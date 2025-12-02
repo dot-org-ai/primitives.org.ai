@@ -1,0 +1,21 @@
+{
+  "name": "@primitives/language-models",
+  "version": "0.0.1",
+  "description": "Language model primitives for building LLM-powered applications",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "keywords": ["ai", "llm", "language-models", "primitives"],
+  "license": "MIT"
+}

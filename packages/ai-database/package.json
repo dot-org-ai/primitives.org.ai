@@ -1,0 +1,21 @@
+{
+  "name": "@primitives/ai-database",
+  "version": "0.0.1",
+  "description": "AI-powered database primitives for intelligent data storage and retrieval",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "keywords": ["ai", "database", "primitives"],
+  "license": "MIT"
+}

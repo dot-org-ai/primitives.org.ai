@@ -1,0 +1,21 @@
+{
+  "name": "@primitives/ai-functions",
+  "version": "0.0.1",
+  "description": "AI-powered function primitives for building intelligent applications",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "keywords": ["ai", "functions", "primitives"],
+  "license": "MIT"
+}

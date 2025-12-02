@@ -1,0 +1,21 @@
+{
+  "name": "@primitives/ai-workflows",
+  "version": "0.0.1",
+  "description": "AI-powered workflow primitives for orchestrating intelligent processes",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "keywords": ["ai", "workflows", "primitives"],
+  "license": "MIT"
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@primitives/ai-sandbox",
+  "version": "0.0.1",
+  "description": "AI-powered sandbox primitives for secure code execution and experimentation",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "keywords": ["ai", "sandbox", "primitives"],
+  "license": "MIT"
+}
