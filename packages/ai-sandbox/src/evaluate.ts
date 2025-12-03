@@ -3,6 +3,8 @@
  *
  * Uses Cloudflare worker_loaders in production,
  * Miniflare in development/Node.
+ *
+ * Requires ai-tests service binding (TEST) for assertions and test running.
  */
 
 import type {
@@ -11,7 +13,7 @@ import type {
   WorkerLoader,
   SandboxEnv
 } from './types.js'
-import { generateWorkerCode } from './worker-template.js'
+import { generateWorkerCode, generateDevWorkerCode } from './worker-template.js'
 
 /**
  * Evaluate code in a sandboxed worker
@@ -54,11 +56,11 @@ export async function evaluate(
 
   try {
     // Use worker_loaders if available (Cloudflare Workers)
-    if (env?.LOADER) {
-      return await evaluateWithWorkerLoader(options, env.LOADER, start)
+    if (env?.LOADER && env?.TEST) {
+      return await evaluateWithWorkerLoader(options, env.LOADER, env.TEST, start)
     }
 
-    // Fall back to Miniflare (Node.js)
+    // Fall back to Miniflare with local TestService (Node.js)
     return await evaluateWithMiniflare(options, start)
   } catch (error) {
     return {
@@ -76,6 +78,7 @@ export async function evaluate(
 async function evaluateWithWorkerLoader(
   options: EvaluateOptions,
   loader: WorkerLoader,
+  testService: unknown,
   start: number
 ): Promise<EvaluateResult> {
   const workerCode = generateWorkerCode(options)
@@ -87,7 +90,11 @@ async function evaluateWithWorkerLoader(
       'worker.js': workerCode
     },
     compatibilityDate: '2024-01-01',
-    globalOutbound: null // Block network access
+    // Block network access only if fetch: null
+    globalOutbound: options.fetch === null ? null : undefined,
+    bindings: {
+      TEST: testService
+    }
   }))
 
   const response = await worker.fetch(new Request('http://sandbox/execute'))
@@ -101,20 +108,24 @@ async function evaluateWithWorkerLoader(
 
 /**
  * Evaluate using Miniflare (for Node.js/development)
+ *
+ * For local dev, we use generateDevWorkerCode which bundles the test
+ * framework directly. In production, the sandbox worker uses RPC to
+ * a deployed ai-tests worker.
  */
 async function evaluateWithMiniflare(
   options: EvaluateOptions,
   start: number
 ): Promise<EvaluateResult> {
-  // Dynamic import to avoid bundling Miniflare in production
+  // Dynamic import to avoid bundling in production
   const { Miniflare } = await import('miniflare')
 
-  const workerCode = generateWorkerCode(options)
+  const workerCode = generateDevWorkerCode(options)
 
   const mf = new Miniflare({
     modules: true,
     script: workerCode,
-    compatibilityDate: '2024-01-01',
+    compatibilityDate: '2024-01-01'
   })
 
   try {

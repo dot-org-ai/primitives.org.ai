@@ -181,7 +181,7 @@ console.log(result.testResults)
 
 ## Test Framework
 
-The sandbox provides a vitest-compatible test API:
+The sandbox provides a vitest-compatible test API with async support.
 
 ### describe / it / test
 
@@ -198,32 +198,107 @@ describe('group name', () => {
   it.skip('skipped test', () => {
     // won't run
   });
+
+  it.only('only this test', () => {
+    // when .only is used, only these tests run
+  });
+});
+```
+
+### Async Tests
+
+```typescript
+describe('async operations', () => {
+  it('supports async/await', async () => {
+    const result = await someAsyncFunction();
+    expect(result).toBe('expected');
+  });
+
+  it('supports promises', () => {
+    return fetchData().then(data => {
+      expect(data).toBeDefined();
+    });
+  });
+});
+```
+
+### Hooks
+
+```typescript
+describe('with setup', () => {
+  let data;
+
+  beforeEach(() => {
+    data = { count: 0 };
+  });
+
+  afterEach(() => {
+    data = null;
+  });
+
+  it('uses setup data', () => {
+    data.count++;
+    expect(data.count).toBe(1);
+  });
 });
 ```
 
 ### expect matchers
 
 ```typescript
-expect(value).toBe(expected)           // Strict equality
+// Equality
+expect(value).toBe(expected)           // Strict equality (===)
 expect(value).toEqual(expected)        // Deep equality
+expect(value).toStrictEqual(expected)  // Strict deep equality
+
+// Truthiness
 expect(value).toBeTruthy()             // Truthy check
 expect(value).toBeFalsy()              // Falsy check
 expect(value).toBeNull()               // null check
 expect(value).toBeUndefined()          // undefined check
 expect(value).toBeDefined()            // not undefined
-expect(value).toContain(item)          // Array/string contains
-expect(value).toHaveLength(n)          // Length check
-expect(fn).toThrow()                   // Throws check
-expect(fn).toThrow('message')          // Throws with message
+expect(value).toBeNaN()                // NaN check
+
+// Numbers
 expect(value).toBeGreaterThan(n)       // > comparison
 expect(value).toBeLessThan(n)          // < comparison
+expect(value).toBeGreaterThanOrEqual(n)// >= comparison
+expect(value).toBeLessThanOrEqual(n)   // <= comparison
+expect(value).toBeCloseTo(n, digits)   // Floating point comparison
+
+// Strings
 expect(value).toMatch(/pattern/)       // Regex match
+expect(value).toMatch('substring')     // Contains substring
+
+// Arrays & Strings
+expect(value).toContain(item)          // Array/string contains
+expect(value).toContainEqual(item)     // Array contains (deep equality)
+expect(value).toHaveLength(n)          // Length check
+
+// Objects
+expect(value).toHaveProperty('path')   // Has property
+expect(value).toHaveProperty('path', v)// Has property with value
+expect(value).toMatchObject(partial)   // Partial object match
+
+// Types
 expect(value).toBeInstanceOf(Class)    // instanceof check
+expect(value).toBeTypeOf('string')     // typeof check
+
+// Errors
+expect(fn).toThrow()                   // Throws any error
+expect(fn).toThrow('message')          // Throws with message
+expect(fn).toThrow(/pattern/)          // Throws matching pattern
+expect(fn).toThrow(ErrorClass)         // Throws specific error type
 
 // Negated matchers
 expect(value).not.toBe(expected)
 expect(value).not.toEqual(expected)
+expect(value).not.toContain(item)
 expect(fn).not.toThrow()
+
+// Promise matchers
+await expect(promise).resolves.toBe(value)
+await expect(promise).rejects.toThrow('error')
 ```
 
 ## Cloudflare Workers Setup

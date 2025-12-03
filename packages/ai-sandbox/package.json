@@ -20,7 +20,13 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*"
+    "ai-functions": "workspace:*",
+    "ai-tests": "workspace:*",
+    "capnweb": "^0.2.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.0",
+    "vitest": "^2.1.0"
   },
   "optionalDependencies": {
     "miniflare": "^3.20241106.0"

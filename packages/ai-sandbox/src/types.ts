@@ -16,6 +16,12 @@ export interface EvaluateOptions {
   timeout?: number
   /** Environment variables to pass to the sandbox */
   env?: Record<string, string>
+  /** Fetch configuration. Set to null to block network access. Default: allowed */
+  fetch?: null
+  /** RPC services to expose via capnweb (URL -> handler) */
+  rpc?: Record<string, unknown>
+  /** Outbound RPC interceptor - intercepts fetch calls to RPC URLs */
+  outboundRpc?: (url: string, request: Request) => Promise<Response> | Response | null
 }
 
 /**
@@ -106,8 +112,37 @@ export interface WorkerStub {
 }
 
 /**
+ * Test service core - returned by connect() (from ai-tests)
+ */
+export interface TestServiceCore {
+  expect(value: unknown, message?: string): unknown
+  should(value: unknown): unknown
+  assert: unknown
+  describe(name: string, fn: () => void): void
+  it(name: string, fn: () => void | Promise<void>): void
+  test(name: string, fn: () => void | Promise<void>): void
+  skip(name: string, fn?: () => void | Promise<void>): void
+  only(name: string, fn: () => void | Promise<void>): void
+  beforeEach(fn: () => void | Promise<void>): void
+  afterEach(fn: () => void | Promise<void>): void
+  beforeAll(fn: () => void | Promise<void>): void
+  afterAll(fn: () => void | Promise<void>): void
+  run(): Promise<TestResults>
+  reset(): void
+}
+
+/**
+ * Test service binding type - WorkerEntrypoint (from ai-tests)
+ */
+export interface TestServiceBinding {
+  /** Get a test service instance via RPC */
+  connect(): Promise<TestServiceCore>
+}
+
+/**
  * Environment with worker loader binding
  */
 export interface SandboxEnv {
   LOADER?: WorkerLoader
+  TEST?: TestServiceBinding
 }
