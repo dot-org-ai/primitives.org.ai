@@ -37,7 +37,11 @@ export function registerScheduleHandler(
   interval: ScheduleInterval,
   handler: ScheduleHandler
 ): void {
-  scheduleRegistry.push({ interval, handler })
+  scheduleRegistry.push({
+    interval,
+    handler,
+    source: handler.toString(),
+  })
 }
 
 /**
@@ -147,27 +151,6 @@ export async function toCron(description: string): Promise<string> {
 }
 
 /**
- * Create a time accessor for a day pattern
- */
-function createTimeAccessor(dayPattern: string) {
-  return new Proxy({} as Record<string, (handler: ScheduleHandler) => void>, {
-    get(_target, timeKey: string) {
-      const time = TIME_PATTERNS[timeKey]
-      if (time) {
-        const cron = combineWithTime(dayPattern, time)
-        return (handler: ScheduleHandler) => {
-          registerScheduleHandler({ type: 'cron', expression: cron, natural: `${dayPattern} ${timeKey}` }, handler)
-        }
-      }
-      // If not a known time, treat as handler function directly
-      return (handler: ScheduleHandler) => {
-        registerScheduleHandler({ type: 'cron', expression: dayPattern, natural: dayPattern }, handler)
-      }
-    }
-  })
-}
-
-/**
  * Create the `every` proxy
  */
 function createEveryProxy() {
@@ -237,17 +220,17 @@ function createEveryProxy() {
  * import { every } from 'ai-workflows'
  *
  * // Simple intervals
- * every.hour($ => console.log('Hourly task'))
- * every.day($ => console.log('Daily task'))
+ * every.hour($ => $.log('Hourly task'))
+ * every.day($ => $.log('Daily task'))
  *
  * // Day + time combinations
- * every.Monday.at9am($ => console.log('Monday morning standup'))
- * every.weekday.at8am($ => console.log('Workday start'))
- * every.Friday.at5pm($ => console.log('End of week report'))
+ * every.Monday.at9am($ => $.log('Monday morning standup'))
+ * every.weekday.at8am($ => $.log('Workday start'))
+ * every.Friday.at5pm($ => $.log('End of week report'))
  *
  * // Plural intervals with values
- * every.minutes(30)($ => console.log('Every 30 minutes'))
- * every.hours(4)($ => console.log('Every 4 hours'))
+ * every.minutes(30)($ => $.log('Every 30 minutes'))
+ * every.hours(4)($ => $.log('Every 4 hours'))
  *
  * // Natural language (requires AI converter)
  * every('hour during business hours', $ => { ... })

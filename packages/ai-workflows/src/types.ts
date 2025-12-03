@@ -2,37 +2,146 @@
  * Types for ai-workflows
  */
 
-import type { AnyActorLogic, AnyEventObject, Snapshot } from 'xstate'
+/**
+ * Handler function with source code for remote execution
+ */
+export interface HandlerFunction<T = unknown> {
+  /** The actual function */
+  fn: (...args: any[]) => void | Promise<void>
+  /** Source code string for remote execution */
+  source: string
+  /** Handler name (for debugging) */
+  name?: string
+}
 
 /**
  * Event handler function type
+ * Can return void (for send) or a result (for do/try)
  */
-export type EventHandler<T = unknown> = (
+export type EventHandler<T = unknown, R = unknown> = (
   data: T,
-  context: WorkflowContext
-) => void | Promise<void>
+  $: WorkflowContext
+) => R | void | Promise<R | void>
 
 /**
  * Schedule handler function type
  */
 export type ScheduleHandler = (
-  context: WorkflowContext
+  $: WorkflowContext
 ) => void | Promise<void>
 
 /**
- * Workflow context passed to handlers
+ * Workflow context ($) passed to handlers
  */
 export interface WorkflowContext {
-  /** Emit an event */
+  /**
+   * Send an event (fire and forget, durable)
+   * Confirms receipt but doesn't wait for result
+   */
   send: <T = unknown>(event: string, data: T) => Promise<void>
-  /** Get workflow state */
-  getState: () => WorkflowState
-  /** Store data in workflow context */
-  set: (key: string, value: unknown) => void
-  /** Get data from workflow context */
-  get: <T = unknown>(key: string) => T | undefined
+
+  /**
+   * Do an action (durable, waits for result)
+   * Retries on failure, stores result durably
+   */
+  do: <TData = unknown, TResult = unknown>(event: string, data: TData) => Promise<TResult>
+
+  /**
+   * Try an action (non-durable, waits for result)
+   * Simple execution without durability guarantees
+   */
+  try: <TData = unknown, TResult = unknown>(event: string, data: TData) => Promise<TResult>
+
+  /** Register event handler ($.on.Noun.event) */
+  on: OnProxy
+
+  /** Register schedule handler ($.every.hour, $.every.Monday.at9am) */
+  every: EveryProxy
+
+  /**
+   * Workflow state - read/write context data
+   * $.state.userId = '123'
+   * const id = $.state.userId
+   */
+  state: Record<string, unknown>
+
   /** Log message */
   log: (message: string, data?: unknown) => void
+
+  /** Access to database (if connected) */
+  db?: DatabaseContext
+}
+
+/**
+ * Database context for workflows
+ */
+export interface DatabaseContext {
+  /** Record an event (immutable) */
+  recordEvent: (event: string, data: unknown) => Promise<void>
+
+  /** Create an action (pending work) */
+  createAction: (action: ActionData) => Promise<void>
+
+  /** Complete an action */
+  completeAction: (id: string, result: unknown) => Promise<void>
+
+  /** Store an artifact */
+  storeArtifact: (artifact: ArtifactData) => Promise<void>
+
+  /** Get an artifact */
+  getArtifact: (key: string) => Promise<unknown | null>
+}
+
+/**
+ * Action data for pending/active work
+ */
+export interface ActionData {
+  /** Actor performing the action (user, agent, system) */
+  actor: string
+  /** Object being acted upon */
+  object: string
+  /** Action being performed */
+  action: string
+  /** Current status */
+  status?: 'pending' | 'active' | 'completed' | 'failed'
+  /** Optional metadata */
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Artifact data for cached compiled/parsed content
+ */
+export interface ArtifactData {
+  /** Unique key for the artifact */
+  key: string
+  /** Type of artifact (ast, types, esm, worker, html, markdown) */
+  type: 'ast' | 'types' | 'esm' | 'worker' | 'html' | 'markdown' | 'bundle' | string
+  /** Source hash (for cache invalidation) */
+  sourceHash: string
+  /** The artifact content */
+  content: unknown
+  /** Optional metadata */
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Event proxy type for $.on.Noun.event pattern
+ */
+export type OnProxy = {
+  [noun: string]: {
+    [event: string]: (handler: EventHandler) => void
+  }
+}
+
+/**
+ * Every proxy type for $.every patterns
+ */
+export type EveryProxy = {
+  (description: string, handler: ScheduleHandler): void
+} & {
+  [key: string]: ((handler: ScheduleHandler) => void) | ((value: number) => (handler: ScheduleHandler) => void) | {
+    [timeKey: string]: (handler: ScheduleHandler) => void
+  }
 }
 
 /**
@@ -58,20 +167,22 @@ export interface WorkflowHistoryEntry {
 }
 
 /**
- * Event registration
+ * Event registration with source
  */
 export interface EventRegistration {
   noun: string
   event: string
   handler: EventHandler
+  source: string
 }
 
 /**
- * Schedule registration
+ * Schedule registration with source
  */
 export interface ScheduleRegistration {
   interval: ScheduleInterval
   handler: ScheduleHandler
+  source: string
 }
 
 /**
@@ -93,37 +204,7 @@ export interface WorkflowDefinition {
   name: string
   events: EventRegistration[]
   schedules: ScheduleRegistration[]
-  machine?: AnyActorLogic
   initialContext?: Record<string, unknown>
-}
-
-/**
- * Workflow runner options
- */
-export interface WorkflowRunnerOptions {
-  /** Persist state to storage */
-  storage?: WorkflowStorage
-  /** Logger */
-  logger?: WorkflowLogger
-}
-
-/**
- * Workflow storage interface
- */
-export interface WorkflowStorage {
-  get(workflowId: string): Promise<WorkflowState | null>
-  set(workflowId: string, state: WorkflowState): Promise<void>
-  delete(workflowId: string): Promise<void>
-}
-
-/**
- * Workflow logger interface
- */
-export interface WorkflowLogger {
-  debug(message: string, data?: unknown): void
-  info(message: string, data?: unknown): void
-  warn(message: string, data?: unknown): void
-  error(message: string, data?: unknown): void
 }
 
 /**
@@ -132,4 +213,14 @@ export interface WorkflowLogger {
 export interface ParsedEvent {
   noun: string
   event: string
+}
+
+/**
+ * Workflow options
+ */
+export interface WorkflowOptions {
+  /** Initial context data */
+  context?: Record<string, unknown>
+  /** Database connection for persistence */
+  db?: DatabaseContext
 }

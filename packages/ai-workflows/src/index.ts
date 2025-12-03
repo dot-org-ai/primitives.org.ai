@@ -1,52 +1,72 @@
 /**
- * ai-workflows - Event-driven workflows with state machine support
+ * ai-workflows - Event-driven workflows with $ context
  *
  * @example
  * ```ts
- * import { on, every, send, defineWorkflow, createWorkflow } from 'ai-workflows'
+ * import { Workflow } from 'ai-workflows'
  *
- * // Register event handlers
- * on.Customer.created(async (customer, ctx) => {
- *   console.log('Customer created:', customer.name)
- *   await ctx.send('Email.welcome', { to: customer.email })
+ * // Create a workflow with $ context
+ * const workflow = Workflow($ => {
+ *   // Register event handlers
+ *   $.on.Customer.created(async (customer, $) => {
+ *     $.log('New customer:', customer.name)
+ *     await $.send('Email.welcome', { to: customer.email })
+ *   })
+ *
+ *   $.on.Order.completed(async (order, $) => {
+ *     $.log('Order completed:', order.id)
+ *   })
+ *
+ *   // Register scheduled tasks
+ *   $.every.hour(async ($) => {
+ *     $.log('Hourly check')
+ *   })
+ *
+ *   $.every.Monday.at9am(async ($) => {
+ *     $.log('Weekly standup reminder')
+ *   })
+ *
+ *   $.every.minutes(30)(async ($) => {
+ *     $.log('Every 30 minutes')
+ *   })
+ *
+ *   // Natural language scheduling
+ *   $.every('first Monday of the month', async ($) => {
+ *     $.log('Monthly report')
+ *   })
  * })
  *
- * on.Order.completed(async (order, ctx) => {
- *   console.log('Order completed:', order.id)
- * })
- *
- * // Register scheduled tasks
- * every.hour(async (ctx) => {
- *   console.log('Hourly task')
- * })
- *
- * every.Monday.at9am(async (ctx) => {
- *   console.log('Monday standup reminder')
- * })
- *
- * every.minutes(30)(async (ctx) => {
- *   console.log('Every 30 minutes')
- * })
- *
- * // Natural language scheduling (requires AI converter)
- * every('first Monday of the month at 9am', async (ctx) => {
- *   console.log('Monthly report')
- * })
- *
- * // Create and start workflow
- * const workflow = defineWorkflow('my-workflow')
- * const runner = createWorkflow(workflow)
- * await runner.start()
+ * // Start the workflow
+ * await workflow.start()
  *
  * // Emit events
- * await send('Customer.created', { id: '123', name: 'John', email: 'john@example.com' })
+ * await workflow.send('Customer.created', { name: 'John', email: 'john@example.com' })
+ * ```
+ *
+ * @example
+ * // Alternative: Use standalone on/every for global registration
+ * ```ts
+ * import { on, every, send } from 'ai-workflows'
+ *
+ * on.Customer.created(async (customer, $) => {
+ *   await $.send('Email.welcome', { to: customer.email })
+ * })
+ *
+ * every.hour(async ($) => {
+ *   $.log('Hourly task')
+ * })
+ *
+ * await send('Customer.created', { name: 'John' })
  * ```
  */
 
-// Event handling
+// Main Workflow API
+export { Workflow, createTestContext, parseEvent, type WorkflowInstance } from './workflow.js'
+
+// Standalone event handling (for global registration)
 export { on, registerEventHandler, getEventHandlers, clearEventHandlers } from './on.js'
 
-// Scheduling
+// Standalone scheduling (for global registration)
 export {
   every,
   registerScheduleHandler,
@@ -59,19 +79,10 @@ export {
 } from './every.js'
 
 // Event emission
-export { send, parseEvent, getEventBus } from './send.js'
+export { send, getEventBus } from './send.js'
 
-// Workflow context
+// Context
 export { createWorkflowContext, createIsolatedContext } from './context.js'
-
-// Workflow runner
-export {
-  defineWorkflow,
-  createWorkflow,
-  createMemoryStorage,
-  clearAllHandlers,
-  type Workflow,
-} from './workflow.js'
 
 // Types
 export type {
@@ -84,8 +95,12 @@ export type {
   ScheduleRegistration,
   ScheduleInterval,
   WorkflowDefinition,
-  WorkflowRunnerOptions,
-  WorkflowStorage,
-  WorkflowLogger,
+  WorkflowOptions,
   ParsedEvent,
+  OnProxy,
+  EveryProxy,
+  HandlerFunction,
+  DatabaseContext,
+  ActionData,
+  ArtifactData,
 } from './types.js'

@@ -36,7 +36,12 @@ export function registerEventHandler(
   event: string,
   handler: EventHandler
 ): void {
-  eventRegistry.push({ noun, event, handler })
+  eventRegistry.push({
+    noun,
+    event,
+    handler,
+    source: handler.toString(),
+  })
 }
 
 /**
@@ -82,13 +87,13 @@ function createOnProxy(): EventProxy {
  * ```ts
  * import { on } from 'ai-workflows'
  *
- * on.Customer.created(async (customer, ctx) => {
- *   console.log('Customer created:', customer.name)
- *   await ctx.send('Email.welcome', { to: customer.email })
+ * on.Customer.created(async (customer, $) => {
+ *   $.log('Customer created:', customer.name)
+ *   await $.send('Email.welcome', { to: customer.email })
  * })
  *
- * on.Order.completed(async (order, ctx) => {
- *   console.log('Order completed:', order.id)
+ * on.Order.completed(async (order, $) => {
+ *   $.log('Order completed:', order.id)
  * })
  * ```
  */

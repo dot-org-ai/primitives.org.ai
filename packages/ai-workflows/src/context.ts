@@ -2,7 +2,7 @@
  * Workflow context implementation
  */
 
-import type { WorkflowContext, WorkflowState, WorkflowHistoryEntry } from './types.js'
+import type { WorkflowContext, WorkflowState, WorkflowHistoryEntry, OnProxy, EveryProxy } from './types.js'
 
 /**
  * Event bus interface (imported from send.ts to avoid circular dependency)
@@ -15,17 +15,35 @@ interface EventBusLike {
  * Create a workflow context
  */
 export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
-  const state: WorkflowState = {
+  const workflowState: WorkflowState = {
     context: {},
     history: [],
   }
 
   const addHistory = (entry: Omit<WorkflowHistoryEntry, 'timestamp'>) => {
-    state.history.push({
+    workflowState.history.push({
       ...entry,
       timestamp: Date.now(),
     })
   }
+
+  // Create no-op proxies for on/every (these are used in send context, not workflow setup)
+  const noOpOnProxy = new Proxy({} as OnProxy, {
+    get() {
+      return new Proxy({}, {
+        get() {
+          return () => {}
+        }
+      })
+    }
+  })
+
+  const noOpEveryProxy = new Proxy(function() {} as any, {
+    get() {
+      return () => () => {}
+    },
+    apply() {}
+  }) as EveryProxy
 
   return {
     async send<T = unknown>(event: string, data: T): Promise<void> {
@@ -33,21 +51,18 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
       await eventBus.emit(event, data)
     },
 
-    getState(): WorkflowState {
-      return {
-        ...state,
-        context: { ...state.context },
-        history: [...state.history],
-      }
+    async do<TData = unknown, TResult = unknown>(_event: string, _data: TData): Promise<TResult> {
+      throw new Error('$.do not available in this context')
     },
 
-    set(key: string, value: unknown): void {
-      state.context[key] = value
+    async try<TData = unknown, TResult = unknown>(_event: string, _data: TData): Promise<TResult> {
+      throw new Error('$.try not available in this context')
     },
 
-    get<T = unknown>(key: string): T | undefined {
-      return state.context[key] as T | undefined
-    },
+    on: noOpOnProxy,
+    every: noOpEveryProxy,
+
+    state: workflowState.context,
 
     log(message: string, data?: unknown): void {
       addHistory({ type: 'action', name: 'log', data: { message, data } })
@@ -60,7 +75,7 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
  * Create an isolated workflow context (not connected to event bus)
  * Useful for testing or standalone execution
  */
-export function createIsolatedContext(): WorkflowContext {
+export function createIsolatedContext(): WorkflowContext & { getEmittedEvents: () => Array<{ event: string; data: unknown }> } {
   const emittedEvents: Array<{ event: string; data: unknown }> = []
 
   const ctx = createWorkflowContext({
@@ -69,8 +84,8 @@ export function createIsolatedContext(): WorkflowContext {
     },
   })
 
-  // Add method to get emitted events for testing
-  ;(ctx as any).getEmittedEvents = () => [...emittedEvents]
-
-  return ctx
+  return {
+    ...ctx,
+    getEmittedEvents: () => [...emittedEvents],
+  }
 }
