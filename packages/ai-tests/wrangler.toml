@@ -1,0 +1,6 @@
+name = "ai-tests"
+main = "dist/worker.js"
+compatibility_date = "2024-12-01"
+
+# The default export (TestService) extends WorkerEntrypoint
+# All public methods are automatically exposed via RPC
