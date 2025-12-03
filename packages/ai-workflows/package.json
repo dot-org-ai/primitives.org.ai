@@ -1,7 +1,7 @@
 {
   "name": "ai-workflows",
   "version": "0.0.1",
-  "description": "AI-powered workflow primitives for orchestrating intelligent processes",
+  "description": "Event-driven workflows with state machine support",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,11 +15,16 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*"
+    "xstate": "^5.18.0"
   },
-  "keywords": ["ai", "workflows", "primitives"],
+  "devDependencies": {
+    "vitest": "^2.1.0"
+  },
+  "keywords": ["ai", "workflows", "events", "state-machine", "xstate", "primitives"],
   "license": "MIT"
 }

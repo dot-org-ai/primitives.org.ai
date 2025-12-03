@@ -13,6 +13,8 @@
   - [ ] `ai.embed()`
   - [ ] `ai.generate()`
   - [ ] `ai.image()`
+  - [ ] `ai.list()`
+  - [ ] `ai.lists()`
   - [ ] `ai.video()`
   - [ ] `ai.write()`
   - [ ] `RPC()`
