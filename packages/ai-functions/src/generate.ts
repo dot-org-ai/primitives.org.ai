@@ -20,8 +20,11 @@ import {
   type StreamTextResult,
   type LanguageModel
 } from 'ai'
+import { schema as convertSchema, type SimpleSchema } from './schema.js'
+import type { ZodTypeAny } from 'zod'
 
 type ModelArg = string | LanguageModel
+type SchemaArg = ZodTypeAny | SimpleSchema
 
 interface GenerateObjectOptions<T> {
   model: ModelArg
@@ -79,23 +82,56 @@ async function resolveModel(modelArg: ModelArg): Promise<LanguageModel> {
 }
 
 /**
+ * Check if value is a Zod schema
+ */
+function isZodSchema(value: unknown): value is ZodTypeAny {
+  return value !== null &&
+    typeof value === 'object' &&
+    '_def' in value &&
+    'parse' in value
+}
+
+/**
+ * Convert schema to Zod if needed
+ */
+function resolveSchema(schemaArg: SchemaArg): ZodTypeAny {
+  if (isZodSchema(schemaArg)) {
+    return schemaArg
+  }
+  return convertSchema(schemaArg as SimpleSchema)
+}
+
+/**
  * Generate a typed object from a prompt using AI
  *
  * Automatically resolves model aliases and routes to the best provider.
+ * Supports both Zod schemas and simplified schema syntax.
  *
  * @example
  * ```ts
  * import { generateObject } from 'ai-functions'
- * import { z } from 'zod'
  *
+ * // Simplified schema syntax
  * const { object } = await generateObject({
- *   model: 'claude-sonnet',  // → anthropic/claude-sonnet-4.5
+ *   model: 'sonnet',
+ *   schema: {
+ *     recipe: {
+ *       name: 'What is the recipe name?',
+ *       type: 'food | drink | dessert',
+ *       ingredients: ['List all ingredients'],
+ *       steps: ['List all cooking steps'],
+ *     },
+ *   },
+ *   prompt: 'Generate a lasagna recipe.',
+ * })
+ *
+ * // Zod schema also works
+ * import { z } from 'zod'
+ * const { object } = await generateObject({
+ *   model: 'sonnet',
  *   schema: z.object({
- *     recipe: z.object({
- *       name: z.string(),
- *       ingredients: z.array(z.string()),
- *       steps: z.array(z.string()),
- *     }),
+ *     name: z.string(),
+ *     ingredients: z.array(z.string()),
  *   }),
  *   prompt: 'Generate a lasagna recipe.',
  * })
@@ -105,9 +141,11 @@ export async function generateObject<T>(
   options: GenerateObjectOptions<T>
 ): Promise<GenerateObjectResult<T>> {
   const model = await resolveModel(options.model)
+  const schema = resolveSchema(options.schema as SchemaArg)
   return sdkGenerateObject({
     ...options,
-    model
+    model,
+    schema
   } as Parameters<typeof sdkGenerateObject>[0]) as Promise<GenerateObjectResult<T>>
 }
 
@@ -150,11 +188,10 @@ export async function generateText(
  * @example
  * ```ts
  * import { streamObject } from 'ai-functions'
- * import { z } from 'zod'
  *
  * const { partialObjectStream } = streamObject({
  *   model: 'sonnet',
- *   schema: z.object({ story: z.string() }),
+ *   schema: { story: 'Write a creative story' },
  *   prompt: 'Write a short story.',
  * })
  *
@@ -167,9 +204,11 @@ export async function streamObject<T>(
   options: GenerateObjectOptions<T>
 ): Promise<StreamObjectResult<T, never, never>> {
   const model = await resolveModel(options.model)
+  const schema = resolveSchema(options.schema as SchemaArg)
   return sdkStreamObject({
     ...options,
-    model
+    model,
+    schema
   } as Parameters<typeof sdkStreamObject>[0]) as Promise<StreamObjectResult<T, never, never>>
 }
 

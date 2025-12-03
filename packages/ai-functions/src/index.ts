@@ -25,5 +25,8 @@ export * from './embeddings.js'
 // Export generation functions with smart model routing
 export { generateObject, generateText, streamObject, streamText } from './generate.js'
 
+// Export simplified schema helper
+export { schema, type SimpleSchema } from './schema.js'
+
 // Export providers
 export * from './providers/index.js'
