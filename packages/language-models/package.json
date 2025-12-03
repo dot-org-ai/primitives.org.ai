@@ -1,7 +1,7 @@
 {
   "name": "language-models",
   "version": "0.0.1",
-  "description": "Language model primitives for building LLM-powered applications",
+  "description": "Model listing and resolution for LLM providers",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,15 +12,12 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "tsc -p tsconfig.json && cp -r data dist/",
+    "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "fetch-models": "npx tsx scripts/fetch-models.ts"
   },
-  "dependencies": {
-    "ai-functions": "workspace:*",
-    "ai-providers": "workspace:*"
-  },
-  "keywords": ["ai", "llm", "language-models", "primitives"],
+  "keywords": ["ai", "llm", "language-models", "openrouter", "primitives"],
   "license": "MIT"
 }

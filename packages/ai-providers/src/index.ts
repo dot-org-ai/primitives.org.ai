@@ -13,7 +13,9 @@ export {
   configureRegistry,
   model,
   embeddingModel,
+  DIRECT_PROVIDERS,
   type ProviderId,
+  type DirectProvider,
   type ProviderConfig
 } from './registry.js'
 

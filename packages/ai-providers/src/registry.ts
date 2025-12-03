@@ -2,11 +2,14 @@
  * Unified AI Provider Registry
  *
  * Centralizes access to multiple AI providers via simple string identifiers.
- * Format: providerId:modelId (e.g., 'openai:gpt-4o', 'anthropic:claude-3-5-sonnet')
  *
- * Supports Cloudflare AI Gateway for unified routing:
- * - AI_GATEWAY_URL: Your Cloudflare AI Gateway endpoint
- * - AI_GATEWAY_TOKEN: Auth token for the gateway (e.g., DO_TOKEN)
+ * Smart routing:
+ * - openai/* models → OpenAI SDK (via gateway)
+ * - anthropic/* models → Anthropic SDK (via gateway)
+ * - google/* models → Google AI SDK (via gateway)
+ * - All other models → OpenRouter (via gateway)
+ *
+ * Supports simple aliases: 'opus' → anthropic/claude-opus-4.5
  *
  * @packageDocumentation
  */
@@ -17,6 +20,13 @@ import { createProviderRegistry, type Provider, type ProviderRegistry } from 'ai
  * Available provider IDs
  */
 export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'cloudflare'
+
+/**
+ * Providers that get direct SDK access (not via openrouter)
+ * These support special capabilities like MCP, structured outputs, etc.
+ */
+export const DIRECT_PROVIDERS = ['openai', 'anthropic', 'google'] as const
+export type DirectProvider = typeof DIRECT_PROVIDERS[number]
 
 /**
  * Provider configuration options
@@ -265,21 +275,66 @@ export async function configureRegistry(config: ProviderConfig): Promise<void> {
 }
 
 /**
- * Shorthand to get a language model from the default registry
+ * Parse a model ID into provider and model name
+ *
+ * @example
+ * parseModelId('openai/gpt-4o') // { provider: 'openai', model: 'gpt-4o' }
+ * parseModelId('meta-llama/llama-3.3-70b') // { provider: 'meta-llama', model: 'llama-3.3-70b' }
+ */
+function parseModelId(id: string): { provider: string; model: string } {
+  const slashIndex = id.indexOf('/')
+  if (slashIndex === -1) {
+    return { provider: 'openrouter', model: id }
+  }
+  return {
+    provider: id.substring(0, slashIndex),
+    model: id.substring(slashIndex + 1)
+  }
+}
+
+/**
+ * Get a language model with smart routing
+ *
+ * Resolves aliases and routes to the appropriate provider:
+ * - openai/* → OpenAI SDK (via gateway)
+ * - anthropic/* → Anthropic SDK (via gateway)
+ * - google/* → Google AI SDK (via gateway)
+ * - All others → OpenRouter (via gateway)
  *
  * @example
  * ```ts
  * import { model } from 'ai-providers'
  *
- * const gpt4 = await model('openai:gpt-4o')
- * const claude = await model('anthropic:claude-3-5-sonnet-latest')
- * const gemini = await model('google:gemini-2.0-flash-exp')
- * const llama = await model('openrouter:meta-llama/llama-3.3-70b-instruct')
+ * // Simple aliases
+ * const opus = await model('opus')           // → anthropic/claude-opus-4.5
+ * const gpt = await model('gpt-4o')          // → openai/gpt-4o
+ * const llama = await model('llama-70b')     // → meta-llama/llama-3.3-70b-instruct
+ *
+ * // Full IDs also work
+ * const claude = await model('anthropic/claude-sonnet-4.5')
+ * const mistral = await model('mistralai/mistral-large-2411')
  * ```
  */
 export async function model(id: string) {
+  // Try to resolve alias via language-models
+  let resolvedId = id
+  try {
+    const { resolve } = await import('language-models')
+    resolvedId = resolve(id)
+  } catch {
+    // language-models not available, use id as-is
+  }
+
+  const { provider, model: modelName } = parseModelId(resolvedId)
   const registry = await getRegistry()
-  return registry.languageModel(id)
+
+  // Route to direct provider or openrouter
+  if (DIRECT_PROVIDERS.includes(provider as DirectProvider)) {
+    return registry.languageModel(`${provider}:${modelName}`)
+  }
+
+  // Everything else goes through openrouter with full model ID
+  return registry.languageModel(`openrouter:${resolvedId}`)
 }
 
 /**
