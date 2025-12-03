@@ -1,7 +1,7 @@
 /**
  * AI Providers
  *
- * Re-exports model providers for use with AI SDK.
+ * Re-exports model providers from ai-providers package.
  *
  * @packageDocumentation
  */
@@ -11,4 +11,4 @@ export {
   cloudflareEmbedding,
   DEFAULT_CF_EMBEDDING_MODEL,
   type CloudflareConfig
-} from './cloudflare.js'
+} from 'ai-providers/cloudflare'

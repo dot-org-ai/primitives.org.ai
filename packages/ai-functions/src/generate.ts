@@ -69,6 +69,7 @@ interface GenerateTextOptions {
 
 /**
  * Resolve model string to LanguageModel instance
+ * Uses ai-providers for model routing with Cloudflare AI Gateway support
  */
 async function resolveModel(modelArg: ModelArg): Promise<LanguageModel> {
   // Already a LanguageModel instance
@@ -76,7 +77,7 @@ async function resolveModel(modelArg: ModelArg): Promise<LanguageModel> {
     return modelArg
   }
 
-  // Import model router from ai-providers
+  // Use ai-providers for model resolution
   const { model } = await import('ai-providers')
   return model(modelArg)
 }

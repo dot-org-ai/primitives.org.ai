@@ -21,8 +21,21 @@ import type {
   ImageResult,
   VideoOptions,
   VideoResult,
-  WriteOptions
+  WriteOptions,
+  ListResult,
+  ListsResult,
+  FunctionDefinition,
+  DefinedFunction,
+  CodeFunctionDefinition,
+  CodeFunctionResult,
+  GenerativeFunctionDefinition,
+  AgenticFunctionDefinition,
+  HumanFunctionDefinition,
+  CodeLanguage,
+  FunctionRegistry,
+  AutoDefineResult
 } from './types.js'
+import { schema as convertSchema, type SimpleSchema as SimpleSchemaType } from './schema.js'
 
 /**
  * Options for creating an AI RPC client instance
@@ -242,44 +255,385 @@ function buildPromptFromSchema(schema: SimpleSchema, path = ''): string {
 }
 
 /**
- * Shorthand for creating an AI client with default options
- *
- * @example
- * ```ts
- * const result = await ai({ prompt: 'Explain quantum computing' })
- * ```
+ * Create a defined function from a function definition
  */
-export function ai(options: AIGenerateOptions): RpcPromise<AIGenerateResult>
-export function ai(prompt: string): RpcPromise<AIGenerateResult>
-export function ai(optionsOrPrompt: AIGenerateOptions | string): RpcPromise<AIGenerateResult> {
-  // Get default AI client from environment or config
-  const client = getDefaultAIClient()
+function createDefinedFunction<TArgs, TReturn>(
+  definition: FunctionDefinition<TArgs, TReturn>
+): DefinedFunction<TArgs, TReturn> {
+  const call = async (args: TArgs): Promise<TReturn> => {
+    switch (definition.type) {
+      case 'code':
+        return executeCodeFunction(definition, args) as Promise<TReturn>
+      case 'generative':
+        return executeGenerativeFunction(definition, args) as Promise<TReturn>
+      case 'agentic':
+        return executeAgenticFunction(definition, args) as Promise<TReturn>
+      case 'human':
+        return executeHumanFunction(definition, args) as Promise<TReturn>
+      default:
+        throw new Error(`Unknown function type: ${(definition as FunctionDefinition).type}`)
+    }
+  }
 
-  const options: AIGenerateOptions = typeof optionsOrPrompt === 'string'
-    ? { prompt: optionsOrPrompt }
-    : optionsOrPrompt
+  const asTool = (): AIFunctionDefinition<TArgs, TReturn> => {
+    return {
+      name: definition.name,
+      description: definition.description || `Execute ${definition.name}`,
+      parameters: convertArgsToJSONSchema(definition.args),
+      handler: call,
+    }
+  }
 
-  return client.generate(options)
+  return { definition, call, asTool }
 }
 
-// Attach methods to ai function
-ai.do = (action: string, context?: unknown) => getDefaultAIClient().do(action, context)
-ai.is = (value: unknown, type: string | JSONSchema) => getDefaultAIClient().is(value, type)
-ai.code = (prompt: string, language?: string) => getDefaultAIClient().code(prompt, language)
-ai.decide = <T extends string>(options: T[], context?: string) => getDefaultAIClient().decide(options, context)
-ai.diagram = (description: string, format?: 'mermaid' | 'svg' | 'ascii') => getDefaultAIClient().diagram(description, format)
-ai.generate = (options: AIGenerateOptions) => getDefaultAIClient().generate(options)
-ai.image = (prompt: string, options?: ImageOptions) => getDefaultAIClient().image(prompt, options)
-ai.video = (prompt: string, options?: VideoOptions) => getDefaultAIClient().video(prompt, options)
-ai.write = (prompt: string, options?: WriteOptions) => getDefaultAIClient().write(prompt, options)
+/**
+ * Convert args schema to JSON Schema
+ */
+function convertArgsToJSONSchema(args: unknown): JSONSchema {
+  // If it's already a JSON schema-like object
+  if (typeof args === 'object' && args !== null && 'type' in args) {
+    return args as JSONSchema
+  }
+
+  // Convert SimpleSchema to JSON Schema
+  const properties: Record<string, JSONSchema> = {}
+  const required: string[] = []
+
+  if (typeof args === 'object' && args !== null) {
+    for (const [key, value] of Object.entries(args as Record<string, unknown>)) {
+      required.push(key) // All properties required for cross-provider compatibility
+      properties[key] = convertValueToJSONSchema(value)
+    }
+  }
+
+  return {
+    type: 'object',
+    properties,
+    required,
+    additionalProperties: false, // Required for OpenAI compatibility
+  }
+}
 
 /**
- * Define a function that can be called by AI
+ * Convert a single value to JSON Schema
  */
-ai.defineFunction = <TInput, TOutput>(
-  definition: AIFunctionDefinition<TInput, TOutput>
-): AIFunctionDefinition<TInput, TOutput> => {
-  return definition
+function convertValueToJSONSchema(value: unknown): JSONSchema {
+  if (typeof value === 'string') {
+    // Check for type hints: 'description (number)', 'description (boolean)', etc.
+    const typeMatch = value.match(/^(.+?)\s*\((number|boolean|integer|date)\)$/i)
+    if (typeMatch) {
+      const description = typeMatch[1]!
+      const type = typeMatch[2]!
+      switch (type.toLowerCase()) {
+        case 'number':
+          return { type: 'number', description: description.trim() }
+        case 'integer':
+          return { type: 'integer', description: description.trim() }
+        case 'boolean':
+          return { type: 'boolean', description: description.trim() }
+        case 'date':
+          return { type: 'string', format: 'date-time', description: description.trim() }
+      }
+    }
+
+    // Check for enum: 'option1 | option2 | option3'
+    if (value.includes(' | ')) {
+      const options = value.split(' | ').map(s => s.trim())
+      return { type: 'string', enum: options }
+    }
+
+    return { type: 'string', description: value }
+  }
+
+  if (Array.isArray(value) && value.length === 1) {
+    const [desc] = value
+    if (typeof desc === 'string') {
+      return { type: 'array', items: { type: 'string' }, description: desc }
+    }
+    if (typeof desc === 'number') {
+      return { type: 'array', items: { type: 'number' } }
+    }
+    return { type: 'array', items: convertValueToJSONSchema(desc) }
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return convertArgsToJSONSchema(value)
+  }
+
+  return { type: 'string' }
+}
+
+/**
+ * Fill template with values
+ */
+function fillTemplate(template: string, args: Record<string, unknown>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(args[key] ?? ''))
+}
+
+/**
+ * Execute a code function - generates code with tests and examples
+ */
+async function executeCodeFunction<TArgs>(
+  definition: CodeFunctionDefinition<TArgs>,
+  args: TArgs
+): Promise<CodeFunctionResult> {
+  const { name, description, language = 'typescript', instructions, includeTests = true, includeExamples = true } = definition
+
+  const argsDescription = JSON.stringify(args, null, 2)
+
+  const result = await generateObject({
+    model: 'sonnet',
+    schema: {
+      code: 'The complete implementation code with JSDoc comments',
+      tests: includeTests ? 'Vitest test code for the implementation' : undefined,
+      examples: includeExamples ? 'Example usage code' : undefined,
+      documentation: 'JSDoc or equivalent documentation string',
+    },
+    system: `You are an expert ${language} developer. Generate clean, well-documented, production-ready code.`,
+    prompt: `Generate a ${language} function with the following specification:
+
+Name: ${name}
+Description: ${description || 'No description provided'}
+Arguments: ${argsDescription}
+Return Type: ${JSON.stringify(definition.returnType)}
+
+${instructions ? `Additional Instructions: ${instructions}` : ''}
+
+Requirements:
+- Include comprehensive JSDoc comments
+- Follow best practices for ${language}
+- Handle edge cases appropriately
+${includeTests ? '- Include vitest tests that cover main functionality and edge cases' : ''}
+${includeExamples ? '- Include example usage showing how to call the function' : ''}`,
+  })
+
+  const obj = result.object as { code: string; tests?: string; examples?: string; documentation: string }
+  return {
+    code: obj.code,
+    tests: obj.tests,
+    examples: obj.examples,
+    language,
+    documentation: obj.documentation,
+  }
+}
+
+/**
+ * Execute a generative function - uses AI to generate content
+ */
+async function executeGenerativeFunction<TArgs, TReturn>(
+  definition: GenerativeFunctionDefinition<TArgs, TReturn>,
+  args: TArgs
+): Promise<TReturn> {
+  const { output, system, promptTemplate, model = 'sonnet', temperature, returnType } = definition
+
+  const prompt = promptTemplate
+    ? fillTemplate(promptTemplate, args as Record<string, unknown>)
+    : JSON.stringify(args)
+
+  switch (output) {
+    case 'string': {
+      const result = await generateObject({
+        model,
+        schema: { text: 'The generated text response' },
+        system,
+        prompt,
+        temperature,
+      })
+      return (result.object as { text: string }).text as TReturn
+    }
+
+    case 'object': {
+      const objectSchema = returnType || { result: 'The generated result' }
+      const result = await generateObject({
+        model,
+        schema: objectSchema as SimpleSchemaType,
+        system,
+        prompt,
+        temperature,
+      })
+      return result.object as TReturn
+    }
+
+    case 'image': {
+      const client = getDefaultAIClient()
+      return client.image(prompt) as unknown as Promise<TReturn>
+    }
+
+    case 'video': {
+      const client = getDefaultAIClient()
+      return client.video(prompt) as unknown as Promise<TReturn>
+    }
+
+    case 'audio': {
+      // Audio generation would need a specific implementation
+      throw new Error('Audio generation not yet implemented')
+    }
+
+    default:
+      throw new Error(`Unknown output type: ${output}`)
+  }
+}
+
+/**
+ * Execute an agentic function - runs in a loop with tools
+ */
+async function executeAgenticFunction<TArgs, TReturn>(
+  definition: AgenticFunctionDefinition<TArgs, TReturn>,
+  args: TArgs
+): Promise<TReturn> {
+  const { instructions, promptTemplate, tools = [], maxIterations = 10, model = 'sonnet', returnType } = definition
+
+  const prompt = promptTemplate
+    ? fillTemplate(promptTemplate, args as Record<string, unknown>)
+    : JSON.stringify(args)
+
+  // Build system prompt with tool descriptions
+  const toolDescriptions = tools.map(t => `- ${t.name}: ${t.description}`).join('\n')
+  const systemPrompt = `${instructions}
+
+Available tools:
+${toolDescriptions || 'No tools available'}
+
+Work step by step to accomplish the task. When you have completed the task, provide your final result.`
+
+  let iteration = 0
+  const toolResults: unknown[] = []
+
+  // Simple agent loop
+  while (iteration < maxIterations) {
+    iteration++
+
+    const result = await generateObject({
+      model,
+      schema: {
+        thinking: 'Your step-by-step reasoning',
+        toolCall: {
+          name: 'Tool to call (or "done" if finished)',
+          arguments: 'Arguments for the tool as JSON string',
+        },
+        finalResult: returnType || 'The final result if done',
+      },
+      system: systemPrompt,
+      prompt: `Task: ${prompt}
+
+Previous tool results:
+${toolResults.map((r, i) => `Step ${i + 1}: ${JSON.stringify(r)}`).join('\n') || 'None yet'}
+
+What is your next step?`,
+    })
+
+    const response = result.object as {
+      thinking: string
+      toolCall: { name: string; arguments: string }
+      finalResult: unknown
+    }
+
+    if (response.toolCall.name === 'done' || response.finalResult) {
+      return response.finalResult as TReturn
+    }
+
+    // Execute tool call
+    const tool = tools.find(t => t.name === response.toolCall.name)
+    if (tool) {
+      const toolArgs = JSON.parse(response.toolCall.arguments || '{}')
+      const toolResult = await tool.handler(toolArgs)
+      toolResults.push({ tool: response.toolCall.name, result: toolResult })
+    } else {
+      toolResults.push({ error: `Tool not found: ${response.toolCall.name}` })
+    }
+  }
+
+  throw new Error(`Agent exceeded maximum iterations (${maxIterations})`)
+}
+
+/**
+ * Execute a human function - generates UI and waits for human input
+ */
+async function executeHumanFunction<TArgs, TReturn>(
+  definition: HumanFunctionDefinition<TArgs, TReturn>,
+  args: TArgs
+): Promise<TReturn> {
+  const { channel, instructions, promptTemplate, returnType } = definition
+
+  const prompt = promptTemplate
+    ? fillTemplate(promptTemplate, args as Record<string, unknown>)
+    : JSON.stringify(args)
+
+  // Generate channel-specific UI
+  const uiSchema = {
+    slack: {
+      blocks: ['Slack BlockKit blocks as JSON array'],
+      text: 'Plain text fallback',
+    },
+    email: {
+      subject: 'Email subject',
+      html: 'Email HTML body',
+      text: 'Plain text fallback',
+    },
+    web: {
+      component: 'React component code for the form',
+      schema: 'JSON schema for the form fields',
+    },
+    sms: {
+      text: 'SMS message text (max 160 chars)',
+    },
+    custom: {
+      data: 'Structured data for custom implementation',
+      instructions: 'Instructions for the human',
+    },
+  }
+
+  const result = await generateObject({
+    model: 'sonnet',
+    schema: uiSchema[channel] || uiSchema.custom,
+    system: `Generate ${channel} UI/content for a human-in-the-loop task.`,
+    prompt: `Task: ${instructions}
+
+Input data:
+${prompt}
+
+Expected response format:
+${JSON.stringify(returnType)}
+
+Generate the appropriate ${channel} UI/content to collect this response from a human.`,
+  })
+
+  // In a real implementation, this would:
+  // 1. Send the generated UI to the appropriate channel
+  // 2. Wait for human response
+  // 3. Return the validated response
+
+  // For now, return the generated artifacts as a placeholder
+  return {
+    _pending: true,
+    channel,
+    artifacts: result.object,
+    expectedResponseType: returnType,
+  } as unknown as TReturn
+}
+
+/**
+ * Helper to create a function that supports both regular calls and tagged template literals
+ * @example
+ * const fn = withTemplate((prompt) => doSomething(prompt))
+ * fn('hello')      // regular call
+ * fn`hello ${name}` // tagged template literal
+ */
+export function withTemplate<TArgs extends unknown[], TReturn>(
+  fn: (prompt: string, ...args: TArgs) => TReturn
+): ((prompt: string, ...args: TArgs) => TReturn) & ((strings: TemplateStringsArray, ...values: unknown[]) => TReturn) {
+  return function (promptOrStrings: string | TemplateStringsArray, ...args: unknown[]): TReturn {
+    if (Array.isArray(promptOrStrings) && 'raw' in promptOrStrings) {
+      // Tagged template literal call - pass empty args for optional params
+      const strings = promptOrStrings as TemplateStringsArray
+      const values = args
+      const prompt = strings.reduce((acc, str, i) => acc + str + (values[i] ?? ''), '')
+      return fn(prompt, ...([] as unknown as TArgs))
+    }
+    // Regular function call
+    return fn(promptOrStrings as string, ...(args as TArgs))
+  } as ((prompt: string, ...args: TArgs) => TReturn) & ((strings: TemplateStringsArray, ...values: unknown[]) => TReturn)
 }
 
 // Default client management
@@ -336,4 +690,448 @@ export abstract class AIServiceTarget extends RpcTarget implements AIClient {
   abstract image(prompt: string, options?: ImageOptions): RpcPromise<ImageResult>
   abstract video(prompt: string, options?: VideoOptions): RpcPromise<VideoResult>
   abstract write(prompt: string, options?: WriteOptions): RpcPromise<string>
+  abstract list(prompt: string): RpcPromise<ListResult>
+  abstract lists(prompt: string): RpcPromise<ListsResult>
 }
+
+/**
+ * Standalone function for defining AI functions
+ *
+ * @example
+ * ```ts
+ * import { defineFunction } from 'ai-functions'
+ *
+ * const summarize = defineFunction({
+ *   type: 'generative',
+ *   name: 'summarize',
+ *   args: { text: 'Text to summarize' },
+ *   output: 'string',
+ *   promptTemplate: 'Summarize: {{text}}',
+ * })
+ *
+ * const result = await summarize.call({ text: 'Long article...' })
+ * ```
+ */
+export function defineFunction<TArgs, TReturn>(
+  definition: FunctionDefinition<TArgs, TReturn>
+): DefinedFunction<TArgs, TReturn> {
+  return createDefinedFunction(definition)
+}
+
+// ============================================================================
+// Function Registry
+// ============================================================================
+
+/**
+ * In-memory function registry
+ */
+class InMemoryFunctionRegistry implements FunctionRegistry {
+  private functions = new Map<string, DefinedFunction>()
+
+  get(name: string): DefinedFunction | undefined {
+    return this.functions.get(name)
+  }
+
+  set(name: string, fn: DefinedFunction): void {
+    this.functions.set(name, fn)
+  }
+
+  has(name: string): boolean {
+    return this.functions.has(name)
+  }
+
+  list(): string[] {
+    return Array.from(this.functions.keys())
+  }
+
+  delete(name: string): boolean {
+    return this.functions.delete(name)
+  }
+
+  clear(): void {
+    this.functions.clear()
+  }
+}
+
+/**
+ * Global function registry
+ *
+ * Note: This is in-memory only. For persistence, use mdxai or mdxdb packages.
+ */
+export const functions: FunctionRegistry = new InMemoryFunctionRegistry()
+
+// ============================================================================
+// Auto-Define Functions
+// ============================================================================
+
+/**
+ * Analyze a function call and determine what type of function it should be
+ */
+async function analyzeFunction(
+  name: string,
+  args: Record<string, unknown>
+): Promise<AutoDefineResult> {
+  // Convert camelCase/snake_case to readable name
+  const readableName = name
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .trim()
+
+  const argDescriptions = Object.entries(args)
+    .map(([key, value]) => {
+      const type = Array.isArray(value) ? 'array' : typeof value
+      return `  - ${key}: ${type} (example: ${JSON.stringify(value).slice(0, 50)})`
+    })
+    .join('\n')
+
+  const result = await generateObject({
+    model: 'sonnet',
+    schema: {
+      type: 'code | generative | agentic | human',
+      reasoning: 'Why this function type is appropriate (1-2 sentences)',
+      description: 'What this function does',
+      output: 'string | object | image | video | audio',
+      returnType: 'Schema for the return type as a SimpleSchema object',
+      system: 'System prompt for the AI (if generative/agentic)',
+      promptTemplate: 'Prompt template with {{arg}} placeholders',
+      instructions: 'Instructions for agentic/human functions',
+      needsTools: 'true | false',
+      suggestedTools: ['Names of tools that might be needed'],
+      channel: 'slack | email | web | sms | custom',
+    },
+    system: `You are an expert at designing AI functions. Analyze the function name and arguments to determine the best function type.
+
+Function Types:
+- "code": For generating executable code (calculations, algorithms, data transformations)
+- "generative": For generating content (text, summaries, translations, creative writing, structured data)
+- "agentic": For complex tasks requiring multiple steps, research, or tool use (research, planning, multi-step workflows)
+- "human": For tasks requiring human judgment, approval, or input (approvals, reviews, decisions)
+
+Guidelines:
+- Most functions should be "generative" - they generate content or structured data
+- Use "code" only when actual executable code needs to be generated
+- Use "agentic" when the task requires research, multiple steps, or external tool use
+- Use "human" when human judgment/approval is essential`,
+    prompt: `Analyze this function call and determine how to define it:
+
+Function Name: ${name}
+Readable Name: ${readableName}
+Arguments:
+${argDescriptions || '  (no arguments)'}
+
+Determine:
+1. What type of function this should be
+2. What it should return
+3. How it should be implemented`,
+  })
+
+  const analysis = result.object as {
+    type: string
+    reasoning: string
+    description: string
+    output: string
+    returnType: unknown
+    system: string
+    promptTemplate: string
+    instructions: string
+    needsTools: string
+    suggestedTools: string[]
+    channel: string
+  }
+
+  // Build the function definition based on the analysis
+  let definition: FunctionDefinition
+
+  const baseDefinition = {
+    name,
+    description: analysis.description,
+    args: inferArgsSchema(args),
+    returnType: analysis.returnType as SimpleSchemaType,
+  }
+
+  switch (analysis.type) {
+    case 'code':
+      definition = {
+        ...baseDefinition,
+        type: 'code' as const,
+        language: 'typescript' as const,
+        instructions: analysis.instructions,
+      }
+      break
+
+    case 'agentic':
+      definition = {
+        ...baseDefinition,
+        type: 'agentic' as const,
+        instructions: analysis.instructions || `Complete the ${readableName} task`,
+        promptTemplate: analysis.promptTemplate,
+        tools: [], // Tools would need to be provided separately
+        maxIterations: 10,
+      }
+      break
+
+    case 'human':
+      definition = {
+        ...baseDefinition,
+        type: 'human' as const,
+        channel: (analysis.channel || 'web') as 'slack' | 'email' | 'web' | 'sms' | 'custom',
+        instructions: analysis.instructions || `Please review and respond to this ${readableName} request`,
+        promptTemplate: analysis.promptTemplate,
+      }
+      break
+
+    case 'generative':
+    default:
+      definition = {
+        ...baseDefinition,
+        type: 'generative' as const,
+        output: (analysis.output || 'object') as 'string' | 'object' | 'image' | 'video' | 'audio',
+        system: analysis.system,
+        promptTemplate: analysis.promptTemplate || `{{${Object.keys(args)[0] || 'input'}}}`,
+      }
+      break
+  }
+
+  return {
+    type: analysis.type as 'code' | 'generative' | 'agentic' | 'human',
+    reasoning: analysis.reasoning,
+    definition,
+  }
+}
+
+/**
+ * Infer a schema from example arguments
+ */
+function inferArgsSchema(args: Record<string, unknown>): Record<string, string | string[] | Record<string, unknown>> {
+  const schema: Record<string, string | string[] | Record<string, unknown>> = {}
+
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value === 'string') {
+      schema[key] = `The ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}`
+    } else if (typeof value === 'number') {
+      schema[key] = `The ${key.replace(/([A-Z])/g, ' $1').toLowerCase()} (number)`
+    } else if (typeof value === 'boolean') {
+      schema[key] = `Whether ${key.replace(/([A-Z])/g, ' $1').toLowerCase()} (boolean)`
+    } else if (Array.isArray(value)) {
+      if (value.length > 0 && typeof value[0] === 'string') {
+        schema[key] = [`List of ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}`]
+      } else {
+        schema[key] = [`Items for ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}`]
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      schema[key] = inferArgsSchema(value as Record<string, unknown>)
+    } else {
+      schema[key] = `The ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}`
+    }
+  }
+
+  return schema
+}
+
+/**
+ * Auto-define a function based on its name and arguments, or define with explicit definition
+ *
+ * When called with (name, args), uses AI to analyze and determine:
+ * - What type of function it should be (code, generative, agentic, human)
+ * - What it should return
+ * - How it should be implemented
+ *
+ * When called with a FunctionDefinition, creates the function directly.
+ *
+ * @example
+ * ```ts
+ * // Auto-define from name and example args
+ * const planTrip = await define('planTrip', { destination: 'Tokyo', travelers: 2 })
+ *
+ * // Or define explicitly
+ * const summarize = define.generative({
+ *   name: 'summarize',
+ *   args: { text: 'Text to summarize' },
+ *   output: 'string',
+ * })
+ *
+ * // Or with full definition
+ * const fn = defineFunction({
+ *   type: 'generative',
+ *   name: 'translate',
+ *   args: { text: 'Text', lang: 'Target language' },
+ *   output: 'string',
+ * })
+ * ```
+ */
+async function autoDefineImpl(
+  name: string,
+  args: Record<string, unknown>
+): Promise<DefinedFunction> {
+  // Check if already defined
+  const existing = functions.get(name)
+  if (existing) {
+    return existing
+  }
+
+  // Analyze and define the function
+  const { definition } = await analyzeFunction(name, args)
+
+  // Create the defined function
+  const definedFn = createDefinedFunction(definition)
+
+  // Store in registry
+  functions.set(name, definedFn)
+
+  return definedFn
+}
+
+/**
+ * Define functions - auto-define or use typed helpers
+ */
+export const define = Object.assign(autoDefineImpl, {
+  /**
+   * Define a code generation function
+   */
+  code: <TArgs, TReturn>(
+    definition: Omit<CodeFunctionDefinition<TArgs, TReturn>, 'type'>
+  ): DefinedFunction<TArgs, TReturn> => {
+    const fn = defineFunction({ type: 'code', ...definition } as CodeFunctionDefinition<TArgs, TReturn>)
+    functions.set(definition.name, fn as DefinedFunction)
+    return fn
+  },
+
+  /**
+   * Define a generative function
+   */
+  generative: <TArgs, TReturn>(
+    definition: Omit<GenerativeFunctionDefinition<TArgs, TReturn>, 'type'>
+  ): DefinedFunction<TArgs, TReturn> => {
+    const fn = defineFunction({ type: 'generative', ...definition } as GenerativeFunctionDefinition<TArgs, TReturn>)
+    functions.set(definition.name, fn as DefinedFunction)
+    return fn
+  },
+
+  /**
+   * Define an agentic function
+   */
+  agentic: <TArgs, TReturn>(
+    definition: Omit<AgenticFunctionDefinition<TArgs, TReturn>, 'type'>
+  ): DefinedFunction<TArgs, TReturn> => {
+    const fn = defineFunction({ type: 'agentic', ...definition } as AgenticFunctionDefinition<TArgs, TReturn>)
+    functions.set(definition.name, fn as DefinedFunction)
+    return fn
+  },
+
+  /**
+   * Define a human-in-the-loop function
+   */
+  human: <TArgs, TReturn>(
+    definition: Omit<HumanFunctionDefinition<TArgs, TReturn>, 'type'>
+  ): DefinedFunction<TArgs, TReturn> => {
+    const fn = defineFunction({ type: 'human', ...definition } as HumanFunctionDefinition<TArgs, TReturn>)
+    functions.set(definition.name, fn as DefinedFunction)
+    return fn
+  },
+})
+
+// ============================================================================
+// AI() - Smart AI Client with Auto-Definition
+// ============================================================================
+
+/** Known built-in method names that should not be auto-defined */
+const BUILTIN_METHODS = new Set([
+  'do', 'is', 'code', 'decide', 'diagram', 'generate', 'image', 'video', 'write', 'list', 'lists',
+  'functions', 'define', 'defineFunction', 'then', 'catch', 'finally',
+])
+
+/**
+ * Create a smart AI client that auto-defines functions on first call
+ *
+ * @example
+ * ```ts
+ * const ai = AI()
+ *
+ * // First call - auto-defines the function
+ * const trip = await ai.planTrip({
+ *   destination: 'Tokyo',
+ *   dates: { start: '2024-03-01', end: '2024-03-10' },
+ *   travelers: 2,
+ * })
+ *
+ * // Second call - uses cached definition (in-memory)
+ * const trip2 = await ai.planTrip({
+ *   destination: 'Paris',
+ *   dates: { start: '2024-06-01', end: '2024-06-07' },
+ *   travelers: 4,
+ * })
+ *
+ * // Access registry and define
+ * console.log(ai.functions.list()) // ['planTrip']
+ * ai.define.generative({ name: 'summarize', ... })
+ * ```
+ */
+function createSmartAI(): AIProxy {
+  const base = {
+    functions,
+    define,
+    defineFunction,
+  }
+
+  return new Proxy(base as AIProxy, {
+    get(target, prop: string) {
+      // Return built-in properties
+      if (prop in target) {
+        return (target as Record<string, unknown>)[prop]
+      }
+
+      // Skip internal properties
+      if (typeof prop === 'symbol' || prop.startsWith('_') || BUILTIN_METHODS.has(prop)) {
+        return undefined
+      }
+
+      // Return a function that auto-defines and calls
+      return async (args: Record<string, unknown> = {}) => {
+        // Check if function is already defined
+        let fn = functions.get(prop)
+
+        if (!fn) {
+          // Auto-define the function
+          fn = await define(prop, args)
+        }
+
+        // Call the function
+        return fn.call(args)
+      }
+    },
+  })
+}
+
+/**
+ * Type for the AI proxy with auto-define capability
+ */
+export interface AIProxy {
+  /** Function registry */
+  functions: FunctionRegistry
+  /** Define functions */
+  define: typeof define
+  /** Define a function with full definition */
+  defineFunction: typeof defineFunction
+  /** Dynamic function calls */
+  [key: string]: unknown
+}
+
+/**
+ * Default AI instance with auto-define capability
+ *
+ * @example
+ * ```ts
+ * import { ai } from 'ai-functions'
+ *
+ * // Auto-define and call
+ * const result = await ai.summarize({ text: 'Long article...' })
+ *
+ * // Access functions registry
+ * ai.functions.list()
+ *
+ * // Define explicitly
+ * ai.define.generative({ name: 'translate', ... })
+ * ```
+ */
+export const ai: AIProxy = createSmartAI()

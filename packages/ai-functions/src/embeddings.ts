@@ -18,11 +18,11 @@ export type {
   Embedding
 } from 'ai'
 
-// Re-export Cloudflare provider
-export { cloudflare, cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from './providers/cloudflare.js'
+// Re-export Cloudflare provider from ai-providers
+export { cloudflare, cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from 'ai-providers/cloudflare'
 
 import { embed as aiEmbed, embedMany as aiEmbedMany } from 'ai'
-import { cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from './providers/cloudflare.js'
+import { cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from 'ai-providers/cloudflare'
 
 /**
  * Get the default embedding model (Cloudflare @cf/baai/bge-m3)
@@ -126,8 +126,8 @@ export function findSimilar<T>(
 
   const scored = embeddings
     .map((embedding, index) => ({
-      item: items[index],
-      score: cosineSimilarity(queryEmbedding, embedding),
+      item: items[index]!,
+      score: cosineSimilarity(queryEmbedding, embedding) as number,
       index
     }))
     .filter(result => result.score >= minScore)
@@ -153,11 +153,11 @@ export function pairwiseSimilarity(embeddings: number[][]): number[][] {
   const matrix: number[][] = Array(n).fill(null).map(() => Array(n).fill(0))
 
   for (let i = 0; i < n; i++) {
-    matrix[i][i] = 1 // Self-similarity is always 1
+    matrix[i]![i] = 1 // Self-similarity is always 1
     for (let j = i + 1; j < n; j++) {
       const sim = cosineSimilarity(embeddings[i], embeddings[j])
-      matrix[i][j] = sim
-      matrix[j][i] = sim
+      matrix[i]![j] = sim
+      matrix[j]![i] = sim
     }
   }
 
@@ -191,7 +191,7 @@ export function clusterBySimilarity<T>(
   for (let i = 0; i < n; i++) {
     if (assigned.has(i)) continue
 
-    const cluster: T[] = [items[i]]
+    const cluster: T[] = [items[i]!]
     assigned.add(i)
 
     for (let j = i + 1; j < n; j++) {
@@ -199,7 +199,7 @@ export function clusterBySimilarity<T>(
 
       const sim = cosineSimilarity(embeddings[i], embeddings[j])
       if (sim >= threshold) {
-        cluster.push(items[j])
+        cluster.push(items[j]!)
         assigned.add(j)
       }
     }
@@ -217,7 +217,7 @@ export function clusterBySimilarity<T>(
 export function averageEmbeddings(embeddings: number[][]): number[] {
   if (embeddings.length === 0) return []
 
-  const dim = embeddings[0].length
+  const dim = embeddings[0]!.length
   const result = new Array(dim).fill(0)
 
   for (const embedding of embeddings) {

@@ -1,6 +1,6 @@
 # ai-functions
 
-Core AI primitives for building intelligent applications. This is the foundational package that all other primitives depend on.
+Core AI primitives for building intelligent applications with auto-defining functions.
 
 ## Installation
 
@@ -11,9 +11,138 @@ pnpm add ai-functions
 ## Quick Start
 
 ```typescript
-import { AI, generateObject, generateText } from 'ai-functions'
+import { ai } from 'ai-functions'
 
-// Create schema-based AI functions
+// Just call any function - it auto-defines on first use
+const trip = await ai.planTrip({
+  destination: 'Tokyo',
+  dates: { start: '2024-03-01', end: '2024-03-10' },
+  travelers: 2,
+})
+
+// Second call uses cached definition
+const trip2 = await ai.planTrip({
+  destination: 'Paris',
+  dates: { start: '2024-06-01', end: '2024-06-07' },
+  travelers: 4,
+})
+```
+
+## Auto-Defining Functions
+
+The `ai` proxy automatically analyzes function names and arguments to determine the best implementation:
+
+```typescript
+import { ai } from 'ai-functions'
+
+// Generative - generates content
+const summary = await ai.summarize({ text: 'Long article...' })
+const recipe = await ai.generateRecipe({ cuisine: 'Italian', servings: 4 })
+const email = await ai.writeEmail({ to: 'John', subject: 'Meeting', tone: 'professional' })
+
+// Agentic - multi-step with tools
+const research = await ai.researchTopic({ topic: 'quantum computing', depth: 'comprehensive' })
+const analysis = await ai.analyzeCompetitors({ company: 'Acme Corp', market: 'SaaS' })
+
+// Human - requires approval
+const approval = await ai.approveExpense({ amount: 500, description: 'Team dinner' })
+const review = await ai.reviewPullRequest({ pr: 123, repo: 'myapp' })
+
+// Code - generates executable code
+const algo = await ai.implementSortAlgorithm({ type: 'quicksort', language: 'typescript' })
+```
+
+## Explicit Function Definition
+
+Define functions explicitly when you need precise control:
+
+```typescript
+import { ai, define } from 'ai-functions'
+
+// Define a generative function
+const summarize = define.generative({
+  name: 'summarize',
+  args: { text: 'The text to summarize', maxLength: 'Maximum length (number)' },
+  output: 'string',
+  system: 'You are an expert summarizer. Be concise.',
+  promptTemplate: 'Summarize in {{maxLength}} words or less:\n\n{{text}}',
+})
+
+const result = await summarize.call({ text: 'Very long article...', maxLength: 100 })
+
+// Define agentic function with tools
+const research = define.agentic({
+  name: 'research',
+  args: { topic: 'Topic to research' },
+  returnType: {
+    summary: 'Research summary',
+    sources: ['List of sources'],
+    confidence: 'Confidence level (number)',
+  },
+  instructions: 'Research the topic thoroughly using available tools.',
+  tools: [searchTool, fetchTool],
+  maxIterations: 10,
+})
+
+// Define human-in-the-loop function
+const approve = define.human({
+  name: 'approveExpense',
+  args: {
+    amount: 'Expense amount (number)',
+    description: 'What the expense is for',
+    submitter: 'Who submitted it',
+  },
+  returnType: {
+    approved: 'Whether approved (boolean)',
+    notes: 'Approver notes',
+  },
+  channel: 'slack',
+  instructions: 'Review the expense and approve or reject with notes.',
+})
+
+// Define code generation function
+const implement = define.code({
+  name: 'implementFunction',
+  args: { spec: 'Function specification' },
+  language: 'typescript',
+  includeTests: true,
+  includeExamples: true,
+})
+```
+
+## Function Registry
+
+Access and manage defined functions:
+
+```typescript
+import { ai, functions } from 'ai-functions'
+
+// After calling ai.summarize(), it's in the registry
+await ai.summarize({ text: '...' })
+
+// List all defined functions
+console.log(functions.list()) // ['summarize']
+
+// Get a function
+const fn = functions.get('summarize')
+console.log(fn?.definition)
+
+// Check if exists
+if (functions.has('summarize')) {
+  // ...
+}
+
+// Clear all
+functions.clear()
+```
+
+## Schema-Based Functions
+
+Create typed functions from schemas:
+
+```typescript
+import { AI } from 'ai-functions'
+
 const ai = AI({
   recipe: {
     name: 'Recipe name',
@@ -32,281 +161,64 @@ const ai = AI({
   },
 })
 
-// Call the generated functions
+// Call with inferred types
 const recipe = await ai.recipe('Italian pasta for 4 people')
-const brand = await ai.storyBrand('Acme Corp sells productivity tools')
-```
-
-## Features
-
-- **Schema-based AI functions** - Define typed AI functions with simple schema syntax
-- **Smart model routing** - Automatically routes to the best provider
-- **Simplified schemas** - Human-readable schema definitions that compile to Zod
-- **Embedding utilities** - Full embedding support with Cloudflare Workers AI
-- **RPC with promise pipelining** - Efficient remote calls via capnweb
-
-## AI Functions
-
-### Creating Schema Functions
-
-Define AI functions using a simple, human-readable schema syntax:
-
-```typescript
-import { AI } from 'ai-functions'
-
-const ai = AI({
-  // Each key becomes a function
-  summarize: {
-    summary: 'A concise summary of the content',
-    keyPoints: ['The main takeaways'],
-    sentiment: 'positive | negative | neutral',
-  },
-
-  extract: {
-    entities: ['Named entities found in the text'],
-    dates: ['Any dates mentioned'],
-    numbers: ['Any numbers or quantities (number)'],
-  },
-})
-
-// Call with a prompt
-const { summary, keyPoints, sentiment } = await ai.summarize('Long article text...')
-const { entities, dates } = await ai.extract('Meeting on Jan 15 with John...')
+// Type: { name: string, type: 'food'|'drink'|'dessert', servings: number, ingredients: string[], steps: string[] }
 ```
 
 ### Schema Syntax
 
-The simplified schema syntax maps to Zod types:
-
-| Syntax | Zod Equivalent | Example |
-|--------|---------------|---------|
-| `'description'` | `z.string().describe()` | `name: 'User name'` |
-| `'desc (number)'` | `z.number().describe()` | `age: 'User age (number)'` |
-| `'desc (boolean)'` | `z.boolean().describe()` | `active: 'Is active? (boolean)'` |
-| `'desc (integer)'` | `z.number().int().describe()` | `count: 'Item count (integer)'` |
-| `'opt1 \| opt2'` | `z.enum([...])` | `status: 'pending \| done'` |
-| `['description']` | `z.array(z.string()).describe()` | `tags: ['List of tags']` |
-| `{ nested }` | `z.object()` | `address: { city: '...', zip: '...' }` |
-
-### Using with Options
-
-```typescript
-const ai = AI({
-  analyze: {
-    score: 'Quality score 1-10 (number)',
-    issues: ['List of issues found'],
-    recommendation: 'What to do next',
-  },
-}, {
-  model: 'opus',      // Default model for all functions
-  temperature: 0.7,   // Default temperature
-})
-
-// Override per-call
-const result = await ai.analyze('Code to review', {
-  model: 'sonnet',
-  temperature: 0,
-})
-```
+| Syntax | Type | Example |
+|--------|------|---------|
+| `'description'` | string | `name: 'User name'` |
+| `'desc (number)'` | number | `age: 'User age (number)'` |
+| `'desc (boolean)'` | boolean | `active: 'Is active? (boolean)'` |
+| `'desc (date)'` | datetime | `created: 'Created at (date)'` |
+| `'opt1 \| opt2'` | enum | `status: 'pending \| done'` |
+| `['description']` | string[] | `tags: ['List of tags']` |
+| `{ nested }` | object | `address: { city: '...' }` |
 
 ## Generate Functions
 
-Use `generateObject` and `generateText` directly with smart model routing:
-
-### generateObject
+Use `generateObject` and `generateText` directly:
 
 ```typescript
-import { generateObject } from 'ai-functions'
+import { generateObject, generateText } from 'ai-functions'
 
-// With simplified schema
+// Generate structured object
 const { object } = await generateObject({
-  model: 'sonnet',  // Resolves to anthropic/claude-sonnet-4.5
+  model: 'sonnet',
   schema: {
     title: 'Article title',
-    sections: [{
-      heading: 'Section heading',
-      content: 'Section content',
-    }],
-    tags: ['Relevant tags'],
+    sections: [{ heading: 'Heading', content: 'Content' }],
   },
   prompt: 'Write an article about TypeScript',
 })
 
-// With Zod schema
-import { z } from 'zod'
-
-const { object } = await generateObject({
-  model: 'gpt-4o',
-  schema: z.object({
-    name: z.string(),
-    age: z.number(),
-  }),
-  prompt: 'Generate a user profile',
-})
-```
-
-### generateText
-
-```typescript
-import { generateText } from 'ai-functions'
-
+// Generate text
 const { text } = await generateText({
-  model: 'opus',
-  prompt: 'Explain quantum computing in simple terms',
-})
-
-// With tools
-const { text, toolResults } = await generateText({
   model: 'sonnet',
-  prompt: 'What is the weather in Tokyo?',
-  tools: {
-    getWeather: {
-      description: 'Get weather for a city',
-      parameters: z.object({ city: z.string() }),
-      execute: async ({ city }) => fetchWeather(city),
-    },
-  },
-  maxSteps: 5,
+  prompt: 'Explain quantum computing',
 })
 ```
-
-### Streaming
-
-```typescript
-import { streamObject, streamText } from 'ai-functions'
-
-// Stream object generation
-const { partialObjectStream } = await streamObject({
-  model: 'sonnet',
-  schema: { story: 'A creative story' },
-  prompt: 'Write a short story',
-})
-
-for await (const partial of partialObjectStream) {
-  console.log(partial.story)
-}
-
-// Stream text generation
-const { textStream } = await streamText({
-  model: 'gemini',
-  prompt: 'Explain machine learning',
-})
-
-for await (const chunk of textStream) {
-  process.stdout.write(chunk)
-}
-```
-
-## Model Routing
-
-Models are automatically resolved and routed to the best provider:
-
-```typescript
-// Simple aliases
-await generateText({ model: 'opus' })      // → anthropic/claude-opus-4.5
-await generateText({ model: 'sonnet' })    // → anthropic/claude-sonnet-4.5
-await generateText({ model: 'gpt-4o' })    // → openai/gpt-4o
-await generateText({ model: 'gemini' })    // → google/gemini-2.5-flash
-await generateText({ model: 'llama' })     // → meta-llama/llama-4-maverick
-
-// Full IDs also work
-await generateText({ model: 'anthropic/claude-opus-4.5' })
-await generateText({ model: 'mistralai/mistral-large-2411' })
-```
-
-**Smart routing:**
-- `openai/*` → OpenAI SDK (structured outputs, streaming)
-- `anthropic/*` → Anthropic SDK (MCP, tool use)
-- `google/*` → Google AI SDK (grounding, code execution)
-- Everything else → OpenRouter (200+ models)
 
 ## Embeddings
 
-Full embedding support with sensible defaults:
-
 ```typescript
-import {
-  embed,
-  embedMany,
-  embedText,
-  embedTexts,
-  cosineSimilarity,
-  findSimilar,
-} from 'ai-functions'
+import { embedText, embedTexts, findSimilar, cosineSimilarity } from 'ai-functions'
 
-// Quick embedding with default Cloudflare model
+// Embed text
 const { embedding } = await embedText('Hello world')
 const { embeddings } = await embedTexts(['doc1', 'doc2', 'doc3'])
 
-// Custom model
-import { embed } from 'ai-functions'
-
-const { embedding } = await embed({
-  model: openai.embedding('text-embedding-3-small'),
-  value: 'Hello world',
-})
-
-// Find similar items
+// Find similar
 const results = findSimilar(queryEmbedding, embeddings, documents, {
   topK: 5,
   minScore: 0.7,
 })
 
-// Clustering
-import { clusterBySimilarity } from 'ai-functions'
-
-const clusters = clusterBySimilarity(embeddings, documents, {
-  threshold: 0.8,
-})
-```
-
-### Embedding Utilities
-
-| Function | Description |
-|----------|-------------|
-| `embed()` | Embed single value (AI SDK) |
-| `embedMany()` | Embed multiple values (AI SDK) |
-| `embedText()` | Embed text with default CF model |
-| `embedTexts()` | Embed multiple texts with default CF model |
-| `cosineSimilarity()` | Calculate similarity between embeddings |
-| `findSimilar()` | Find most similar items |
-| `pairwiseSimilarity()` | Calculate all pairwise similarities |
-| `clusterBySimilarity()` | Cluster items by embedding similarity |
-| `averageEmbeddings()` | Average multiple embeddings |
-| `normalizeEmbedding()` | Normalize to unit length |
-
-## RPC with Promise Pipelining
-
-Efficient remote AI calls using capnweb:
-
-```typescript
-import { AI } from 'ai-functions'
-
-// Connect to remote AI service
-const ai = AI({ wsUrl: 'wss://ai.example.com/rpc' })
-
-// Promise pipelining - single round trip!
-const result = ai.generate({ prompt: 'Hello' })
-const upper = result.text.map(t => t.toUpperCase())
-console.log(await upper)  // Only one network call
-
-// Dynamic function calling
-const summary = await ai.summarize({ text: longText })
-```
-
-### Creating RPC Sessions
-
-```typescript
-import { createRPCSession, createAuthenticatedClient } from 'ai-functions/rpc'
-
-// Basic session
-const client = createRPCSession({ wsUrl: 'wss://...' })
-
-// Authenticated (uses DO_TOKEN or oauth.do)
-const client = await createAuthenticatedClient({
-  httpUrl: 'https://apis.do/rpc',
-  wsUrl: 'wss://apis.do/rpc',
-})
+// Calculate similarity
+const score = cosineSimilarity(embedding1, embedding2)
 ```
 
 ## Configuration
@@ -317,69 +229,48 @@ const client = await createAuthenticatedClient({
 |----------|-------------|
 | `AI_GATEWAY_URL` | Cloudflare AI Gateway URL |
 | `AI_GATEWAY_TOKEN` | Gateway auth token |
-| `DO_TOKEN` | Default auth token for apis.do |
-| `CLOUDFLARE_ACCOUNT_ID` | For Workers AI embeddings |
-| `CLOUDFLARE_API_TOKEN` | For Workers AI embeddings |
-
-### Configuring Defaults
-
-```typescript
-import { configureAI } from 'ai-functions'
-
-// Configure default AI client
-configureAI({
-  wsUrl: 'wss://custom.example.com/rpc',
-  model: 'sonnet',
-})
-```
-
-## TypeScript Support
-
-Full TypeScript support with inferred types:
-
-```typescript
-const ai = AI({
-  user: {
-    name: 'User name',
-    age: 'User age (number)',
-    roles: ['User roles'],
-  },
-})
-
-// Type is inferred:
-// { name: string; age: number; roles: string[] }
-const user = await ai.user('Generate an admin user')
-```
+| `OPENAI_API_KEY` | OpenAI API key (fallback) |
+| `ANTHROPIC_API_KEY` | Anthropic API key (fallback) |
 
 ## API Reference
 
-### Core Functions
+### Core Exports
 
 | Export | Description |
 |--------|-------------|
-| `AI()` | Create schema functions or RPC client |
+| `ai` | Smart proxy with auto-define |
+| `ai.functions` | Function registry |
+| `ai.define` | Define helpers |
+| `ai.defineFunction` | Full definition |
+| `functions` | Direct registry access |
+| `define` | Auto-define + typed helpers |
+| `defineFunction` | Low-level define |
+
+### Define Helpers
+
+| Helper | Description |
+|--------|-------------|
+| `define(name, args)` | Auto-define from name + args |
+| `define.generative({...})` | Define generative function |
+| `define.agentic({...})` | Define agentic function |
+| `define.human({...})` | Define human function |
+| `define.code({...})` | Define code function |
+
+### Generate Functions
+
+| Function | Description |
+|----------|-------------|
 | `generateObject()` | Generate structured object |
 | `generateText()` | Generate text |
 | `streamObject()` | Stream object generation |
 | `streamText()` | Stream text generation |
-| `schema()` | Convert simple schema to Zod |
 
 ### Embedding Functions
 
-| Export | Description |
-|--------|-------------|
-| `embed()` | Embed single value |
-| `embedMany()` | Embed multiple values |
-| `embedText()` | Quick embed with CF model |
-| `embedTexts()` | Quick embed multiple |
+| Function | Description |
+|----------|-------------|
+| `embedText()` | Embed single text |
+| `embedTexts()` | Embed multiple texts |
 | `cosineSimilarity()` | Calculate similarity |
 | `findSimilar()` | Find similar items |
 | `clusterBySimilarity()` | Cluster by similarity |
-
-### RPC Functions
-
-| Export | Description |
-|--------|-------------|
-| `createRPCSession()` | Create RPC session |
-| `createAuthenticatedClient()` | Create authenticated client |
-| `getDefaultRPCClient()` | Get default client |

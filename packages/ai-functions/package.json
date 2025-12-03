@@ -39,11 +39,24 @@
     "ai": "^4.0.0",
     "ai-providers": "workspace:*",
     "capnweb": "^0.2.0",
+    "language-models": "workspace:*",
     "zod": "^3.23.0"
   },
   "optionalDependencies": {
     "oauth.do": "^0.0.1"
   },
-  "keywords": ["ai", "functions", "rpc", "capnweb", "embeddings", "cloudflare", "oauth", "primitives"],
-  "license": "MIT"
+  "keywords": [
+    "ai",
+    "functions",
+    "rpc",
+    "capnweb",
+    "embeddings",
+    "cloudflare",
+    "oauth",
+    "primitives"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "dotenv": "^17.2.3"
+  }
 }

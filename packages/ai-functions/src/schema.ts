@@ -81,8 +81,8 @@ function convertToZod(input: SimpleSchema): ZodTypeAny {
     const typeMatch = input.match(/^(.+?)\s*\((number|boolean|integer|date)\)$/i)
     if (typeMatch) {
       const [, description, type] = typeMatch
-      const desc = description.trim()
-      switch (type.toLowerCase()) {
+      const desc = description!.trim()
+      switch (type!.toLowerCase()) {
         case 'number':
           return z.number().describe(desc)
         case 'integer':
