@@ -37,6 +37,8 @@
   - [ ] `cartesian()`
   - [ ] `decide()`
   - [ ] `track()`
+- [ ] `ai-props`
+  - [ ] `AI`
 - [ ] `ai-providers`
   - [ ] `model()`
 - [ ] `ai-sandbox`
