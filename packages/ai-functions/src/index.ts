@@ -7,6 +7,7 @@
  * - AI function types and interfaces
  * - Core AI() and ai() constructors
  * - Embedding utilities from AI SDK
+ * - Cloudflare Workers AI provider (default for embeddings)
  *
  * @packageDocumentation
  */
@@ -20,3 +21,6 @@ export * from './ai.js'
 
 // Export embedding utilities
 export * from './embeddings.js'
+
+// Export providers
+export * from './providers/index.js'

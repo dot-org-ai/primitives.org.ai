@@ -4,6 +4,8 @@
  * Re-exports embed, embedMany, and cosineSimilarity from the Vercel AI SDK
  * with additional convenience wrappers.
  *
+ * Default model: Cloudflare Workers AI @cf/baai/bge-m3
+ *
  * @packageDocumentation
  */
 
@@ -15,6 +17,53 @@ export type {
   EmbeddingModel,
   Embedding
 } from 'ai'
+
+// Re-export Cloudflare provider
+export { cloudflare, cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from './providers/cloudflare.js'
+
+import { embed as aiEmbed, embedMany as aiEmbedMany } from 'ai'
+import { cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from './providers/cloudflare.js'
+
+/**
+ * Get the default embedding model (Cloudflare @cf/baai/bge-m3)
+ */
+export function getDefaultEmbeddingModel() {
+  return cloudflareEmbedding(DEFAULT_CF_EMBEDDING_MODEL)
+}
+
+/**
+ * Embed a single value using the default Cloudflare model
+ *
+ * @example
+ * ```ts
+ * import { embedText } from 'ai-functions'
+ *
+ * const { embedding } = await embedText('hello world')
+ * ```
+ */
+export async function embedText(value: string) {
+  return aiEmbed({
+    model: getDefaultEmbeddingModel(),
+    value
+  })
+}
+
+/**
+ * Embed multiple values using the default Cloudflare model
+ *
+ * @example
+ * ```ts
+ * import { embedTexts } from 'ai-functions'
+ *
+ * const { embeddings } = await embedTexts(['doc1', 'doc2', 'doc3'])
+ * ```
+ */
+export async function embedTexts(values: string[]) {
+  return aiEmbedMany({
+    model: getDefaultEmbeddingModel(),
+    values
+  })
+}
 
 /**
  * Result of an embed operation
