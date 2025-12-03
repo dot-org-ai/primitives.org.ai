@@ -1,3 +1,3 @@
-import config from '@config/eslint'
+import config from '@mdxld/config/eslint'
 
 export default config

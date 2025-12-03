@@ -16,6 +16,7 @@
     "release": "pnpm build && pnpm prepare-publish && changeset publish"
   },
   "devDependencies": {
+    "@dotdo/config": "workspace:*",
     "@changesets/cli": "^2.27.0",
     "@types/node": "^20.0.0",
     "eslint": "^9.16.0",
