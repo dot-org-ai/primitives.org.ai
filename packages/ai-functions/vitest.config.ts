@@ -23,6 +23,12 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['test/**/*.test.ts'],
+    // Exclude runtime-specific tests (use separate configs)
+    exclude: [
+      'test/rpc/workers/**',
+      'test/rpc/bun/**',
+      'node_modules/**',
+    ],
     testTimeout: 60000, // AI calls can take time
     hookTimeout: 30000,
     // Run tests sequentially to avoid rate limiting
