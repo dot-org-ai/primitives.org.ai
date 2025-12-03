@@ -55,13 +55,13 @@ export class MemoryProvider implements DBProvider {
     let results: Record<string, unknown>[] = []
 
     for (const [id, entity] of store) {
-      const full = { ...entity, $id: id, $type: type }
+      const full: Record<string, unknown> = { ...entity, $id: id, $type: type }
 
       // Apply where filter
       if (options?.where) {
         let matches = true
         for (const [key, value] of Object.entries(options.where)) {
-          if (full[key] !== value) {
+          if ((full as Record<string, unknown>)[key] !== value) {
             matches = false
             break
           }

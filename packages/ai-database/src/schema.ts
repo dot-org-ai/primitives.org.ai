@@ -517,44 +517,62 @@ async function resolveProvider(): Promise<DBProvider> {
       }
 
       case 'fs': {
-        const { createFsProvider } = await import('@mdxdb/fs/provider')
-        globalProvider = createFsProvider({ root: parsed.root })
+        try {
+          const { createFsProvider } = await import('@mdxdb/fs/provider' as any)
+          globalProvider = createFsProvider({ root: parsed.root })
 
-        // Check file count and warn if approaching threshold
-        checkFileCountThreshold(parsed.root)
+          // Check file count and warn if approaching threshold
+          checkFileCountThreshold(parsed.root)
+        } catch (err) {
+          console.warn('@mdxdb/fs not available, falling back to memory provider')
+          const { createMemoryProvider } = await import('./memory-provider.js')
+          globalProvider = createMemoryProvider()
+        }
         break
       }
 
       case 'sqlite': {
-        const { createSqliteProvider } = await import('@mdxdb/sqlite/provider')
+        try {
+          const { createSqliteProvider } = await import('@mdxdb/sqlite/provider' as any)
 
-        if (parsed.remoteUrl) {
-          // Remote Turso
-          globalProvider = await createSqliteProvider({ url: parsed.remoteUrl })
-        } else {
-          // Local SQLite in .db folder
-          const dbPath = `${parsed.root}/.db/index.sqlite`
-          globalProvider = await createSqliteProvider({ url: `file:${dbPath}` })
+          if (parsed.remoteUrl) {
+            // Remote Turso
+            globalProvider = await createSqliteProvider({ url: parsed.remoteUrl })
+          } else {
+            // Local SQLite in .db folder
+            const dbPath = `${parsed.root}/.db/index.sqlite`
+            globalProvider = await createSqliteProvider({ url: `file:${dbPath}` })
+          }
+        } catch (err) {
+          console.warn('@mdxdb/sqlite not available, falling back to memory provider')
+          const { createMemoryProvider } = await import('./memory-provider.js')
+          globalProvider = createMemoryProvider()
         }
         break
       }
 
       case 'clickhouse': {
-        const { createClickhouseProvider } = await import('@mdxdb/clickhouse/provider')
+        try {
+          const { createClickhouseProvider } = await import('@mdxdb/clickhouse/provider' as any)
 
-        if (parsed.remoteUrl) {
-          // Remote ClickHouse
-          globalProvider = await createClickhouseProvider({
-            mode: 'http',
-            url: parsed.remoteUrl,
-          })
-        } else {
-          // Local chDB in .db folder
-          const dbPath = `${parsed.root}/.db/clickhouse`
-          globalProvider = await createClickhouseProvider({
-            mode: 'chdb',
-            url: dbPath,
-          })
+          if (parsed.remoteUrl) {
+            // Remote ClickHouse
+            globalProvider = await createClickhouseProvider({
+              mode: 'http',
+              url: parsed.remoteUrl,
+            })
+          } else {
+            // Local chDB in .db folder
+            const dbPath = `${parsed.root}/.db/clickhouse`
+            globalProvider = await createClickhouseProvider({
+              mode: 'chdb',
+              url: dbPath,
+            })
+          }
+        } catch (err) {
+          console.warn('@mdxdb/clickhouse not available, falling back to memory provider')
+          const { createMemoryProvider } = await import('./memory-provider.js')
+          globalProvider = createMemoryProvider()
         }
         break
       }
