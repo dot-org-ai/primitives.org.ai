@@ -1,0 +1,21 @@
+{
+  "name": "digital-workers",
+  "version": "0.0.1",
+  "description": "Common abstract interface over AI Agents and Humans",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "keywords": ["ai", "agents", "humans", "workers", "primitives"],
+  "license": "MIT"
+}

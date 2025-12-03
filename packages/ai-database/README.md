@@ -14,3 +14,4 @@ AI-powered database primitives for intelligent data storage and retrieval.
 - `db.update()` - Update an existing record
 - `db.upsert()` - Create or update a record
 - `db.delete()` - Delete a record
+- `db.forEach()` - Iterate over records

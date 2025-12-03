@@ -25,6 +25,7 @@
   - [ ] `db.update()`
   - [ ] `db.upsert()`
   - [ ] `db.delete()`
+  - [ ] `db.forEach()`
 - [ ] `ai-workflows`
   - [ ] `Workflow()`
   - [ ] `StateMachine()`
@@ -46,15 +47,85 @@
   - [ ] `evaluate()`
 - [ ] `autonomous-agents`
   - [ ] `Agent()`
+  - [ ] `Role()`
+  - [ ] `Team()`
+  - [ ] `Goals()`
+  - [ ] `approve()`
+  - [ ] `ask()`
+  - [ ] `do()`
+  - [ ] `decide()`
+  - [ ] `generate()`
+  - [ ] `is()`
+  - [ ] `notify()`
+  - [ ] `kpis()`
+  - [ ] `okrs()`
 - [ ] `business-as-code`
   - [ ] `Business()`
+  - [ ] `Vision()`
+  - [ ] `Goals()`
+  - [ ] `Product()`
+  - [ ] `Service()`
+  - [ ] `Process()`
+  - [ ] `Workflow()`
+  - [ ] `financials()`
+  - [ ] `kpis()`
+  - [ ] `okrs()`
   - [ ] `$`
+- [ ] `digital-products`
+  - [ ] `Product()`
+  - [ ] `App()`
+  - [ ] `API()`
+  - [ ] `Content()`
+  - [ ] `Data()`
+  - [ ] `Dataset()`
+  - [ ] `Site()`
+  - [ ] `MCP()`
+  - [ ] `SDK()`
+  - [ ] `Site()`
+- [ ] `digital-workers`
+  - [ ] `Role()`
+  - [ ] `Team()`
+  - [ ] `Goals()`
+  - [ ] `approve()`
+  - [ ] `ask()`
+  - [ ] `do()`
+  - [ ] `decide()`
+  - [ ] `generate()`
+  - [ ] `is()`
+  - [ ] `notify()`
+  - [ ] `kpis()`
+  - [ ] `okrs()`
 - [ ] `human-in-the-loop`
   - [ ] `Human()`
-  - [ ] `do`
+  - [ ] `Role()`
+  - [ ] `Team()`
+  - [ ] `Goals()`
+  - [ ] `approve()`
+  - [ ] `ask()`
+  - [ ] `do()`
   - [ ] `decide()`
+  - [ ] `generate()`
+  - [ ] `is()`
+  - [ ] `notify()`
+  - [ ] `kpis()`
+  - [ ] `okrs()`
 - [ ] `language-models`
   - [ ] `models()`
   - [ ] `model()`
 - [ ] `services-as-software`
   - [ ] `Service()`
+  - [ ] `ask()`
+  - [ ] `deliver()`
+  - [ ] `do()`
+  - [ ] `every()`
+  - [ ] `generate()`
+  - [ ] `is()`
+  - [ ] `notify()`
+  - [ ] `on()`
+  - [ ] `order()`
+  - [ ] `queue()`
+  - [ ] `quote()`
+  - [ ] `subscribe()`
+  - [ ] `entitlements()`
+  - [ ] `kpis()`
+  - [ ] `okrs()`
