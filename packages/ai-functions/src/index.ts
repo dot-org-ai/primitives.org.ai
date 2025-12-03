@@ -22,5 +22,8 @@ export * from './ai.js'
 // Export embedding utilities
 export * from './embeddings.js'
 
+// Export generation functions with smart model routing
+export { generateObject, generateText, streamObject, streamText } from './generate.js'
+
 // Export providers
 export * from './providers/index.js'

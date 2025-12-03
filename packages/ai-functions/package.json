@@ -31,11 +31,14 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo 'No linter configured'",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "ai": "^4.0.0",
-    "capnweb": "^0.0.3"
+    "ai-providers": "workspace:*",
+    "capnweb": "^0.2.0"
   },
   "optionalDependencies": {
     "oauth.do": "^0.0.1"
