@@ -20,4 +20,4 @@ export {
 } from './registry.js'
 
 // Re-export AI SDK types for convenience
-export type { Provider, ProviderRegistry } from 'ai'
+export type { Provider, ProviderRegistryProvider } from 'ai'

@@ -9,23 +9,28 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./cloudflare": {
+      "import": "./dist/providers/cloudflare.js",
+      "types": "./dist/providers/cloudflare.d.ts"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "ai": "^4.0.0",
-    "ai-functions": "workspace:*"
+    "language-models": "workspace:*"
   },
   "optionalDependencies": {
     "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/google": "^1.0.0",
-    "@ai-sdk/openai": "^1.0.0",
-    "language-models": "workspace:*"
+    "@ai-sdk/openai": "^1.0.0"
   },
   "keywords": ["ai", "providers", "llm", "openai", "anthropic", "google", "cloudflare", "gateway", "primitives"],
   "license": "MIT"

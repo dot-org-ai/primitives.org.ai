@@ -14,7 +14,7 @@
  * @packageDocumentation
  */
 
-import { createProviderRegistry, type Provider, type ProviderRegistry } from 'ai'
+import { createProviderRegistry, type Provider, type ProviderRegistryProvider } from 'ai'
 
 /**
  * Available provider IDs
@@ -24,9 +24,9 @@ export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'clo
 /**
  * Providers that get direct SDK access (not via openrouter)
  * These support special capabilities like MCP, structured outputs, etc.
+ * Re-exported from language-models for consistency.
  */
-export const DIRECT_PROVIDERS = ['openai', 'anthropic', 'google'] as const
-export type DirectProvider = typeof DIRECT_PROVIDERS[number]
+export { DIRECT_PROVIDERS, type DirectProvider } from 'language-models'
 
 /**
  * Provider configuration options
@@ -109,61 +109,96 @@ function getBaseUrl(
 }
 
 /**
- * Get API key - gateway token takes priority
+ * Create a custom fetch that handles Cloudflare AI Gateway authentication
+ * When using gateway with secrets, we strip SDK's API key headers and let the gateway inject them
+ */
+function createGatewayFetch(config: ProviderConfig): typeof fetch | undefined {
+  if (!config.gatewayUrl || !config.gatewayToken) {
+    return undefined
+  }
+
+  return async (url, init) => {
+    const headers = new Headers(init?.headers)
+    // Remove SDK's API key headers - gateway will inject from its secrets
+    headers.delete('x-api-key')
+    headers.delete('authorization')
+    headers.delete('x-goog-api-key')
+    // Add gateway authentication
+    headers.set('cf-aig-authorization', `Bearer ${config.gatewayToken}`)
+    return fetch(url, { ...init, headers })
+  }
+}
+
+/**
+ * Check if using gateway with secrets (token configured)
+ */
+function useGatewaySecrets(config: ProviderConfig): boolean {
+  return !!(config.gatewayUrl && config.gatewayToken)
+}
+
+/**
+ * Get API key - when using gateway secrets, use a placeholder
  */
 function getApiKey(config: ProviderConfig, providerApiKey?: string): string | undefined {
-  return config.gatewayToken || providerApiKey
+  if (useGatewaySecrets(config)) {
+    return 'gateway' // Placeholder - will be stripped by gatewayFetch
+  }
+  return providerApiKey
 }
 
 /**
  * Create OpenAI provider
  */
-async function createOpenAIProvider(config: ProviderConfig): Promise<Provider> {
+async function createOpenAIProvider(config: ProviderConfig): Promise<unknown> {
   const { createOpenAI } = await import('@ai-sdk/openai')
   return createOpenAI({
     apiKey: getApiKey(config, config.openaiApiKey),
-    baseURL: getBaseUrl('openai', config)
+    baseURL: getBaseUrl('openai', config),
+    fetch: createGatewayFetch(config),
   })
 }
 
 /**
  * Create Anthropic provider
  */
-async function createAnthropicProvider(config: ProviderConfig): Promise<Provider> {
+async function createAnthropicProvider(config: ProviderConfig): Promise<unknown> {
   const { createAnthropic } = await import('@ai-sdk/anthropic')
   return createAnthropic({
     apiKey: getApiKey(config, config.anthropicApiKey),
-    baseURL: getBaseUrl('anthropic', config)
+    baseURL: getBaseUrl('anthropic', config),
+    fetch: createGatewayFetch(config),
   })
 }
 
 /**
  * Create Google AI provider
  */
-async function createGoogleProvider(config: ProviderConfig): Promise<Provider> {
+async function createGoogleProvider(config: ProviderConfig): Promise<unknown> {
   const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
   return createGoogleGenerativeAI({
     apiKey: getApiKey(config, config.googleApiKey),
-    baseURL: getBaseUrl('google', config)
+    baseURL: getBaseUrl('google', config),
+    fetch: createGatewayFetch(config),
   })
 }
 
 /**
  * Create OpenRouter provider (OpenAI-compatible)
  */
-async function createOpenRouterProvider(config: ProviderConfig): Promise<Provider> {
+async function createOpenRouterProvider(config: ProviderConfig): Promise<unknown> {
   const { createOpenAI } = await import('@ai-sdk/openai')
   return createOpenAI({
     apiKey: getApiKey(config, config.openrouterApiKey),
-    baseURL: getBaseUrl('openrouter', config, 'https://openrouter.ai/api/v1')
+    baseURL: getBaseUrl('openrouter', config, 'https://openrouter.ai/api/v1'),
+    fetch: createGatewayFetch(config),
   })
 }
 
 /**
  * Create Cloudflare Workers AI provider
  */
-async function createCloudflareProvider(config: ProviderConfig): Promise<Provider> {
-  const { cloudflare } = await import('ai-functions/providers/cloudflare')
+async function createCloudflareProvider(config: ProviderConfig): Promise<unknown> {
+  const { cloudflare } = await import('./providers/cloudflare.js')
 
   return {
     languageModel: (modelId: string) => {
@@ -176,13 +211,13 @@ async function createCloudflareProvider(config: ProviderConfig): Promise<Provide
         baseUrl: getBaseUrl('cloudflare', config)
       })
     }
-  } as Provider
+  } as unknown
 }
 
 /**
  * Provider factories map
  */
-const providerFactories: Record<ProviderId, (config: ProviderConfig) => Promise<Provider>> = {
+const providerFactories: Record<ProviderId, (config: ProviderConfig) => Promise<unknown>> = {
   openai: createOpenAIProvider,
   anthropic: createAnthropicProvider,
   google: createGoogleProvider,
@@ -223,11 +258,11 @@ const providerFactories: Record<ProviderId, (config: ProviderConfig) => Promise<
 export async function createRegistry(
   config: ProviderConfig = {},
   options: { providers?: ProviderId[] } = {}
-): Promise<ProviderRegistry> {
+): Promise<ProviderRegistryProvider> {
   const mergedConfig = { ...getEnvConfig(), ...config }
   const providerIds = options.providers || (['openai', 'anthropic', 'google', 'openrouter', 'cloudflare'] as ProviderId[])
 
-  const providers: Record<string, Provider> = {}
+  const providers: Record<string, unknown> = {}
 
   // Load providers in parallel
   await Promise.all(
@@ -243,17 +278,17 @@ export async function createRegistry(
     })
   )
 
-  return createProviderRegistry(providers)
+  return createProviderRegistry(providers as Record<string, any>)
 }
 
 // Default registry management
-let defaultRegistry: ProviderRegistry | null = null
-let defaultRegistryPromise: Promise<ProviderRegistry> | null = null
+let defaultRegistry: ProviderRegistryProvider | null = null
+let defaultRegistryPromise: Promise<ProviderRegistryProvider> | null = null
 
 /**
  * Get or create the default provider registry
  */
-export async function getRegistry(): Promise<ProviderRegistry> {
+export async function getRegistry(): Promise<ProviderRegistryProvider> {
   if (defaultRegistry) return defaultRegistry
 
   if (!defaultRegistryPromise) {
@@ -296,19 +331,24 @@ function parseModelId(id: string): { provider: string; model: string } {
  * Get a language model with smart routing
  *
  * Resolves aliases and routes to the appropriate provider:
- * - openai/* → OpenAI SDK (via gateway)
- * - anthropic/* → Anthropic SDK (via gateway)
- * - google/* → Google AI SDK (via gateway)
+ * - openai/* → OpenAI SDK (via gateway) when provider_model_id is available
+ * - anthropic/* → Anthropic SDK (via gateway) when provider_model_id is available
+ * - google/* → Google AI SDK (via gateway) when provider_model_id is available
  * - All others → OpenRouter (via gateway)
+ *
+ * Direct routing to native SDKs enables provider-specific features like:
+ * - Anthropic: MCP (Model Context Protocol), extended thinking
+ * - OpenAI: Function calling, JSON mode, vision
+ * - Google: Grounding, code execution
  *
  * @example
  * ```ts
  * import { model } from 'ai-providers'
  *
  * // Simple aliases
- * const opus = await model('opus')           // → anthropic/claude-opus-4.5
- * const gpt = await model('gpt-4o')          // → openai/gpt-4o
- * const llama = await model('llama-70b')     // → meta-llama/llama-3.3-70b-instruct
+ * const opus = await model('opus')           // → anthropic:claude-opus-4-5-20251101
+ * const gpt = await model('gpt-4o')          // → openai:gpt-4o
+ * const llama = await model('llama-70b')     // → openrouter:meta-llama/llama-3.3-70b-instruct
  *
  * // Full IDs also work
  * const claude = await model('anthropic/claude-sonnet-4.5')
@@ -316,25 +356,42 @@ function parseModelId(id: string): { provider: string; model: string } {
  * ```
  */
 export async function model(id: string) {
-  // Try to resolve alias via language-models
-  let resolvedId = id
-  try {
-    const { resolve } = await import('language-models')
-    resolvedId = resolve(id)
-  } catch {
-    // language-models not available, use id as-is
-  }
-
-  const { provider, model: modelName } = parseModelId(resolvedId)
   const registry = await getRegistry()
 
-  // Route to direct provider or openrouter
-  if (DIRECT_PROVIDERS.includes(provider as DirectProvider)) {
-    return registry.languageModel(`${provider}:${modelName}`)
-  }
+  // Try to resolve with provider routing info
+  try {
+    const { resolveWithProvider, DIRECT_PROVIDERS } = await import('language-models')
+    const resolved = resolveWithProvider(id)
 
-  // Everything else goes through openrouter with full model ID
-  return registry.languageModel(`openrouter:${resolvedId}`)
+    // Extract expected provider from the model ID (e.g., 'anthropic' from 'anthropic/claude-sonnet-4.5')
+    const slashIndex = resolved.id.indexOf('/')
+    const expectedProvider = slashIndex > 0 ? resolved.id.substring(0, slashIndex) : null
+
+    // Use direct routing if:
+    // 1. Provider supports direct SDK access (openai, anthropic, google)
+    // 2. We have the provider's native model ID
+    // 3. The data's provider matches the expected provider from the model ID
+    //    (OpenRouter may return different top providers like google-vertex for anthropic models)
+    const dataProvider = resolved.model?.provider
+    const providerMatches = expectedProvider && dataProvider === expectedProvider
+
+    if (
+      resolved.supportsDirectRouting &&
+      resolved.providerModelId &&
+      providerMatches &&
+      (DIRECT_PROVIDERS as readonly string[]).includes(expectedProvider)
+    ) {
+      // Route directly to provider SDK with native model ID
+      const modelSpec = `${expectedProvider}:${resolved.providerModelId}` as `${string}:${string}`
+      return registry.languageModel(modelSpec)
+    }
+
+    // Fall back to OpenRouter for all other models
+    return registry.languageModel(`openrouter:${resolved.id}`)
+  } catch {
+    // language-models not available, route through OpenRouter as-is
+    return registry.languageModel(`openrouter:${id}`)
+  }
 }
 
 /**
@@ -350,5 +407,5 @@ export async function model(id: string) {
  */
 export async function embeddingModel(id: string) {
   const registry = await getRegistry()
-  return registry.textEmbeddingModel(id)
+  return registry.textEmbeddingModel(id as `${string}:${string}`)
 }
