@@ -3,7 +3,17 @@
 - [ ] `ai-functions`
   - [ ] `AI()`
   - [ ] `ai()`
+  - [ ] `ai.do()`
+  - [ ] `ai.is()`
+  - [ ] `ai[functionName]()`
   - [ ] `ai.defineFunction()`
+  - [ ] `ai.code()`
+  - [ ] `ai.decide()`
+  - [ ] `ai.diagram()`
+  - [ ] `ai.generate()`
+  - [ ] `ai.image()`
+  - [ ] `ai.video()`
+  - [ ] `ai.write()`
 - [ ] `ai-database`
   - [ ] `DB()`
   - [ ] `db.list()`
@@ -17,8 +27,32 @@
   - [ ] `db.delete()`
 - [ ] `ai-workflows`
   - [ ] `Workflow()`
+  - [ ] `StateMachine()`
   - [ ] `on()`
   - [ ] `every()`
+  - [ ] `send()`
+  - [ ] `schedule()`
+- [ ] `ai-experiments`
+  - [ ] `Experiment()`
+  - [ ] `cartesian()`
+  - [ ] `decide()`
   - [ ] `track()`
+- [ ] `ai-providers`
+  - [ ] `model()`
 - [ ] `ai-sandbox`
+  - [ ] `Sandbox()`
   - [ ] `evaluate()`
+- [ ] `autonomous-agents`
+  - [ ] `Agent()`
+- [ ] `business-as-code`
+  - [ ] `Business()`
+  - [ ] `$`
+- [ ] `human-in-the-loop`
+  - [ ] `Human()`
+  - [ ] `do`
+  - [ ] `decide()`
+- [ ] `language-models`
+  - [ ] `models()`
+  - [ ] `model()`
+- [ ] `services-as-software`
+  - [ ] `Service()`
