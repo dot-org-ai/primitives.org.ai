@@ -5,7 +5,7 @@ Schema-first database with AI-native primitives. Create, generate, and search by
 ```typescript
 import { DB } from 'ai-database'
 
-const db = DB({
+const { db, events, actions } = DB({
   Post: { title: 'string', author: 'Author.posts' },
   Author: { name: 'string' }
 })
@@ -35,7 +35,7 @@ pnpm add ai-database
 import { DB } from 'ai-database'
 
 // Schema defines types AND generation prompts
-const db = DB({
+const { db, events, actions, artifacts, nouns, verbs } = DB({
   Post: {
     title: 'Engaging post title',
     content: 'markdown',
@@ -59,14 +59,119 @@ const results = await db.search('AI tutorials')
 const pending = await db`what posts are drafts?`
 ```
 
-## Core Primitives
+## Destructured Exports
 
-| Primitive | Description |
-|-----------|-------------|
-| **Things** | Entities with typed schemas |
-| **Events** | Immutable log of mutations |
-| **Actions** | Durable execution with progress |
-| **Artifacts** | Cached embeddings and computed content |
+The `DB()` function returns all database primitives as destructured exports:
+
+```typescript
+const { db, events, actions, artifacts, nouns, verbs } = DB(schema)
+```
+
+| Export | Description |
+|--------|-------------|
+| `db` | CRUD operations for each entity type |
+| `events` | Event subscription and emission |
+| `actions` | Durable execution with progress tracking |
+| `artifacts` | Cached embeddings and computed content |
+| `nouns` | Type introspection |
+| `verbs` | Action introspection |
+
+## CRUD Operations
+
+```typescript
+// Create
+const post = await db.Post.create({ title: 'Hello' })
+const post = await db.Post.create('custom-id', { title: 'Hello' })
+
+// Read
+const post = await db.Post.get('post-id')
+const posts = await db.Post.list()
+const posts = await db.Post.list({ where: { published: true }, limit: 10 })
+const posts = await db.Post.find({ author: 'john' })
+
+// Update
+await db.Post.update('post-id', { title: 'Updated' })
+
+// Upsert
+await db.Post.upsert('post-id', { title: 'Create or Update' })
+
+// Delete
+await db.Post.delete('post-id')
+
+// Count
+const total = await db.Post.count()
+const published = await db.Post.count({ published: true })
+
+// Iterate
+await db.Post.forEach(async (post) => {
+  console.log(post.title)
+})
+```
+
+## Events
+
+```typescript
+// Subscribe to events
+events.on('Post.created', (event) => {
+  console.log(`New post: ${event.data.title}`)
+})
+
+events.on('*.updated', (event) => {
+  console.log(`Updated: ${event.type}`)
+})
+
+// Emit custom events
+await events.emit('custom.event', { data: 'value' })
+
+// List events
+const recent = await events.list({ limit: 100 })
+
+// Replay events
+await events.replay({
+  since: yesterday,
+  handler: async (event) => {
+    await processEvent(event)
+  }
+})
+```
+
+## Actions
+
+```typescript
+// Create a durable action
+const action = await actions.create({
+  type: 'generate-posts',
+  data: { count: 100 },
+  total: 100,
+})
+
+// Update progress
+await actions.update(action.id, { progress: 50 })
+
+// Complete or fail
+await actions.update(action.id, { status: 'completed', result: { created: 100 } })
+await actions.update(action.id, { status: 'failed', error: 'Rate limited' })
+
+// List and retry
+const failed = await actions.list({ status: 'failed' })
+await actions.retry(failed[0].id)
+```
+
+## Artifacts
+
+```typescript
+// Cache embeddings
+await artifacts.set('Post/hello', 'embedding', {
+  content: [0.1, 0.2, ...],
+  sourceHash: 'abc123',
+})
+
+// Get cached artifact
+const embedding = await artifacts.get('Post/hello', 'embedding')
+
+// List all artifacts for a URL
+const all = await artifacts.list('Post/hello')
+```
 
 ## Semantic Types
 
@@ -96,11 +201,11 @@ DATABASE_URL=:memory:          # in-memory
 
 Full documentation at [primitives.org.ai/database](https://primitives.org.ai/database):
 
+- [CRUD Operations](https://primitives.org.ai/database/create) - create, get, list, update, delete
 - [Query Styles](https://primitives.org.ai/database/queries) - SQL, Document, Graph
-- [Natural Language](https://primitives.org.ai/database/natural-language) - AI-powered queries
-- [Events & Actions](https://primitives.org.ai/database/events) - Durable execution
+- [Events](https://primitives.org.ai/database/events) - Event subscription
+- [Actions](https://primitives.org.ai/database/actions) - Durable execution
 - [Schema Types](https://primitives.org.ai/database/schema) - Noun & Verb definitions
-- [Providers](https://primitives.org.ai/database/providers) - SQLite, ClickHouse, Memory
 
 ## Related Packages
 

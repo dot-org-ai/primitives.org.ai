@@ -2041,7 +2041,7 @@ async function checkFileCountThreshold(root: string): Promise<void> {
  *
  * @example
  * ```ts
- * const db = DB({
+ * const { db, events, actions, artifacts, nouns, verbs } = DB({
  *   Post: {
  *     title: 'string',
  *     content: 'markdown',
@@ -2058,15 +2058,20 @@ async function checkFileCountThreshold(root: string): Promise<void> {
  *   }
  * })
  *
- * // Fully typed operations
- * const post = await db.Post.get('hello-world')
- * const author = await post?.author // Resolved Author
- * const authorPosts = await db.Author.get('john')?.posts // Post[]
+ * // CRUD operations
+ * const post = await db.Post.create({ title: 'Hello' })
+ * await db.Post.update(post.$id, { title: 'Updated' })
+ *
+ * // Event subscription
+ * events.on('Post.created', (event) => console.log(event))
+ *
+ * // Durable actions
+ * const action = await actions.create({ type: 'generate', data: {} })
  * ```
  */
 export function DB<TSchema extends DatabaseSchema>(
   schema: TSchema
-): TypedDB<TSchema> {
+): DBResult<TSchema> {
   const parsedSchema = parseSchema(schema)
 
   // Create entity operations for each type
@@ -2080,13 +2085,26 @@ export function DB<TSchema extends DatabaseSchema>(
     )
   }
 
+  // Noun definitions cache
+  const nounDefinitions = new Map<string, Noun>()
+
+  // Initialize nouns from schema
+  for (const [entityName] of parsedSchema.entities) {
+    const noun = inferNoun(entityName)
+    nounDefinitions.set(entityName, noun)
+  }
+
+  // Verb definitions cache
+  const verbDefinitions = new Map<string, Verb>(
+    Object.entries(Verbs).map(([k, v]) => [k, v])
+  )
+
   // Create the typed DB object
   const db = {
     $schema: parsedSchema,
 
     async get(url: string) {
       const provider = await resolveProvider()
-      // Parse URL to get type and id
       const parsed = parseUrl(url)
       return provider.get(parsed.type, parsed.id)
     },
@@ -2101,10 +2119,219 @@ export function DB<TSchema extends DatabaseSchema>(
       return results
     },
 
+    async count(type: string, where?: Record<string, unknown>) {
+      const provider = await resolveProvider()
+      const results = await provider.list(type, { where })
+      return results.length
+    },
+
+    async forEach(
+      options: { type: string; where?: Record<string, unknown>; concurrency?: number },
+      callback: (entity: unknown) => void | Promise<void>
+    ) {
+      const provider = await resolveProvider()
+      const results = await provider.list(options.type, { where: options.where })
+      const concurrency = options.concurrency ?? 1
+
+      if (concurrency === 1) {
+        for (const entity of results) {
+          await callback(entity)
+        }
+      } else {
+        // Process in batches with concurrency
+        const { Semaphore } = await import('./memory-provider.js')
+        const semaphore = new Semaphore(concurrency)
+        await semaphore.map(results, callback as (item: Record<string, unknown>) => Promise<void>)
+      }
+    },
+
+    async set(type: string, id: string, data: Record<string, unknown>) {
+      const provider = await resolveProvider()
+      const existing = await provider.get(type, id)
+      if (existing) {
+        // Replace entirely (not merge)
+        return provider.update(type, id, data)
+      }
+      return provider.create(type, id, data)
+    },
+
+    async generate(options: GenerateOptions) {
+      // Placeholder - actual AI generation would be implemented here
+      // For now, just create with provided data
+      const provider = await resolveProvider()
+      if (options.mode === 'background') {
+        // Return action ID for tracking
+        const { createMemoryProvider } = await import('./memory-provider.js')
+        const memProvider = provider as ReturnType<typeof createMemoryProvider>
+        if ('createAction' in memProvider) {
+          return memProvider.createAction({
+            type: 'generate',
+            data: options,
+            total: options.count ?? 1,
+          })
+        }
+      }
+      // Sync mode - create single entity
+      return provider.create(options.type, undefined, options.data ?? {})
+    },
+
+    ask: createNLQueryFn(parsedSchema),
+
     ...entityOperations,
+  } as TypedDB<TSchema>
+
+  // Create Events API
+  const events: EventsAPI = {
+    on(pattern, handler) {
+      // Get provider and delegate - need async resolution
+      let unsubscribe = () => {}
+      resolveProvider().then((provider) => {
+        if ('on' in provider) {
+          unsubscribe = (provider as any).on(pattern, handler)
+        }
+      })
+      return () => unsubscribe()
+    },
+
+    async emit(type, data) {
+      const provider = await resolveProvider()
+      if ('emit' in provider) {
+        await (provider as any).emit(type, data)
+      }
+    },
+
+    async list(options) {
+      const provider = await resolveProvider()
+      if ('listEvents' in provider) {
+        return (provider as any).listEvents(options)
+      }
+      return []
+    },
+
+    async replay(options) {
+      const provider = await resolveProvider()
+      if ('replayEvents' in provider) {
+        await (provider as any).replayEvents(options)
+      }
+    },
   }
 
-  return db as TypedDB<TSchema>
+  // Create Actions API
+  const actions: ActionsAPI = {
+    async create(data) {
+      const provider = await resolveProvider()
+      if ('createAction' in provider) {
+        return (provider as any).createAction(data)
+      }
+      throw new Error('Provider does not support actions')
+    },
+
+    async get(id) {
+      const provider = await resolveProvider()
+      if ('getAction' in provider) {
+        return (provider as any).getAction(id)
+      }
+      return null
+    },
+
+    async update(id, updates) {
+      const provider = await resolveProvider()
+      if ('updateAction' in provider) {
+        return (provider as any).updateAction(id, updates)
+      }
+      throw new Error('Provider does not support actions')
+    },
+
+    async list(options) {
+      const provider = await resolveProvider()
+      if ('listActions' in provider) {
+        return (provider as any).listActions(options)
+      }
+      return []
+    },
+
+    async retry(id) {
+      const provider = await resolveProvider()
+      if ('retryAction' in provider) {
+        return (provider as any).retryAction(id)
+      }
+      throw new Error('Provider does not support actions')
+    },
+
+    async cancel(id) {
+      const provider = await resolveProvider()
+      if ('cancelAction' in provider) {
+        await (provider as any).cancelAction(id)
+      }
+    },
+  }
+
+  // Create Artifacts API
+  const artifacts: ArtifactsAPI = {
+    async get(url, type) {
+      const provider = await resolveProvider()
+      if ('getArtifact' in provider) {
+        return (provider as any).getArtifact(url, type)
+      }
+      return null
+    },
+
+    async set(url, type, data) {
+      const provider = await resolveProvider()
+      if ('setArtifact' in provider) {
+        await (provider as any).setArtifact(url, type, data)
+      }
+    },
+
+    async delete(url, type) {
+      const provider = await resolveProvider()
+      if ('deleteArtifact' in provider) {
+        await (provider as any).deleteArtifact(url, type)
+      }
+    },
+
+    async list(url) {
+      const provider = await resolveProvider()
+      if ('listArtifacts' in provider) {
+        return (provider as any).listArtifacts(url)
+      }
+      return []
+    },
+  }
+
+  // Create Nouns API
+  const nouns: NounsAPI = {
+    async get(name) {
+      return nounDefinitions.get(name) ?? null
+    },
+
+    async list() {
+      return Array.from(nounDefinitions.values())
+    },
+
+    async define(noun) {
+      nounDefinitions.set(noun.singular, noun)
+    },
+  }
+
+  // Create Verbs API
+  const verbs: VerbsAPI = {
+    get(action) {
+      return verbDefinitions.get(action) ?? null
+    },
+
+    list() {
+      return Array.from(verbDefinitions.values())
+    },
+
+    define(verb) {
+      verbDefinitions.set(verb.action, verb)
+    },
+
+    conjugate,
+  }
+
+  return { db, events, actions, artifacts, nouns, verbs }
 }
 
 /**

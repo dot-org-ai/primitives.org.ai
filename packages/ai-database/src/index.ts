@@ -3,7 +3,7 @@
  *
  * @example
  * ```ts
- * const db = DB({
+ * const { db, events, actions, artifacts, nouns, verbs } = DB({
  *   Post: {
  *     title: 'string',
  *     author: 'Author.posts',  // Creates Post.author -> Author AND Author.posts -> Post[]
@@ -14,19 +14,25 @@
  *   }
  * })
  *
- * // Typed, provider-agnostic access
- * const post = await db.Post.get('123')
- * const author = await post.author  // Resolved Author
- * const posts = await db.Author.get('456').posts  // Post[]
+ * // CRUD operations
+ * const post = await db.Post.create({ title: 'Hello' })
+ * await db.Post.update(post.$id, { title: 'Updated' })
+ *
+ * // Event subscription
+ * events.on('Post.created', (event) => console.log(event))
+ *
+ * // Durable actions
+ * const action = await actions.create({ type: 'generate', data: {} })
  * ```
  *
- * Provider is resolved transparently from environment (DB_PROVIDER, DB_URL).
+ * Provider is resolved transparently from environment (DATABASE_URL).
  *
  * @packageDocumentation
  */
 
 export { DB } from './schema.js'
 export type {
+  // Schema types
   DatabaseSchema,
   EntitySchema,
   FieldDefinition,
@@ -40,12 +46,24 @@ export type {
   ListOptions,
   SearchOptions,
   InferEntity,
+  GenerateOptions,
+  // DB Result type
+  DBResult,
   // Noun & Verb semantic types
   Noun,
   NounProperty,
   NounRelationship,
   Verb,
   TypeMeta,
+  // API types
+  EventsAPI,
+  ActionsAPI,
+  ArtifactsAPI,
+  NounsAPI,
+  VerbsAPI,
+  DBEvent,
+  DBAction,
+  DBArtifact,
   // Natural Language Query types
   NLQueryResult,
   NLQueryFn,

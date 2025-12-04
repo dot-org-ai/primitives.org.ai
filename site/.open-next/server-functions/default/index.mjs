@@ -1,1 +1,0 @@
-export { handler } from "./site/index.mjs";
