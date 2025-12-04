@@ -3,7 +3,7 @@
  *
  * This is the foundational package that all other primitives depend on.
  * It provides:
- * - RPC primitives with capnweb promise pipelining
+ * - RPC primitives via rpc.do
  * - AI function types and interfaces
  * - Core AI() and ai() constructors
  * - Embedding utilities from AI SDK
@@ -14,8 +14,8 @@
  * @packageDocumentation
  */
 
-// Re-export RPC primitives
-export * from './rpc/index.js'
+// Re-export RPC primitives from rpc.do
+export * from 'rpc.do'
 
 // Export AI function types and interfaces
 export * from './types.js'

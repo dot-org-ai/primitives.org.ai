@@ -20,6 +20,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "rpc.do": "^0.1.0",
     "xstate": "^5.18.0"
   },
   "devDependencies": {

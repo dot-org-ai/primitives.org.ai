@@ -1,0 +1,76 @@
+---
+title: AI()
+description: Create typed AI instances with predefined schemas
+---
+
+Create a typed AI instance with predefined schemas.
+
+## Import
+
+```typescript
+import { AI } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+const ai = AI(schemas: Record<string, Schema>)
+```
+
+## Examples
+
+```typescript
+const ai = AI({
+  recipe: {
+    name: 'Recipe name',
+    type: 'food | drink | dessert',
+    servings: 'Number of servings (number)',
+    ingredients: ['List of ingredients'],
+    steps: ['Cooking steps'],
+  },
+  blogPost: {
+    title: 'Post title',
+    summary: 'Brief summary',
+    sections: [{
+      heading: 'Section heading',
+      content: 'Section content',
+    }],
+  },
+})
+
+// Fully typed!
+const recipe = await ai.recipe('Italian pasta for 4')
+// TypeScript knows: { name: string, type: 'food'|'drink'|'dessert', ... }
+
+const post = await ai.blogPost('TypeScript tips')
+// TypeScript knows: { title: string, summary: string, sections: [...] }
+```
+
+## Benefits
+
+- **Type Safety** - Full TypeScript inference
+- **Reusability** - Define once, use everywhere
+- **Consistency** - Same schema across calls
+- **Documentation** - Schema serves as docs
+
+## Complex Schemas
+
+```typescript
+const ai = AI({
+  storyBrand: {
+    hero: 'Who is the customer?',
+    guide: 'Who/what helps them?',
+    problem: {
+      external: 'What external challenge?',
+      internal: 'What internal struggle?',
+      philosophical: 'Why is this wrong?',
+    },
+    plan: ['Steps to success'],
+    callToAction: 'What should they do?',
+    success: 'What does winning look like?',
+    failure: 'What are they avoiding?',
+  },
+})
+
+const brand = await ai.storyBrand('ai-functions library')
+```

@@ -1,0 +1,255 @@
+---
+title: Agent
+description: Truly autonomous entities with real identity, long-term memory, and presence in your organization
+---
+
+Unlike simple chatbots or task runners, Agents have real identity, persistent memory, and the ability to work independently over extended time horizons.
+
+## What Makes an Agent
+
+An Agent is more than an AI model wrapped in an API. It's an entity with:
+
+- **Identity**: Email, phone, Slack, calendar—real presence in organizational systems
+- **Memory**: Persistent context that grows and evolves over time
+- **Autonomy**: Ability to work independently, making decisions and taking actions
+- **Relationships**: Understanding of team structure, preferences, and history
+- **Accountability**: Clear ownership of tasks with escalation paths
+
+```typescript
+import { agent, capability } from 'autonomous-agents'
+
+const sdkExpert = agent({
+  name: 'sdk-expert',
+
+  identity: {
+    displayName: 'SDK Expert',
+    email: 'sdk-expert@company.com',
+    slack: '@sdk-expert',
+    calendar: 'sdk-expert@company.com',
+  },
+
+  personality: {
+    role: 'Senior developer advocate specializing in SDK design',
+    traits: ['helpful', 'thorough', 'technically precise'],
+    communication: 'Clear and educational, with code examples',
+  },
+
+  capabilities: [
+    answerSDKQuestions,
+    reviewPullRequests,
+    writeDocumentation,
+    triageIssues,
+  ],
+
+  memory: {
+    type: 'persistent',
+    includes: ['conversations', 'preferences', 'codebase-knowledge'],
+  },
+})
+```
+
+## Real Identity
+
+Agents exist in your organization's systems as first-class entities:
+
+```typescript
+// Agent receives email
+const emailHandler = agent.onEmail(async (email) => {
+  if (email.subject.includes('SDK question')) {
+    const response = await agent.capabilities.answerSDKQuestions({
+      question: email.body,
+      context: await agent.memory.getConversation(email.from),
+    })
+    await agent.reply(email, response)
+  }
+})
+
+// Agent joins Slack channels
+await agent.slack.join(['#sdk-support', '#developer-questions'])
+
+// Agent responds to mentions
+agent.slack.onMention(async (message) => {
+  const response = await agent.think(message.text)
+  await agent.slack.reply(message, response)
+})
+
+// Agent has calendar for scheduling
+await agent.calendar.createMeeting({
+  title: 'SDK Office Hours',
+  recurrence: 'weekly',
+  duration: '1h',
+})
+```
+
+## Long-Term Memory
+
+Agents build knowledge over time:
+
+```typescript
+const memory = agent.memory
+
+// Remember facts about users
+await memory.remember({
+  type: 'user-preference',
+  user: 'alice@company.com',
+  fact: 'Prefers TypeScript examples over JavaScript',
+  confidence: 0.95,
+})
+
+// Store learned information
+await memory.learn({
+  type: 'codebase-pattern',
+  pattern: 'Error handling uses Result type, not exceptions',
+  source: 'code-review-feedback',
+})
+
+// Recall relevant context
+const context = await memory.recall({
+  query: 'How does Alice prefer to receive code examples?',
+  types: ['user-preference', 'conversation-history'],
+  limit: 10,
+})
+```
+
+### Memory Types
+
+- **Episodic**: Specific interactions and events
+- **Semantic**: Learned facts and knowledge
+- **Procedural**: How to perform tasks
+- **Working**: Current task context
+
+## True Autonomy
+
+Agents work independently, making decisions without constant supervision:
+
+```typescript
+const autonomousAgent = agent({
+  name: 'support-agent',
+
+  autonomy: {
+    // What the agent can do without asking
+    canDo: [
+      'answer-common-questions',
+      'look-up-documentation',
+      'create-tickets',
+    ],
+
+    // When to escalate to humans
+    escalateTo: 'support-team',
+    escalateWhen: [
+      'confidence < 0.7',
+      'customer-sentiment = angry',
+      'topic = billing',
+      'request = refund > $100',
+    ],
+
+    // Learning from feedback
+    learnFrom: ['human-corrections', 'outcome-feedback'],
+  },
+})
+```
+
+### Decision Making
+
+```typescript
+// Agent decides how to handle a request
+const decision = await agent.decide({
+  situation: 'Customer asking about enterprise pricing',
+  options: [
+    { action: 'answer-directly', confidence: 0.3 },
+    { action: 'escalate-to-sales', confidence: 0.9 },
+    { action: 'schedule-call', confidence: 0.7 },
+  ],
+})
+
+// Agent takes action based on decision
+await agent.execute(decision.chosen)
+```
+
+## Working with Teams
+
+Agents understand organizational structure:
+
+```typescript
+const agent = agent({
+  name: 'project-coordinator',
+
+  team: {
+    reports_to: 'engineering-manager',
+    collaborates_with: ['frontend-team', 'backend-team', 'design-team'],
+    can_assign_to: ['junior-developers'],
+  },
+
+  workflows: [
+    dailyStandup,
+    sprintPlanning,
+    codeReviewAssignment,
+  ],
+})
+
+// Agent coordinates work across team
+await agent.coordinate({
+  task: 'Implement new auth flow',
+  assignees: await agent.findBestMatch({
+    skills: ['react', 'oauth'],
+    availability: 'this-sprint',
+  }),
+})
+```
+
+## Agent Lifecycle
+
+```typescript
+// Create and deploy agent
+const myAgent = await agent.deploy()
+
+// Agent is now active and responding
+console.log(myAgent.status) // 'active'
+
+// Monitor agent activity
+myAgent.on('action', (action) => {
+  console.log(`Agent performed: ${action.type}`)
+})
+
+// Review agent decisions
+const decisions = await myAgent.getDecisionLog({
+  since: lastWeek,
+  includeReasoning: true,
+})
+
+// Provide feedback
+await myAgent.feedback({
+  decisionId: 'dec_abc123',
+  outcome: 'incorrect',
+  correction: 'Should have escalated this billing question',
+})
+
+// Agent learns from feedback
+await myAgent.learn()
+```
+
+## Guardrails
+
+Agents operate within defined boundaries:
+
+```typescript
+const agent = agent({
+  name: 'secure-agent',
+
+  guardrails: {
+    // Rate limits
+    maxActionsPerHour: 100,
+    maxEmailsPerDay: 50,
+
+    // Content policies
+    neverMention: ['competitor-names', 'internal-financials'],
+    alwaysInclude: ['disclaimer-for-legal-advice'],
+
+    // Approval requirements
+    requireApprovalFor: [
+      { action: 'send-email', when: 'external-recipient' },
+      { action: 'create-ticket', when: 'priority = critical' },
+    ],
+  },
+})
+```

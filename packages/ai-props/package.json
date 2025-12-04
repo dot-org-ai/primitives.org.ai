@@ -20,12 +20,18 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*"
+    "ai-functions": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
   "devDependencies": {
-    "vitest": "^2.1.9",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
   },
-  "keywords": ["ai", "props", "react", "primitives"],
+  "keywords": [
+    "ai",
+    "props",
+    "react",
+    "primitives"
+  ],
   "license": "MIT"
 }

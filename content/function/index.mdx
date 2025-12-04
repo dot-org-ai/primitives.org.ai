@@ -1,0 +1,104 @@
+---
+title: AI Functions
+description: Call AI like a function. No prompts. No configuration.
+---
+
+Just call it.
+
+```typescript
+import { ai, is, list, code } from 'ai-functions'
+
+await ai`write a haiku about ${topic}`
+await is`${email} a valid email?`
+await list`blog post ideas about ${topic}`
+await code`${task} in ${language}`
+```
+
+## Installation
+
+```bash
+pnpm add ai-functions
+```
+
+## All Functions
+
+### Core
+
+| Function | Description |
+|----------|-------------|
+| [`ai`](/function/ai) | The simplest way to call AI |
+| [`generate`](/function/generate) | Core generation primitive with schema support |
+| [`define`](/function/define) | Foundation for creating AI functions |
+| [`AI()`](/function/AI) | Create typed AI instances with schemas |
+
+### Generation
+
+| Function | Description |
+|----------|-------------|
+| [`write`](/function/write) | Generate formatted text content |
+| [`summarize`](/function/summarize) | Condense text to key points |
+| [`list`](/function/list) | Generate a list of items |
+| [`lists`](/function/lists) | Generate multiple named lists |
+| [`extract`](/function/extract) | Extract structured data from text |
+
+### Classification
+
+| Function | Description |
+|----------|-------------|
+| [`is`](/function/is) | Boolean classification |
+| [`decide`](/function/decide) | LLM as judge - pick best option |
+
+### Code
+
+| Function | Description |
+|----------|-------------|
+| [`code`](/function/code) | Generate code in any language |
+| [`diagram`](/function/diagram) | Generate diagrams (Mermaid, PlantUML) |
+| [`slides`](/function/slides) | Generate presentations |
+
+### Media
+
+| Function | Description |
+|----------|-------------|
+| [`image`](/function/image) | Generate images from descriptions |
+| [`video`](/function/video) | Generate videos from descriptions |
+
+### Agentic
+
+| Function | Description |
+|----------|-------------|
+| [`do`](/function/do) | Single-pass task execution |
+| [`research`](/function/research) | Agentic web research |
+| [`browse`](/function/browse) | Browser automation with AI |
+| [`read`](/function/read) | Fetch URL as markdown |
+
+### Human-in-the-Loop
+
+| Function | Description |
+|----------|-------------|
+| [`ask`](/function/ask) | Get free-form input |
+| [`approve`](/function/approve) | Get yes/no approval |
+| [`review`](/function/review) | Get detailed review and feedback |
+
+## Quick Examples
+
+```typescript
+// Generation - creates content, analyzes, extracts
+const post = await write`blog post about ${topic}`
+const ideas = await list`10 startup ideas for ${industry}`
+
+// Classification - returns boolean or picks options
+const isSpam = await is`${email} spam?`
+const best = await decide`which is better?`(optionA, optionB)
+
+// Code - generates executable code
+const fn = await code`email validator in TypeScript`
+const arch = await diagram`microservices architecture`
+
+// Agentic - uses tools, multiple steps
+const analysis = await research`${company} competitive landscape`
+
+// Human - waits for human input
+const decision = await ask`should we proceed with ${plan}?`
+const ok = await approve`Deploy to production?`
+```

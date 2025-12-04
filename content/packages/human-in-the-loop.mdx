@@ -1,0 +1,37 @@
+---
+title: human-in-the-loop
+description: Human integration for approvals, reviews, and judgment
+---
+
+```bash
+npm install human-in-the-loop
+```
+
+First-class human participation in AI workflows.
+
+```typescript
+import { approve, review, ask } from 'human-in-the-loop'
+
+const approved = await approve`
+  Expense: ${expense.description}
+  Amount: $${expense.amount}
+`({ assignTo: { role: 'manager' } })
+
+if (approved) {
+  await processExpense(expense)
+}
+```
+
+## Features
+
+- Slack, email, and web notifications
+- Role-based assignment
+- Timeout and escalation policies
+- Audit logging
+- Custom approval UIs
+
+## Related
+
+- [Human Primitive](/human) — Full documentation
+- [ai-workflows](/packages/ai-workflows) — Workflow integration
+- [Human Functions](/function/human) — ask, approve, review

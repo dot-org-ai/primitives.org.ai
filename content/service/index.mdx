@@ -1,0 +1,310 @@
+---
+title: Service
+description: Services-as-Software—AI delivering work traditionally performed by humans
+---
+
+AI systems that deliver work traditionally performed by humans, packaged as callable services that scale infinitely and improve continuously.
+
+## The Shift
+
+Traditional services require human labor for every unit of output. Services-as-Software encapsulate expertise, judgment, and execution into software that:
+
+- Scales without proportional headcount
+- Operates 24/7 with consistent quality
+- Improves from every interaction
+- Costs marginal compute instead of salaries
+
+```typescript
+import { service, sla, pricing } from 'services-as-software'
+
+const codeReviewService = service({
+  name: 'code-review',
+  description: 'Expert code review for pull requests',
+
+  // What the service does
+  input: z.object({
+    repository: z.string(),
+    pullRequest: z.number(),
+    reviewType: z.enum(['security', 'performance', 'general']),
+  }),
+
+  output: z.object({
+    approved: z.boolean(),
+    comments: z.array(reviewComment),
+    summary: z.string(),
+    suggestions: z.array(codeSuggestion),
+  }),
+
+  // How it's delivered
+  implementation: {
+    agent: codeReviewAgent,
+    workflow: codeReviewWorkflow,
+    escalation: { to: 'senior-engineers', when: 'complexity > 8' },
+  },
+
+  // Service guarantees
+  sla: sla({
+    responseTime: '< 30 minutes',
+    accuracy: '> 95%',
+    availability: '99.9%',
+  }),
+
+  // Pricing model
+  pricing: pricing({
+    model: 'per-review',
+    base: 5.00,
+    modifiers: [
+      { when: 'lines > 500', multiply: 1.5 },
+      { when: 'reviewType = security', multiply: 2.0 },
+    ],
+  }),
+})
+```
+
+## Service Types
+
+### Analysis Services
+
+Transform data into insights:
+
+```typescript
+const competitorAnalysis = service({
+  name: 'competitor-analysis',
+
+  input: z.object({
+    company: z.string(),
+    aspects: z.array(z.enum(['pricing', 'features', 'positioning', 'market'])),
+  }),
+
+  output: z.object({
+    report: z.string(),
+    keyFindings: z.array(z.string()),
+    recommendations: z.array(z.string()),
+    sources: z.array(z.string()),
+  }),
+
+  implementation: {
+    agent: researchAgent,
+    tools: [webSearch, documentAnalysis, dataExtraction],
+    humanReview: { when: 'report.confidence < 0.8' },
+  },
+})
+```
+
+### Creation Services
+
+Generate content and artifacts:
+
+```typescript
+const blogWritingService = service({
+  name: 'blog-writing',
+
+  input: z.object({
+    topic: z.string(),
+    tone: z.enum(['professional', 'casual', 'technical']),
+    length: z.enum(['short', 'medium', 'long']),
+    seoKeywords: z.array(z.string()).optional(),
+  }),
+
+  output: z.object({
+    title: z.string(),
+    content: z.string(),
+    excerpt: z.string(),
+    suggestedImages: z.array(z.string()),
+  }),
+
+  implementation: {
+    workflow: contentCreationWorkflow,
+    stages: ['research', 'outline', 'draft', 'edit', 'polish'],
+    humanInLoop: { stage: 'edit', optional: true },
+  },
+})
+```
+
+### Processing Services
+
+Handle operational tasks:
+
+```typescript
+const invoiceProcessing = service({
+  name: 'invoice-processing',
+
+  input: z.object({
+    document: z.string(), // URL or base64
+    format: z.enum(['pdf', 'image', 'email']),
+  }),
+
+  output: z.object({
+    vendor: z.string(),
+    amount: z.number(),
+    currency: z.string(),
+    lineItems: z.array(lineItemSchema),
+    dueDate: z.date(),
+    confidence: z.number(),
+  }),
+
+  implementation: {
+    function: extractInvoiceData,
+    validation: validateExtraction,
+    humanReview: { when: 'confidence < 0.9' },
+  },
+})
+```
+
+## Quality Guarantees
+
+Services come with explicit quality commitments:
+
+```typescript
+const qualityService = service({
+  name: 'quality-service',
+
+  quality: {
+    // Accuracy metrics
+    accuracy: {
+      target: 0.95,
+      measurement: 'human-evaluated-sample',
+      sampleRate: 0.1,
+    },
+
+    // Consistency
+    consistency: {
+      acrossInputs: 'high',
+      overTime: 'stable',
+    },
+
+    // Handling edge cases
+    edgeCases: {
+      detection: 'automatic',
+      handling: 'escalate-to-human',
+    },
+  },
+
+  feedback: {
+    collectFrom: ['customer-ratings', 'outcome-tracking'],
+    improveFrom: 'continuous-learning',
+  },
+})
+```
+
+## Human Escalation
+
+Services seamlessly escalate to humans when needed:
+
+```typescript
+const hybridService = service({
+  name: 'customer-support',
+
+  escalation: {
+    // Automatic escalation triggers
+    triggers: [
+      { condition: 'sentiment < -0.5', priority: 'high' },
+      { condition: 'topic = refund AND amount > 1000', priority: 'medium' },
+      { condition: 'attempts > 3', priority: 'low' },
+    ],
+
+    // Where to escalate
+    destinations: [
+      { tier: 1, team: 'support-team', sla: '5m' },
+      { tier: 2, team: 'senior-support', sla: '15m' },
+      { tier: 3, team: 'support-managers', sla: '1h' },
+    ],
+
+    // Context passed to human
+    handoff: {
+      include: ['conversation-history', 'customer-profile', 'ai-analysis'],
+      suggestActions: true,
+    },
+  },
+})
+```
+
+## Service Consumption
+
+```typescript
+// Direct invocation
+const review = await codeReviewService.invoke({
+  repository: 'org/repo',
+  pullRequest: 123,
+  reviewType: 'general',
+})
+
+// Async with callback
+const job = await codeReviewService.submit({
+  repository: 'org/repo',
+  pullRequest: 123,
+  reviewType: 'security',
+}, {
+  callback: 'https://my-app.com/webhooks/review-complete',
+})
+
+// Batch processing
+const results = await codeReviewService.batch([
+  { repository: 'org/repo1', pullRequest: 1, reviewType: 'general' },
+  { repository: 'org/repo2', pullRequest: 2, reviewType: 'general' },
+  { repository: 'org/repo3', pullRequest: 3, reviewType: 'general' },
+])
+```
+
+## Continuous Improvement
+
+Services learn and improve over time:
+
+```typescript
+const improvingService = service({
+  name: 'improving-service',
+
+  learning: {
+    // Learn from corrections
+    fromCorrections: {
+      collectVia: 'feedback-api',
+      applyAs: 'fine-tuning',
+      frequency: 'weekly',
+    },
+
+    // Learn from outcomes
+    fromOutcomes: {
+      track: ['customer-satisfaction', 'task-success'],
+      optimize: 'satisfaction',
+    },
+
+    // A/B testing
+    experiments: {
+      enabled: true,
+      variants: ['baseline', 'new-prompt', 'different-model'],
+      metric: 'accuracy',
+    },
+  },
+})
+```
+
+## Pricing Models
+
+```typescript
+// Per-unit pricing
+const perUnit = pricing({
+  model: 'per-unit',
+  unitPrice: 0.10,
+  unit: 'document-processed',
+})
+
+// Tiered pricing
+const tiered = pricing({
+  model: 'tiered',
+  tiers: [
+    { upTo: 1000, unitPrice: 0.10 },
+    { upTo: 10000, unitPrice: 0.08 },
+    { upTo: Infinity, unitPrice: 0.05 },
+  ],
+})
+
+// Subscription pricing
+const subscription = pricing({
+  model: 'subscription',
+  plans: [
+    { name: 'starter', monthly: 99, includes: 1000 },
+    { name: 'growth', monthly: 299, includes: 5000 },
+    { name: 'enterprise', custom: true },
+  ],
+})
+```

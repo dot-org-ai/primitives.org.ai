@@ -1,0 +1,63 @@
+---
+title: ask
+description: Get free-form input from a human
+---
+
+Pause execution and wait for human text input. Use for open-ended questions, clarifications, or decisions that need human judgment.
+
+## Import
+
+```typescript
+import { ask } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+ask`question`
+ask`question`(options)
+```
+
+## Examples
+
+```typescript
+// Simple question
+const answer = await ask`What should we name the new feature?`
+
+// With context
+const decision = await ask`
+  The analysis found ${issues.length} issues.
+  How should we proceed?
+
+  Options:
+  1. Fix all issues
+  2. Fix critical only
+  3. Skip and continue
+`
+
+// With options
+const input = await ask`Describe the desired outcome`({
+  assignTo: { user: 'product-manager@company.com' },
+  channel: 'slack',
+})
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `assignTo` | `Assignment` | Who should answer |
+| `channel` | `string` | Notification channel (slack, email, ui) |
+| `timeout` | `string` | How long to wait (e.g., '24h') |
+| `escalateTo` | `string` | Who to escalate to on timeout |
+
+## Returns
+
+Returns the human's text response as a `string`.
+
+## When to Use
+
+- Open-ended questions
+- Requests for clarification
+- Creative decisions
+- Input that can't be constrained to options

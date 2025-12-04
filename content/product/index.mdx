@@ -1,0 +1,282 @@
+---
+title: Product
+description: Compose primitives into complete products with declarative interfaces
+---
+
+Compose Functions, Databases, Workflows, and Agents into complete, deployable products with declarative capability and interface definitions.
+
+## Defining a Product
+
+```typescript
+import { product, api, ui, capability } from 'digital-products'
+
+const supportPortal = product({
+  name: 'support-portal',
+  description: 'AI-powered customer support system',
+
+  // What the product can do
+  capabilities: [
+    capability('answer-questions', {
+      function: answerQuestions,
+      rateLimit: '100/minute',
+    }),
+    capability('create-ticket', {
+      workflow: ticketCreationWorkflow,
+      auth: 'authenticated',
+    }),
+    capability('escalate-to-human', {
+      function: escalateToHuman,
+      auth: 'authenticated',
+    }),
+  ],
+
+  // How users interact
+  interfaces: {
+    api: api({
+      version: 'v1',
+      endpoints: [
+        { path: '/ask', method: 'POST', capability: 'answer-questions' },
+        { path: '/tickets', method: 'POST', capability: 'create-ticket' },
+      ],
+    }),
+
+    widget: ui({
+      type: 'embedded-widget',
+      component: 'ChatWidget',
+      config: { theme: 'light', position: 'bottom-right' },
+    }),
+  },
+
+  // State and storage
+  database: supportDatabase,
+
+  // Autonomous actors
+  agents: [supportAgent, triageAgent],
+})
+```
+
+## Capabilities
+
+Capabilities are the atomic units of product functionality:
+
+```typescript
+const searchCapability = capability('semantic-search', {
+  // The underlying function
+  function: semanticSearch,
+
+  // Access control
+  auth: {
+    required: true,
+    scopes: ['read:documents'],
+  },
+
+  // Rate limiting
+  rateLimit: {
+    requests: 1000,
+    period: 'hour',
+    by: 'user',
+  },
+
+  // Usage tracking
+  metering: {
+    unit: 'search',
+    track: ['user', 'organization'],
+  },
+
+  // Documentation
+  description: 'Search documents using natural language',
+  examples: [
+    { input: { query: 'quarterly revenue' }, output: { results: [...] } },
+  ],
+})
+```
+
+## API Interface
+
+Define RESTful or GraphQL APIs:
+
+```typescript
+const productApi = api({
+  version: 'v1',
+  basePath: '/api',
+
+  endpoints: [
+    {
+      path: '/documents',
+      method: 'GET',
+      capability: 'list-documents',
+      query: z.object({ limit: z.number().optional() }),
+    },
+    {
+      path: '/documents/:id',
+      method: 'GET',
+      capability: 'get-document',
+      params: z.object({ id: z.string() }),
+    },
+    {
+      path: '/documents',
+      method: 'POST',
+      capability: 'create-document',
+      body: documentSchema,
+    },
+    {
+      path: '/search',
+      method: 'POST',
+      capability: 'semantic-search',
+      body: z.object({ query: z.string() }),
+    },
+  ],
+
+  middleware: [
+    authenticate,
+    rateLimit,
+    logRequest,
+  ],
+})
+```
+
+## UI Components
+
+Products can include user interfaces:
+
+```typescript
+const productUI = ui({
+  type: 'web-app',
+
+  pages: {
+    '/': homePage,
+    '/dashboard': dashboardPage,
+    '/documents/:id': documentPage,
+  },
+
+  components: {
+    SearchBar: searchBarComponent,
+    DocumentList: documentListComponent,
+    ChatWidget: chatWidgetComponent,
+  },
+
+  theme: {
+    colors: { primary: '#3b82f6' },
+    fonts: { body: 'Inter' },
+  },
+})
+```
+
+## Multi-Tenancy
+
+Built-in support for SaaS products:
+
+```typescript
+const saasProduct = product({
+  name: 'saas-platform',
+
+  tenancy: {
+    type: 'organization',
+    isolation: 'row-level',
+
+    tiers: {
+      free: {
+        limits: { users: 5, storage: '1GB' },
+        features: ['basic-search'],
+      },
+      pro: {
+        limits: { users: 50, storage: '100GB' },
+        features: ['basic-search', 'ai-features', 'api-access'],
+      },
+      enterprise: {
+        limits: { users: 'unlimited', storage: 'unlimited' },
+        features: ['*'],
+        support: 'dedicated',
+      },
+    },
+  },
+})
+```
+
+## Deployment
+
+Products deploy as complete units:
+
+```typescript
+// Deploy to production
+await supportPortal.deploy({
+  environment: 'production',
+  region: 'us-east-1',
+
+  scaling: {
+    min: 2,
+    max: 10,
+    target: { cpu: 70 },
+  },
+
+  domains: {
+    api: 'api.support.example.com',
+    app: 'support.example.com',
+  },
+})
+
+// Check deployment status
+const status = await supportPortal.status()
+console.log(status)
+// {
+//   environment: 'production',
+//   version: '1.2.3',
+//   health: 'healthy',
+//   instances: 3,
+//   endpoints: {
+//     api: 'https://api.support.example.com',
+//     app: 'https://support.example.com',
+//   },
+// }
+```
+
+## Versioning
+
+Manage product versions and migrations:
+
+```typescript
+const productV2 = product({
+  name: 'my-product',
+  version: '2.0.0',
+
+  migration: {
+    from: '1.x',
+    steps: [
+      { type: 'schema', migration: 'add-new-fields' },
+      { type: 'backfill', function: backfillNewData },
+      { type: 'deprecate', capability: 'old-search' },
+    ],
+  },
+
+  compatibility: {
+    apiVersions: ['v1', 'v2'],
+    deprecations: [
+      { version: 'v1', sunset: '2024-12-31' },
+    ],
+  },
+})
+```
+
+## Observability
+
+Products come with built-in observability:
+
+```typescript
+// Metrics
+const metrics = await supportPortal.metrics({
+  period: 'last-24h',
+  include: ['requests', 'latency', 'errors', 'usage'],
+})
+
+// Logs
+const logs = await supportPortal.logs({
+  level: 'error',
+  since: lastHour,
+})
+
+// Traces
+const traces = await supportPortal.traces({
+  capability: 'answer-questions',
+  sample: 0.1,
+})
+```

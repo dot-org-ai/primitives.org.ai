@@ -1,0 +1,248 @@
+---
+title: Timers & Waiting
+description: Sleep, wait for events, and schedule work
+---
+
+# Timers & Waiting
+
+Workflows can wait for arbitrary periods, external events, or scheduled times without consuming resources.
+
+## Sleeping
+
+Pause workflow execution for a duration:
+
+```typescript
+const reminderWorkflow = workflow({
+  name: 'subscription-reminder',
+  execute: async (ctx, subscription) => {
+    await step('activate', () => activateSubscription(subscription))
+
+    // Sleep for 30 days - workflow suspends
+    await ctx.sleep('30d')
+
+    await step('remind', () => sendRenewalReminder(subscription))
+
+    // Sleep for another 7 days
+    await ctx.sleep('7d')
+
+    await step('final-notice', () => sendFinalNotice(subscription))
+  },
+})
+```
+
+### Duration Formats
+
+```typescript
+await ctx.sleep('5s')     // 5 seconds
+await ctx.sleep('30m')    // 30 minutes
+await ctx.sleep('2h')     // 2 hours
+await ctx.sleep('7d')     // 7 days
+await ctx.sleep('2w')     // 2 weeks
+await ctx.sleep(3600000)  // Milliseconds
+```
+
+## Waiting for Events
+
+Wait for external events with optional timeout:
+
+```typescript
+const orderWorkflow = workflow({
+  name: 'order-fulfillment',
+  execute: async (ctx, order) => {
+    await step('create', () => createOrder(order))
+
+    // Wait for payment event
+    const payment = await ctx.waitForEvent('payment.received', {
+      filter: { orderId: order.id },
+      timeout: '24h',
+      timeoutValue: null,
+    })
+
+    if (!payment) {
+      await step('cancel', () => cancelOrder(order.id, 'payment-timeout'))
+      return { status: 'cancelled' }
+    }
+
+    await step('fulfill', () => fulfillOrder(order.id))
+    return { status: 'completed' }
+  },
+})
+```
+
+### Event Matching
+
+```typescript
+// Wait for specific event
+const event = await ctx.waitForEvent('order.shipped', {
+  filter: { orderId: ctx.orderId },
+})
+
+// Wait for any of multiple events
+const event = await ctx.waitForEvent(['payment.success', 'payment.failed'], {
+  filter: { orderId: ctx.orderId },
+})
+
+// Complex filtering
+const event = await ctx.waitForEvent('notification', {
+  filter: (e) => e.type === 'reply' && e.userId === ctx.userId,
+})
+```
+
+## Scheduled Execution
+
+Schedule workflows to run at specific times:
+
+```typescript
+import { schedule, cron } from 'ai-workflows'
+
+// Schedule for specific time
+await schedule(reportWorkflow, reportData, {
+  at: new Date('2024-12-31T23:59:00Z'),
+})
+
+// Schedule with delay
+await schedule(reminderWorkflow, userData, {
+  delay: '7d',
+})
+
+// Recurring schedule
+await cron('0 9 * * MON', weeklyReportWorkflow, {
+  timezone: 'America/New_York',
+})
+```
+
+### Cron Expressions
+
+```typescript
+// Every day at 9am
+cron('0 9 * * *', dailyWorkflow)
+
+// Every Monday at 10am
+cron('0 10 * * MON', weeklyWorkflow)
+
+// First of every month
+cron('0 0 1 * *', monthlyWorkflow)
+
+// Every 15 minutes
+cron('*/15 * * * *', frequentWorkflow)
+```
+
+## Timeouts
+
+Set timeouts for steps or entire workflows:
+
+```typescript
+const workflow = workflow({
+  name: 'time-sensitive',
+  timeout: '1h',  // Entire workflow timeout
+
+  execute: async (ctx, input) => {
+    await step('quick', () => quickOperation(), {
+      timeout: '30s',
+    })
+
+    await step('slow', () => slowOperation(), {
+      timeout: '10m',
+    })
+  },
+})
+```
+
+### Timeout Handling
+
+```typescript
+const workflow = workflow({
+  execute: async (ctx, input) => {
+    try {
+      await step('risky', () => riskyOperation(), {
+        timeout: '5m',
+      })
+    } catch (error) {
+      if (error.code === 'TIMEOUT') {
+        await step('fallback', () => fallbackOperation())
+      }
+      throw error
+    }
+  },
+})
+```
+
+## Deadlines
+
+Set absolute deadlines:
+
+```typescript
+const workflow = workflow({
+  execute: async (ctx, order) => {
+    // Must complete by deadline
+    ctx.setDeadline(order.fulfillmentDeadline)
+
+    await step('process', () => processOrder(order))
+
+    // Check remaining time
+    const remaining = ctx.timeRemaining()
+    if (remaining < 3600000) {
+      await step('expedite', () => expediteShipping(order))
+    }
+  },
+})
+```
+
+## Signals
+
+Receive signals during execution:
+
+```typescript
+const workflow = workflow({
+  signals: {
+    cancel: async (ctx, reason) => {
+      await step('cleanup', () => cleanup(ctx.data))
+      ctx.exit({ status: 'cancelled', reason })
+    },
+
+    updatePriority: async (ctx, newPriority) => {
+      ctx.data.priority = newPriority
+    },
+  },
+
+  execute: async (ctx, input) => {
+    // Workflow runs, can receive signals at any time
+    while (!ctx.done) {
+      await step('work', () => doWork(ctx.data))
+      await ctx.sleep('1h')
+    }
+  },
+})
+
+// Send signal to running workflow
+await workflow.signal('wf_123', 'updatePriority', 'high')
+```
+
+## Polling
+
+Implement polling patterns:
+
+```typescript
+const workflow = workflow({
+  execute: async (ctx, jobId) => {
+    await step('submit', () => submitJob(jobId))
+
+    // Poll until complete
+    let status = 'pending'
+    while (status === 'pending' || status === 'running') {
+      await ctx.sleep('30s')
+      status = await step('check', () => getJobStatus(jobId))
+    }
+
+    return { jobId, status }
+  },
+})
+```
+
+## Timer Best Practices
+
+1. **Use appropriate granularity** - Don't sleep for seconds if minutes work
+2. **Always set timeouts** - Prevent workflows from running forever
+3. **Handle timeout gracefully** - Implement compensating actions
+4. **Use events over polling** - More efficient when possible
+5. **Consider timezones** - Especially for scheduled workflows

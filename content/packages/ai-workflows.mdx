@@ -1,0 +1,35 @@
+---
+title: ai-workflows
+description: Durable execution and state machines
+---
+
+```bash
+npm install ai-workflows
+```
+
+Orchestrate complex processes with automatic persistence, retries, and recovery.
+
+```typescript
+import { workflow, step } from 'ai-workflows'
+
+const processOrder = workflow('process-order', async (ctx, order) => {
+  const validated = await ctx.run('validate', () => validateOrder(order))
+  const payment = await ctx.run('charge', () => chargeCard(validated))
+  await ctx.run('fulfill', () => fulfillOrder(payment))
+  return { success: true }
+})
+```
+
+## Features
+
+- Durable execution with automatic checkpointing
+- State machines for explicit state management
+- Parallel execution with `Promise.all`
+- Human-in-the-loop integration
+- Timers and scheduled execution
+
+## Related
+
+- [Workflow Primitive](/workflow) — Full documentation
+- [ai-functions](/packages/ai-functions) — Functions to orchestrate
+- [human-in-the-loop](/packages/human-in-the-loop) — Human steps

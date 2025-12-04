@@ -1,0 +1,40 @@
+---
+title: autonomous-agents
+description: Truly autonomous agents with identity and memory
+---
+
+```bash
+npm install autonomous-agents
+```
+
+Create agents that are long-term members of your organization with real identity.
+
+```typescript
+import { agent } from 'autonomous-agents'
+
+const reviewer = agent({
+  name: 'code-reviewer',
+  identity: {
+    email: 'reviewer@company.com',
+    slack: '@code-reviewer',
+  },
+  capabilities: [reviewCode, suggestFixes],
+  memory: { type: 'persistent' },
+})
+
+await reviewer.assign(pullRequest)
+```
+
+## Features
+
+- Real identity (email, Slack, calendar)
+- Long-term persistent memory
+- Capability-based permissions
+- Autonomous goal pursuit
+- Human escalation paths
+
+## Related
+
+- [Agent Primitive](/agent) — Full documentation
+- [ai-functions](/packages/ai-functions) — Agent capabilities
+- [ai-workflows](/packages/ai-workflows) — Agent workflows

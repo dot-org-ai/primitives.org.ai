@@ -1,0 +1,75 @@
+---
+title: review
+description: Get detailed review and feedback from a human
+---
+
+Pause execution and wait for a structured human review with rating, feedback, and optional approval.
+
+## Import
+
+```typescript
+import { review } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+review`content to review`
+review`content`(options)
+```
+
+## Examples
+
+```typescript
+// Simple review
+const result = await review`
+  Blog Post Draft
+
+  ${blogPost}
+`
+
+console.log(result.approved)  // boolean
+console.log(result.rating)    // 1-5
+console.log(result.feedback)  // string
+
+// With options
+const codeReview = await review`
+  Pull Request #${pr.number}
+
+  ${pr.diff}
+`({
+  assignTo: { role: 'senior-engineer' },
+  rubric: ['correctness', 'readability', 'performance'],
+})
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `assignTo` | `Assignment` | Who should review |
+| `channel` | `string` | Notification channel |
+| `timeout` | `string` | How long to wait |
+| `rubric` | `string[]` | Categories to rate |
+| `requireApproval` | `boolean` | Include approval decision |
+
+## Returns
+
+```typescript
+interface Review {
+  approved?: boolean      // If requireApproval is true
+  rating: number          // 1-5 overall rating
+  ratings?: Record<string, number>  // Per-rubric ratings
+  feedback: string        // Written feedback
+  reviewer: string        // Who reviewed
+  reviewedAt: Date        // When reviewed
+}
+```
+
+## When to Use
+
+- Content review (docs, blog posts, marketing)
+- Code review
+- Design review
+- Quality assurance
+- Any review needing detailed feedback

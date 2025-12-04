@@ -1,0 +1,68 @@
+---
+title: is
+description: Boolean classification
+---
+
+Boolean classification. Returns `true` or `false`.
+
+## Import
+
+```typescript
+import { is } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+is`${input} question?`
+is(classification: string, context: object)
+```
+
+## Examples
+
+```typescript
+// Tagged template - natural question format
+const isSpam = await is`${emailContent} spam?`
+const isUrgent = await is`${message} urgent?`
+const isValid = await is`${code} valid TypeScript?`
+const isProfessional = await is`${text} professional tone?`
+
+// With context object
+const isPositive = await is('positive sentiment', { review: 'Great product!' })
+```
+
+## Use Cases
+
+```typescript
+// Content moderation
+const isAppropriate = await is`${userPost} appropriate for all ages?`
+if (!isAppropriate) {
+  await flagForReview(userPost)
+}
+
+// Validation
+const isValidEmail = await is`${input} a valid email address?`
+const isSecure = await is`${password} a strong password?`
+
+// Classification
+const isQuestion = await is`${text} a question?`
+const isTechnical = await is`${article} technical content?`
+```
+
+## With Options
+
+```typescript
+// Use more powerful model for complex decisions
+const isFactual = await is`${claim} factually accurate?`({
+  model: 'claude-opus-4-5',
+})
+```
+
+## Type Signature
+
+```typescript
+type IsFunction = {
+  (strings: TemplateStringsArray, ...values: unknown[]): Promise<boolean>
+  (classification: string, context: object): Promise<boolean>
+}
+```

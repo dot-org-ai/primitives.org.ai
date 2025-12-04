@@ -21,8 +21,14 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
-    "digital-workers": "workspace:*"
+    "digital-workers": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
-  "keywords": ["services", "software", "ai", "primitives"],
+  "keywords": [
+    "services",
+    "software",
+    "ai",
+    "primitives"
+  ],
   "license": "MIT"
 }

@@ -1,0 +1,304 @@
+---
+title: Markdown Integration
+description: Convert between tasks and markdown checklists
+---
+
+# Markdown Integration
+
+Bidirectional conversion between task structures and markdown checklists enables human-readable task definitions and documentation.
+
+## Parsing Markdown
+
+```typescript
+import { parseMarkdown } from 'digital-tasks'
+
+const project = parseMarkdown(`
+# Launch Feature
+
+## Planning
+- [ ] Design mockups
+- [ ] Write technical spec
+- [x] Create project board
+
+## Implementation
+1. [ ] Build backend API
+2. [ ] Build frontend UI
+3. [ ] Write tests
+
+## Deployment
+- [ ] Deploy to staging
+- [ ] QA review
+- [ ] Deploy to production
+`)
+
+console.log(project.name)  // 'Launch Feature'
+console.log(project.tasks.length)  // 9 tasks
+```
+
+## Converting to Markdown
+
+```typescript
+import { toMarkdown } from 'digital-tasks'
+
+const project = createProject({
+  name: 'My Project',
+  tasks: [
+    parallel(
+      task('Design', { status: 'completed' }),
+      task('Spec', { status: 'in_progress' }),
+    ),
+    task('Implement'),
+  ],
+})
+
+const md = toMarkdown(project)
+console.log(md)
+// # My Project
+//
+// ## Tasks
+// - [x] Design
+// - [-] Spec
+// - [ ] Implement
+```
+
+## Status Markers
+
+| Markdown | Status | Description |
+|----------|--------|-------------|
+| `[ ]` | pending | Not started |
+| `[-]` | in_progress | Currently working |
+| `[x]` | completed | Finished |
+| `[~]` | blocked | Waiting on dependencies |
+| `[!]` | failed | Failed with error |
+| `[/]` | cancelled | Cancelled |
+
+```typescript
+const project = parseMarkdown(`
+- [ ] Pending task
+- [-] In progress task
+- [x] Completed task
+- [~] Blocked task
+- [!] Failed task
+- [/] Cancelled task
+`)
+```
+
+## Priority Markers
+
+| Marker | Priority | Description |
+|--------|----------|-------------|
+| `!!` | critical | Do immediately |
+| `!` | urgent | Do next |
+| `^` | high | Important |
+| (none) | normal | Default |
+| `v` | low | When time permits |
+
+```typescript
+const project = parseMarkdown(`
+- [ ] !! Critical task
+- [ ] ! Urgent task
+- [ ] ^ High priority task
+- [ ] Normal task
+- [ ] v Low priority task
+`)
+```
+
+## Parallel vs Sequential
+
+```typescript
+// Unordered lists = parallel (can run simultaneously)
+const parallelMd = `
+- [ ] Task A
+- [ ] Task B
+- [ ] Task C
+`
+
+// Ordered lists = sequential (must run in order)
+const sequentialMd = `
+1. [ ] Step 1
+2. [ ] Step 2
+3. [ ] Step 3
+`
+
+const parallel = parseMarkdown(parallelMd)
+// Tasks have no dependencies on each other
+
+const sequential = parseMarkdown(sequentialMd)
+// Step 2 depends on Step 1, Step 3 depends on Step 2
+```
+
+## Nested Tasks
+
+```typescript
+const project = parseMarkdown(`
+# Feature Development
+
+- [ ] Implement backend
+  - [ ] Create API endpoints
+  - [ ] Add database models
+  - [ ] Write migrations
+- [ ] Implement frontend
+  - [ ] Build components
+  - [ ] Add state management
+  - [ ] Style with CSS
+`)
+
+// Creates parent tasks with subtasks
+const backend = project.tasks.find(t => t.name === 'Implement backend')
+console.log(backend.subtasks.length)  // 3
+```
+
+## Sections as Groups
+
+```typescript
+const project = parseMarkdown(`
+# My Project
+
+## Phase 1: Planning
+- [ ] Research
+- [ ] Design
+
+## Phase 2: Development
+1. [ ] Implement
+2. [ ] Test
+
+## Phase 3: Launch
+- [ ] Deploy
+- [ ] Monitor
+`)
+
+// Sections become task groups
+console.log(project.groups)
+// [
+//   { name: 'Phase 1: Planning', type: 'parallel', tasks: [...] },
+//   { name: 'Phase 2: Development', type: 'sequential', tasks: [...] },
+//   { name: 'Phase 3: Launch', type: 'parallel', tasks: [...] },
+// ]
+```
+
+## Function Type Hints
+
+```typescript
+const project = parseMarkdown(`
+- [ ] Write code @code
+- [ ] Generate content @ai
+- [ ] Review changes @human
+- [ ] Research topic @agentic
+`)
+
+// Function types parsed from hints
+project.tasks[0].function.type  // 'code'
+project.tasks[1].function.type  // 'generative'
+project.tasks[2].function.type  // 'human'
+project.tasks[3].function.type  // 'agentic'
+```
+
+## Assignment Hints
+
+```typescript
+const project = parseMarkdown(`
+- [ ] Design mockups @assign:john
+- [ ] Code review @assign:team:engineering
+- [ ] Deploy @assign:agent:deploy-bot
+`)
+
+// Assignments parsed from hints
+project.tasks[0].assignTo  // { type: 'human', id: 'john' }
+project.tasks[1].assignTo  // { type: 'team', id: 'engineering' }
+project.tasks[2].assignTo  // { type: 'agent', id: 'deploy-bot' }
+```
+
+## Metadata in YAML Front Matter
+
+```typescript
+const project = parseMarkdown(`
+---
+name: Q1 Planning
+description: Quarterly planning tasks
+priority: high
+deadline: 2024-03-31
+---
+
+# Q1 Planning
+
+- [ ] Set goals
+- [ ] Allocate resources
+- [ ] Define milestones
+`)
+
+console.log(project.metadata)
+// { priority: 'high', deadline: '2024-03-31' }
+```
+
+## Roundtrip Conversion
+
+```typescript
+import { parseMarkdown, toMarkdown } from 'digital-tasks'
+
+// Parse markdown to project
+const project = parseMarkdown(originalMd)
+
+// Make changes
+await completeTask(project.tasks[0].id, result)
+
+// Convert back to markdown
+const updatedMd = toMarkdown(project)
+
+// Markdown reflects task completion
+// - [x] First task (was - [ ])
+```
+
+## Formatting Options
+
+```typescript
+const md = toMarkdown(project, {
+  includeStatus: true,       // Include status markers
+  includePriority: true,     // Include priority markers
+  includeAssignments: true,  // Include @assign hints
+  includeFunctionType: true, // Include @code, @ai hints
+  groupByStatus: false,      // Group tasks by status
+  includeMetadata: true,     // Include YAML front matter
+  checkboxStyle: 'github',   // 'github' | 'standard'
+})
+```
+
+## Diff and Sync
+
+```typescript
+import { diffMarkdown, syncMarkdown } from 'digital-tasks'
+
+// Compare two markdown versions
+const diff = diffMarkdown(oldMd, newMd)
+console.log(diff.added)    // New tasks
+console.log(diff.removed)  // Removed tasks
+console.log(diff.changed)  // Status changes
+
+// Sync external markdown with project
+const synced = syncMarkdown(project, externalMd, {
+  conflictResolution: 'external',  // 'project' | 'external' | 'manual'
+})
+```
+
+## File Integration
+
+```typescript
+import { loadMarkdownFile, saveMarkdownFile } from 'digital-tasks'
+
+// Load from file
+const project = await loadMarkdownFile('./TODO.md')
+
+// Make changes
+await updateTask(project.tasks[0].id, { status: 'completed' })
+
+// Save back to file
+await saveMarkdownFile(project, './TODO.md')
+```
+
+## Best Practices
+
+1. **Use consistent formatting** - Stick to one style throughout
+2. **Keep nesting shallow** - Deep nesting is hard to read
+3. **Use sections for phases** - Organize with markdown headers
+4. **Add metadata in front matter** - Keep task list clean
+5. **Sync regularly** - Keep markdown and project in sync
+6. **Use ordered lists for sequences** - Makes dependencies clear

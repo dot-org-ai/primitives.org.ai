@@ -1,0 +1,68 @@
+---
+title: approve
+description: Get yes/no approval from a human
+---
+
+Pause execution and wait for human approval. Returns `true` if approved, `false` if rejected.
+
+## Import
+
+```typescript
+import { approve } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+approve`request description`
+approve`request`(options)
+```
+
+## Examples
+
+```typescript
+// Simple approval
+const ok = await approve`Deploy to production?`
+
+if (ok) {
+  await deploy()
+}
+
+// With details
+const approved = await approve`
+  Expense Report
+
+  Amount: $${expense.amount}
+  Category: ${expense.category}
+  Description: ${expense.description}
+  Requester: ${expense.submittedBy}
+`
+
+// With options
+const result = await approve`${request}`({
+  assignTo: { role: 'manager' },
+  timeout: '48h',
+  escalateTo: 'director',
+})
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `assignTo` | `Assignment` | Who should approve |
+| `channel` | `string` | Notification channel |
+| `timeout` | `string` | How long to wait |
+| `escalateTo` | `string` | Who to escalate to on timeout |
+| `requireReason` | `boolean` | Require reason for rejection |
+
+## Returns
+
+Returns `boolean` - `true` if approved, `false` if rejected.
+
+## When to Use
+
+- Financial approvals
+- Deployment gates
+- Access requests
+- Any binary yes/no decision

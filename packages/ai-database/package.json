@@ -20,7 +20,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*"
+    "ai-functions": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
   "keywords": ["ai", "database", "linked-data", "mdxld", "primitives"],
   "license": "MIT"

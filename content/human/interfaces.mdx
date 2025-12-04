@@ -1,0 +1,418 @@
+---
+title: Interfaces
+description: Forms, workspaces, and UI for human tasks
+---
+
+# Human Interfaces
+
+Define how humans interact with tasks through forms, workspaces, and custom UI components.
+
+## Forms
+
+### Basic Form
+
+```typescript
+import { human } from 'human-in-the-loop'
+
+const approvalForm = human.form({
+  name: 'expense-approval',
+
+  fields: [
+    {
+      name: 'decision',
+      type: 'select',
+      options: ['approve', 'reject', 'request-more-info'],
+      required: true,
+    },
+    {
+      name: 'notes',
+      type: 'textarea',
+      placeholder: 'Add any notes...',
+      required: false,
+    },
+  ],
+})
+```
+
+### Field Types
+
+```typescript
+const comprehensiveForm = human.form({
+  name: 'detailed-form',
+
+  fields: [
+    // Text inputs
+    { name: 'title', type: 'text', maxLength: 100 },
+    { name: 'description', type: 'textarea', rows: 4 },
+    { name: 'email', type: 'email' },
+    { name: 'phone', type: 'phone' },
+    { name: 'url', type: 'url' },
+
+    // Numbers
+    { name: 'amount', type: 'number', min: 0, max: 10000 },
+    { name: 'rating', type: 'rating', scale: 5 },
+    { name: 'slider', type: 'slider', min: 0, max: 100, step: 10 },
+
+    // Selection
+    { name: 'category', type: 'select', options: ['A', 'B', 'C'] },
+    { name: 'tags', type: 'multiselect', options: ['tag1', 'tag2', 'tag3'] },
+    { name: 'priority', type: 'radio', options: ['low', 'medium', 'high'] },
+    { name: 'features', type: 'checkbox', options: ['f1', 'f2', 'f3'] },
+
+    // Date/Time
+    { name: 'dueDate', type: 'date' },
+    { name: 'meetingTime', type: 'datetime' },
+    { name: 'duration', type: 'duration' },
+
+    // Files
+    { name: 'attachment', type: 'file', accept: '.pdf,.doc' },
+    { name: 'images', type: 'files', accept: 'image/*', maxFiles: 5 },
+
+    // Rich content
+    { name: 'content', type: 'richtext' },
+    { name: 'code', type: 'code', language: 'typescript' },
+    { name: 'markdown', type: 'markdown' },
+
+    // Special
+    { name: 'signature', type: 'signature' },
+    { name: 'location', type: 'location' },
+  ],
+})
+```
+
+### Conditional Fields
+
+```typescript
+const conditionalForm = human.form({
+  name: 'conditional-form',
+
+  fields: [
+    {
+      name: 'decision',
+      type: 'select',
+      options: ['approve', 'reject', 'defer'],
+    },
+    {
+      name: 'reason',
+      type: 'textarea',
+      showWhen: 'decision === "reject"',
+      required: { when: 'decision === "reject"' },
+    },
+    {
+      name: 'deferUntil',
+      type: 'date',
+      showWhen: 'decision === "defer"',
+    },
+    {
+      name: 'adjustedAmount',
+      type: 'number',
+      showWhen: 'decision === "approve"',
+      label: 'Adjusted Amount (optional)',
+    },
+  ],
+})
+```
+
+### Form Validation
+
+```typescript
+const validatedForm = human.form({
+  name: 'validated-form',
+
+  fields: [
+    {
+      name: 'email',
+      type: 'email',
+      required: true,
+      validation: {
+        pattern: /^[\w-\.]+@company\.com$/,
+        message: 'Must be a company email',
+      },
+    },
+    {
+      name: 'amount',
+      type: 'number',
+      validation: {
+        min: 0,
+        max: { value: 'context.budget', message: 'Exceeds budget' },
+        custom: (value, form) =>
+          value > form.previousAmount ? 'Cannot increase amount' : null,
+      },
+    },
+  ],
+
+  // Form-level validation
+  validate: (values) => {
+    const errors = {}
+    if (values.endDate < values.startDate) {
+      errors.endDate = 'End date must be after start date'
+    }
+    return errors
+  },
+})
+```
+
+## Workspaces
+
+### Basic Workspace
+
+```typescript
+const reviewWorkspace = human.workspace({
+  name: 'document-review',
+
+  layout: 'split-view',
+
+  panels: [
+    {
+      type: 'document-viewer',
+      source: 'input.document',
+      position: 'left',
+    },
+    {
+      type: 'form',
+      form: reviewForm,
+      position: 'right',
+    },
+  ],
+})
+```
+
+### Multi-Panel Workspace
+
+```typescript
+const analysisWorkspace = human.workspace({
+  name: 'data-analysis',
+
+  layout: 'grid',
+
+  panels: [
+    {
+      id: 'data',
+      type: 'data-table',
+      source: 'input.dataset',
+      position: { row: 1, col: 1, colspan: 2 },
+      features: ['sort', 'filter', 'search'],
+    },
+    {
+      id: 'chart',
+      type: 'chart',
+      source: 'input.dataset',
+      chartType: 'auto',
+      position: { row: 1, col: 3 },
+    },
+    {
+      id: 'suggestions',
+      type: 'ai-suggestions',
+      source: 'context.analysis',
+      position: { row: 2, col: 1 },
+    },
+    {
+      id: 'notes',
+      type: 'notes',
+      position: { row: 2, col: 2 },
+    },
+    {
+      id: 'decision',
+      type: 'form',
+      form: decisionForm,
+      position: { row: 2, col: 3 },
+    },
+  ],
+})
+```
+
+### Panel Types
+
+```typescript
+const panels = [
+  // Content viewers
+  { type: 'document-viewer', source: 'input.doc' },
+  { type: 'pdf-viewer', source: 'input.pdf' },
+  { type: 'image-viewer', source: 'input.images' },
+  { type: 'code-viewer', source: 'input.code', language: 'typescript' },
+  { type: 'diff-viewer', source: { old: 'input.old', new: 'input.new' } },
+
+  // Data display
+  { type: 'data-table', source: 'input.data' },
+  { type: 'chart', source: 'input.metrics', chartType: 'line' },
+  { type: 'json-viewer', source: 'input.json' },
+  { type: 'timeline', source: 'input.events' },
+
+  // Interactive
+  { type: 'form', form: myForm },
+  { type: 'annotation-tools' },
+  { type: 'drawing-canvas' },
+  { type: 'notes' },
+
+  // AI assistance
+  { type: 'ai-suggestions', source: 'context.suggestions' },
+  { type: 'ai-chat', agent: 'assistant' },
+  { type: 'similar-items', source: 'context.similar' },
+
+  // Context
+  { type: 'context-panel', source: 'context' },
+  { type: 'history', source: 'context.history' },
+  { type: 'related-items', source: 'context.related' },
+]
+```
+
+## Context Display
+
+### Showing Context
+
+```typescript
+const contextualTask = human.task({
+  name: 'contextual-review',
+
+  context: {
+    // What to show
+    show: ['request', 'customer', 'history', 'policy'],
+
+    // How to display
+    display: {
+      request: { panel: 'main', highlight: ['amount', 'category'] },
+      customer: { panel: 'sidebar', compact: true },
+      history: { panel: 'bottom', type: 'timeline' },
+      policy: { panel: 'collapsible', expanded: false },
+    },
+  },
+})
+```
+
+### Context Sections
+
+```typescript
+const structuredContext = human.task({
+  name: 'structured-context',
+
+  context: {
+    sections: [
+      {
+        title: 'Request Details',
+        source: 'input.request',
+        display: 'card',
+        fields: ['id', 'amount', 'category', 'description'],
+      },
+      {
+        title: 'Customer Profile',
+        source: 'context.customer',
+        display: 'profile',
+        compact: true,
+      },
+      {
+        title: 'Similar Past Requests',
+        source: 'context.similar',
+        display: 'list',
+        maxItems: 5,
+      },
+      {
+        title: 'AI Analysis',
+        source: 'context.aiAnalysis',
+        display: 'formatted',
+        highlight: ['recommendation', 'confidence'],
+      },
+    ],
+  },
+})
+```
+
+## Custom Components
+
+```typescript
+import { registerComponent } from 'human-in-the-loop'
+
+// Register custom component
+registerComponent({
+  name: 'custom-rating',
+
+  props: {
+    value: { type: 'number' },
+    max: { type: 'number', default: 5 },
+    labels: { type: 'array' },
+  },
+
+  render: ({ value, max, labels, onChange }) => (
+    <div className="rating">
+      {Array.from({ length: max }, (_, i) => (
+        <button
+          key={i}
+          className={i < value ? 'active' : ''}
+          onClick={() => onChange(i + 1)}
+        >
+          {labels?.[i] || i + 1}
+        </button>
+      ))}
+    </div>
+  ),
+})
+
+// Use in form
+const form = human.form({
+  fields: [
+    {
+      name: 'satisfaction',
+      type: 'custom-rating',
+      max: 5,
+      labels: ['Poor', 'Fair', 'Good', 'Great', 'Excellent'],
+    },
+  ],
+})
+```
+
+## Themes and Styling
+
+```typescript
+const styledTask = human.task({
+  name: 'styled-task',
+
+  ui: {
+    theme: 'light',  // 'light' | 'dark' | 'auto'
+
+    styles: {
+      primaryColor: '#0066cc',
+      accentColor: '#00cc66',
+      fontFamily: 'Inter, sans-serif',
+    },
+
+    branding: {
+      logo: 'https://company.com/logo.png',
+      title: 'Company Review Portal',
+    },
+  },
+})
+```
+
+## Mobile Support
+
+```typescript
+const mobileTask = human.task({
+  name: 'mobile-friendly',
+
+  ui: {
+    responsive: true,
+
+    mobile: {
+      layout: 'stack',  // Stack panels vertically
+      simplify: true,   // Use simplified controls
+      offlineSupport: true,
+    },
+
+    tablet: {
+      layout: 'sidebar',
+    },
+
+    desktop: {
+      layout: 'grid',
+    },
+  },
+})
+```
+
+## Best Practices
+
+1. **Keep forms simple** - Only ask for necessary information
+2. **Smart defaults** - Pre-fill when possible
+3. **Clear validation** - Immediate, helpful error messages
+4. **Responsive design** - Support all device sizes
+5. **Show context** - Give humans the information they need
+6. **Progress indication** - Show form completion status

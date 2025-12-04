@@ -1,7 +1,0 @@
-{
-  "title": "Introduction",
-  "description": "Get started with Primitives",
-  "root": true,
-  "icon": "BookOpen",
-  "pages": ["index"]
-}

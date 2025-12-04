@@ -22,7 +22,8 @@
   "dependencies": {
     "ai-functions": "workspace:*",
     "ai-tests": "workspace:*",
-    "capnweb": "^0.2.0"
+    "capnweb": "^0.2.0",
+    "rpc.do": "^0.1.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^2.1.0",
@@ -32,6 +33,14 @@
     "esbuild": "^0.24.0",
     "miniflare": "^3.20241106.0"
   },
-  "keywords": ["ai", "sandbox", "evaluate", "cloudflare", "workers", "miniflare", "primitives"],
+  "keywords": [
+    "ai",
+    "sandbox",
+    "evaluate",
+    "cloudflare",
+    "workers",
+    "miniflare",
+    "primitives"
+  ],
   "license": "MIT"
 }

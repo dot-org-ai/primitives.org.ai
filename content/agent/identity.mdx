@@ -1,0 +1,303 @@
+---
+title: Identity
+description: Real presence in organizational systems
+---
+
+# Agent Identity
+
+Agents exist as first-class entities in your organization with real identity across communication systems, enabling natural integration with existing workflows.
+
+## Identity Configuration
+
+```typescript
+import { agent } from 'autonomous-agents'
+
+const supportAgent = agent({
+  name: 'support-agent',
+
+  identity: {
+    displayName: 'Support Assistant',
+    email: 'support-agent@company.com',
+    slack: '@support-agent',
+    phone: '+1-555-SUPPORT',
+    calendar: 'support-agent@company.com',
+    avatar: 'https://cdn.company.com/agents/support.png',
+  },
+})
+```
+
+## Email Integration
+
+Agents can send, receive, and respond to email:
+
+```typescript
+// Handle incoming email
+agent.onEmail(async (email) => {
+  // Access email properties
+  console.log(email.from)      // sender address
+  console.log(email.subject)   // email subject
+  console.log(email.body)      // email content
+  console.log(email.attachments) // array of attachments
+
+  // Process and respond
+  const response = await agent.think(email.body)
+  await agent.reply(email, response)
+})
+
+// Send email proactively
+await agent.email.send({
+  to: 'customer@example.com',
+  cc: ['manager@company.com'],
+  subject: 'Follow-up on your request',
+  body: 'Thank you for contacting us...',
+  attachments: [{ name: 'report.pdf', content: reportBuffer }],
+})
+```
+
+### Email Routing
+
+```typescript
+agent.onEmail(async (email) => {
+  // Route based on content
+  if (email.subject.includes('urgent')) {
+    await agent.email.forward(email, 'urgent-team@company.com')
+    return
+  }
+
+  if (email.hasAttachment('invoice')) {
+    await agent.capabilities.processInvoice(email.attachments)
+    return
+  }
+
+  // Default handling
+  await agent.capabilities.handleSupport(email)
+})
+```
+
+## Slack Integration
+
+Full presence in Slack workspaces:
+
+```typescript
+// Join channels
+await agent.slack.join(['#support', '#general', '#dev-questions'])
+
+// Listen for mentions
+agent.slack.onMention(async (message) => {
+  const response = await agent.think(message.text)
+  await agent.slack.reply(message, response)
+})
+
+// Listen for direct messages
+agent.slack.onDM(async (message) => {
+  const response = await agent.think(message.text)
+  await agent.slack.reply(message, response)
+})
+
+// React to messages
+agent.slack.onMessage(async (message) => {
+  if (message.text.includes('thank')) {
+    await agent.slack.react(message, ':heart:')
+  }
+})
+```
+
+### Slack Actions
+
+```typescript
+// Send message to channel
+await agent.slack.send('#support', 'Daily metrics report ready!')
+
+// Send with rich formatting
+await agent.slack.send('#support', {
+  blocks: [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*Daily Report*' },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: '*Tickets Resolved:* 42' },
+        { type: 'mrkdwn', text: '*Avg Response Time:* 5m' },
+      ],
+    },
+  ],
+})
+
+// Start thread
+const thread = await agent.slack.startThread('#support', 'Starting investigation...')
+await agent.slack.reply(thread, 'Found the issue!')
+await agent.slack.reply(thread, 'Resolution applied.')
+```
+
+## Calendar Integration
+
+Manage time and scheduling:
+
+```typescript
+// Create meetings
+await agent.calendar.createMeeting({
+  title: 'SDK Office Hours',
+  description: 'Weekly Q&A session',
+  attendees: ['team@company.com'],
+  recurrence: 'weekly',
+  day: 'wednesday',
+  time: '14:00',
+  duration: '1h',
+  conferenceLink: true,
+})
+
+// Check availability
+const available = await agent.calendar.isAvailable({
+  start: new Date('2024-01-15T10:00:00'),
+  end: new Date('2024-01-15T11:00:00'),
+})
+
+// Find meeting time
+const slot = await agent.calendar.findTime({
+  participants: ['alice@company.com', 'bob@company.com'],
+  duration: '30m',
+  within: '7d',
+})
+
+// Accept/decline invites
+agent.calendar.onInvite(async (invite) => {
+  if (await agent.shouldAttend(invite)) {
+    await invite.accept()
+  } else {
+    await invite.decline('Scheduling conflict')
+  }
+})
+```
+
+## Phone/SMS Integration
+
+Voice and text communication:
+
+```typescript
+// Handle incoming calls
+agent.phone.onCall(async (call) => {
+  await call.answer()
+  await call.say('Hello, this is the support assistant.')
+
+  const transcript = await call.listen()
+  const response = await agent.think(transcript)
+
+  await call.say(response)
+  await call.end()
+})
+
+// Send SMS
+await agent.sms.send('+15551234567', 'Your verification code is 123456')
+
+// Handle incoming SMS
+agent.sms.onMessage(async (message) => {
+  const response = await agent.think(message.text)
+  await agent.sms.reply(message, response)
+})
+```
+
+## Webhook Integrations
+
+Connect to external services:
+
+```typescript
+// GitHub webhooks
+agent.webhook.on('github', async (event) => {
+  if (event.type === 'pull_request' && event.action === 'opened') {
+    await agent.capabilities.reviewPullRequest(event.payload)
+  }
+})
+
+// JIRA webhooks
+agent.webhook.on('jira', async (event) => {
+  if (event.type === 'issue_created') {
+    await agent.capabilities.triageIssue(event.payload)
+  }
+})
+
+// Generic webhooks
+agent.webhook.on('custom', async (payload) => {
+  await agent.process(payload)
+})
+```
+
+## Status and Presence
+
+```typescript
+// Set agent status
+await agent.setStatus({
+  state: 'active',        // 'active' | 'busy' | 'away' | 'offline'
+  message: 'Handling support requests',
+  emoji: ':robot_face:',
+})
+
+// Schedule status changes
+await agent.scheduleStatus({
+  state: 'away',
+  message: 'Off for maintenance',
+  start: new Date('2024-01-20T00:00:00'),
+  end: new Date('2024-01-20T06:00:00'),
+})
+
+// Respond based on status
+agent.onMessage(async (message) => {
+  if (agent.status.state === 'away') {
+    await message.reply('I am currently away. I will respond when I return.')
+    return
+  }
+  // Normal processing
+})
+```
+
+## Identity Verification
+
+```typescript
+const agent = agent({
+  identity: {
+    email: 'agent@company.com',
+    verification: {
+      dkim: true,          // Sign outgoing emails
+      spf: true,           // Include in SPF records
+      signature: true,     // Add digital signature
+    },
+  },
+})
+
+// Verify incoming messages
+agent.onMessage(async (message) => {
+  const verified = await agent.verifyIdentity(message.from)
+  if (!verified) {
+    await message.reply('Unable to verify your identity.')
+    return
+  }
+  // Process verified message
+})
+```
+
+## Multi-Channel Coordination
+
+```typescript
+// Coordinate across channels
+const conversation = await agent.startConversation({
+  user: 'alice@company.com',
+  topic: 'Support request #123',
+})
+
+// Continue conversation across channels
+await conversation.send('I am looking into this now.', { via: 'email' })
+await conversation.send('Quick update: found the issue!', { via: 'slack' })
+await conversation.send('Resolution applied. Please verify.', { via: 'email' })
+
+// Full conversation history available
+console.log(conversation.messages)
+```
+
+## Best Practices
+
+1. **Use consistent identity** - Same name/avatar across channels
+2. **Set appropriate presence** - Update status for maintenance
+3. **Verify incoming messages** - Prevent impersonation
+4. **Coordinate channels** - Track conversations across mediums
+5. **Respect rate limits** - Don't spam users across channels

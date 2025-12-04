@@ -1,0 +1,373 @@
+---
+title: Memory
+description: Long-term learning and context retention
+---
+
+# Agent Memory
+
+Agents build knowledge over time through persistent memory systems that enable learning, personalization, and contextual understanding.
+
+## Memory Overview
+
+```typescript
+import { agent } from 'autonomous-agents'
+
+const agent = agent({
+  name: 'knowledgeable-agent',
+
+  memory: {
+    type: 'persistent',
+    includes: [
+      'conversations',
+      'preferences',
+      'learned-facts',
+      'codebase-knowledge',
+    ],
+    retention: {
+      conversations: '90d',
+      preferences: 'forever',
+      learned: 'forever',
+    },
+  },
+})
+```
+
+## Memory Types
+
+### Episodic Memory
+
+Specific interactions and events:
+
+```typescript
+// Store conversation history
+await memory.storeEpisode({
+  type: 'conversation',
+  participants: ['alice@company.com', agent.id],
+  content: messages,
+  timestamp: new Date(),
+  metadata: {
+    topic: 'SDK integration question',
+    sentiment: 'positive',
+    resolved: true,
+  },
+})
+
+// Recall past conversations
+const history = await memory.recallEpisodes({
+  participant: 'alice@company.com',
+  limit: 10,
+  since: lastMonth,
+})
+```
+
+### Semantic Memory
+
+Learned facts and knowledge:
+
+```typescript
+// Learn a fact
+await memory.learn({
+  type: 'user-preference',
+  subject: 'alice@company.com',
+  fact: 'Prefers TypeScript examples over JavaScript',
+  confidence: 0.95,
+  source: 'explicit-statement',
+})
+
+// Learn from observation
+await memory.learn({
+  type: 'pattern',
+  fact: 'Support tickets spike on Mondays after deployments',
+  confidence: 0.8,
+  source: 'data-analysis',
+  evidence: ticketData,
+})
+
+// Recall facts
+const preferences = await memory.recall({
+  subject: 'alice@company.com',
+  type: 'user-preference',
+})
+```
+
+### Procedural Memory
+
+How to perform tasks:
+
+```typescript
+// Store procedure
+await memory.learnProcedure({
+  name: 'handle-billing-dispute',
+  steps: [
+    'Verify customer identity',
+    'Check transaction history',
+    'Review dispute reason',
+    'Escalate to billing team if > $100',
+    'Otherwise, process refund directly',
+  ],
+  learnedFrom: 'human-demonstration',
+})
+
+// Execute learned procedure
+const procedure = await memory.getProcedure('handle-billing-dispute')
+await agent.execute(procedure.steps)
+```
+
+### Working Memory
+
+Current task context:
+
+```typescript
+// Set current context
+await memory.setContext({
+  currentTask: 'Investigating issue #456',
+  relevantFacts: await memory.recall({ related: 'issue-456' }),
+  recentActions: actionLog,
+})
+
+// Access context during task
+const context = await memory.getContext()
+console.log(context.currentTask)
+
+// Clear when task complete
+await memory.clearContext()
+```
+
+## Remember and Recall
+
+### Remember Facts
+
+```typescript
+// Remember simple fact
+await memory.remember('alice prefers email over Slack')
+
+// Remember structured fact
+await memory.remember({
+  type: 'user-preference',
+  user: 'alice@company.com',
+  key: 'communication-channel',
+  value: 'email',
+  confidence: 0.95,
+})
+
+// Remember with expiration
+await memory.remember({
+  fact: 'Maintenance window is tonight 2-4am',
+  expires: new Date('2024-01-16T04:00:00'),
+})
+```
+
+### Recall Information
+
+```typescript
+// Simple recall
+const fact = await memory.recall('What language does Alice prefer?')
+
+// Structured recall
+const preferences = await memory.recall({
+  query: 'user preferences',
+  user: 'alice@company.com',
+  types: ['user-preference'],
+  limit: 10,
+})
+
+// Semantic search
+const relevant = await memory.recall({
+  query: 'authentication errors',
+  similarity: 0.8,
+  limit: 5,
+})
+```
+
+## Learning
+
+### Learn from Interactions
+
+```typescript
+// Agent automatically learns from conversations
+agent.onConversation(async (conversation) => {
+  // Extract learnable facts
+  const facts = await agent.extractFacts(conversation)
+
+  for (const fact of facts) {
+    await memory.learn({
+      ...fact,
+      source: 'conversation',
+      confidence: fact.explicit ? 0.95 : 0.7,
+    })
+  }
+})
+```
+
+### Learn from Feedback
+
+```typescript
+// Learn from corrections
+agent.onFeedback(async (feedback) => {
+  if (feedback.type === 'correction') {
+    // Update existing knowledge
+    await memory.update({
+      original: feedback.original,
+      corrected: feedback.correction,
+      source: 'human-feedback',
+    })
+  }
+
+  if (feedback.type === 'positive') {
+    // Reinforce correct behavior
+    await memory.reinforce(feedback.actionId)
+  }
+})
+```
+
+### Learn from Observation
+
+```typescript
+// Learn patterns from data
+await memory.analyzeAndLearn({
+  data: supportTickets,
+  lookFor: ['patterns', 'anomalies', 'correlations'],
+  minConfidence: 0.7,
+})
+
+// Result: learned facts like
+// - "Tickets about 'login' increase after password policy changes"
+// - "User 'bob' typically has complex technical questions"
+```
+
+## Memory Search
+
+### Semantic Search
+
+```typescript
+// Find related memories by meaning
+const results = await memory.search({
+  query: 'How to handle authentication errors',
+  type: 'semantic',
+  limit: 10,
+})
+
+// Results ranked by relevance
+results.forEach((result) => {
+  console.log(result.content, result.similarity)
+})
+```
+
+### Filtered Search
+
+```typescript
+// Search with filters
+const results = await memory.search({
+  query: 'deployment issues',
+  filters: {
+    type: ['incident', 'resolution'],
+    timeRange: { start: lastMonth, end: now },
+    confidence: { min: 0.7 },
+  },
+})
+```
+
+## Memory Consolidation
+
+```typescript
+// Periodically consolidate memories
+await memory.consolidate({
+  // Merge similar facts
+  deduplication: true,
+
+  // Decay old, unused memories
+  decay: {
+    enabled: true,
+    threshold: '180d',
+    keepHighConfidence: true,
+  },
+
+  // Summarize episodic memories
+  summarize: {
+    enabled: true,
+    olderThan: '30d',
+  },
+})
+```
+
+## Memory Namespaces
+
+```typescript
+// Organize memories by namespace
+const projectMemory = memory.namespace('project-alpha')
+const userMemory = memory.namespace('users')
+
+await projectMemory.remember('Deadline is March 15')
+await userMemory.remember({ user: 'alice', fact: 'Prefers email' })
+
+// Query within namespace
+const projectFacts = await projectMemory.recall('deadline')
+```
+
+## Shared Memory
+
+```typescript
+// Share memories between agents
+const sharedMemory = createSharedMemory({
+  name: 'team-knowledge',
+  agents: [agent1, agent2, agent3],
+})
+
+// Agent 1 learns something
+await agent1.memory.share(sharedMemory, {
+  fact: 'Customer X prefers morning calls',
+})
+
+// Agent 2 can access it
+const fact = await agent2.memory.fromShared(sharedMemory, {
+  query: 'Customer X preferences',
+})
+```
+
+## Memory Export/Import
+
+```typescript
+// Export memories
+const exported = await memory.export({
+  types: ['user-preference', 'learned-fact'],
+  format: 'json',
+})
+
+// Import memories
+await memory.import(exported, {
+  conflictResolution: 'merge', // 'replace' | 'merge' | 'skip'
+})
+```
+
+## Privacy and Retention
+
+```typescript
+const memory = agent.memory.configure({
+  retention: {
+    conversations: '90d',    // Delete after 90 days
+    preferences: 'forever',   // Keep indefinitely
+    pii: '30d',              // Personal info deleted after 30 days
+  },
+
+  privacy: {
+    anonymize: ['email', 'phone'],  // Anonymize in storage
+    encrypt: true,                   // Encrypt at rest
+    audit: true,                     // Log all access
+  },
+})
+
+// Forget specific information
+await memory.forget({
+  user: 'alice@company.com',
+  types: ['conversation', 'preference'],
+})
+```
+
+## Best Practices
+
+1. **Set appropriate retention** - Don't keep data longer than needed
+2. **Use confidence scores** - Track certainty of learned facts
+3. **Regular consolidation** - Prevent memory bloat
+4. **Namespace organization** - Keep memories organized
+5. **Privacy compliance** - Handle PII appropriately
+6. **Source attribution** - Track where knowledge came from

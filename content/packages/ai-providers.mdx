@@ -1,0 +1,38 @@
+---
+title: ai-providers
+description: Provider integrations for AI services
+---
+
+```bash
+npm install ai-providers
+```
+
+Connect to Anthropic, OpenAI, Google, Cloudflare, and more.
+
+```typescript
+import { anthropic, openai, cloudflare } from 'ai-providers'
+
+// Use Anthropic
+const claude = anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// Use OpenAI
+const gpt = openai({ apiKey: process.env.OPENAI_API_KEY })
+
+// Use Cloudflare Workers AI (no API key needed in Workers)
+const cf = cloudflare()
+```
+
+## Providers
+
+| Provider | Models | Embeddings |
+|----------|--------|------------|
+| Anthropic | Claude 4, Sonnet, Haiku | — |
+| OpenAI | GPT-4, GPT-3.5 | text-embedding-3 |
+| Google | Gemini Pro, Flash | — |
+| Cloudflare | Workers AI models | bge-* |
+| Ollama | Local models | Local embeddings |
+
+## Related
+
+- [language-models](/packages/language-models) — Unified interface
+- [ai-functions](/packages/ai-functions) — Uses providers internally

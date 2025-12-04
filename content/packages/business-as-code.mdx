@@ -1,0 +1,43 @@
+---
+title: business-as-code
+description: Express business processes and structures as code
+---
+
+```bash
+npm install business-as-code
+```
+
+Define organizations, teams, processes, and policies as code.
+
+```typescript
+import { business, team, process, policy } from 'business-as-code'
+
+const acme = business({
+  name: 'Acme Corp',
+  teams: [
+    team({ name: 'Engineering', members: [...] }),
+    team({ name: 'Sales', members: [...] }),
+  ],
+  processes: [
+    process({ name: 'hiring', steps: [...] }),
+    process({ name: 'expense-approval', steps: [...] }),
+  ],
+  policies: [
+    policy({ name: 'expense-limit', rule: amount => amount < 5000 }),
+  ],
+})
+```
+
+## Features
+
+- Organizational structure as code
+- Process definitions with versioning
+- Policy enforcement
+- Audit and compliance
+- AI and human collaboration
+
+## Related
+
+- [Business Primitive](/business) — Full documentation
+- [ai-workflows](/packages/ai-workflows) — Process orchestration
+- [human-in-the-loop](/packages/human-in-the-loop) — Human approvals

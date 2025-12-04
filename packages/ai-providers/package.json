@@ -25,7 +25,8 @@
   },
   "dependencies": {
     "ai": "^4.0.0",
-    "language-models": "workspace:*"
+    "language-models": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
   "optionalDependencies": {
     "@ai-sdk/anthropic": "^1.0.0",

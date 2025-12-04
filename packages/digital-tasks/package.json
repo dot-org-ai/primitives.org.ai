@@ -26,7 +26,8 @@
   "dependencies": {
     "ai-functions": "workspace:*",
     "digital-tools": "workspace:*",
-    "digital-workers": "workspace:*"
+    "digital-workers": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
   "keywords": ["ai", "tasks", "queue", "workers", "agents", "primitives"],
   "license": "MIT"

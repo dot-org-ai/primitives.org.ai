@@ -1,0 +1,348 @@
+---
+title: Teams
+description: Agent collaboration and organizational integration
+---
+
+# Working with Teams
+
+Agents understand organizational structure and collaborate effectively with humans and other agents as team members.
+
+## Team Configuration
+
+```typescript
+import { agent } from 'autonomous-agents'
+
+const agent = agent({
+  name: 'project-coordinator',
+
+  team: {
+    reports_to: 'engineering-manager',
+    collaborates_with: ['frontend-team', 'backend-team', 'design-team'],
+    can_assign_to: ['junior-developers', 'contractors'],
+    member_of: ['engineering', 'product'],
+  },
+})
+```
+
+## Organizational Context
+
+```typescript
+// Agent understands org structure
+const org = await agent.organization.get()
+
+console.log(org.teams)
+// [
+//   { name: 'engineering', members: [...], lead: 'alice' },
+//   { name: 'product', members: [...], lead: 'bob' },
+// ]
+
+// Find people by role
+const designers = await agent.organization.findByRole('designer')
+const managers = await agent.organization.findByRole('manager')
+
+// Get team for a person
+const team = await agent.organization.getTeamFor('alice@company.com')
+```
+
+## Collaboration Patterns
+
+### Task Assignment
+
+```typescript
+// Agent assigns work to team members
+await agent.assign({
+  task: 'Review pull request #456',
+  to: await agent.findBestMatch({
+    skills: ['react', 'typescript'],
+    availability: 'today',
+    workload: 'low',
+  }),
+  priority: 'high',
+  deadline: tomorrow,
+})
+
+// Bulk assignment
+await agent.distribute({
+  tasks: unassignedTasks,
+  among: 'frontend-team',
+  strategy: 'balanced',  // 'balanced' | 'expertise' | 'availability'
+})
+```
+
+### Coordination
+
+```typescript
+// Coordinate across teams
+await agent.coordinate({
+  objective: 'Launch new feature',
+  teams: ['frontend', 'backend', 'qa'],
+
+  plan: [
+    { team: 'backend', task: 'Implement API', by: 'Jan 15' },
+    { team: 'frontend', task: 'Build UI', by: 'Jan 20' },
+    { team: 'qa', task: 'Test integration', by: 'Jan 25' },
+  ],
+
+  checkpoints: ['daily-standup', 'weekly-review'],
+})
+
+// Track coordination progress
+const status = await agent.getCoordinationStatus('launch-feature')
+console.log(status.tasksCompleted)
+console.log(status.blockers)
+console.log(status.nextMilestone)
+```
+
+### Handoffs
+
+```typescript
+// Hand off work to another agent or human
+await agent.handoff({
+  to: 'senior-support',
+  context: {
+    conversation: currentConversation,
+    summary: 'Customer needs billing adjustment > $500',
+    attempted: ['verified account', 'checked history'],
+    recommendation: 'Approve the adjustment',
+  },
+})
+
+// Receive handoffs
+agent.onHandoff(async (handoff) => {
+  await agent.memory.setContext(handoff.context)
+  await agent.continue(handoff.conversation)
+})
+```
+
+## Agent-to-Agent Communication
+
+### Direct Messaging
+
+```typescript
+// Send message to another agent
+await agent.message('analytics-agent', {
+  type: 'request',
+  content: 'Generate weekly report for project Alpha',
+  priority: 'normal',
+  expectResponse: true,
+})
+
+// Receive messages from agents
+agent.onMessage(async (message) => {
+  if (message.from.type === 'agent') {
+    const response = await agent.process(message)
+    await agent.reply(message, response)
+  }
+})
+```
+
+### Broadcasting
+
+```typescript
+// Broadcast to multiple agents
+await agent.broadcast({
+  to: ['support-agent', 'sales-agent', 'analytics-agent'],
+  message: 'System maintenance scheduled for tonight',
+  priority: 'high',
+})
+
+// Subscribe to broadcasts
+agent.onBroadcast(async (broadcast) => {
+  if (broadcast.topic === 'system-status') {
+    await agent.updateStatus(broadcast.content)
+  }
+})
+```
+
+### Agent Teams
+
+```typescript
+import { createAgentTeam } from 'autonomous-agents'
+
+// Create team of agents
+const supportTeam = createAgentTeam({
+  name: 'support-agents',
+  members: [tier1Agent, tier2Agent, escalationAgent],
+
+  routing: {
+    // Route incoming requests to appropriate agent
+    strategy: 'skill-based',
+    rules: [
+      { condition: 'topic = billing', assign: 'tier2Agent' },
+      { condition: 'priority = critical', assign: 'escalationAgent' },
+      { default: 'tier1Agent' },
+    ],
+  },
+
+  coordination: {
+    // How agents coordinate
+    handoffProtocol: 'context-aware',
+    loadBalancing: true,
+    failover: true,
+  },
+})
+
+// Team handles requests as a unit
+await supportTeam.handle(incomingRequest)
+```
+
+## Human Collaboration
+
+### Working with Humans
+
+```typescript
+// Request human input
+const input = await agent.requestHumanInput({
+  from: 'alice@company.com',
+  question: 'Should we proceed with the refund?',
+  options: ['approve', 'deny', 'need-more-info'],
+  context: refundRequest,
+  deadline: '4h',
+})
+
+// Notify humans of status
+await agent.notify({
+  to: 'team@company.com',
+  message: 'Sprint tasks have been assigned',
+  channel: 'slack',
+})
+
+// Schedule human review
+await agent.scheduleReview({
+  what: 'Weekly agent performance',
+  reviewer: 'manager@company.com',
+  frequency: 'weekly',
+})
+```
+
+### Human Override
+
+```typescript
+// Humans can override agent decisions
+agent.onOverride(async (override) => {
+  // Log the override
+  await agent.log({
+    type: 'override',
+    original: override.originalDecision,
+    new: override.humanDecision,
+    by: override.human,
+    reason: override.reason,
+  })
+
+  // Learn from override
+  await agent.learn({
+    situation: override.situation,
+    correction: override.humanDecision,
+    source: 'human-override',
+  })
+})
+```
+
+## Meeting Participation
+
+```typescript
+// Agent participates in meetings
+await agent.calendar.createMeeting({
+  title: 'Sprint Planning',
+  role: 'note-taker',  // 'participant' | 'facilitator' | 'note-taker'
+})
+
+// During meeting
+agent.onMeeting(async (meeting) => {
+  // Take notes
+  await agent.transcribe(meeting)
+
+  // Track action items
+  const actionItems = await agent.extractActionItems(meeting.transcript)
+
+  // Create tasks from action items
+  for (const item of actionItems) {
+    await agent.createTask({
+      title: item.description,
+      assignee: item.owner,
+      deadline: item.dueDate,
+    })
+  }
+
+  // Send meeting summary
+  await agent.send({
+    to: meeting.attendees,
+    subject: `Meeting Notes: ${meeting.title}`,
+    body: await agent.summarize(meeting),
+  })
+})
+```
+
+## Reporting Structure
+
+```typescript
+// Agent reports to manager
+await agent.report({
+  to: 'engineering-manager',
+  type: 'weekly-status',
+  content: {
+    tasksCompleted: 45,
+    tasksInProgress: 12,
+    blockers: ['Waiting on API access'],
+    highlights: ['Resolved critical bug'],
+    nextWeekPlan: ['Complete feature X', 'Review PRs'],
+  },
+})
+
+// Receive direction from manager
+agent.onDirection(async (direction) => {
+  await agent.prioritize(direction.priorities)
+  await agent.acknowledge(direction)
+})
+```
+
+## Permission and Access
+
+```typescript
+// Team-based permissions
+const agent = agent({
+  permissions: {
+    // Access based on team membership
+    'engineering': ['read-code', 'create-tickets', 'comment-prs'],
+    'product': ['read-roadmap', 'update-specs'],
+    'support': ['read-tickets', 'respond-customers'],
+  },
+})
+
+// Check permission before action
+const canAccess = await agent.hasPermission('read-code')
+if (canAccess) {
+  await agent.reviewCode(pr)
+}
+```
+
+## Team Metrics
+
+```typescript
+// Track team performance
+const metrics = await agent.getTeamMetrics({
+  team: 'support-agents',
+  period: 'last-30-days',
+})
+
+console.log(metrics)
+// {
+//   ticketsResolved: 1250,
+//   avgResponseTime: '5m',
+//   customerSatisfaction: 4.5,
+//   escalationRate: 0.05,
+//   agentUtilization: {
+//     'tier1-agent': 0.85,
+//     'tier2-agent': 0.72,
+//   },
+// }
+```
+
+## Best Practices
+
+1. **Clear reporting lines** - Define who agent reports to
+2. **Explicit permissions** - Specify what agent can assign/access
+3. **Smooth handoffs** - Include full context in transitions
+4. **Human oversight** - Always allow human override
+5. **Team visibility** - Keep team informed of agent actions
+6. **Regular reviews** - Schedule human review of agent performance

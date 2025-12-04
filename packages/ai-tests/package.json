@@ -32,7 +32,8 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "chai": "^5.1.0"
+    "chai": "^5.1.0",
+    "rpc.do": "^0.1.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",
@@ -43,6 +44,15 @@
   "optionalDependencies": {
     "miniflare": "^3.20241106.0"
   },
-  "keywords": ["ai", "test", "chai", "expect", "assert", "workers", "rpc", "primitives"],
+  "keywords": [
+    "ai",
+    "test",
+    "chai",
+    "expect",
+    "assert",
+    "workers",
+    "rpc",
+    "primitives"
+  ],
   "license": "MIT"
 }

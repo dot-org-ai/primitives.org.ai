@@ -10,14 +10,6 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./rpc": {
-      "import": "./dist/rpc/index.js",
-      "types": "./dist/rpc/index.d.ts"
-    },
-    "./rpc/server": {
-      "import": "./dist/rpc/server.js",
-      "types": "./dist/rpc/server.d.ts"
-    },
     "./embeddings": {
       "import": "./dist/embeddings.js",
       "types": "./dist/embeddings.d.ts"
@@ -35,10 +27,6 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest",
-    "test:rpc": "vitest run test/rpc/node/",
-    "test:rpc:workers": "vitest --config vitest.config.workers.ts",
-    "test:rpc:bun": "bun test test/rpc/bun/",
-    "test:rpc:all": "pnpm test:rpc && pnpm test:rpc:workers && pnpm test:rpc:bun",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "clean": "rm -rf dist"
@@ -46,27 +34,17 @@
   "dependencies": {
     "ai": "^4.0.0",
     "ai-providers": "workspace:*",
-    "capnweb": "^0.2.0",
     "language-models": "workspace:*",
+    "rpc.do": "^0.1.0",
     "yaml": "^2.8.0",
     "zod": "^3.23.0"
   },
   "optionalDependencies": {
     "oauth.do": "^0.0.1"
   },
-  "peerDependencies": {
-    "hono": "^4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "hono": {
-      "optional": true
-    }
-  },
   "keywords": [
     "ai",
     "functions",
-    "rpc",
-    "capnweb",
     "embeddings",
     "cloudflare",
     "oauth",
@@ -74,12 +52,7 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.5.0",
-    "@hono/node-server": "^1.13.0",
-    "@hono/node-ws": "^1.0.0",
     "dotenv": "^17.2.3",
-    "hono": "^4.6.0",
-    "vitest": "^2.1.0",
-    "ws": "^8.18.0"
+    "vitest": "^2.1.0"
   }
 }

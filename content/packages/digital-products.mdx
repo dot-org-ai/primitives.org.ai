@@ -1,0 +1,42 @@
+---
+title: digital-products
+description: Compose primitives into complete products
+---
+
+```bash
+npm install digital-products
+```
+
+Define complete products with capabilities, APIs, and interfaces.
+
+```typescript
+import { product, api, ui } from 'digital-products'
+
+const app = product({
+  name: 'document-processor',
+  capabilities: [
+    uploadDocument,
+    extractData,
+    generateSummary,
+  ],
+  api: api({
+    routes: ['/upload', '/process', '/status'],
+  }),
+  ui: ui({
+    pages: ['upload', 'results'],
+  }),
+})
+```
+
+## Features
+
+- Declarative capability definitions
+- API generation from capabilities
+- UI scaffolding
+- Versioning and deployment
+
+## Related
+
+- [Product Primitive](/product) — Full documentation
+- [ai-functions](/packages/ai-functions) — Product capabilities
+- [services-as-software](/packages/services-as-software) — Service packaging

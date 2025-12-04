@@ -1,0 +1,40 @@
+---
+title: digital-tools
+description: Tools and integrations for agents
+---
+
+```bash
+npm install digital-tools
+```
+
+Pre-built tools for web search, code execution, file operations, and more.
+
+```typescript
+import { webSearch, codeExec, fileSystem, http } from 'digital-tools'
+
+const search = webSearch({ provider: 'google', maxResults: 10 })
+const exec = codeExec({ runtime: 'node', timeout: 30000 })
+const fs = fileSystem({ root: '/workspace' })
+const api = http({ baseUrl: 'https://api.example.com' })
+
+// Use in agents
+const agent = agent({
+  tools: [search, exec, fs, api],
+})
+```
+
+## Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `webSearch` | Search the web |
+| `codeExec` | Execute code |
+| `fileSystem` | Read/write files |
+| `http` | Make HTTP requests |
+| `browser` | Browser automation |
+| `database` | Database queries |
+
+## Related
+
+- [autonomous-agents](/packages/autonomous-agents) — Use tools in agents
+- [Agentic Functions](/function/agentic) — Tool-using functions

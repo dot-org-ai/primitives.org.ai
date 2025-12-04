@@ -1,0 +1,72 @@
+---
+title: research
+description: Agentic web research and synthesis
+---
+
+Agentic research that searches, reads, and synthesizes information.
+
+## Import
+
+```typescript
+import { research } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+research`topic`
+research`topic`(options)
+```
+
+## Examples
+
+```typescript
+// Quick research
+const findings = await research`${topic}`
+
+// With depth control
+const deep = await research`market size for AI developer tools`({
+  depth: 'thorough',
+})
+
+// With context
+const report = await research`competitor analysis for ${{ company, market }}`
+```
+
+## Return Type
+
+```typescript
+interface Research {
+  summary: string           // Key findings
+  sources: Array<{
+    url: string
+    title: string
+    relevance: number
+  }>
+  findings: string[]        // Individual findings
+  confidence: number        // 0-1 confidence score
+}
+```
+
+## Options
+
+| Option | Values | Description |
+|--------|--------|-------------|
+| `depth` | `'quick'` \| `'thorough'` | Research depth |
+| `sources` | number | Max sources to check |
+| `model` | string | Model for synthesis |
+
+## Chaining
+
+```typescript
+// Research → Content
+const brand = await ai.storyBrand({ hero: 'developers', guide: 'our product' })
+const marketResearch = await research`market validation for ${{ brand }}`
+const pitch = await write`investor pitch based on ${{ brand, marketResearch }}`
+
+// Research → Extract → Research
+const initial = await research`competitors in ${market}`
+for await (const competitor of extract`company names from ${initial}`) {
+  const analysis = await research`${competitor} vs ${ourProduct}`
+}
+```

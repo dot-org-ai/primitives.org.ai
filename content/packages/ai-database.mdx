@@ -1,0 +1,37 @@
+---
+title: ai-database
+description: Schema-first database with vector embeddings
+---
+
+```bash
+npm install ai-database
+```
+
+AI-native database with natural language queries and semantic search.
+
+```typescript
+import { DB } from 'ai-database'
+
+const db = new DB({ namespace: 'my-app' })
+
+// Create with AI
+await db.User.create`a developer named Alice`
+
+// Query naturally
+const users = await db.User.find`active in the last week`
+
+// Semantic search
+const similar = await db.Article.search`machine learning tutorials`
+```
+
+## Features
+
+- Schema inference from natural language
+- Vector embeddings for semantic search
+- Graph relationships between entities
+- Multiple storage providers (Cloudflare D1, Turso, etc.)
+
+## Related
+
+- [Database Primitive](/database) — Full documentation
+- [ai-providers](/packages/ai-providers) — Embedding providers

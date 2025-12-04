@@ -1,0 +1,15 @@
+{
+  "title": "Workflow",
+  "description": "Durable execution and state machines",
+  "root": true,
+  "icon": "GitBranch",
+  "pages": [
+    "index",
+    "steps",
+    "state-machines",
+    "timers",
+    "parallel",
+    "errors",
+    "observability"
+  ]
+}

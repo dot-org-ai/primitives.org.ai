@@ -1,0 +1,365 @@
+---
+title: Approvals
+description: Human approval gates in automated workflows
+---
+
+# Approval Gates
+
+Insert human approval checkpoints into automated workflows for decisions that require accountability, judgment, or regulatory compliance.
+
+## Basic Approval
+
+```typescript
+import { human } from 'human-in-the-loop'
+
+const approval = human.approval({
+  name: 'manager-approval',
+  description: 'Manager must approve this request',
+  assignTo: { role: 'manager' },
+})
+
+// Use in workflow
+const result = await approval.request({
+  context: { request: purchaseRequest },
+  timeout: '48h',
+})
+
+if (result.approved) {
+  await processRequest(purchaseRequest)
+} else {
+  await rejectRequest(purchaseRequest, result.reason)
+}
+```
+
+## Approval Configuration
+
+```typescript
+const purchaseApproval = human.approval({
+  name: 'purchase-approval',
+  description: 'Approve purchase requests over $1000',
+
+  // Who can approve
+  assignTo: {
+    role: 'finance-approver',
+    minLevel: 3,  // Manager level 3+
+  },
+
+  // Alternative approvers
+  fallback: [
+    { after: '24h', assignTo: 'department-head' },
+    { after: '48h', assignTo: 'cfo' },
+  ],
+
+  // Context to show
+  showContext: ['request', 'budget', 'policy', 'history'],
+
+  // Required fields
+  require: {
+    decision: ['approve', 'reject', 'defer'],
+    reason: { when: 'decision = reject' },
+    notes: false,
+  },
+
+  // Timeout behavior
+  timeout: '72h',
+  onTimeout: 'escalate',  // 'escalate' | 'auto-approve' | 'auto-reject'
+})
+```
+
+## Dynamic Assignment
+
+```typescript
+const dynamicApproval = human.approval({
+  name: 'expense-approval',
+
+  // Assign based on request attributes
+  assignTo: ({ input }) => {
+    if (input.amount > 10000) {
+      return { role: 'cfo' }
+    }
+    if (input.amount > 1000) {
+      return { role: 'finance-manager' }
+    }
+    return input.requester.manager
+  },
+
+  // Or use approval matrix
+  approvalMatrix: {
+    conditions: [
+      { amount: { gt: 10000 }, approver: 'cfo' },
+      { amount: { gt: 1000 }, approver: 'finance-manager' },
+      { category: 'travel', approver: 'travel-coordinator' },
+      { default: 'direct-manager' },
+    ],
+  },
+})
+```
+
+## Multi-Level Approval
+
+```typescript
+const multiLevelApproval = human.approval({
+  name: 'contract-approval',
+
+  levels: [
+    {
+      name: 'legal-review',
+      assignTo: { role: 'legal-counsel' },
+      actions: ['approve', 'request-changes', 'reject'],
+    },
+    {
+      name: 'finance-approval',
+      assignTo: { role: 'finance-director' },
+      actions: ['approve', 'reject'],
+      requiresPrevious: true,
+    },
+    {
+      name: 'executive-approval',
+      assignTo: { role: 'ceo' },
+      when: 'value > 100000',
+      actions: ['approve', 'reject'],
+      requiresPrevious: true,
+    },
+  ],
+
+  // Approval mode
+  mode: 'sequential',  // 'sequential' | 'parallel' | 'any'
+})
+```
+
+## Parallel Approvals
+
+```typescript
+const parallelApproval = human.approval({
+  name: 'cross-functional-approval',
+
+  approvers: [
+    { role: 'engineering-lead', required: true },
+    { role: 'product-manager', required: true },
+    { role: 'legal', required: false },
+  ],
+
+  mode: 'parallel',
+
+  // How to combine decisions
+  resolution: {
+    approve: 'all-required',  // All required must approve
+    reject: 'any',            // Any rejection rejects
+  },
+})
+```
+
+## Conditional Approval
+
+```typescript
+const conditionalApproval = human.approval({
+  name: 'conditional-purchase',
+
+  // Only require approval when
+  when: [
+    'amount > 500',
+    'vendor.new = true',
+    'category = software',
+  ],
+
+  // Skip approval when
+  skip: [
+    'requester.level >= 5',
+    'preApproved = true',
+  ],
+
+  assignTo: { role: 'manager' },
+})
+```
+
+## Delegation
+
+```typescript
+const delegatedApproval = human.approval({
+  name: 'delegatable-approval',
+
+  delegation: {
+    allowed: true,
+    maxDepth: 2,  // Can delegate to someone who delegates
+    preserveContext: true,
+    notifyOriginal: true,
+  },
+
+  // Delegate automatically when
+  autoDelegation: {
+    when: ['approver.outOfOffice = true'],
+    to: 'approver.delegate',
+  },
+})
+
+// Approver can delegate
+await approval.delegate({
+  to: 'backup-approver@company.com',
+  reason: 'Out of office this week',
+  expires: nextMonday,
+})
+```
+
+## Approval with Modifications
+
+```typescript
+const modifiableApproval = human.approval({
+  name: 'budget-approval',
+
+  actions: [
+    {
+      name: 'approve',
+      allowModifications: ['amount', 'timeline'],
+    },
+    {
+      name: 'approve-with-conditions',
+      requiresNotes: true,
+      addConditions: true,
+    },
+    {
+      name: 'reject',
+      requiresReason: true,
+    },
+  ],
+})
+
+// Approver can modify
+const result = await approval.request({ budget })
+
+if (result.action === 'approve') {
+  // May have modifications
+  budget.amount = result.modifications?.amount ?? budget.amount
+}
+```
+
+## Approval Workflow Integration
+
+```typescript
+import { workflow } from 'ai-workflows'
+
+const purchaseWorkflow = workflow({
+  name: 'purchase-request',
+
+  execute: async (ctx, request) => {
+    // Validate request
+    await step('validate', () => validateRequest(request))
+
+    // Check budget
+    const budget = await step('check-budget', () => checkBudget(request))
+
+    // Human approval gate
+    const approval = await step('approve', () =>
+      human.approval({
+        name: 'manager-approval',
+        assignTo: request.requester.manager,
+        showContext: { request, budget },
+        timeout: '48h',
+      }).request()
+    )
+
+    if (!approval.approved) {
+      await step('notify-rejection', () =>
+        notifyRequester(request, approval.reason)
+      )
+      return { status: 'rejected', reason: approval.reason }
+    }
+
+    // Process approved request
+    await step('process', () => processRequest(request))
+
+    return { status: 'approved', processedAt: new Date() }
+  },
+})
+```
+
+## Approval UI
+
+```typescript
+const approvalForm = human.approval({
+  name: 'visual-approval',
+
+  ui: {
+    layout: 'card',
+    sections: [
+      {
+        title: 'Request Summary',
+        fields: ['amount', 'category', 'description'],
+        highlight: ['amount'],
+      },
+      {
+        title: 'Policy Check',
+        type: 'checklist',
+        items: [
+          'Within budget guidelines',
+          'Approved vendor',
+          'Business justification provided',
+        ],
+      },
+      {
+        title: 'Previous Approvals',
+        type: 'history',
+        source: 'context.approvalHistory',
+      },
+    ],
+    actions: {
+      approve: { color: 'green', icon: 'check' },
+      reject: { color: 'red', icon: 'x' },
+    },
+  },
+})
+```
+
+## Notifications
+
+```typescript
+const approvalWithNotifications = human.approval({
+  name: 'notified-approval',
+
+  notifications: {
+    // When approval is requested
+    onRequest: {
+      channels: ['email', 'slack'],
+      template: 'approval-request',
+    },
+
+    // Reminders
+    remind: [
+      { after: '24h', channels: ['slack'] },
+      { after: '48h', channels: ['email', 'slack'] },
+    ],
+
+    // When decision is made
+    onDecision: {
+      notify: ['requester', 'cc-list'],
+      channels: ['email'],
+    },
+  },
+})
+```
+
+## Audit Trail
+
+```typescript
+// All approvals are logged
+const auditLog = await human.getApprovalAudit({
+  approval: 'purchase-approval',
+  period: 'last-30-days',
+})
+
+auditLog.forEach((entry) => {
+  console.log(entry.requestId)
+  console.log(entry.approver)
+  console.log(entry.decision)
+  console.log(entry.timestamp)
+  console.log(entry.reason)
+})
+```
+
+## Best Practices
+
+1. **Clear context** - Show approvers everything they need
+2. **Appropriate timeouts** - Balance urgency with thoroughness
+3. **Escalation paths** - Don't let requests get stuck
+4. **Audit everything** - Maintain compliance trail
+5. **Delegation support** - Handle vacations and absences
+6. **Mobile-friendly** - Enable approvals on the go

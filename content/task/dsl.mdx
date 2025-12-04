@@ -1,0 +1,343 @@
+---
+title: Project DSL
+description: Declarative task workflow definitions
+---
+
+# Project DSL
+
+Define complex task workflows using a declarative domain-specific language that combines tasks into parallel and sequential execution patterns.
+
+## Basic Building Blocks
+
+```typescript
+import { task, parallel, sequential, createProject } from 'digital-tasks'
+
+// Create individual tasks
+const design = task('Design mockups')
+const spec = task('Write technical spec')
+const implement = task('Implement feature')
+const test = task('Write tests')
+const review = task('Code review')
+```
+
+## Creating Projects
+
+```typescript
+const project = createProject({
+  name: 'Launch Feature',
+  description: 'Ship the new dashboard feature',
+  tasks: [
+    parallel(design, spec),    // Run in parallel
+    sequential(implement, test), // Run in sequence
+    review,                      // After both groups complete
+  ],
+})
+
+console.log(project.name)     // 'Launch Feature'
+console.log(project.tasks)    // All tasks with dependencies set
+```
+
+## Parallel Execution
+
+Tasks in a parallel group can execute simultaneously:
+
+```typescript
+// All three tasks can run at the same time
+const planning = parallel(
+  task('Design UI'),
+  task('Write specs'),
+  task('Set up infrastructure'),
+)
+
+// Nested parallel groups
+const development = parallel(
+  parallel(
+    task('Build API'),
+    task('Build database layer'),
+  ),
+  task('Build frontend'),
+)
+```
+
+## Sequential Execution
+
+Tasks in a sequential group execute one after another:
+
+```typescript
+// Each task waits for the previous to complete
+const deployment = sequential(
+  task('Run tests'),
+  task('Build artifacts'),
+  task('Deploy to staging'),
+  task('Run smoke tests'),
+  task('Deploy to production'),
+)
+```
+
+## Combining Patterns
+
+```typescript
+const project = createProject({
+  name: 'Feature Development',
+  tasks: [
+    // Phase 1: Planning (parallel)
+    parallel(
+      task('Design mockups'),
+      task('Write technical spec'),
+      task('Set up project board'),
+    ),
+
+    // Phase 2: Implementation (mixed)
+    parallel(
+      sequential(
+        task('Implement backend'),
+        task('Write backend tests'),
+      ),
+      sequential(
+        task('Implement frontend'),
+        task('Write frontend tests'),
+      ),
+    ),
+
+    // Phase 3: Integration (sequential)
+    sequential(
+      task('Integration testing'),
+      task('Performance testing'),
+    ),
+
+    // Phase 4: Release
+    task('Deploy to production'),
+  ],
+})
+```
+
+## Task Options
+
+```typescript
+const tasks = [
+  task('Critical task', { priority: 'critical' }),
+  task('Code task', { functionType: 'code' }),
+  task('AI task', { functionType: 'generative' }),
+  task('Human approval', { functionType: 'human' }),
+  task('Assigned task', {
+    assignTo: { type: 'human', id: 'user_123', name: 'John' },
+  }),
+]
+```
+
+## Fluent Builder API
+
+Build projects with a chainable API:
+
+```typescript
+import { workflow } from 'digital-tasks'
+
+const project = workflow('Launch Feature')
+  .description('Ship the new dashboard')
+  .parallel(
+    task('Design'),
+    task('Spec'),
+  )
+  .then(
+    task('Implement'),
+  )
+  .parallel(
+    task('Test'),
+    task('Document'),
+  )
+  .then(
+    task('Review', { functionType: 'human' }),
+  )
+  .then(
+    task('Deploy'),
+  )
+  .build()
+```
+
+### Builder Methods
+
+```typescript
+workflow('Name')
+  .description('Project description')
+  .parallel(...tasks)        // Add parallel group
+  .sequential(...tasks)      // Add sequential group (alias: .then())
+  .then(...tasks)           // Alias for sequential
+  .task(name, options)      // Add single task
+  .when(condition, tasks)   // Conditional tasks
+  .metadata({ key: 'value' }) // Add metadata
+  .build()                  // Create project
+```
+
+## Conditional Tasks
+
+Include tasks based on conditions:
+
+```typescript
+const project = workflow('Deploy')
+  .task('Build')
+  .when(config.runTests, [
+    task('Run unit tests'),
+    task('Run integration tests'),
+  ])
+  .task('Deploy')
+  .build()
+```
+
+## Named Groups
+
+Create reusable task groups:
+
+```typescript
+import { group } from 'digital-tasks'
+
+// Define reusable groups
+const testingPhase = group('Testing', [
+  task('Unit tests'),
+  task('Integration tests'),
+  task('E2E tests'),
+])
+
+const deploymentPhase = group('Deployment', [
+  sequential(
+    task('Build'),
+    task('Deploy staging'),
+    task('Deploy production'),
+  ),
+])
+
+// Use in projects
+const project = createProject({
+  name: 'Release',
+  tasks: [
+    task('Development'),
+    testingPhase,
+    deploymentPhase,
+  ],
+})
+```
+
+## Templates
+
+Create project templates:
+
+```typescript
+import { template } from 'digital-tasks'
+
+const featureTemplate = template({
+  name: 'Feature Development',
+  parameters: ['featureName', 'assignee'],
+  tasks: (params) => [
+    parallel(
+      task(`Design ${params.featureName}`),
+      task(`Spec ${params.featureName}`),
+    ),
+    task(`Implement ${params.featureName}`, {
+      assignTo: params.assignee,
+    }),
+    task('Review', { functionType: 'human' }),
+  ],
+})
+
+// Create project from template
+const project = featureTemplate.create({
+  featureName: 'Dark Mode',
+  assignee: { type: 'human', id: 'user_123', name: 'Jane' },
+})
+```
+
+## Milestones
+
+Mark progress points:
+
+```typescript
+import { milestone } from 'digital-tasks'
+
+const project = createProject({
+  name: 'Product Launch',
+  tasks: [
+    parallel(task('Design'), task('Spec')),
+    milestone('Planning Complete'),
+
+    parallel(task('Backend'), task('Frontend')),
+    milestone('Development Complete'),
+
+    sequential(task('QA'), task('Staging')),
+    milestone('Ready for Launch'),
+
+    task('Production Deploy'),
+  ],
+})
+```
+
+## Subtasks
+
+Create hierarchical task structures:
+
+```typescript
+const project = createProject({
+  name: 'Build Dashboard',
+  tasks: [
+    task('Implement Charts', {
+      subtasks: [
+        task('Line chart component'),
+        task('Bar chart component'),
+        task('Pie chart component'),
+      ],
+    }),
+    task('Implement Filters', {
+      subtasks: [
+        task('Date range filter'),
+        task('Category filter'),
+        task('Search filter'),
+      ],
+    }),
+  ],
+})
+```
+
+## Project Execution
+
+```typescript
+import { executeProject } from 'digital-tasks'
+
+// Execute project
+const execution = await executeProject(project, {
+  onTaskStart: (task) => console.log(`Starting: ${task.name}`),
+  onTaskComplete: (task) => console.log(`Completed: ${task.name}`),
+  onMilestone: (milestone) => console.log(`Milestone: ${milestone.name}`),
+})
+
+// Wait for completion
+await execution.wait()
+
+console.log(execution.status)    // 'completed'
+console.log(execution.duration)  // Total time in ms
+```
+
+## Visualization
+
+```typescript
+import { visualizeProject } from 'digital-tasks'
+
+// Generate Mermaid diagram
+const diagram = visualizeProject(project, { format: 'mermaid' })
+
+console.log(diagram)
+// gantt
+//   title Launch Feature
+//   section Planning
+//   Design: a1, 2024-01-01, 3d
+//   Spec: a2, 2024-01-01, 2d
+//   section Development
+//   Implement: a3, after a1 a2, 5d
+//   ...
+```
+
+## Best Practices
+
+1. **Use meaningful names** - Task names should be self-documenting
+2. **Group related tasks** - Use named groups for clarity
+3. **Limit nesting depth** - Keep hierarchy manageable
+4. **Add milestones** - Mark significant progress points
+5. **Create templates** - Reuse common patterns
+6. **Visualize before executing** - Validate the workflow structure

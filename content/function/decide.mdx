@@ -1,0 +1,75 @@
+---
+title: decide
+description: LLM as judge - pick the best option
+---
+
+LLM as judge. Pick the best option based on criteria.
+
+## Import
+
+```typescript
+import { decide } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+decide`criteria`(option1, option2, ...options)
+decide`criteria`(option1, option2, options?)
+```
+
+## Examples
+
+```typescript
+// Compare two options
+const better = await decide`which is more compelling?`(copyA, copyB)
+
+// Compare multiple options
+const best = await decide`which headline will get more clicks?`(
+  'AI is Here',
+  'The Future of AI',
+  'Why AI Matters Now',
+)
+
+// With context in criteria
+const winner = await decide`
+  which design better fits ${{ brand, audience }}?
+`(designA, designB, designC)
+
+// Returns the winning option (same type as inputs)
+const bestProduct = await decide`which has better value?`(productA, productB)
+// bestProduct === productA or bestProduct === productB
+```
+
+## Use Cases
+
+```typescript
+// A/B testing
+const bestHeadline = await decide`higher conversion rate?`(headlineA, headlineB)
+
+// Content selection
+const bestDraft = await decide`most engaging for ${audience}?`(...drafts)
+
+// Code review
+const betterImpl = await decide`more readable and maintainable?`(implA, implB)
+```
+
+## With Options
+
+```typescript
+// Complex decisions need more reasoning
+const winner = await decide`which architecture scales better?`(archA, archB, {
+  model: 'claude-opus-4-5',
+  thinking: 'high',  // Enable extended thinking
+})
+```
+
+## Return Type
+
+Returns the exact input option that won:
+
+```typescript
+const options = [{ name: 'A', price: 10 }, { name: 'B', price: 20 }]
+const best = await decide`better value?`(...options)
+// best === options[0] or best === options[1] (same reference)
+```

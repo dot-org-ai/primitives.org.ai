@@ -1,0 +1,362 @@
+---
+title: Autonomy
+description: Independent decision-making and action
+---
+
+# Agent Autonomy
+
+Agents work independently, making decisions and taking actions without constant supervision while operating within defined boundaries.
+
+## Autonomy Configuration
+
+```typescript
+import { agent } from 'autonomous-agents'
+
+const agent = agent({
+  name: 'autonomous-support',
+
+  autonomy: {
+    // Actions the agent can take independently
+    canDo: [
+      'answer-common-questions',
+      'look-up-documentation',
+      'create-tickets',
+      'send-status-updates',
+    ],
+
+    // Actions requiring approval
+    requiresApproval: [
+      'close-tickets',
+      'issue-refunds',
+      'modify-user-accounts',
+    ],
+
+    // When to escalate
+    escalateTo: 'support-team',
+    escalateWhen: [
+      'confidence < 0.7',
+      'customer-sentiment = angry',
+      'topic = legal',
+    ],
+  },
+})
+```
+
+## Decision Making
+
+### Making Decisions
+
+```typescript
+// Agent evaluates options and decides
+const decision = await agent.decide({
+  situation: 'Customer asking about enterprise pricing',
+  context: await agent.memory.recall({ customer }),
+
+  options: [
+    { action: 'answer-directly', confidence: 0.3 },
+    { action: 'escalate-to-sales', confidence: 0.9 },
+    { action: 'schedule-call', confidence: 0.7 },
+    { action: 'send-pricing-doc', confidence: 0.6 },
+  ],
+})
+
+console.log(decision.chosen)      // 'escalate-to-sales'
+console.log(decision.reasoning)   // Explanation of why
+console.log(decision.confidence)  // 0.9
+```
+
+### Decision Logging
+
+```typescript
+// All decisions are logged
+const recentDecisions = await agent.getDecisionLog({
+  since: lastWeek,
+  includeReasoning: true,
+})
+
+// Review decisions
+recentDecisions.forEach((decision) => {
+  console.log(decision.situation)
+  console.log(decision.chosen)
+  console.log(decision.outcome)  // If feedback provided
+})
+```
+
+## Action Execution
+
+### Autonomous Actions
+
+```typescript
+// Define what agent can do
+const capabilities = [
+  capability({
+    name: 'answer-question',
+    description: 'Answer common support questions',
+    autonomous: true,  // Can execute without approval
+    handler: async (question) => {
+      const answer = await agent.think(question)
+      return answer
+    },
+  }),
+
+  capability({
+    name: 'issue-refund',
+    description: 'Process customer refunds',
+    autonomous: false,  // Requires approval
+    approvalFrom: 'finance-team',
+    handler: async (refund) => {
+      await processRefund(refund)
+    },
+  }),
+]
+
+// Execute autonomous action
+await agent.execute('answer-question', { question: 'How do I reset my password?' })
+
+// Request approval for restricted action
+const approval = await agent.requestApproval('issue-refund', {
+  amount: 150,
+  reason: 'Service disruption',
+  customer: 'customer@example.com',
+})
+
+if (approval.granted) {
+  await agent.execute('issue-refund', approval.params)
+}
+```
+
+### Action Policies
+
+```typescript
+const agent = agent({
+  policies: {
+    // Rate limits
+    maxActionsPerHour: 100,
+    maxActionsPerDay: 1000,
+
+    // Spending limits
+    maxRefundAmount: 100,
+    maxTotalRefundsPerDay: 500,
+
+    // Time restrictions
+    activeHours: { start: '09:00', end: '18:00', timezone: 'America/New_York' },
+
+    // Content restrictions
+    prohibitedTopics: ['competitor-comparisons', 'future-roadmap'],
+  },
+})
+```
+
+## Escalation
+
+### Automatic Escalation
+
+```typescript
+agent.onInteraction(async (interaction) => {
+  // Check escalation conditions
+  const shouldEscalate = await agent.checkEscalation({
+    confidence: interaction.confidence,
+    sentiment: interaction.customerSentiment,
+    topic: interaction.topic,
+    duration: interaction.duration,
+  })
+
+  if (shouldEscalate) {
+    await agent.escalate({
+      to: shouldEscalate.team,
+      reason: shouldEscalate.reason,
+      context: interaction,
+      priority: shouldEscalate.priority,
+    })
+  }
+})
+```
+
+### Escalation Rules
+
+```typescript
+const escalationRules = [
+  {
+    condition: 'confidence < 0.5',
+    action: 'escalate',
+    to: 'support-team',
+    priority: 'normal',
+  },
+  {
+    condition: 'customer.sentiment = angry',
+    action: 'escalate',
+    to: 'senior-support',
+    priority: 'high',
+  },
+  {
+    condition: 'topic = billing AND amount > 1000',
+    action: 'escalate',
+    to: 'finance-team',
+    priority: 'high',
+  },
+  {
+    condition: 'attempts > 3',
+    action: 'escalate',
+    to: 'escalations',
+    priority: 'urgent',
+  },
+]
+```
+
+## Learning from Outcomes
+
+### Outcome Tracking
+
+```typescript
+// Track outcomes of decisions
+await agent.recordOutcome({
+  decisionId: 'dec_123',
+  outcome: 'success',
+  customerSatisfied: true,
+  resolutionTime: 300000,  // ms
+  notes: 'Customer confirmed issue resolved',
+})
+
+// Agent learns from outcomes
+await agent.learn()
+```
+
+### Feedback Integration
+
+```typescript
+// Human provides feedback
+await agent.feedback({
+  decisionId: 'dec_456',
+  outcome: 'incorrect',
+  correction: 'Should have escalated this to billing',
+  reason: 'Customer had a valid refund request',
+})
+
+// Agent adjusts behavior
+agent.onFeedback(async (feedback) => {
+  if (feedback.outcome === 'incorrect') {
+    // Adjust confidence thresholds
+    await agent.adjust({
+      situation: feedback.situation,
+      adjustment: 'lower-confidence',
+      amount: 0.1,
+    })
+  }
+})
+```
+
+## Confidence and Uncertainty
+
+### Confidence Scoring
+
+```typescript
+// Agent tracks confidence in its decisions
+const response = await agent.think({
+  question: 'Can I get a refund after 90 days?',
+})
+
+console.log(response.answer)
+console.log(response.confidence)  // 0.85
+console.log(response.sources)     // What informed the answer
+
+// Act based on confidence
+if (response.confidence < 0.7) {
+  await agent.requestHumanReview(response)
+}
+```
+
+### Uncertainty Handling
+
+```typescript
+agent.onUncertain(async (situation) => {
+  // Options when uncertain
+  const action = await agent.decide({
+    situation,
+    options: [
+      { action: 'ask-clarifying-question', confidence: 0.8 },
+      { action: 'provide-partial-answer', confidence: 0.5 },
+      { action: 'escalate-to-human', confidence: 0.9 },
+    ],
+  })
+
+  await agent.execute(action)
+})
+```
+
+## Proactive Behavior
+
+```typescript
+const agent = agent({
+  proactive: {
+    // Agent initiates actions based on conditions
+    triggers: [
+      {
+        condition: 'ticket.age > 24h AND ticket.status = open',
+        action: 'follow-up',
+        message: 'Checking in on your request...',
+      },
+      {
+        condition: 'user.activity = none AND user.onboarding = incomplete',
+        action: 'send-reminder',
+        delay: '7d',
+      },
+    ],
+
+    // Scheduled proactive tasks
+    scheduled: [
+      {
+        cron: '0 9 * * MON',
+        action: 'weekly-summary',
+        recipients: ['team@company.com'],
+      },
+    ],
+  },
+})
+```
+
+## Autonomy Levels
+
+```typescript
+// Configure autonomy level
+const agent = agent({
+  autonomyLevel: 'supervised',  // 'manual' | 'supervised' | 'autonomous'
+})
+
+// Manual: Human approves every action
+// Supervised: Agent acts, human reviews
+// Autonomous: Agent acts independently
+
+// Adjust dynamically
+await agent.setAutonomyLevel('autonomous', {
+  for: ['answer-common-questions'],
+  because: 'High accuracy demonstrated over 1000 interactions',
+})
+```
+
+## Audit Trail
+
+```typescript
+// All autonomous actions logged
+const auditLog = await agent.getAuditLog({
+  since: lastMonth,
+  actions: ['decision', 'execution', 'escalation'],
+})
+
+// Each entry includes
+auditLog.forEach((entry) => {
+  console.log(entry.timestamp)
+  console.log(entry.action)
+  console.log(entry.context)
+  console.log(entry.outcome)
+  console.log(entry.reasoning)
+})
+```
+
+## Best Practices
+
+1. **Start supervised** - Build trust before full autonomy
+2. **Clear escalation paths** - Always have human fallback
+3. **Log everything** - Maintain audit trail
+4. **Learn from outcomes** - Use feedback to improve
+5. **Set appropriate limits** - Prevent runaway actions
+6. **Regular review** - Audit agent decisions periodically

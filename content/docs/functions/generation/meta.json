@@ -1,5 +1,0 @@
-{
-  "title": "Generation",
-  "description": "Core text generation functions",
-  "pages": ["index", "ai", "generate", "write", "summarize"]
-}

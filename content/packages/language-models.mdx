@@ -1,0 +1,37 @@
+---
+title: language-models
+description: Unified interface for working with LLMs
+---
+
+```bash
+npm install language-models
+```
+
+Provider-agnostic interface for text generation and embeddings.
+
+```typescript
+import { llm } from 'language-models'
+
+const response = await llm.generate({
+  model: 'claude-sonnet-4-20250514',
+  messages: [{ role: 'user', content: 'Hello!' }],
+})
+
+const embedding = await llm.embed({
+  model: 'text-embedding-3-small',
+  input: 'Hello world',
+})
+```
+
+## Supported Providers
+
+- Anthropic (Claude)
+- OpenAI (GPT)
+- Google (Gemini)
+- Cloudflare Workers AI
+- Ollama (local)
+
+## Related
+
+- [ai-providers](/packages/ai-providers) — Provider implementations
+- [ai-functions](/packages/ai-functions) — Higher-level abstractions

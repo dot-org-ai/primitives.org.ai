@@ -1,0 +1,64 @@
+---
+title: read
+description: Fetch and convert URL to markdown
+---
+
+Fetch and convert a URL to markdown. Powered by Firecrawl.
+
+## Import
+
+```typescript
+import { read } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+read`${url}`
+read(url: string)
+```
+
+## Examples
+
+```typescript
+// Get markdown from URL
+const article = await read`https://example.com/blog/post`
+
+// Process the content
+const content = await read`${url}`
+const summary = await summarize`${content}`
+const keyPoints = await list`main takeaways from ${content}`
+```
+
+## Chaining
+
+```typescript
+// Read and process
+const content = await read`${url}`
+const summary = await summarize`${content}`
+const isRelevant = await is`${content} relevant to ${topic}?`
+
+// Read multiple pages
+const docs = await Promise.all([
+  read`https://docs.example.com/intro`,
+  read`https://docs.example.com/api`,
+  read`https://docs.example.com/examples`,
+])
+const overview = await write`documentation overview based on ${docs}`
+```
+
+## vs browse
+
+| Function | Use Case |
+|----------|----------|
+| `read` | Static content, articles, docs |
+| `browse` | Interactive pages, JavaScript-rendered |
+
+```typescript
+// Static content - use read
+const article = await read`https://blog.example.com/post`
+
+// Interactive page - use browse
+const page = await browse`https://app.example.com`
+const data = await page.extract`pricing information`
+```

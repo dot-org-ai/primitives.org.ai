@@ -1,5 +1,0 @@
-{
-  "title": "Defining",
-  "description": "Define custom AI functions",
-  "pages": ["index", "define", "ai-factory", "magic-proxy"]
-}

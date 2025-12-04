@@ -1,15 +1,16 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import Image from 'next/image';
 
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
-      title: 'Primitives.org.ai',
+      title: (
+        <>
+          <Image src="/org-ai.svg" alt="" width={24} height={24} />
+          Primitives.org.ai
+        </>
+      ),
     },
-    links: [
-      {
-        text: 'GitHub',
-        url: 'https://github.com/dot-org-ai/primitives.org.ai',
-      },
-    ],
+    githubUrl: 'https://github.com/dot-org-ai/primitives.org.ai',
   };
 }

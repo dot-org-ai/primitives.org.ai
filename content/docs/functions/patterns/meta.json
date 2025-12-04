@@ -1,5 +1,0 @@
-{
-  "title": "Patterns",
-  "description": "Common usage patterns",
-  "pages": ["index", "streaming", "batch", "schema", "options"]
-}

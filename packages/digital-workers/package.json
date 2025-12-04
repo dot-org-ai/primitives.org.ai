@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
-    "ai-workflows": "workspace:*"
+    "ai-workflows": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
   "keywords": ["ai", "agents", "humans", "workers", "primitives"],
   "license": "MIT"

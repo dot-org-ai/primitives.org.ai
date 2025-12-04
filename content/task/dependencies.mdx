@@ -1,0 +1,290 @@
+---
+title: Dependencies
+description: Task dependencies, blocking, and dependency graphs
+---
+
+# Dependencies
+
+Tasks can depend on other tasks, enabling complex workflows where work is automatically sequenced based on completion.
+
+## Basic Dependencies
+
+```typescript
+import { createTask, completeTask, getTask } from 'digital-tasks'
+
+// Create first task
+const task1 = await createTask({
+  function: { type: 'code', name: 'fetchData', ... },
+})
+
+// Create task that depends on task1
+const task2 = await createTask({
+  function: { type: 'code', name: 'processData', ... },
+  dependencies: [task1.id],
+})
+
+console.log(task2.status)  // 'blocked'
+
+// When task1 completes, task2 automatically unblocks
+await completeTask(task1.id, { data: [...] })
+
+const updated = await getTask(task2.id)
+console.log(updated.status)  // 'queued'
+```
+
+## Multiple Dependencies
+
+```typescript
+// Task depends on multiple tasks completing
+const finalTask = await createTask({
+  function: processFunc,
+  dependencies: [task1.id, task2.id, task3.id],
+})
+
+// Task remains blocked until ALL dependencies complete
+console.log(finalTask.status)  // 'blocked'
+
+await completeTask(task1.id, result1)
+await completeTask(task2.id, result2)
+
+// Still blocked - task3 not complete
+const stillBlocked = await getTask(finalTask.id)
+console.log(stillBlocked.status)  // 'blocked'
+
+await completeTask(task3.id, result3)
+
+// Now unblocked
+const unblocked = await getTask(finalTask.id)
+console.log(unblocked.status)  // 'queued'
+```
+
+## Dependency Types
+
+```typescript
+interface TaskDependency {
+  taskId: string
+  type: 'completion' | 'success' | 'any'
+}
+
+// Default: completion (task must complete, success or failure)
+const task = await createTask({
+  function: func,
+  dependencies: ['task_1'],  // Same as [{ taskId: 'task_1', type: 'completion' }]
+})
+
+// Success: task must complete successfully
+const strictTask = await createTask({
+  function: func,
+  dependencies: [{ taskId: 'task_1', type: 'success' }],
+})
+
+// Any: proceeds when dependency reaches any terminal state
+const flexibleTask = await createTask({
+  function: func,
+  dependencies: [{ taskId: 'task_1', type: 'any' }],
+})
+```
+
+## Dependency Graph Utilities
+
+### Get Dependants
+
+Find tasks that depend on a given task:
+
+```typescript
+import { getDependants } from 'digital-tasks'
+
+const allTasks = await getAllProjectTasks(projectId)
+const dependants = getDependants(task.id, allTasks)
+
+// Returns tasks that will be affected when this task completes
+console.log(dependants.map(t => t.name))
+```
+
+### Get Dependencies
+
+Find tasks that a given task depends on:
+
+```typescript
+import { getDependencies } from 'digital-tasks'
+
+const dependencies = getDependencies(task, allTasks)
+
+// Returns the actual task objects this task is waiting for
+console.log(dependencies.map(t => ({ id: t.id, status: t.status })))
+```
+
+### Get Ready Tasks
+
+Find tasks that can be executed now:
+
+```typescript
+import { getReadyTasks } from 'digital-tasks'
+
+const allTasks = await getAllProjectTasks(projectId)
+const ready = getReadyTasks(allTasks)
+
+// Returns tasks with status 'queued' and no unsatisfied dependencies
+console.log(`${ready.length} tasks ready to execute`)
+```
+
+### Check for Cycles
+
+Detect circular dependencies:
+
+```typescript
+import { hasCycles } from 'digital-tasks'
+
+const tasks = [
+  { id: 'a', dependencies: ['b'] },
+  { id: 'b', dependencies: ['c'] },
+  { id: 'c', dependencies: ['a'] },  // Creates cycle!
+]
+
+const cyclic = hasCycles(tasks)
+console.log(cyclic)  // true
+```
+
+### Topological Sort
+
+Get execution order:
+
+```typescript
+import { sortTasks } from 'digital-tasks'
+
+const sorted = sortTasks(allTasks)
+
+// Returns tasks in valid execution order
+// Tasks with no dependencies come first
+sorted.forEach((task, index) => {
+  console.log(`${index + 1}. ${task.name}`)
+})
+```
+
+## Dependency Visualization
+
+```typescript
+import { visualizeDependencies } from 'digital-tasks'
+
+const diagram = visualizeDependencies(allTasks, {
+  format: 'mermaid',
+})
+
+console.log(diagram)
+// graph TD
+//   task_1[Fetch Data]
+//   task_2[Process Data]
+//   task_3[Generate Report]
+//   task_1 --> task_2
+//   task_2 --> task_3
+```
+
+## Cascading Effects
+
+### Failed Dependencies
+
+When a dependency fails:
+
+```typescript
+// task2 depends on task1
+await failTask(task1.id, 'Error occurred')
+
+// task2 can be configured to:
+// 1. Stay blocked (default for 'success' type)
+// 2. Automatically fail
+// 3. Unblock anyway ('any' type)
+
+const task2 = await createTask({
+  function: func,
+  dependencies: [{ taskId: task1.id, type: 'success' }],
+  onDependencyFailed: 'fail',  // 'block' | 'fail' | 'ignore'
+})
+```
+
+### Cancelled Dependencies
+
+```typescript
+await cancelTask(task1.id, 'No longer needed')
+
+// Dependent tasks can cascade cancel
+const task2 = await createTask({
+  function: func,
+  dependencies: [task1.id],
+  onDependencyCancelled: 'cancel',  // 'block' | 'cancel' | 'ignore'
+})
+```
+
+## Dynamic Dependencies
+
+Add or remove dependencies at runtime:
+
+```typescript
+import { addDependency, removeDependency } from 'digital-tasks'
+
+// Add dependency
+await addDependency(task2.id, task1.id)
+
+// Remove dependency
+await removeDependency(task2.id, task1.id)
+```
+
+## Data Flow Between Tasks
+
+Pass output from one task as input to dependents:
+
+```typescript
+// Task 1 produces data
+const task1 = await createTask({
+  function: {
+    type: 'code',
+    name: 'fetchUsers',
+    output: 'array',
+  },
+})
+
+// Task 2 consumes task1's output
+const task2 = await createTask({
+  function: {
+    type: 'code',
+    name: 'processUsers',
+    args: { users: 'Array of users' },
+  },
+  dependencies: [task1.id],
+  inputMapping: {
+    users: { from: task1.id, path: 'output' },
+  },
+})
+
+// When task1 completes, task2 receives its output
+await completeTask(task1.id, [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }])
+// task2.input.users is now [{ id: 1, name: 'John' }, { id: 2, name: 'Jane' }]
+```
+
+## Parallel and Sequential Groups
+
+```typescript
+import { createTask, parallel, sequential } from 'digital-tasks'
+
+// Parallel: all tasks can run simultaneously
+const parallelGroup = parallel([
+  createTask({ function: func1 }),
+  createTask({ function: func2 }),
+  createTask({ function: func3 }),
+])
+
+// Sequential: each task depends on the previous
+const sequentialGroup = sequential([
+  createTask({ function: step1 }),
+  createTask({ function: step2 }),
+  createTask({ function: step3 }),
+])
+// Automatically creates: step2 depends on step1, step3 depends on step2
+```
+
+## Best Practices
+
+1. **Avoid circular dependencies** - Use `hasCycles()` to validate
+2. **Keep dependency chains short** - Long chains increase latency
+3. **Use success type sparingly** - Consider if 'completion' suffices
+4. **Handle failed dependencies explicitly** - Configure cascade behavior
+5. **Visualize complex graphs** - Catch issues early

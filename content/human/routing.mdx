@@ -1,0 +1,384 @@
+---
+title: Routing
+description: Task assignment, skills matching, and queue management
+---
+
+# Routing and Assignment
+
+Route tasks to the right humans based on skills, availability, workload, and other factors.
+
+## Basic Routing
+
+```typescript
+import { human } from 'human-in-the-loop'
+
+const task = human.task({
+  name: 'support-ticket',
+
+  routing: {
+    strategy: 'round-robin',
+    assignTo: { team: 'support' },
+  },
+})
+```
+
+## Routing Strategies
+
+### Round Robin
+
+```typescript
+const roundRobin = human.routing({
+  strategy: 'round-robin',
+  assignTo: { team: 'support' },
+  skipUnavailable: true,
+})
+```
+
+### Skills-Based
+
+```typescript
+const skillsRouting = human.routing({
+  strategy: 'skills-match',
+
+  skills: {
+    required: ['customer-service'],
+    preferred: ['technical-support', 'product-knowledge'],
+  },
+
+  // How to score matches
+  scoring: {
+    requiredSkillWeight: 1.0,
+    preferredSkillWeight: 0.5,
+    experienceWeight: 0.3,
+  },
+})
+```
+
+### Load-Balanced
+
+```typescript
+const loadBalanced = human.routing({
+  strategy: 'load-balanced',
+
+  factors: {
+    currentWorkload: 0.4,   // Current task count
+    availability: 0.3,      // Schedule availability
+    capacity: 0.2,          // Max task capacity
+    recentAssignments: 0.1, // Fair distribution
+  },
+
+  limits: {
+    maxTasksPerPerson: 10,
+    maxHighPriorityPerPerson: 3,
+  },
+})
+```
+
+### Priority-Based
+
+```typescript
+const priorityRouting = human.routing({
+  strategy: 'priority',
+
+  rules: [
+    {
+      condition: 'priority = critical',
+      assignTo: { role: 'senior-specialist' },
+    },
+    {
+      condition: 'customer.tier = enterprise',
+      assignTo: { team: 'enterprise-support' },
+    },
+    {
+      condition: 'topic = billing',
+      assignTo: { team: 'billing' },
+    },
+    {
+      default: true,
+      assignTo: { team: 'general-support' },
+    },
+  ],
+})
+```
+
+## Dynamic Assignment
+
+```typescript
+const dynamicRouting = human.routing({
+  strategy: 'dynamic',
+
+  assignTo: async ({ task, context }) => {
+    // Custom assignment logic
+    if (task.language !== 'en') {
+      return findByLanguage(task.language)
+    }
+
+    if (task.complexity === 'high') {
+      return findByExpertise(task.category)
+    }
+
+    return findAvailable({ team: 'support' })
+  },
+})
+```
+
+## Queue Management
+
+### Basic Queue
+
+```typescript
+const taskQueue = human.queue({
+  name: 'review-queue',
+
+  // Queue settings
+  settings: {
+    maxSize: 1000,
+    defaultPriority: 'normal',
+    fifo: true,  // First in, first out
+  },
+})
+
+// Add to queue
+await taskQueue.add(task)
+
+// Get next task for worker
+const next = await taskQueue.getNext({ worker: workerId })
+```
+
+### Priority Queue
+
+```typescript
+const priorityQueue = human.queue({
+  name: 'priority-queue',
+
+  prioritization: [
+    // Priority boosting rules
+    { condition: 'priority = critical', boost: 10 },
+    { condition: 'deadline < 1h', boost: 5 },
+    { condition: 'customer.tier = enterprise', boost: 3 },
+    { condition: 'waitTime > 30m', boost: 2 },
+    { condition: 'type = escalation', boost: 1.5 },
+  ],
+
+  // Decay waiting tasks' priority over time
+  aging: {
+    enabled: true,
+    boostPerHour: 0.5,
+  },
+})
+```
+
+### SLA-Based Queue
+
+```typescript
+const slaQueue = human.queue({
+  name: 'sla-queue',
+
+  sla: {
+    critical: { responseTime: '15m', resolution: '1h' },
+    high: { responseTime: '1h', resolution: '4h' },
+    normal: { responseTime: '4h', resolution: '24h' },
+    low: { responseTime: '24h', resolution: '72h' },
+  },
+
+  // Escalate when SLA at risk
+  escalation: {
+    warnAt: 0.75,  // 75% of SLA time
+    escalateAt: 0.9,
+    escalateTo: 'supervisor',
+  },
+})
+```
+
+## Fairness and Limits
+
+```typescript
+const fairQueue = human.queue({
+  name: 'fair-queue',
+
+  fairness: {
+    // Distribution limits
+    maxTasksPerPerson: 10,
+    maxHighPriorityPerPerson: 3,
+
+    // Rotation
+    rotateAfter: '2h',
+    breakReminders: {
+      after: '90m',
+      message: 'Consider taking a short break',
+    },
+
+    // Variety
+    maxSameTypeConsecutive: 3,
+    balanceCategories: true,
+  },
+})
+```
+
+## Availability
+
+### Schedule-Based
+
+```typescript
+const scheduledRouting = human.routing({
+  strategy: 'skills-match',
+
+  availability: {
+    // Consider working hours
+    respectSchedule: true,
+
+    // Working hours
+    workingHours: {
+      default: '9:00-17:00',
+      timezone: 'local',
+    },
+
+    // Handle out of hours
+    outOfHours: {
+      queue: true,
+      fallback: 'on-call-team',
+    },
+  },
+})
+```
+
+### Real-Time Availability
+
+```typescript
+const realtimeRouting = human.routing({
+  strategy: 'load-balanced',
+
+  availability: {
+    realtime: true,
+    statusCheck: true,  // Check user status
+
+    statuses: {
+      available: { eligible: true, weight: 1.0 },
+      busy: { eligible: true, weight: 0.5 },
+      away: { eligible: false },
+      offline: { eligible: false },
+    },
+  },
+})
+```
+
+## Escalation Paths
+
+```typescript
+const escalatingRouting = human.routing({
+  strategy: 'tiered',
+
+  tiers: [
+    {
+      name: 'tier-1',
+      assignTo: { role: 'support-agent' },
+      timeout: '30m',
+    },
+    {
+      name: 'tier-2',
+      assignTo: { role: 'senior-agent' },
+      timeout: '1h',
+    },
+    {
+      name: 'tier-3',
+      assignTo: { role: 'specialist' },
+      timeout: '2h',
+    },
+    {
+      name: 'management',
+      assignTo: { role: 'support-manager' },
+      final: true,
+    },
+  ],
+
+  escalateOn: ['timeout', 'request', 'complexity-increase'],
+})
+```
+
+## Queue Analytics
+
+```typescript
+const stats = await taskQueue.getStats()
+
+console.log(stats)
+// {
+//   total: 150,
+//   waiting: 45,
+//   inProgress: 30,
+//   completed: 75,
+//   avgWaitTime: '12m',
+//   avgProcessTime: '25m',
+//   slaCompliance: 0.92,
+//   byPriority: { critical: 5, high: 20, ... },
+//   byAssignee: { 'user_1': 10, 'user_2': 12, ... },
+// }
+
+// Real-time monitoring
+taskQueue.on('sla-warning', (task) => {
+  console.log(`SLA at risk for task ${task.id}`)
+})
+
+taskQueue.on('queue-full', () => {
+  console.log('Queue is at capacity')
+})
+```
+
+## Claiming and Reassignment
+
+```typescript
+// Worker claims task
+await taskQueue.claim(taskId, { worker: workerId })
+
+// Release task back to queue
+await taskQueue.release(taskId, {
+  reason: 'Need specialist assistance',
+  preserveProgress: true,
+})
+
+// Reassign to specific person
+await taskQueue.reassign(taskId, {
+  to: 'specialist@company.com',
+  reason: 'Requires technical expertise',
+})
+
+// Bulk reassignment
+await taskQueue.bulkReassign({
+  from: 'agent_leaving',
+  to: 'team',
+  preserveProgress: true,
+})
+```
+
+## Notifications
+
+```typescript
+const notifiedQueue = human.queue({
+  name: 'notified-queue',
+
+  notifications: {
+    onAssignment: {
+      channels: ['email', 'slack', 'push'],
+      template: 'task-assigned',
+    },
+
+    onEscalation: {
+      channels: ['email', 'slack'],
+      includeContext: true,
+    },
+
+    reminders: [
+      { after: '30m', channels: ['slack'] },
+      { after: '1h', channels: ['email'] },
+    ],
+  },
+})
+```
+
+## Best Practices
+
+1. **Match skills to tasks** - Route based on expertise
+2. **Balance workload** - Prevent burnout
+3. **Set clear SLAs** - Define expectations
+4. **Enable escalation** - Provide escape valves
+5. **Monitor queues** - React to backlogs early
+6. **Support reassignment** - Handle unavailability gracefully

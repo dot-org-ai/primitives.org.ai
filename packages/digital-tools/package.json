@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
+    "rpc.do": "^0.1.0",
     "zod": "^3.23.0"
   },
   "keywords": ["ai", "tools", "agents", "humans", "primitives", "mcp"],

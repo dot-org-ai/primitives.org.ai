@@ -1,0 +1,278 @@
+---
+title: State Machines
+description: Explicit state management for complex business logic
+---
+
+# State Machines
+
+State machines provide explicit state management with guarded transitions, making complex business logic predictable and auditable.
+
+## Defining a State Machine
+
+```typescript
+import { stateMachine, state, transition } from 'ai-workflows'
+
+const orderMachine = stateMachine({
+  name: 'order-lifecycle',
+  initial: 'draft',
+  context: {
+    orderId: '',
+    items: [],
+    total: 0,
+    paidAt: null,
+    shippedAt: null,
+  },
+
+  states: {
+    draft: state({
+      on: {
+        SUBMIT: transition('pending'),
+        CANCEL: transition('cancelled'),
+      },
+    }),
+
+    pending: state({
+      on: {
+        PAYMENT_RECEIVED: transition('paid', {
+          action: (ctx) => {
+            ctx.paidAt = new Date()
+          },
+        }),
+        CANCEL: transition('cancelled'),
+      },
+    }),
+
+    paid: state({
+      onEnter: async (ctx) => {
+        await notifyWarehouse(ctx.orderId)
+      },
+      on: {
+        SHIP: transition('shipped'),
+        REFUND: transition('refunded'),
+      },
+    }),
+
+    shipped: state({
+      onEnter: async (ctx) => {
+        ctx.shippedAt = new Date()
+        await sendTrackingEmail(ctx.orderId)
+      },
+      on: {
+        DELIVER: transition('delivered'),
+        RETURN: transition('returning'),
+      },
+    }),
+
+    delivered: state({ type: 'final' }),
+    cancelled: state({ type: 'final' }),
+    refunded: state({ type: 'final' }),
+  },
+})
+```
+
+## Guarded Transitions
+
+Transitions can have guards that must pass:
+
+```typescript
+pending: state({
+  on: {
+    PAYMENT_RECEIVED: transition('paid', {
+      guard: (ctx, event) => {
+        // Only transition if payment amount matches
+        return event.amount >= ctx.total
+      },
+    }),
+
+    APPLY_DISCOUNT: transition('pending', {
+      guard: (ctx, event) => event.code !== undefined,
+      action: (ctx, event) => {
+        ctx.total = ctx.total * (1 - event.discount)
+      },
+    }),
+  },
+}),
+```
+
+## Entry and Exit Actions
+
+Execute code when entering or leaving states:
+
+```typescript
+processing: state({
+  onEnter: async (ctx) => {
+    // Runs when entering 'processing'
+    await startProcessing(ctx.orderId)
+    ctx.processingStartedAt = new Date()
+  },
+
+  onExit: async (ctx) => {
+    // Runs when leaving 'processing'
+    await logProcessingDuration(
+      ctx.orderId,
+      Date.now() - ctx.processingStartedAt
+    )
+  },
+
+  on: {
+    COMPLETE: transition('completed'),
+  },
+}),
+```
+
+## Sending Events
+
+```typescript
+const instance = await orderMachine.create({
+  orderId: 'order_123',
+  items: [{ name: 'Widget', price: 100 }],
+  total: 100,
+})
+
+// Send events to transition
+await instance.send('SUBMIT')
+console.log(instance.state) // 'pending'
+
+await instance.send('PAYMENT_RECEIVED', { amount: 100 })
+console.log(instance.state) // 'paid'
+
+// Check if transition is possible
+const canShip = instance.can('SHIP')
+```
+
+## Hierarchical States
+
+States can be nested:
+
+```typescript
+const machine = stateMachine({
+  states: {
+    active: state({
+      initial: 'idle',
+
+      states: {
+        idle: state({
+          on: { START: transition('running') },
+        }),
+        running: state({
+          on: { PAUSE: transition('paused') },
+        }),
+        paused: state({
+          on: { RESUME: transition('running') },
+        }),
+      },
+
+      on: {
+        STOP: transition('stopped'),  // Exits all nested states
+      },
+    }),
+
+    stopped: state({ type: 'final' }),
+  },
+})
+```
+
+## Parallel States
+
+Run multiple states simultaneously:
+
+```typescript
+const machine = stateMachine({
+  type: 'parallel',
+
+  states: {
+    upload: state({
+      initial: 'pending',
+      states: {
+        pending: state({ on: { START: transition('uploading') } }),
+        uploading: state({ on: { COMPLETE: transition('done') } }),
+        done: state({ type: 'final' }),
+      },
+    }),
+
+    validate: state({
+      initial: 'pending',
+      states: {
+        pending: state({ on: { START: transition('validating') } }),
+        validating: state({ on: { PASS: transition('valid') } }),
+        valid: state({ type: 'final' }),
+      },
+    }),
+  },
+})
+```
+
+## History States
+
+Remember previous state when re-entering:
+
+```typescript
+const machine = stateMachine({
+  states: {
+    editing: state({
+      initial: 'text',
+      states: {
+        text: state({}),
+        formatting: state({}),
+        preview: state({}),
+      },
+      history: 'shallow',  // Remember last child state
+    }),
+
+    saving: state({
+      on: {
+        DONE: transition('editing'),  // Returns to last editing state
+      },
+    }),
+  },
+})
+```
+
+## Visualization
+
+Generate diagrams from state machine definitions:
+
+```typescript
+import { visualize } from 'ai-workflows'
+
+const diagram = visualize(orderMachine, {
+  format: 'mermaid',
+})
+
+console.log(diagram)
+// stateDiagram-v2
+//   [*] --> draft
+//   draft --> pending: SUBMIT
+//   draft --> cancelled: CANCEL
+//   pending --> paid: PAYMENT_RECEIVED
+//   ...
+```
+
+## Persistence
+
+State machines are automatically persisted:
+
+```typescript
+// Create with ID for persistence
+const instance = await orderMachine.create(
+  { orderId: 'order_123' },
+  { id: 'order_123' }
+)
+
+// Later, restore from ID
+const restored = await orderMachine.get('order_123')
+console.log(restored.state)  // Current state
+console.log(restored.context)  // Current context
+```
+
+## Event History
+
+Track all transitions:
+
+```typescript
+const history = instance.getHistory()
+// [
+//   { from: 'draft', to: 'pending', event: 'SUBMIT', timestamp: ... },
+//   { from: 'pending', to: 'paid', event: 'PAYMENT_RECEIVED', timestamp: ... },
+// ]
+```

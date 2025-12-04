@@ -1,0 +1,41 @@
+---
+title: digital-workers
+description: Worker abstractions for task execution
+---
+
+```bash
+npm install digital-workers
+```
+
+Define workers that process tasks from queues.
+
+```typescript
+import { worker, pool } from 'digital-workers'
+
+const reviewWorker = worker({
+  name: 'document-reviewer',
+  capabilities: [reviewDocument, extractData],
+  concurrency: 5,
+})
+
+const workerPool = pool({
+  workers: [reviewWorker, summaryWorker],
+  scaling: { min: 1, max: 10 },
+})
+
+await workerPool.start()
+```
+
+## Features
+
+- Capability-based task matching
+- Concurrency control
+- Auto-scaling pools
+- Health monitoring
+- Graceful shutdown
+
+## Related
+
+- [digital-tasks](/packages/digital-tasks) — Task definitions
+- [ai-functions](/packages/ai-functions) — Worker capabilities
+- [autonomous-agents](/packages/autonomous-agents) — Agent workers

@@ -1,0 +1,380 @@
+---
+title: Collaboration
+description: Human and AI working together effectively
+---
+
+# Human + AI Collaboration
+
+The best outcomes come from humans and AI working together, each contributing their unique strengths.
+
+## Assisted Work
+
+### AI-Assisted Human Work
+
+```typescript
+import { human } from 'human-in-the-loop'
+
+const assistedReview = human.assisted({
+  name: 'ai-assisted-review',
+
+  // AI provides assistance
+  aiAssist: {
+    suggestions: true,       // Suggest responses
+    autoComplete: true,      // Complete sentences
+    factCheck: true,         // Verify claims
+    grammarCheck: true,      // Check grammar
+    similarCases: true,      // Show similar past cases
+    nextSteps: true,         // Suggest next actions
+  },
+
+  // Human makes final decisions
+  humanDecides: {
+    finalApproval: true,
+    edits: true,
+    escalation: true,
+  },
+})
+```
+
+### Suggestion System
+
+```typescript
+const suggestiveTask = human.task({
+  name: 'suggested-response',
+
+  aiSuggestions: {
+    // Generate response suggestions
+    responses: {
+      count: 3,
+      style: 'professional',
+      tone: 'context.customerSentiment',
+    },
+
+    // Suggest actions
+    actions: {
+      enabled: true,
+      confidence: 0.7,  // Only show above this confidence
+    },
+
+    // Highlight key information
+    highlights: {
+      entities: true,
+      dates: true,
+      amounts: true,
+      requirements: true,
+    },
+  },
+})
+```
+
+## Feedback Loops
+
+### Learning from Human Edits
+
+```typescript
+const learningTask = human.task({
+  name: 'learning-from-edits',
+
+  feedback: {
+    // Capture when human edits AI output
+    captureEdits: true,
+
+    // Track acceptance/rejection
+    captureDecisions: true,
+
+    // Ask for explicit feedback
+    collectFeedback: {
+      enabled: true,
+      frequency: 'always',  // 'always' | 'sample' | 'on-reject'
+      questions: [
+        'Was the AI suggestion helpful?',
+        'What could be improved?',
+      ],
+    },
+
+    // Send to training pipeline
+    feedTo: 'ai-improvement-pipeline',
+  },
+})
+```
+
+### Correction Handling
+
+```typescript
+const correctableTask = human.task({
+  name: 'correctable',
+
+  corrections: {
+    // Track what was changed
+    trackChanges: true,
+
+    // Categorize corrections
+    categories: [
+      'factual-error',
+      'tone-adjustment',
+      'missing-information',
+      'policy-compliance',
+      'formatting',
+    ],
+
+    // Learn from patterns
+    analyze: {
+      enabled: true,
+      minSamples: 100,
+      reportTo: 'ai-team',
+    },
+  },
+})
+```
+
+## Handoffs
+
+### AI to Human
+
+```typescript
+import { workflow } from 'ai-workflows'
+
+const supportFlow = workflow({
+  name: 'ai-first-support',
+
+  execute: async (ctx, ticket) => {
+    // AI attempts resolution
+    const aiResponse = await step('ai-attempt', () =>
+      aiSupport.handle(ticket)
+    )
+
+    // Check if handoff needed
+    if (aiResponse.confidence < 0.7 || aiResponse.needsHuman) {
+      // Hand off to human
+      const humanResult = await step('human-support', () =>
+        human.task({
+          name: 'support-handoff',
+          assignTo: { role: 'support-agent' },
+
+          // Provide AI context
+          context: {
+            aiAnalysis: aiResponse.analysis,
+            suggestedResponse: aiResponse.suggestion,
+            confidence: aiResponse.confidence,
+            reasoning: aiResponse.reasoning,
+          },
+        }).request()
+      )
+
+      return humanResult
+    }
+
+    return aiResponse
+  },
+})
+```
+
+### Human to AI
+
+```typescript
+const delegatingTask = human.task({
+  name: 'delegating-task',
+
+  // Human can delegate to AI
+  delegation: {
+    toAI: {
+      enabled: true,
+      tasks: ['research', 'summarize', 'format', 'translate'],
+    },
+  },
+
+  // UI for delegation
+  ui: {
+    showDelegateButton: true,
+    delegateOptions: [
+      { action: 'research', label: 'Research this topic' },
+      { action: 'summarize', label: 'Summarize document' },
+      { action: 'draft', label: 'Draft a response' },
+    ],
+  },
+})
+```
+
+## Co-Pilot Mode
+
+```typescript
+const coPilot = human.coPilot({
+  name: 'writing-copilot',
+
+  // Real-time assistance
+  realtime: {
+    suggestions: true,
+    completion: true,
+    correction: true,
+  },
+
+  // Context awareness
+  context: {
+    document: true,
+    history: true,
+    style: 'context.brandVoice',
+  },
+
+  // Controls
+  controls: {
+    toggleAssist: true,
+    adjustConfidence: true,
+    chooseStyle: true,
+  },
+})
+```
+
+## Collaborative Editing
+
+```typescript
+const collaborativeDoc = human.collaborative({
+  name: 'collaborative-document',
+
+  participants: {
+    humans: ['editor', 'reviewer'],
+    ai: ['assistant', 'fact-checker'],
+  },
+
+  // Who can do what
+  roles: {
+    editor: { edit: true, approve: true },
+    reviewer: { comment: true, suggest: true },
+    assistant: { suggest: true, format: true },
+    'fact-checker': { annotate: true, flag: true },
+  },
+
+  // Real-time collaboration
+  realtime: true,
+  showCursors: true,
+  showTyping: true,
+})
+```
+
+## Intelligent Triage
+
+```typescript
+const intelligentTriage = workflow({
+  name: 'intelligent-triage',
+
+  execute: async (ctx, items) => {
+    // AI categorizes and prioritizes
+    const triaged = await step('ai-triage', () =>
+      aiTriage.process(items)
+    )
+
+    // Group by confidence
+    const confident = triaged.filter((i) => i.confidence > 0.9)
+    const uncertain = triaged.filter((i) => i.confidence <= 0.9)
+
+    // AI handles confident cases
+    await step('ai-process', () =>
+      Promise.all(confident.map(processAutomatically))
+    )
+
+    // Humans review uncertain cases
+    await step('human-review', () =>
+      human.task({
+        name: 'triage-review',
+        items: uncertain,
+        showAiRecommendation: true,
+      }).request()
+    )
+  },
+})
+```
+
+## Quality Assurance
+
+```typescript
+const qaWorkflow = workflow({
+  name: 'human-ai-qa',
+
+  execute: async (ctx, content) => {
+    // AI performs initial QA
+    const aiQA = await step('ai-qa', () =>
+      aiQualityCheck.check(content)
+    )
+
+    // Human reviews AI findings
+    const humanReview = await step('human-qa', () =>
+      human.task({
+        name: 'qa-review',
+        context: {
+          content,
+          aiFindings: aiQA.issues,
+          aiConfidence: aiQA.confidence,
+        },
+        actions: ['confirm', 'override', 'add-issue'],
+      }).request()
+    )
+
+    // Combine AI and human findings
+    const allIssues = combineFindings(aiQA.issues, humanReview.additions)
+
+    return { issues: allIssues, reviewed: true }
+  },
+})
+```
+
+## Training Humans
+
+```typescript
+const trainingTask = human.task({
+  name: 'training-mode',
+
+  training: {
+    enabled: true,
+
+    // Show correct answers after submission
+    showCorrectAnswer: true,
+
+    // Explain AI reasoning
+    explainReasoning: true,
+
+    // Track learning progress
+    trackProgress: true,
+
+    // Adjust difficulty
+    adaptiveDifficulty: true,
+  },
+})
+```
+
+## Metrics and Analytics
+
+```typescript
+const collaborationMetrics = await human.getCollaborationMetrics({
+  period: 'last-30-days',
+})
+
+console.log(collaborationMetrics)
+// {
+//   aiSuggestionsAccepted: 0.72,
+//   aiSuggestionsEdited: 0.18,
+//   aiSuggestionsRejected: 0.10,
+//   humanCorrections: {
+//     total: 450,
+//     byCategory: { 'tone': 150, 'factual': 100, ... },
+//   },
+//   escalationRate: 0.15,
+//   avgResolutionTime: {
+//     aiOnly: '5m',
+//     humanOnly: '25m',
+//     collaborative: '12m',
+//   },
+//   satisfaction: {
+//     aiOnly: 4.2,
+//     humanOnly: 4.5,
+//     collaborative: 4.7,
+//   },
+// }
+```
+
+## Best Practices
+
+1. **Clear roles** - Define what AI vs human handles
+2. **Seamless handoffs** - Include full context
+3. **Learn from feedback** - Improve AI from corrections
+4. **Trust indicators** - Show AI confidence levels
+5. **Override capability** - Humans can always override
+6. **Measure outcomes** - Track collaborative effectiveness

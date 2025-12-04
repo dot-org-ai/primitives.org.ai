@@ -1,7 +1,0 @@
-{
-  "title": "Agent",
-  "description": "Truly autonomous entities",
-  "root": true,
-  "icon": "Bot",
-  "pages": ["index"]
-}

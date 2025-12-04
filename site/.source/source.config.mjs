@@ -8,7 +8,7 @@ import {
 import { remarkAutoTypeTable, createGenerator } from "fumadocs-typescript";
 var generator = createGenerator();
 var docs = defineDocs({
-  dir: "../content/docs",
+  dir: "../content",
   docs: {
     schema: frontmatterSchema,
     postprocess: {

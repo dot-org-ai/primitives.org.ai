@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
-    "digital-workers": "workspace:*"
+    "digital-workers": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
   "keywords": ["ai", "agents", "autonomous", "primitives"],
   "license": "MIT"

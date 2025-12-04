@@ -1,0 +1,25 @@
+{
+  "title": "Packages",
+  "description": "NPM packages and libraries",
+  "root": true,
+  "icon": "Boxes",
+  "pages": [
+    "index",
+    "---Core---",
+    "ai-functions",
+    "ai-database",
+    "ai-workflows",
+    "autonomous-agents",
+    "human-in-the-loop",
+    "digital-tasks",
+    "---Products---",
+    "digital-products",
+    "services-as-software",
+    "business-as-code",
+    "---Infrastructure---",
+    "language-models",
+    "ai-providers",
+    "digital-workers",
+    "digital-tools"
+  ]
+}

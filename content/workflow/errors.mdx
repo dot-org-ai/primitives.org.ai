@@ -1,0 +1,294 @@
+---
+title: Error Handling
+description: Handle failures and implement recovery strategies
+---
+
+# Error Handling
+
+Workflows provide robust error handling with automatic retries, compensation, and recovery strategies.
+
+## Basic Error Handling
+
+```typescript
+import { workflow, step } from 'ai-workflows'
+
+const safeWorkflow = workflow({
+  name: 'safe-processing',
+  execute: async (ctx, input) => {
+    try {
+      await step('risky', () => riskyOperation(input))
+    } catch (error) {
+      await step('fallback', () => fallbackOperation(input))
+    }
+  },
+})
+```
+
+## Automatic Retries
+
+Configure retry behavior for individual steps:
+
+```typescript
+await step('api-call', () => callExternalAPI(data), {
+  retry: {
+    maxAttempts: 5,
+    backoff: 'exponential',
+    initialDelay: 1000,    // 1 second
+    maxDelay: 60000,       // 1 minute max
+    factor: 2,             // Double each time
+  },
+})
+```
+
+### Backoff Strategies
+
+```typescript
+// Linear backoff: 1s, 2s, 3s, 4s...
+{ backoff: 'linear', initialDelay: 1000 }
+
+// Exponential backoff: 1s, 2s, 4s, 8s...
+{ backoff: 'exponential', initialDelay: 1000, factor: 2 }
+
+// Fixed delay: 5s, 5s, 5s...
+{ backoff: 'fixed', initialDelay: 5000 }
+
+// Custom backoff function
+{ backoff: (attempt) => attempt * 1000 + Math.random() * 500 }
+```
+
+### Retry Conditions
+
+```typescript
+await step('selective-retry', () => operation(), {
+  retry: {
+    maxAttempts: 3,
+    retryIf: (error) => {
+      // Only retry on specific errors
+      return error.code === 'RATE_LIMIT' ||
+             error.code === 'TIMEOUT' ||
+             error.status >= 500
+    },
+  },
+})
+```
+
+## Compensation (Sagas)
+
+Undo completed steps when later steps fail:
+
+```typescript
+const orderWorkflow = workflow({
+  name: 'order-saga',
+  execute: async (ctx, order) => {
+    // Each step defines its compensation
+    const reservation = await step(
+      'reserve-inventory',
+      () => reserveInventory(order.items),
+      {
+        compensate: (result) => releaseInventory(result.reservationId),
+      }
+    )
+
+    const payment = await step(
+      'charge-payment',
+      () => chargePayment(order.payment),
+      {
+        compensate: (result) => refundPayment(result.transactionId),
+      }
+    )
+
+    // If shipping fails, previous steps are compensated automatically
+    await step('ship-order', () => shipOrder(order))
+  },
+})
+```
+
+### Manual Compensation
+
+```typescript
+const workflow = workflow({
+  execute: async (ctx, order) => {
+    const payment = await step('charge', () => chargePayment(order))
+
+    try {
+      await step('fulfill', () => fulfillOrder(order))
+    } catch (error) {
+      // Manual compensation
+      await step('refund', () => refundPayment(payment.transactionId))
+      throw error  // Re-throw to mark workflow as failed
+    }
+  },
+})
+```
+
+## Error Types
+
+### Workflow Errors
+
+```typescript
+import { WorkflowError, StepError, TimeoutError } from 'ai-workflows'
+
+try {
+  await workflow.run(input)
+} catch (error) {
+  if (error instanceof TimeoutError) {
+    console.log('Workflow timed out')
+  } else if (error instanceof StepError) {
+    console.log(`Step "${error.stepName}" failed:`, error.cause)
+  } else if (error instanceof WorkflowError) {
+    console.log('Workflow failed:', error.message)
+  }
+}
+```
+
+### Custom Errors
+
+```typescript
+import { WorkflowError } from 'ai-workflows'
+
+class PaymentError extends WorkflowError {
+  constructor(message: string, public transactionId: string) {
+    super(message, 'PAYMENT_ERROR')
+  }
+}
+
+// Throw in step
+await step('payment', async () => {
+  const result = await processPayment(order)
+  if (!result.success) {
+    throw new PaymentError('Payment declined', result.transactionId)
+  }
+  return result
+})
+```
+
+## Dead Letter Queue
+
+Handle permanently failed workflows:
+
+```typescript
+const workflow = workflow({
+  name: 'order-processing',
+
+  onFailed: async (ctx, error) => {
+    // Send to dead letter queue for manual review
+    await sendToDeadLetterQueue({
+      workflowId: ctx.id,
+      input: ctx.input,
+      error: error.message,
+      stack: error.stack,
+    })
+
+    // Notify operations team
+    await notifyOps({
+      type: 'workflow-failed',
+      workflow: ctx.name,
+      id: ctx.id,
+    })
+  },
+
+  execute: async (ctx, input) => {
+    // ... workflow logic
+  },
+})
+```
+
+## Circuit Breaker
+
+Prevent cascade failures:
+
+```typescript
+import { circuitBreaker } from 'ai-workflows'
+
+const protectedCall = circuitBreaker({
+  name: 'external-api',
+  threshold: 5,           // Open after 5 failures
+  timeout: 30000,         // Stay open for 30 seconds
+  halfOpenRequests: 3,    // Test with 3 requests
+})
+
+await step('api-call', () =>
+  protectedCall(() => callExternalAPI(data))
+)
+```
+
+## Workflow Recovery
+
+### Resume Failed Workflow
+
+```typescript
+// Get failed workflow
+const failed = await workflow.get('wf_123')
+
+// Retry from failed step
+await failed.retry()
+
+// Or retry from specific step
+await failed.retry({ fromStep: 'payment' })
+```
+
+### Skip Failed Step
+
+```typescript
+// Skip problematic step and continue
+await failed.skip('problematic-step', {
+  mockResult: { status: 'skipped' },
+})
+```
+
+## Error Boundaries
+
+Isolate failures within workflow sections:
+
+```typescript
+const workflow = workflow({
+  execute: async (ctx, data) => {
+    // Critical section - failures propagate
+    await step('critical', () => criticalOperation())
+
+    // Optional section - failures are contained
+    try {
+      await step('optional-enhancement', () => enhance(data))
+    } catch {
+      // Log but continue
+      ctx.log.warn('Enhancement failed, continuing without')
+    }
+
+    // More critical work
+    await step('finalize', () => finalize(data))
+  },
+})
+```
+
+## Timeout Handling
+
+```typescript
+const workflow = workflow({
+  name: 'time-sensitive',
+  timeout: '1h',  // Overall workflow timeout
+
+  execute: async (ctx, input) => {
+    try {
+      await step('long-operation', () => longOperation(), {
+        timeout: '10m',
+      })
+    } catch (error) {
+      if (error.code === 'TIMEOUT') {
+        // Handle timeout specifically
+        await step('timeout-fallback', () => timeoutFallback())
+      } else {
+        throw error
+      }
+    }
+  },
+})
+```
+
+## Best Practices
+
+1. **Be specific with retries** - Don't retry non-transient errors
+2. **Use idempotent operations** - Safe to retry without side effects
+3. **Define compensations** - Clean up resources on failure
+4. **Log errors contextually** - Include workflow and step context
+5. **Set appropriate timeouts** - Prevent indefinite hangs
+6. **Monitor failure rates** - Alert on unusual patterns

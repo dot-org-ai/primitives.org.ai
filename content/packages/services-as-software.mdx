@@ -1,0 +1,42 @@
+---
+title: services-as-software
+description: AI delivering work traditionally performed by humans
+---
+
+```bash
+npm install services-as-software
+```
+
+Package AI capabilities as callable services with SLAs and pricing.
+
+```typescript
+import { service, sla, pricing } from 'services-as-software'
+
+const taxPrep = service({
+  name: 'tax-preparation',
+  description: 'AI-powered tax preparation service',
+  implementation: taxPrepWorkflow,
+  sla: sla({
+    responseTime: '24h',
+    accuracy: 0.99,
+  }),
+  pricing: pricing({
+    base: 49,
+    perComplexity: 10,
+  }),
+})
+```
+
+## Features
+
+- SLA definitions and monitoring
+- Usage-based pricing
+- Quality guarantees
+- Human escalation
+- Audit trails
+
+## Related
+
+- [Service Primitive](/service) — Full documentation
+- [ai-workflows](/packages/ai-workflows) — Service implementations
+- [business-as-code](/packages/business-as-code) — Business integration

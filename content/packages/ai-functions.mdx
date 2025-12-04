@@ -1,0 +1,49 @@
+---
+title: ai-functions
+description: Call AI like a function—no prompts, no configuration
+---
+
+```bash
+npm install ai-functions
+```
+
+The foundation package. Provides tagged template literals for calling AI naturally.
+
+```typescript
+import { ai, list, is, code } from 'ai-functions'
+
+const summary = await ai`summarize ${article}`
+const ideas = await list`blog post ideas about ${topic}`
+const isSpam = await is`${message} spam?`
+const fn = await code`function to calculate fibonacci`
+```
+
+## Exports
+
+| Export | Description |
+|--------|-------------|
+| `ai` | Text generation |
+| `generate` | Structured generation with schema |
+| `write` | Long-form content |
+| `summarize` | Summarization |
+| `list` | Generate a list |
+| `lists` | Generate multiple lists |
+| `extract` | Extract structured data |
+| `is` | Boolean classification |
+| `decide` | Multi-option decision |
+| `code` | Code generation |
+| `diagram` | Diagram generation |
+| `image` | Image generation |
+| `video` | Video generation |
+| `do` | Agentic single-pass |
+| `research` | Web research |
+| `read` | Read URL content |
+| `browse` | Browser automation |
+| `ask` | Human input |
+| `approve` | Human approval |
+| `review` | Human review |
+
+## Related
+
+- [Functions](/functions) — Full documentation
+- [Function Primitive](/function) — The Function abstraction

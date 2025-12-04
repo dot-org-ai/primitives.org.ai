@@ -1,0 +1,48 @@
+---
+title: Packages
+description: NPM packages implementing the Primitives.org.ai abstractions
+---
+
+All packages work together seamlessly. Install what you need.
+
+## Core
+
+| Package | Description | Primitive |
+|---------|-------------|-----------|
+| [ai-functions](/packages/ai-functions) | Call AI like a function | [Function](/function) |
+| [ai-database](/packages/ai-database) | Schema-first with vectors | [Database](/database) |
+| [ai-workflows](/packages/ai-workflows) | Durable execution | [Workflow](/workflow) |
+| [autonomous-agents](/packages/autonomous-agents) | Agents with identity | [Agent](/agent) |
+| [human-in-the-loop](/packages/human-in-the-loop) | Human integration | [Human](/human) |
+| [digital-tasks](/packages/digital-tasks) | Task management | [Task](/task) |
+
+## Products
+
+| Package | Description | Primitive |
+|---------|-------------|-----------|
+| [digital-products](/packages/digital-products) | Compose into products | [Product](/product) |
+| [services-as-software](/packages/services-as-software) | AI-delivered services | [Service](/service) |
+| [business-as-code](/packages/business-as-code) | Business processes | [Business](/business) |
+
+## Infrastructure
+
+| Package | Description |
+|---------|-------------|
+| [language-models](/packages/language-models) | Unified LLM interface |
+| [ai-providers](/packages/ai-providers) | Provider integrations |
+| [digital-workers](/packages/digital-workers) | Worker execution |
+| [digital-tools](/packages/digital-tools) | Tools for agents |
+
+## Quick Start
+
+```bash
+npm install ai-functions
+```
+
+```typescript
+import { ai, list, is } from 'ai-functions'
+
+const summary = await ai`summarize ${article}`
+const ideas = await list`blog post ideas`
+const spam = await is`${message} spam?`
+```

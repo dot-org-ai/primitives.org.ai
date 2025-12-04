@@ -2,15 +2,14 @@
  * AI() and ai() - Core AI function constructors
  *
  * These provide the main entry points for AI-powered functions,
- * with full RPC promise pipelining support via capnweb.
+ * with full RPC promise pipelining support via rpc.do.
  */
 
-import { RpcTarget } from 'capnweb'
+import { RpcTarget, createRPCSession, type RPCSessionOptions } from 'rpc.do'
 
 // Use Promise as RpcPromise for type definitions
 // The actual RPC layer handles pipelining transparently
 type RpcPromise<T> = Promise<T>
-import { createRPCSession, type RPCSessionOptions } from './rpc/session.js'
 import { generateObject } from './generate.js'
 import type { SimpleSchema } from './schema.js'
 import type { LanguageModel } from 'ai'

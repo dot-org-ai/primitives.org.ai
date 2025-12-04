@@ -1,0 +1,376 @@
+---
+title: Reviews
+description: Human review cycles for AI outputs and quality assurance
+---
+
+# Review Cycles
+
+Human review enables quality assurance, feedback loops, and iterative refinement of AI-generated outputs.
+
+## Basic Review
+
+```typescript
+import { human } from 'human-in-the-loop'
+
+const review = human.review({
+  name: 'content-review',
+  description: 'Review AI-generated content',
+  assignTo: { role: 'editor' },
+
+  actions: ['approve', 'request-changes', 'reject'],
+})
+
+const result = await review.request({
+  content: aiGeneratedContent,
+  context: { targetAudience, guidelines },
+})
+```
+
+## Review Configuration
+
+```typescript
+const contentReview = human.review({
+  name: 'editorial-review',
+
+  // What to review
+  subject: 'content',
+  displayAs: 'document',
+
+  // Who reviews
+  assignTo: {
+    role: 'editor',
+    skills: ['content-writing', 'brand-guidelines'],
+  },
+
+  // Available actions
+  actions: [
+    {
+      name: 'approve',
+      description: 'Content is ready to publish',
+    },
+    {
+      name: 'approve-with-edits',
+      description: 'Minor edits made, ready to publish',
+      allowsEdits: true,
+    },
+    {
+      name: 'request-changes',
+      description: 'Significant changes needed',
+      requiresFeedback: true,
+    },
+    {
+      name: 'reject',
+      description: 'Content does not meet standards',
+      requiresReason: true,
+    },
+  ],
+
+  // Review criteria
+  criteria: [
+    'Accuracy of information',
+    'Adherence to brand voice',
+    'Grammar and spelling',
+    'Appropriateness for audience',
+  ],
+})
+```
+
+## Iterative Review
+
+```typescript
+const iterativeReview = human.review({
+  name: 'iterative-content-review',
+
+  // Allow multiple rounds
+  maxIterations: 3,
+
+  onRequestChanges: async (feedback, iteration) => {
+    // Regenerate content based on feedback
+    const revised = await regenerateContent({
+      original: feedback.original,
+      feedback: feedback.comments,
+      iteration,
+    })
+
+    // Submit for re-review
+    return revised
+  },
+
+  onMaxIterations: 'escalate',  // 'escalate' | 'reject' | 'approve-as-is'
+})
+```
+
+## Multi-Reviewer
+
+```typescript
+const multiReview = human.review({
+  name: 'peer-review',
+
+  reviewers: [
+    { role: 'technical-reviewer', weight: 0.5 },
+    { role: 'editorial-reviewer', weight: 0.3 },
+    { role: 'subject-expert', weight: 0.2 },
+  ],
+
+  // How many must review
+  requireReviews: 2,
+
+  // How to combine decisions
+  consensus: {
+    approve: 'majority',   // 'majority' | 'all' | 'any'
+    reject: 'any',
+  },
+})
+```
+
+## Review Workflow
+
+```typescript
+import { workflow } from 'ai-workflows'
+
+const contentPipeline = workflow({
+  name: 'content-creation',
+
+  execute: async (ctx, brief) => {
+    // AI generates draft
+    const draft = await step('generate', () =>
+      generateContent(brief)
+    )
+
+    // First review: Editorial
+    const editorial = await step('editorial-review', () =>
+      human.review({
+        name: 'editorial',
+        assignTo: { role: 'editor' },
+        subject: draft,
+      }).request()
+    )
+
+    let content = editorial.approved ? editorial.content : draft
+
+    // Handle changes if requested
+    while (!editorial.approved && editorial.action === 'request-changes') {
+      content = await step('revise', () =>
+        reviseContent(content, editorial.feedback)
+      )
+
+      editorial = await step('re-review', () =>
+        human.review({
+          name: 'editorial',
+          assignTo: { role: 'editor' },
+          subject: content,
+        }).request()
+      )
+    }
+
+    // Final approval
+    const final = await step('final-approval', () =>
+      human.approval({
+        name: 'publish-approval',
+        assignTo: { role: 'content-lead' },
+        context: { content, reviewHistory: editorial },
+      }).request()
+    )
+
+    if (final.approved) {
+      await step('publish', () => publishContent(content))
+    }
+
+    return { status: final.approved ? 'published' : 'rejected' }
+  },
+})
+```
+
+## Review with Annotations
+
+```typescript
+const annotatedReview = human.review({
+  name: 'document-review',
+
+  // Enable inline annotations
+  annotations: {
+    enabled: true,
+    types: ['comment', 'suggestion', 'highlight', 'strikethrough'],
+  },
+
+  // UI configuration
+  ui: {
+    layout: 'split-view',
+    panels: [
+      { type: 'document-viewer', annotations: true },
+      { type: 'annotation-sidebar' },
+      { type: 'review-form' },
+    ],
+  },
+})
+
+// Access annotations in result
+const result = await annotatedReview.request({ document })
+console.log(result.annotations)
+// [
+//   { type: 'comment', position: { start: 100, end: 150 }, text: 'Clarify this' },
+//   { type: 'suggestion', position: { start: 200, end: 220 }, suggestion: 'Better wording' },
+// ]
+```
+
+## Structured Feedback
+
+```typescript
+const structuredReview = human.review({
+  name: 'code-review',
+
+  feedbackSchema: {
+    overall: {
+      type: 'rating',
+      scale: 5,
+      required: true,
+    },
+    categories: {
+      type: 'ratings',
+      items: ['readability', 'correctness', 'performance', 'security'],
+      scale: 5,
+    },
+    comments: {
+      type: 'textarea',
+      required: { when: 'overall < 3' },
+    },
+    suggestions: {
+      type: 'list',
+      itemType: 'text',
+      maxItems: 10,
+    },
+  },
+})
+```
+
+## Review Criteria
+
+```typescript
+const criteriaReview = human.review({
+  name: 'quality-review',
+
+  // Checklist criteria
+  criteria: [
+    {
+      name: 'accuracy',
+      description: 'Information is factually correct',
+      required: true,
+    },
+    {
+      name: 'completeness',
+      description: 'All required topics are covered',
+      required: true,
+    },
+    {
+      name: 'clarity',
+      description: 'Writing is clear and understandable',
+      required: true,
+    },
+    {
+      name: 'formatting',
+      description: 'Proper formatting and structure',
+      required: false,
+    },
+  ],
+
+  // Must pass all required criteria to approve
+  passRequirement: 'all-required',
+})
+```
+
+## Blind Review
+
+```typescript
+const blindReview = human.review({
+  name: 'blind-peer-review',
+
+  // Hide author identity
+  blind: {
+    hideAuthor: true,
+    hideReviewerFromAuthor: true,
+    revealAfter: 'decision',
+  },
+
+  // Multiple independent reviewers
+  reviewers: {
+    count: 3,
+    independent: true,  // Reviews not shared until all complete
+  },
+})
+```
+
+## Time-Boxed Review
+
+```typescript
+const timeBoxedReview = human.review({
+  name: 'rapid-review',
+
+  // Time constraints
+  timeBox: {
+    target: '15m',      // Target completion time
+    maximum: '1h',      // Hard deadline
+    showTimer: true,
+  },
+
+  // Simplified for speed
+  actions: ['approve', 'flag-for-detailed-review'],
+
+  // Auto-escalate if not completed
+  onTimeout: 'escalate-to-detailed-review',
+})
+```
+
+## Review Feedback to AI
+
+```typescript
+// Feed review feedback back to improve AI
+const feedbackLoop = human.review({
+  name: 'training-review',
+
+  feedbackCapture: {
+    enabled: true,
+    captureEdits: true,
+    captureRatings: true,
+    captureComments: true,
+  },
+
+  onComplete: async (review) => {
+    // Send to training pipeline
+    await trainingPipeline.submit({
+      original: review.original,
+      humanEdited: review.final,
+      feedback: review.feedback,
+      outcome: review.action,
+    })
+  },
+})
+```
+
+## Review Analytics
+
+```typescript
+// Track review metrics
+const metrics = await human.getReviewMetrics({
+  review: 'content-review',
+  period: 'last-30-days',
+})
+
+console.log(metrics)
+// {
+//   totalReviews: 150,
+//   approvalRate: 0.72,
+//   avgIterations: 1.3,
+//   avgReviewTime: '12m',
+//   byReviewer: { ... },
+//   byCategory: { ... },
+// }
+```
+
+## Best Practices
+
+1. **Clear criteria** - Define what good looks like
+2. **Structured feedback** - Make feedback actionable
+3. **Reasonable iterations** - Set max iterations to prevent loops
+4. **Track patterns** - Use analytics to improve AI
+5. **Time expectations** - Set appropriate SLAs
+6. **Blind when appropriate** - Reduce bias in sensitive reviews

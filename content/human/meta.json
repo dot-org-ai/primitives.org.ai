@@ -1,0 +1,14 @@
+{
+  "title": "Human",
+  "description": "Human-in-the-loop integration",
+  "root": true,
+  "icon": "Users",
+  "pages": [
+    "index",
+    "approvals",
+    "reviews",
+    "interfaces",
+    "routing",
+    "collaboration"
+  ]
+}

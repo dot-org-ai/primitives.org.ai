@@ -1,0 +1,79 @@
+---
+title: browse
+description: Browser automation with AI
+---
+
+Browser automation with AI. Navigate, extract, and act. Powered by Stagehand/Browserbase.
+
+## Import
+
+```typescript
+import { browse } from 'ai-functions'
+```
+
+## Syntax
+
+```typescript
+browse`${url}`
+page.extract`query`
+page.do`action`
+```
+
+## Examples
+
+```typescript
+// Open a page
+const page = await browse`https://store.example.com`
+
+// Extract data
+const price = await page.extract`price of the first item`
+const products = await page.extract`all product names and prices${{
+  schema: { name: 'Product name', price: 'Price (number)' }
+}}`
+
+// Perform actions
+await page.do`click on the first product`
+await page.do`add to cart`
+await page.do`proceed to checkout`
+```
+
+## Page Methods
+
+| Method | Description |
+|--------|-------------|
+| `page.extract` | Extract data from page |
+| `page.do` | Perform action on page |
+
+## Complex Workflows
+
+```typescript
+// Competitive analysis
+const page = await browse`https://competitor.com/pricing`
+const pricing = await page.extract`all plan names, prices, and features`
+const analysis = await generate('competitive analysis', {
+  context: { pricing, ourPricing },
+})
+
+// Multi-page navigation
+const page = await browse`https://news.ycombinator.com`
+for await (const title of page.extract`top 10 post titles`) {
+  await page.do`click on "${title}"`
+  const content = await page.extract`main content`
+  const summary = await summarize`${content}`
+  await page.do`go back`
+}
+```
+
+## Extraction with Schema
+
+```typescript
+const page = await browse`https://store.example.com`
+
+const products = await page.extract`all products${{
+  schema: {
+    name: 'Product name',
+    price: 'Price (number)',
+    inStock: 'In stock? (boolean)',
+  }
+}}`
+```

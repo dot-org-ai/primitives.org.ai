@@ -1,0 +1,93 @@
+---
+title: Database
+description: Schema-first database with AI-native primitives
+---
+
+Create, generate, and search by meaning.
+
+```typescript
+import { DB } from 'ai-database'
+
+const db = DB({
+  Post: { title: 'string', author: 'Author.posts' },
+  Author: { name: 'string' }
+})
+
+await db.Post.create({ title: 'Hello World' })
+await db.search('beginner tutorials')
+```
+
+## Why AI-Native?
+
+Traditional databases store and retrieve data exactly as written. An AI-native database understands content:
+
+| Feature | Traditional | AI-Native |
+|---------|-------------|-----------|
+| **Storage** | Store bytes | Store + chunk + embed |
+| **Search** | Keyword matching | Semantic similarity + full-text |
+| **Create** | Insert provided data | Insert or generate from context |
+| **Schema** | Structure data | Structure + guide generation |
+
+## Core Primitives
+
+| Primitive | Description |
+|-----------|-------------|
+| **Things** | Entities with typed schemas |
+| **Relationships** | Bi-directional edges between entities |
+| **Events** | Immutable log of what happened |
+| **Actions** | Durable execution of long-running tasks |
+| **Artifacts** | Cached embeddings and computed content |
+| **Search** | Hybrid vector + full-text |
+
+## Quick Example
+
+```typescript
+import { DB } from 'ai-database'
+
+// Schema descriptions ARE generation prompts
+const db = DB({
+  personas: {
+    name: 'A memorable persona name',
+    description: '2-3 paragraph bio',
+    interests: ['5-7 specific topics'],
+  },
+  posts: {
+    title: 'Engaging post title',
+    content: 'Full markdown post (1500-2500 words)',
+    persona: 'url:personas',
+  },
+})
+
+// Seed personas
+for (const name of ['Builder', 'Coder', 'Founder']) {
+  await db.generate({ type: 'personas', data: { name } })
+}
+
+// Generate posts for each persona
+await db.forEach({ type: 'personas' }, async (persona) => {
+  await db.generate({
+    type: 'posts',
+    count: 10,
+    data: { persona: persona.url },
+  })
+})
+
+// Search across all content
+const results = await db.search('practical AI tips')
+```
+
+## Installation
+
+```bash
+pnpm add ai-database
+```
+
+## Configuration
+
+Set `DATABASE_URL` to configure the storage backend:
+
+```bash
+DATABASE_URL=./content         # filesystem (default)
+DATABASE_URL=sqlite://./data   # SQLite
+DATABASE_URL=:memory:          # in-memory (testing)
+```

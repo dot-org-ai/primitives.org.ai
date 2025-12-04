@@ -20,6 +20,15 @@
     "clean": "rm -rf dist",
     "fetch-models": "npx tsx scripts/fetch-models.ts"
   },
-  "keywords": ["ai", "llm", "language-models", "openrouter", "primitives"],
-  "license": "MIT"
+  "keywords": [
+    "ai",
+    "llm",
+    "language-models",
+    "openrouter",
+    "primitives"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "rpc.do": "^0.1.0"
+  }
 }

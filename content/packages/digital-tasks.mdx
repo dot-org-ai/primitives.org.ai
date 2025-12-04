@@ -1,0 +1,38 @@
+---
+title: digital-tasks
+description: Task management for digital workers
+---
+
+```bash
+npm install digital-tasks
+```
+
+Wrap functions with lifecycle management, status tracking, and dependencies.
+
+```typescript
+import { task, queue } from 'digital-tasks'
+
+const reviewTask = task({
+  name: 'review-document',
+  fn: reviewDocument,
+  assignment: { role: 'reviewer' },
+  dependencies: ['upload-document'],
+})
+
+const q = queue({ concurrency: 5 })
+await q.enqueue(reviewTask, { document })
+```
+
+## Features
+
+- Status tracking (pending, in_progress, completed, failed)
+- Dependencies between tasks
+- Worker assignment and load balancing
+- Priority queues
+- Retry policies
+
+## Related
+
+- [Task Primitive](/task) — Full documentation
+- [ai-functions](/packages/ai-functions) — Task implementations
+- [digital-workers](/packages/digital-workers) — Worker execution

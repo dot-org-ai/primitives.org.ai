@@ -20,8 +20,15 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*"
+    "ai-functions": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
-  "keywords": ["products", "apps", "api", "digital", "primitives"],
+  "keywords": [
+    "products",
+    "apps",
+    "api",
+    "digital",
+    "primitives"
+  ],
   "license": "MIT"
 }
