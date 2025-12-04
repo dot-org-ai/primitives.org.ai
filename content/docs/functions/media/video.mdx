@@ -1,0 +1,76 @@
+---
+title: video
+description: Generate videos from text descriptions
+---
+
+# video
+
+Generate videos from text descriptions.
+
+## Syntax
+
+```typescript
+video`description`
+video`description`(options)
+video(description: string, options?: VideoOptions)
+```
+
+## Examples
+
+```typescript
+import { video } from 'ai-functions'
+
+// Tagged template
+const teaser = await video`product demo for ${productName}`
+const explainer = await video`explain ${concept} with animations`
+
+// With options
+const ad = await video('promotional video for SaaS product', {
+  duration: 30,
+  aspect: '16:9',
+  style: 'motion graphics',
+})
+
+// With detailed requirements
+const tutorial = await video`coding tutorial${{
+  topic: 'Building REST APIs',
+  duration: 60,
+  style: 'screen recording with voiceover',
+  chapters: ['Setup', 'Routes', 'Testing'],
+}}`
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `duration` | number | Length in seconds |
+| `aspect` | `'16:9'` \| `'9:16'` \| `'1:1'` | Aspect ratio |
+| `style` | string | Visual style |
+| `format` | string | Output format |
+
+## Use Cases
+
+```typescript
+// Social media
+const teaser = await video`15 second teaser for ${product}${{
+  aspect: '9:16',  // Vertical for TikTok/Reels
+}}`
+
+// Marketing
+const ad = await video`30 second ad for ${campaign}`
+const demo = await video`product demo showing ${features}`
+
+// Content
+const explainer = await video`explain ${concept} simply`
+const intro = await video`channel intro for ${brand}`
+```
+
+## Return Type
+
+Returns a Buffer containing the video data:
+
+```typescript
+const videoBuffer = await video`product demo`
+await fs.writeFile('demo.mp4', videoBuffer)
+```

@@ -1,0 +1,64 @@
+---
+title: generate
+description: The core generation primitive with schema support
+---
+
+# generate
+
+The core primitive. All other functions call `generate` under the hood.
+
+## Syntax
+
+```typescript
+generate(type: string, prompt: string, options?: GenerateOptions)
+```
+
+## Output Types
+
+```typescript
+// JSON (default)
+const analysis = await generate('json', `competitive analysis of ${company}`)
+
+// With schema
+const user = await generate('json', 'fake user profile', {
+  schema: {
+    name: 'Full name',
+    email: 'Email address',
+    age: 'Age in years (number)',
+  },
+})
+
+// Code
+const config = await generate('code', 'webpack config for React', {
+  language: 'javascript',
+})
+
+// Markdown
+const readme = await generate('markdown', `README for ${project}`)
+
+// Other formats
+const deployment = await generate('yaml', `kubernetes deployment for ${app}`)
+const feed = await generate('rss', `feed for ${posts}`)
+```
+
+## Schema Syntax
+
+| Syntax | Type | Example |
+|--------|------|---------|
+| `'description'` | string | `name: 'User name'` |
+| `'desc (number)'` | number | `age: 'Age (number)'` |
+| `'desc (boolean)'` | boolean | `active: 'Active? (boolean)'` |
+| `'opt1 \| opt2'` | enum | `status: 'pending \| done'` |
+| `['description']` | array | `tags: ['List of tags']` |
+| `{ nested }` | object | `address: { city: '...' }` |
+
+## Built-in Mappings
+
+```typescript
+// Convenience functions use generate:
+write(prompt)      → generate('text', prompt)
+code(prompt)       → generate('code', prompt)
+list(prompt)       → generate('list', prompt)
+summarize(prompt)  → generate('summary', prompt)
+diagram(prompt)    → generate('diagram', prompt)
+```

@@ -213,8 +213,21 @@ export type GenerativeOutputType = 'string' | 'object' | 'image' | 'video' | 'au
 
 /**
  * Human interaction channels
+ *
+ * - chat: Real-time messaging (WebSocket, in-app)
+ * - email: Async email communication
+ * - phone: Voice calls
+ * - sms: SMS text messages
+ * - workspace: Team collaboration platforms (Slack, Teams, Discord)
+ * - web: Web-based interface (browser, web app)
  */
-export type HumanChannel = 'slack' | 'email' | 'web' | 'sms' | 'custom'
+export type HumanChannel = 'chat' | 'email' | 'phone' | 'sms' | 'workspace' | 'web'
+
+/**
+ * Legacy channel type for backwards compatibility
+ * @deprecated Use HumanChannel instead
+ */
+export type LegacyHumanChannel = 'slack' | 'email' | 'web' | 'sms' | 'custom'
 
 /**
  * Schema limitations that apply across providers
@@ -430,7 +443,7 @@ export interface AgenticExecutionState {
  *     approved: 'Whether the expense was approved (boolean)',
  *     notes: 'Any notes from the approver',
  *   },
- *   channel: 'slack',
+ *   channel: 'workspace',
  *   instructions: 'Review the expense request and approve or reject it.',
  * })
  * ```

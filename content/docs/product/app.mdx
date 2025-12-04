@@ -1,0 +1,188 @@
+---
+title: App
+description: Define interactive applications
+---
+
+# App
+
+The `App()` function defines interactive user-facing applications with routes, state management, and authentication.
+
+## Basic Usage
+
+```typescript
+import { App, Route, State, Auth } from 'digital-products'
+
+const myApp = App({
+  id: 'my-app',
+  name: 'My App',
+  description: 'A web application',
+  version: '1.0.0',
+  framework: 'react',
+})
+```
+
+## Routes
+
+Define application routes:
+
+```typescript
+const myApp = App({
+  id: 'my-app',
+  name: 'My App',
+  framework: 'react',
+  routes: [
+    Route('/', 'Home'),
+    Route('/about', 'About'),
+    Route('/users/:id', 'UserDetail', {
+      meta: { title: 'User Profile' },
+    }),
+    Route('/dashboard', 'Dashboard', {
+      meta: { requiresAuth: true },
+    }),
+  ],
+})
+```
+
+### Route Helper
+
+```typescript
+Route(path, component, options?)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `path` | string | URL path pattern |
+| `component` | string | Component name |
+| `options.meta` | object | Route metadata |
+
+## State Management
+
+Configure state management:
+
+```typescript
+const myApp = App({
+  id: 'my-app',
+  name: 'My App',
+  framework: 'react',
+  state: State({
+    library: 'zustand',  // or 'redux', 'jotai', 'recoil'
+    schema: {
+      user: 'Current user object',
+      settings: 'App settings object',
+      cart: ['Array of cart items'],
+    },
+    persistence: {
+      type: 'local',  // or 'session', 'none'
+      key: 'app-state',
+    },
+  }),
+})
+```
+
+### State Libraries
+
+| Library | Description |
+|---------|-------------|
+| `zustand` | Lightweight state management |
+| `redux` | Predictable state container |
+| `jotai` | Primitive and flexible state |
+| `recoil` | Facebook's state management |
+
+## Authentication
+
+Add authentication:
+
+```typescript
+const myApp = App({
+  id: 'my-app',
+  name: 'My App',
+  framework: 'react',
+  auth: Auth({
+    provider: 'clerk',  // or 'auth0', 'firebase', 'supabase'
+    protectedRoutes: ['/dashboard', '/profile', '/settings'],
+    redirectTo: '/login',
+  }),
+})
+```
+
+### Auth Providers
+
+| Provider | Description |
+|----------|-------------|
+| `clerk` | Modern auth platform |
+| `auth0` | Identity platform |
+| `firebase` | Google auth service |
+| `supabase` | Open source auth |
+| `nextauth` | Next.js authentication |
+
+## Complete Example
+
+```typescript
+import { App, Route, State, Auth } from 'digital-products'
+
+const dashboard = App({
+  id: 'dashboard-app',
+  name: 'Analytics Dashboard',
+  description: 'Real-time analytics for your business',
+  version: '2.0.0',
+  framework: 'react',
+
+  routes: [
+    Route('/', 'Home'),
+    Route('/login', 'Login'),
+    Route('/dashboard', 'Dashboard'),
+    Route('/reports', 'Reports'),
+    Route('/reports/:id', 'ReportDetail'),
+    Route('/settings', 'Settings'),
+  ],
+
+  state: State({
+    library: 'zustand',
+    schema: {
+      user: 'Current user object',
+      reports: ['Array of report objects'],
+      filters: {
+        dateRange: 'Selected date range',
+        metrics: ['Selected metrics'],
+      },
+    },
+    persistence: {
+      type: 'local',
+      key: 'dashboard-state',
+    },
+  }),
+
+  auth: Auth({
+    provider: 'clerk',
+    protectedRoutes: ['/dashboard', '/reports', '/settings'],
+    redirectTo: '/login',
+  }),
+})
+```
+
+## Framework Support
+
+| Framework | Features |
+|-----------|----------|
+| `react` | Full support |
+| `vue` | Full support |
+| `svelte` | Full support |
+| `solid` | Full support |
+| `next` | SSR + React |
+| `nuxt` | SSR + Vue |
+
+## Type Definition
+
+```typescript
+interface AppDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  framework?: 'react' | 'vue' | 'svelte' | 'solid' | 'next' | 'nuxt'
+  routes?: RouteDefinition[]
+  state?: StateDefinition
+  auth?: AuthDefinition
+  metadata?: Record<string, unknown>
+}
+```

@@ -1,0 +1,19 @@
+{
+  "title": "Functions",
+  "description": "Call AI like a function. No prompts. No configuration.",
+  "root": true,
+  "icon": "Function",
+  "pages": [
+    "index",
+    "types",
+    "generation",
+    "classification",
+    "lists",
+    "code",
+    "media",
+    "agentic",
+    "defining",
+    "patterns",
+    "api"
+  ]
+}

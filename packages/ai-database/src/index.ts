@@ -40,7 +40,46 @@ export type {
   ListOptions,
   SearchOptions,
   InferEntity,
+  // Noun & Verb semantic types
+  Noun,
+  NounProperty,
+  NounRelationship,
+  Verb,
+  TypeMeta,
+  // Natural Language Query types
+  NLQueryResult,
+  NLQueryFn,
+  NLQueryGenerator,
+  NLQueryContext,
+  NLQueryPlan,
 } from './schema.js'
 
-export { setProvider, parseSchema } from './schema.js'
-export { MemoryProvider, createMemoryProvider } from './memory-provider.js'
+export {
+  // Configuration
+  setProvider,
+  setNLQueryGenerator,
+  // Schema Definition
+  defineNoun,
+  defineVerb,
+  nounToSchema,
+  Verbs,
+  // AI Inference
+  conjugate,
+  pluralize,
+  singularize,
+  inferNoun,
+  Type,
+} from './schema.js'
+
+export {
+  MemoryProvider,
+  createMemoryProvider,
+  Semaphore,
+} from './memory-provider.js'
+
+export type {
+  Event,
+  Action,
+  Artifact,
+  MemoryProviderOptions,
+} from './memory-provider.js'

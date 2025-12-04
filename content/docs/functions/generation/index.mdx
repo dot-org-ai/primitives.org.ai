@@ -1,0 +1,51 @@
+---
+title: Generation
+description: Core text generation functions
+---
+
+# Generation Functions
+
+The foundational functions for generating text content.
+
+## Functions
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `ai` | string | Simplest way to call AI |
+| `generate` | T | Core primitive with schema |
+| `write` | string | Generate formatted text |
+| `summarize` | string | Condense text to key points |
+
+## Quick Examples
+
+```typescript
+import { ai, generate, write, summarize } from 'ai-functions'
+
+// ai - simple string generation
+const explanation = await ai`explain ${topic} to a 5 year old`
+
+// generate - structured output
+const user = await generate('json', 'fake user', {
+  schema: { name: 'Full name', email: 'Email', age: 'Age (number)' }
+})
+
+// write - formatted content
+const email = await write`professional email to ${recipient} about ${subject}`
+
+// summarize - condense text
+const summary = await summarize`${longArticle}`
+```
+
+## generate is the Core
+
+All other functions use `generate` under the hood:
+
+```typescript
+// These are equivalent:
+await ai`explain ${topic}`
+await generate('text', `explain ${topic}`)
+
+// And these:
+await write`blog post about ${topic}`
+await generate('markdown', `blog post about ${topic}`)
+```

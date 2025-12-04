@@ -1,0 +1,7 @@
+{
+  "title": "Task",
+  "description": "Units of work for humans and AI",
+  "root": true,
+  "icon": "CheckSquare",
+  "pages": ["index"]
+}

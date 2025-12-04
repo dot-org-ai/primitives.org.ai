@@ -1,0 +1,18 @@
+{
+  "title": "Product",
+  "description": "Compose primitives into products",
+  "root": true,
+  "icon": "Package",
+  "pages": [
+    "index",
+    "app",
+    "api",
+    "content",
+    "data",
+    "dataset",
+    "site",
+    "mcp",
+    "sdk",
+    "registry"
+  ]
+}

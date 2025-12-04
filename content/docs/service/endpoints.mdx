@@ -1,0 +1,285 @@
+---
+title: Endpoints
+description: Define service endpoints
+---
+
+# Endpoints
+
+Endpoints define how clients interact with your service. Use HTTP method helpers for a clean, declarative API.
+
+## HTTP Method Helpers
+
+```typescript
+import { POST, GET, PUT, DELETE, PATCH } from 'services-as-software'
+```
+
+| Method | Description |
+|--------|-------------|
+| `POST()` | Create resources, submit data |
+| `GET()` | Retrieve resources |
+| `PUT()` | Replace resources |
+| `PATCH()` | Update resources |
+| `DELETE()` | Remove resources |
+
+## Basic Endpoint
+
+```typescript
+import { Service, POST } from 'services-as-software'
+
+const service = Service({
+  name: 'my-service',
+  endpoints: [
+    POST({
+      name: 'process',
+      path: '/process',
+      handler: async (input, context) => {
+        return { processed: true }
+      },
+    }),
+  ],
+})
+```
+
+## Endpoint Properties
+
+```typescript
+POST({
+  name: 'endpoint-name',       // Identifier
+  path: '/path',               // URL path
+  handler: async (input, context) => {
+    // Implementation
+    return result
+  },
+  rateLimit: {                 // Optional rate limiting
+    requests: 100,
+    window: 60,
+  },
+  auth: true,                  // Require authentication
+  description: 'What it does', // Documentation
+})
+```
+
+## Handler Function
+
+The handler receives two parameters:
+
+```typescript
+handler: async (input, context) => {
+  // input - Request body/params
+  // context - Request context (user, headers, etc.)
+
+  return { result: 'data' }
+}
+```
+
+### Input
+
+Contains the request data:
+
+```typescript
+POST({
+  name: 'translate',
+  handler: async (input) => {
+    const { text, targetLanguage } = input
+    // Process input
+    return { translated: '...' }
+  },
+})
+```
+
+### Context
+
+Contains request metadata:
+
+```typescript
+POST({
+  name: 'protected',
+  handler: async (input, context) => {
+    const { user, headers, ip } = context
+
+    if (!user) {
+      throw new Error('Unauthorized')
+    }
+
+    return { userId: user.id }
+  },
+})
+```
+
+## Multiple Endpoints
+
+```typescript
+const apiService = Service({
+  name: 'api-service',
+  endpoints: [
+    GET({
+      name: 'list',
+      path: '/items',
+      handler: async () => {
+        return { items: await db.items.findMany() }
+      },
+    }),
+
+    GET({
+      name: 'get',
+      path: '/items/:id',
+      handler: async ({ id }) => {
+        return await db.items.findById(id)
+      },
+    }),
+
+    POST({
+      name: 'create',
+      path: '/items',
+      handler: async (data) => {
+        return await db.items.create(data)
+      },
+    }),
+
+    PUT({
+      name: 'update',
+      path: '/items/:id',
+      handler: async ({ id, ...data }) => {
+        return await db.items.update(id, data)
+      },
+    }),
+
+    DELETE({
+      name: 'delete',
+      path: '/items/:id',
+      handler: async ({ id }) => {
+        await db.items.delete(id)
+        return { deleted: true }
+      },
+    }),
+  ],
+})
+```
+
+## Rate Limiting
+
+Add rate limits per endpoint:
+
+```typescript
+POST({
+  name: 'expensive-operation',
+  path: '/generate',
+  rateLimit: {
+    requests: 10,    // Max requests
+    window: 60,      // Per 60 seconds
+  },
+  handler: async (input) => {
+    // Rate-limited operation
+  },
+})
+```
+
+## Authentication
+
+Require authentication:
+
+```typescript
+POST({
+  name: 'protected',
+  path: '/private',
+  auth: true,
+  handler: async (input, context) => {
+    // context.user is guaranteed to exist
+    return { userId: context.user.id }
+  },
+})
+```
+
+## Error Handling
+
+Return errors from handlers:
+
+```typescript
+POST({
+  name: 'validate',
+  handler: async (input) => {
+    if (!input.data) {
+      throw new Error('Data is required')
+    }
+
+    if (!isValid(input.data)) {
+      return {
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid data format',
+        },
+      }
+    }
+
+    return { valid: true }
+  },
+})
+```
+
+## Async Operations
+
+For long-running tasks:
+
+```typescript
+POST({
+  name: 'generate-report',
+  handler: async (input, context) => {
+    // Start async job
+    const jobId = await jobs.create({
+      type: 'report',
+      params: input,
+    })
+
+    return {
+      jobId,
+      status: 'processing',
+      checkUrl: `/jobs/${jobId}`,
+    }
+  },
+})
+
+GET({
+  name: 'check-job',
+  path: '/jobs/:id',
+  handler: async ({ id }) => {
+    const job = await jobs.get(id)
+    return {
+      status: job.status,
+      result: job.result,
+    }
+  },
+})
+```
+
+## Generic Endpoint Helper
+
+For more control, use the generic `Endpoint`:
+
+```typescript
+import { Endpoint } from 'services-as-software'
+
+Endpoint({
+  method: 'POST',
+  name: 'custom',
+  path: '/custom',
+  handler: async (input) => {
+    return { custom: true }
+  },
+})
+```
+
+## Type Definition
+
+```typescript
+interface EndpointConfig {
+  name: string
+  path?: string
+  handler: (input: any, context: Context) => Promise<any>
+  rateLimit?: {
+    requests: number
+    window: number
+  }
+  auth?: boolean
+  description?: string
+}
+```

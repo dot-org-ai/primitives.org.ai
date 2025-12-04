@@ -1,0 +1,44 @@
+---
+title: Code
+description: Code generation and structured output
+---
+
+# Code Functions
+
+Generate code, diagrams, and presentations.
+
+## Functions
+
+| Function | Output | Description |
+|----------|--------|-------------|
+| `code` | string | Generate code in any language |
+| `diagram` | string | Generate diagrams (Mermaid, etc.) |
+| `slides` | string | Generate presentations |
+
+## Quick Examples
+
+```typescript
+import { code, diagram, slides } from 'ai-functions'
+
+// code - any language
+const validator = await code`email validation function`
+const query = await code`SQL: top 10 customers by revenue`
+
+// diagram - flowcharts, ERDs, etc.
+const flow = await diagram`user authentication flow`
+const erd = await diagram`e-commerce database schema`
+
+// slides - presentations
+const pitch = await slides`investor pitch for ${brand}`
+const workshop = await slides`TypeScript workshop`
+```
+
+## Language Support
+
+```typescript
+// Automatically detects or specify explicitly
+const ts = await code`email validator in TypeScript`
+const python = await code`data processing script in Python`
+const sql = await code`query for ${requirement}`
+const css = await code`styles for pricing table`
+```

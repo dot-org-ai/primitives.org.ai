@@ -1,0 +1,29 @@
+---
+title: Media
+description: Generate images and videos
+---
+
+# Media Functions
+
+Generate images and videos from text descriptions.
+
+## Functions
+
+| Function | Output | Description |
+|----------|--------|-------------|
+| `image` | Buffer | Generate images |
+| `video` | Buffer | Generate videos |
+
+## Quick Examples
+
+```typescript
+import { image, video } from 'ai-functions'
+
+// image - static visuals
+const logo = await image`minimalist logo for ${company}`
+const hero = await image`hero image for blog about ${topic}`
+
+// video - motion content
+const teaser = await video`15 second teaser for ${product}`
+const explainer = await video`explain ${concept} with animations`
+```

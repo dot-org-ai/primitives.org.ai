@@ -1,0 +1,71 @@
+---
+title: define
+description: The foundation for creating AI functions
+---
+
+# define
+
+The foundation of ai-functions. Every function is built on `define`.
+
+## Syntax
+
+```typescript
+define(name: string, schema: Schema)
+define(name: string, options: DefineOptions)
+```
+
+## Basic Definition
+
+```typescript
+import { define } from 'ai-functions'
+
+const planTrip = define('planTrip', {
+  destination: 'Travel destination',
+  budget: 'Budget in USD (number)',
+})
+
+await planTrip({ destination: 'Tokyo', budget: 5000 })
+```
+
+## With Output Schema
+
+```typescript
+const planTrip = define('planTrip', {
+  args: {
+    destination: 'Travel destination',
+    budget: 'Budget in USD (number)',
+  },
+  returns: {
+    itinerary: [{
+      day: 'Day number (number)',
+      activities: ['List of activities'],
+      estimatedCost: 'Cost for the day (number)',
+    }],
+    totalCost: 'Total trip cost (number)',
+    tips: ['Travel tips'],
+  },
+})
+```
+
+## With Options
+
+```typescript
+const analyze = define('analyzeCompetitors', {
+  args: { company: 'Company name', market: 'Market segment' },
+  returns: { strengths: ['...'], weaknesses: ['...'] },
+  model: 'claude-opus-4-5',
+  temperature: 0.7,
+  system: 'You are a business analyst.',
+})
+```
+
+## Built-in Functions
+
+The built-in functions are all created with `define`:
+
+```typescript
+// Conceptually:
+is = define('is', { returns: 'boolean' })
+list = define('list', { returns: ['items'] })
+code = define('code', { returns: 'code string' })
+```

@@ -1,0 +1,281 @@
+---
+title: MCP
+description: Define Model Context Protocol servers
+---
+
+# MCP
+
+The `MCP()` function defines Model Context Protocol servers for AI tool integration.
+
+## What is MCP?
+
+Model Context Protocol (MCP) is a standard for connecting AI models to external tools, data sources, and capabilities. MCP servers expose:
+
+- **Tools**: Functions that AI can call
+- **Resources**: Data sources AI can access
+- **Prompts**: Pre-defined prompt templates
+
+## Basic Usage
+
+```typescript
+import { MCP, Tool, Resource, Prompt } from 'digital-products'
+
+const mcpServer = MCP({
+  id: 'my-mcp',
+  name: 'My MCP Server',
+  description: 'Custom MCP server for AI tools',
+  version: '1.0.0',
+  transport: 'stdio',
+})
+```
+
+## Transport Types
+
+| Transport | Description |
+|-----------|-------------|
+| `stdio` | Standard input/output |
+| `http` | HTTP server |
+| `websocket` | WebSocket connection |
+
+## Tools
+
+Define tools that AI can invoke:
+
+```typescript
+import { MCP, Tool } from 'digital-products'
+
+const mcpServer = MCP({
+  id: 'file-tools',
+  name: 'File Tools',
+  version: '1.0.0',
+  transport: 'stdio',
+  tools: [
+    Tool('searchFiles', 'Search for files in the project', {
+      query: 'Search query',
+      path: 'Directory to search in',
+      maxResults: 'Maximum results (number)',
+    }),
+    Tool('readFile', 'Read file contents', {
+      path: 'File path to read',
+    }),
+    Tool('writeFile', 'Write content to file', {
+      path: 'File path to write',
+      content: 'Content to write',
+    }),
+    Tool('listDirectory', 'List directory contents', {
+      path: 'Directory path',
+      recursive: 'Include subdirectories (boolean)',
+    }),
+  ],
+})
+```
+
+### Tool Helper
+
+```typescript
+Tool(name, description, parameters)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | Tool identifier |
+| `description` | string | What the tool does |
+| `parameters` | schema | Input parameters |
+
+## Resources
+
+Expose data sources:
+
+```typescript
+import { MCP, Resource } from 'digital-products'
+
+const mcpServer = MCP({
+  id: 'data-server',
+  name: 'Data Server',
+  version: '1.0.0',
+  transport: 'http',
+  resources: [
+    Resource('file://project', 'Project Files', 'Access to all project files'),
+    Resource('db://users', 'User Database', 'Read-only access to user data'),
+    Resource('api://weather', 'Weather API', 'Current weather information'),
+  ],
+})
+```
+
+### Resource Helper
+
+```typescript
+Resource(uri, name, description)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `uri` | string | Resource URI |
+| `name` | string | Display name |
+| `description` | string | Resource description |
+
+## Prompts
+
+Define reusable prompt templates:
+
+```typescript
+import { MCP, Prompt } from 'digital-products'
+
+const mcpServer = MCP({
+  id: 'prompt-server',
+  name: 'Prompt Server',
+  version: '1.0.0',
+  transport: 'stdio',
+  prompts: [
+    Prompt(
+      'codeReview',
+      'Review code for best practices',
+      'Review the following code for best practices, security issues, and potential improvements:\n\n{{code}}',
+      { code: 'Code to review' }
+    ),
+    Prompt(
+      'summarize',
+      'Summarize text content',
+      'Summarize the following content in {{length}} sentences:\n\n{{content}}',
+      { content: 'Text to summarize', length: 'Number of sentences' }
+    ),
+    Prompt(
+      'translate',
+      'Translate text to another language',
+      'Translate the following text to {{language}}:\n\n{{text}}',
+      { text: 'Text to translate', language: 'Target language' }
+    ),
+  ],
+})
+```
+
+### Prompt Helper
+
+```typescript
+Prompt(name, description, template, parameters)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | Prompt identifier |
+| `description` | string | What the prompt does |
+| `template` | string | Prompt template with `{{vars}}` |
+| `parameters` | schema | Template parameters |
+
+## Complete Example
+
+```typescript
+import { MCP, Tool, Resource, Prompt } from 'digital-products'
+
+const devToolsMCP = MCP({
+  id: 'dev-tools',
+  name: 'Developer Tools MCP',
+  description: 'MCP server for development workflows',
+  version: '1.0.0',
+  transport: 'stdio',
+
+  tools: [
+    Tool('searchCode', 'Search codebase for patterns', {
+      pattern: 'Search pattern (regex)',
+      fileTypes: 'File extensions to search',
+      caseSensitive: 'Case sensitive (boolean)',
+    }),
+    Tool('runTests', 'Run test suite', {
+      path: 'Test path or pattern',
+      coverage: 'Generate coverage (boolean)',
+    }),
+    Tool('formatCode', 'Format code file', {
+      path: 'File to format',
+      config: 'Formatter config',
+    }),
+    Tool('lintCode', 'Lint code for issues', {
+      path: 'Path to lint',
+      fix: 'Auto-fix issues (boolean)',
+    }),
+    Tool('gitStatus', 'Get git repository status', {
+      path: 'Repository path',
+    }),
+    Tool('gitDiff', 'Get git diff', {
+      staged: 'Show staged changes (boolean)',
+    }),
+  ],
+
+  resources: [
+    Resource('file://src', 'Source Code', 'Project source files'),
+    Resource('file://tests', 'Test Files', 'Test suite files'),
+    Resource('file://docs', 'Documentation', 'Project documentation'),
+    Resource('git://log', 'Git History', 'Recent commit history'),
+  ],
+
+  prompts: [
+    Prompt(
+      'reviewPR',
+      'Review a pull request',
+      'Review this pull request:\n\nTitle: {{title}}\n\nDescription: {{description}}\n\nChanges:\n{{diff}}\n\nProvide feedback on code quality, potential issues, and suggestions.',
+      { title: 'PR title', description: 'PR description', diff: 'Code diff' }
+    ),
+    Prompt(
+      'explainCode',
+      'Explain code functionality',
+      'Explain what this code does:\n\n```{{language}}\n{{code}}\n```',
+      { language: 'Programming language', code: 'Code to explain' }
+    ),
+    Prompt(
+      'generateTests',
+      'Generate tests for code',
+      'Generate unit tests for this {{language}} code:\n\n```{{language}}\n{{code}}\n```\n\nUse {{framework}} testing framework.',
+      { language: 'Language', code: 'Code to test', framework: 'Test framework' }
+    ),
+  ],
+})
+```
+
+## Database MCP Server
+
+```typescript
+import { MCP, Tool, Resource } from 'digital-products'
+
+const databaseMCP = MCP({
+  id: 'database-mcp',
+  name: 'Database Tools',
+  description: 'MCP server for database operations',
+  version: '1.0.0',
+  transport: 'http',
+
+  tools: [
+    Tool('query', 'Execute SQL query', {
+      sql: 'SQL query to execute',
+      database: 'Database name',
+    }),
+    Tool('describe', 'Describe table schema', {
+      table: 'Table name',
+      database: 'Database name',
+    }),
+    Tool('listTables', 'List all tables', {
+      database: 'Database name',
+    }),
+  ],
+
+  resources: [
+    Resource('db://postgres/main', 'Main Database', 'Production database'),
+    Resource('db://postgres/analytics', 'Analytics DB', 'Analytics database'),
+  ],
+})
+```
+
+## Type Definition
+
+```typescript
+interface MCPDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  transport?: 'stdio' | 'http' | 'websocket'
+  tools?: ToolDefinition[]
+  resources?: ResourceDefinition[]
+  prompts?: PromptDefinition[]
+  auth?: MCPAuthDefinition
+  metadata?: Record<string, unknown>
+}
+```

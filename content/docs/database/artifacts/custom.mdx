@@ -1,0 +1,210 @@
+---
+title: Custom Artifacts
+description: Store computed content with cache invalidation
+---
+
+# Custom Artifacts
+
+Store any computed content as artifacts with automatic cache invalidation.
+
+## Creating Artifacts
+
+```typescript
+await db.artifact.set(entityId, 'type', data)
+```
+
+### Example: Rendered HTML
+
+```typescript
+const post = await db.Post.get('hello')
+
+// Render and cache
+const html = await renderMarkdown(post.content)
+await db.artifact.set(post.$id, 'html', {
+  content: html,
+  sourceHash: hash(post.content),
+})
+```
+
+### Example: Parsed AST
+
+```typescript
+const code = await db.Code.get('snippet')
+
+const ast = parse(code.content)
+await db.artifact.set(code.$id, 'ast', {
+  tree: ast,
+  sourceHash: hash(code.content),
+})
+```
+
+## Getting Artifacts
+
+```typescript
+const html = await db.artifact.get(post.$id, 'html')
+
+if (html) {
+  return html.content
+} else {
+  // Needs regeneration
+  const rendered = await renderMarkdown(post.content)
+  await db.artifact.set(post.$id, 'html', {
+    content: rendered,
+    sourceHash: hash(post.content),
+  })
+  return rendered
+}
+```
+
+## Source Hash
+
+Track source changes with `sourceHash`:
+
+```typescript
+await db.artifact.set(entityId, 'compiled', {
+  output: compiledCode,
+  sourceHash: hash(sourceCode),  // track source
+})
+
+// Later, check if still valid
+const artifact = await db.artifact.get(entityId, 'compiled')
+const currentHash = hash(entity.content)
+
+if (artifact?.sourceHash !== currentHash) {
+  // Stale, needs regeneration
+}
+```
+
+## Cache Invalidation
+
+Artifacts can be invalidated:
+
+### Manual
+
+```typescript
+// Delete specific artifact
+await db.artifact.delete(entityId, 'html')
+
+// Delete all artifacts for entity
+await db.artifact.delete(entityId)
+```
+
+### Automatic
+
+When entity content changes:
+
+```typescript
+await db.Post.update(post.$id, {
+  content: 'New content',
+})
+
+// Embedding is regenerated
+// Custom artifacts are invalidated (return null)
+```
+
+## Artifact Types
+
+| Type | Use Case |
+|------|----------|
+| `embedding` | Vector embeddings (auto) |
+| `chunks` | Chunked content |
+| `html` | Rendered HTML |
+| `ast` | Parsed syntax tree |
+| `bundle` | Compiled code |
+| Custom | Any string |
+
+## Lazy Generation
+
+Generate on first access:
+
+```typescript
+async function getHtml(postId: string) {
+  // Try cache
+  const cached = await db.artifact.get(postId, 'html')
+  if (cached) return cached.content
+
+  // Generate
+  const post = await db.Post.get(postId)
+  const html = await renderMarkdown(post.content)
+
+  // Cache
+  await db.artifact.set(postId, 'html', {
+    content: html,
+    sourceHash: hash(post.content),
+  })
+
+  return html
+}
+```
+
+## With Events
+
+Regenerate on update:
+
+```typescript
+db.events.on('Post.updated', async (event) => {
+  const post = await db.Post.get(event.url)
+
+  // Regenerate HTML
+  const html = await renderMarkdown(post.content)
+  await db.artifact.set(post.$id, 'html', {
+    content: html,
+    sourceHash: hash(post.content),
+  })
+})
+```
+
+## Bulk Operations
+
+```typescript
+// Regenerate all HTML
+const posts = await db.Post.list()
+
+for (const post of posts) {
+  const html = await renderMarkdown(post.content)
+  await db.artifact.set(post.$id, 'html', {
+    content: html,
+    sourceHash: hash(post.content),
+  })
+}
+```
+
+## Listing Artifacts
+
+```typescript
+// All artifacts for entity
+const artifacts = await db.artifact.list(entityId)
+// ['embedding', 'html', 'ast']
+
+// Check if artifact exists
+const exists = await db.artifact.has(entityId, 'html')
+```
+
+## Metadata
+
+Store metadata with artifacts:
+
+```typescript
+await db.artifact.set(entityId, 'compiled', {
+  output: compiled,
+  sourceHash: hash(source),
+  metadata: {
+    compiler: 'esbuild',
+    version: '0.19.0',
+    duration: 150,
+  },
+})
+```
+
+## TTL (Time-to-Live)
+
+Expire artifacts after time:
+
+```typescript
+await db.artifact.set(entityId, 'preview', {
+  content: previewHtml,
+  ttl: 3600,  // 1 hour
+})
+
+// After 1 hour, artifact.get returns null
+```

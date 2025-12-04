@@ -1,0 +1,256 @@
+---
+title: Providers
+description: Connect to cloud providers
+---
+
+# Providers
+
+Use providers to connect to services across different cloud platforms.
+
+## Basic Usage
+
+```typescript
+import { providers } from 'services-as-software'
+
+const aws = providers.aws({
+  accessKeyId: 'key',
+  secretAccessKey: 'secret',
+  region: 'us-east-1',
+})
+
+const translate = aws.service('translate')
+const result = await translate.do('translate', { text: 'Hello', to: 'es' })
+```
+
+## Built-in Providers
+
+### AWS
+
+```typescript
+const aws = providers.aws({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: 'us-east-1',
+})
+
+// Use AWS services
+const translate = aws.service('translate')
+const comprehend = aws.service('comprehend')
+const textract = aws.service('textract')
+```
+
+### Google Cloud
+
+```typescript
+const gcp = providers.gcp({
+  projectId: process.env.GCP_PROJECT_ID,
+  credentials: JSON.parse(process.env.GCP_CREDENTIALS),
+})
+
+// Use GCP services
+const translate = gcp.service('translate')
+const vision = gcp.service('vision')
+const speech = gcp.service('speech')
+```
+
+### Azure
+
+```typescript
+const azure = providers.azure({
+  subscriptionId: process.env.AZURE_SUBSCRIPTION_ID,
+  tenantId: process.env.AZURE_TENANT_ID,
+  clientId: process.env.AZURE_CLIENT_ID,
+  clientSecret: process.env.AZURE_CLIENT_SECRET,
+})
+
+// Use Azure services
+const cognitive = azure.service('cognitive')
+const translator = azure.service('translator')
+```
+
+## Provider Interface
+
+All providers share a common interface:
+
+```typescript
+interface Provider {
+  service(name: string): ServiceClient
+  list(): string[]
+  health(): Promise<HealthStatus>
+}
+```
+
+### service(name)
+
+Get a client for a specific service:
+
+```typescript
+const translate = provider.service('translate')
+```
+
+### list()
+
+List available services:
+
+```typescript
+const services = provider.list()
+// ['translate', 'comprehend', 'textract', ...]
+```
+
+### health()
+
+Check provider health:
+
+```typescript
+const status = await provider.health()
+// { status: 'healthy', latency: 45 }
+```
+
+## Custom Providers
+
+Create custom providers:
+
+```typescript
+import { Provider } from 'services-as-software'
+
+const myProvider = Provider({
+  name: 'my-provider',
+  baseUrl: 'https://api.myservice.com',
+  auth: {
+    type: 'api-key',
+    credentials: {
+      apiKey: process.env.MY_API_KEY,
+    },
+  },
+  services: {
+    translate: '/v1/translate',
+    summarize: '/v1/summarize',
+    analyze: '/v1/analyze',
+  },
+})
+
+// Use custom provider
+const translate = myProvider.service('translate')
+const result = await translate.do('translate', { text: 'Hello' })
+```
+
+## Multi-Provider Example
+
+Use multiple providers together:
+
+```typescript
+import { providers } from 'services-as-software'
+
+// Configure providers
+const aws = providers.aws({ /* config */ })
+const gcp = providers.gcp({ /* config */ })
+
+// Translation service that falls back between providers
+async function translate(text: string, to: string) {
+  try {
+    // Try AWS first
+    const awsTranslate = aws.service('translate')
+    return await awsTranslate.do('translate', { text, to })
+  } catch (error) {
+    // Fall back to GCP
+    const gcpTranslate = gcp.service('translate')
+    return await gcpTranslate.do('translate', { text, to })
+  }
+}
+```
+
+## Provider Configuration
+
+### Connection Pooling
+
+```typescript
+const aws = providers.aws({
+  accessKeyId: 'key',
+  secretAccessKey: 'secret',
+  region: 'us-east-1',
+  connectionPool: {
+    maxConnections: 10,
+    keepAlive: true,
+  },
+})
+```
+
+### Retry Policy
+
+```typescript
+const gcp = providers.gcp({
+  projectId: 'project-id',
+  credentials: { /* ... */ },
+  retry: {
+    attempts: 3,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+### Timeout Settings
+
+```typescript
+const azure = providers.azure({
+  subscriptionId: 'sub-id',
+  timeout: 30000,  // 30 seconds
+})
+```
+
+## Environment Variables
+
+Recommended environment setup:
+
+```bash
+# AWS
+AWS_ACCESS_KEY_ID=your-key
+AWS_SECRET_ACCESS_KEY=your-secret
+AWS_REGION=us-east-1
+
+# GCP
+GCP_PROJECT_ID=your-project
+GCP_CREDENTIALS='{"type":"service_account",...}'
+
+# Azure
+AZURE_SUBSCRIPTION_ID=your-sub
+AZURE_TENANT_ID=your-tenant
+AZURE_CLIENT_ID=your-client
+AZURE_CLIENT_SECRET=your-secret
+```
+
+## Type Definition
+
+```typescript
+interface ProviderConfig {
+  name?: string
+  baseUrl?: string
+  auth?: AuthConfig
+  services?: Record<string, string>
+  connectionPool?: {
+    maxConnections?: number
+    keepAlive?: boolean
+  }
+  retry?: RetryConfig
+  timeout?: number
+}
+
+interface AWSConfig {
+  accessKeyId: string
+  secretAccessKey: string
+  region: string
+  sessionToken?: string
+}
+
+interface GCPConfig {
+  projectId: string
+  credentials: object
+}
+
+interface AzureConfig {
+  subscriptionId: string
+  tenantId: string
+  clientId: string
+  clientSecret: string
+}
+```

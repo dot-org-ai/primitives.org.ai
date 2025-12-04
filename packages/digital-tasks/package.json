@@ -1,0 +1,33 @@
+{
+  "name": "digital-tasks",
+  "version": "0.0.1",
+  "description": "Task management primitives for digital workers (agents and humans)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./queue": {
+      "import": "./dist/queue.js",
+      "types": "./dist/queue.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "ai-functions": "workspace:*",
+    "digital-tools": "workspace:*",
+    "digital-workers": "workspace:*"
+  },
+  "keywords": ["ai", "tasks", "queue", "workers", "agents", "primitives"],
+  "license": "MIT"
+}

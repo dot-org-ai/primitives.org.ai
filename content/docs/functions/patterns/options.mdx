@@ -1,0 +1,83 @@
+---
+title: Options
+description: Configure model and behavior
+---
+
+# Options
+
+Every function accepts an optional last parameter for configuration.
+
+## Syntax
+
+```typescript
+await function`prompt`(options)
+await function(prompt, options)
+```
+
+## Common Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `model` | string | Model to use |
+| `temperature` | number | Randomness (0-1) |
+| `maxTokens` | number | Max output tokens |
+| `thinking` | string/number | Extended thinking depth |
+
+## Model Selection
+
+```typescript
+// Use specific model
+await is`${claim} factually accurate?`({ model: 'claude-opus-4-5' })
+
+// Fast model for simple tasks
+await summarize`${text}`({ model: 'gemini-3-flash' })
+
+// Powerful model for complex tasks
+await decide`which architecture scales better?`(a, b, {
+  model: 'claude-opus-4-5',
+})
+```
+
+## Extended Thinking
+
+For complex reasoning tasks:
+
+```typescript
+await decide`which architecture is better for scale`(optionA, optionB, {
+  model: 'claude-opus-4-5',
+  thinking: 'high',  // 'low' | 'medium' | 'high' | number
+})
+```
+
+## Temperature
+
+Control randomness:
+
+```typescript
+// Low temperature - deterministic
+await generate('json', 'user profile', { temperature: 0.1 })
+
+// High temperature - creative
+await write`creative story about ${topic}`({ temperature: 0.9 })
+```
+
+## Configuration
+
+```typescript
+import { ai } from 'ai-functions'
+
+// Set default model
+ai.config({ model: 'gpt-5-1' })
+
+// Or per-call
+await ai.summarize({ text: '...' }, { model: 'gemini-3-pro' })
+```
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `AI_GATEWAY_URL` | AI Gateway URL |
+| `AI_GATEWAY_TOKEN` | Gateway auth token |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |

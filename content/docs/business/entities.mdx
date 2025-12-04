@@ -1,0 +1,165 @@
+---
+title: Business Entity
+description: Define your company as code
+---
+
+# Business Entity
+
+The `Business()` function creates a complete business entity with mission, values, and organizational structure.
+
+## Basic Usage
+
+```typescript
+import { Business } from 'business-as-code'
+
+const company = Business({
+  name: 'Acme Corp',
+  description: 'Building the future of widgets',
+  industry: 'Technology',
+  mission: 'To make widgets accessible to everyone',
+  values: ['Innovation', 'Customer Focus', 'Integrity'],
+  targetMarket: 'SMB and Enterprise',
+  foundedAt: new Date('2020-01-01'),
+  teamSize: 50,
+})
+```
+
+## Organizational Structure
+
+Define departments, teams, and reporting hierarchies:
+
+```typescript
+const company = Business({
+  name: 'Acme Corp',
+  structure: {
+    departments: [
+      {
+        name: 'Engineering',
+        head: 'Jane Smith',
+        members: ['Alice', 'Bob', 'Charlie'],
+        budget: 2000000,
+        goals: [
+          { name: 'Ship v2.0', status: 'in-progress', progress: 65 }
+        ],
+      },
+      {
+        name: 'Sales',
+        head: 'John Doe',
+        members: ['David', 'Eve'],
+        budget: 1000000,
+      },
+    ],
+    teams: [
+      {
+        name: 'Platform',
+        lead: 'Alice',
+        members: ['Bob', 'Charlie'],
+        objectives: ['Build scalable infrastructure'],
+      },
+    ],
+    hierarchy: {
+      'CEO': ['CTO', 'CFO', 'COO'],
+      'CTO': ['Engineering Head', 'Product Head'],
+    },
+  },
+})
+```
+
+## Helper Functions
+
+### getTotalBudget
+
+Calculate total budget across all departments:
+
+```typescript
+import { getTotalBudget } from 'business-as-code'
+
+const budget = getTotalBudget(company)
+// 3000000
+```
+
+### getTotalTeamSize
+
+Get total team members from department definitions:
+
+```typescript
+import { getTotalTeamSize } from 'business-as-code'
+
+const size = getTotalTeamSize(company)
+// 5 (from department members)
+```
+
+### getDepartment
+
+Retrieve a specific department:
+
+```typescript
+import { getDepartment } from 'business-as-code'
+
+const engineering = getDepartment(company, 'Engineering')
+// { name: 'Engineering', head: 'Jane Smith', ... }
+```
+
+### getTeam
+
+Retrieve a specific team:
+
+```typescript
+import { getTeam } from 'business-as-code'
+
+const platform = getTeam(company, 'Platform')
+// { name: 'Platform', lead: 'Alice', ... }
+```
+
+### validateBusiness
+
+Validate business definition:
+
+```typescript
+import { validateBusiness } from 'business-as-code'
+
+const errors = validateBusiness(company)
+if (errors.length > 0) {
+  console.error('Invalid business:', errors)
+}
+```
+
+## Type Definition
+
+```typescript
+interface BusinessDefinition {
+  name: string
+  description?: string
+  industry?: string
+  mission?: string
+  values?: string[]
+  targetMarket?: string
+  foundedAt?: Date
+  teamSize?: number
+  structure?: OrganizationalStructure
+  metadata?: Record<string, unknown>
+}
+
+interface OrganizationalStructure {
+  departments?: Department[]
+  hierarchy?: Record<string, string[]>
+  teams?: Team[]
+}
+
+interface Department {
+  name: string
+  description?: string
+  head?: string
+  members?: string[]
+  budget?: number
+  goals?: GoalDefinition[]
+}
+
+interface Team {
+  name: string
+  description?: string
+  lead?: string
+  members?: string[]
+  objectives?: string[]
+}
+```

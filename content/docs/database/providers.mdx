@@ -1,0 +1,186 @@
+---
+title: Providers
+description: Configure storage backends for ai-database
+---
+
+# Providers
+
+ai-database separates the API from storage implementation. Configure your provider via `DATABASE_URL`.
+
+## Configuration
+
+```bash
+# Filesystem (default)
+DATABASE_URL=./content
+
+# SQLite
+DATABASE_URL=sqlite://./data
+
+# Remote Turso
+DATABASE_URL=libsql://your-db.turso.io
+
+# ClickHouse (local chDB)
+DATABASE_URL=chdb://./data
+
+# ClickHouse (remote)
+DATABASE_URL=clickhouse://localhost:8123
+
+# In-memory (testing)
+DATABASE_URL=:memory:
+```
+
+## Built-in Providers
+
+| Provider | Use Case | Storage |
+|----------|----------|---------|
+| `memory` | Testing, development | In-memory |
+| `fs` | Small datasets | Filesystem + .db/ metadata |
+| `sqlite` | Single-node, edge | SQLite/Turso |
+| `clickhouse` | Large scale, analytics | ClickHouse |
+
+## Explicit Provider
+
+```typescript
+import { DB, MemoryProvider, setProvider } from 'ai-database'
+
+// Set global provider
+setProvider(new MemoryProvider())
+
+// Or use memory option
+const db = DB({ memory: true })
+```
+
+## Provider Interface
+
+Implement this interface to create custom providers:
+
+```typescript
+interface DBProvider {
+  // Things
+  get(type: string, id: string): Promise<Record | null>
+  list(type: string, options?: ListOptions): Promise<Record[]>
+  create(type: string, id: string | undefined, data: Record): Promise<Record>
+  update(type: string, id: string, data: Record): Promise<Record>
+  delete(type: string, id: string): Promise<boolean>
+
+  // Search
+  search(type: string, query: string, options?: SearchOptions): Promise<Record[]>
+
+  // Relationships
+  relate(fromType: string, fromId: string, relation: string, toType: string, toId: string): Promise<void>
+  related(type: string, id: string, relation: string): Promise<Record[]>
+  unrelate(fromType: string, fromId: string, relation: string, toType: string, toId: string): Promise<void>
+}
+```
+
+## Filesystem Provider
+
+The default provider stores data as MDX files with a `.db/` metadata folder:
+
+```
+content/
+├── posts/
+│   ├── hello-world.mdx
+│   └── getting-started.mdx
+├── authors/
+│   └── john.mdx
+└── .db/
+    ├── index.sqlite    # metadata, relationships
+    └── vectors/        # embeddings
+```
+
+### File Count Warning
+
+When approaching 10,000 files, the database suggests upgrading:
+
+```
+⚠️ You have 12,345 MDX files. Consider upgrading to ClickHouse:
+   DATABASE_URL=chdb://./data/clickhouse
+```
+
+## SQLite Provider
+
+For single-node deployments. Supports local SQLite or remote Turso:
+
+```bash
+# Local
+DATABASE_URL=sqlite://./data
+
+# Turso (distributed SQLite)
+DATABASE_URL=libsql://your-db.turso.io
+```
+
+Stores in `.db/index.sqlite`:
+
+```
+data/
+├── .db/
+│   └── index.sqlite    # all data
+└── ...
+```
+
+## ClickHouse Provider
+
+For large-scale deployments and analytics:
+
+```bash
+# Local (chDB embedded)
+DATABASE_URL=chdb://./data
+
+# Remote
+DATABASE_URL=clickhouse://host:8123
+```
+
+### When to Use ClickHouse
+
+- More than 10,000 records
+- Heavy analytics queries
+- Need columnar storage benefits
+- Distributed deployments
+
+## Embedding Models
+
+Configure embedding model per database or per type:
+
+```typescript
+const db = DB({
+  // Database default
+  model: 'google/gemini-embedding-001',
+  dimensions: 3072,
+
+  types: {
+    posts: {
+      // Type-specific override
+      model: 'baai/bge-m3',
+      dimensions: 1024,
+      // ...schema
+    },
+  },
+})
+```
+
+### Available Models
+
+| Model | Dimensions | Best For |
+|-------|------------|----------|
+| `google/gemini-embedding-001` | 3072 | General purpose (default) |
+| `baai/bge-m3` | 1024 | Multilingual |
+| `openai/text-embedding-3-large` | 3072 | OpenAI ecosystem |
+| `openai/text-embedding-3-small` | 512 | Cost-sensitive |
+
+## Evaluating Models
+
+Test retrieval accuracy across configurations:
+
+```typescript
+const configs = [
+  { model: 'google/gemini-embedding-001', dimensions: 3072 },
+  { model: 'baai/bge-m3', dimensions: 1024 },
+]
+
+const databases = configs.map((config, i) =>
+  DB({ ns: `eval-${i}`, ...config, memory: true })
+)
+
+// Seed with same content, run queries, compare accuracy
+```

@@ -2,154 +2,82 @@
  * Question/answer functionality for digital workers
  */
 
-import { define, generateObject } from 'ai-functions'
+import { generateObject } from 'ai-functions'
 import type { SimpleSchema } from 'ai-functions'
-import type { AskResult, AskOptions } from './types.js'
+import type {
+  Worker,
+  Team,
+  WorkerRef,
+  ActionTarget,
+  ContactChannel,
+  AskResult,
+  AskOptions,
+  Contacts,
+} from './types.js'
 
 /**
- * Ask a question to a human or AI agent
+ * Ask a question to a worker or team
  *
- * Routes questions through appropriate channels and handles
- * both structured and unstructured responses.
+ * Routes questions through the specified channel and waits for a response.
  *
+ * @param target - The worker or team to ask
  * @param question - The question to ask
- * @param options - Ask options (channel, who to ask, schema, etc.)
+ * @param options - Ask options
  * @returns Promise resolving to the answer
  *
  * @example
  * ```ts
  * // Ask a simple question
- * const result = await ask('What is the company holiday policy?', {
- *   channel: 'slack',
- *   askee: 'hr@company.com',
+ * const result = await ask(alice, 'What is the company holiday policy?', {
+ *   via: 'slack',
  * })
  * console.log(result.answer)
- * ```
  *
- * @example
- * ```ts
  * // Ask with structured response
- * const result = await ask('What are our Q1 priorities?', {
- *   channel: 'email',
- *   askee: 'ceo@company.com',
+ * const result = await ask(ceo, 'What are our Q1 priorities?', {
+ *   via: 'email',
  *   schema: {
  *     priorities: ['List of priorities'],
  *     reasoning: 'Why these priorities were chosen',
  *   },
  * })
- * console.log(result.answer) // { priorities: [...], reasoning: '...' }
  * ```
  */
 export async function ask<T = string>(
+  target: ActionTarget,
   question: string,
   options: AskOptions = {}
 ): Promise<AskResult<T>> {
-  const {
-    channel = 'web',
-    askee,
-    timeout,
-    schema,
-    context,
-  } = options
+  const { via, schema, timeout, context } = options
 
-  // If a schema is provided, use structured response
-  if (schema) {
-    // Use human function for structured input
-    const askFn = define.human({
-      name: 'askQuestion',
-      description: 'Ask a question and get a structured response',
-      args: {
-        question: 'The question to ask',
-        contextInfo: 'Additional context for answering',
-      },
-      returnType: schema,
-      channel,
-      instructions: `Please answer the following question:
+  // Resolve target to get contacts and recipient info
+  const { contacts, recipient } = resolveTarget(target)
 
-${question}
+  // Determine which channel to use
+  const channel = resolveChannel(via, contacts)
 
-${context ? `Context: ${JSON.stringify(context, null, 2)}` : ''}
-
-Provide your answer in the requested format.`,
-      assignee: askee,
-      timeout,
-    })
-
-    const response = await askFn.call({
-      question,
-      contextInfo: context ? JSON.stringify(context) : '',
-    }) as unknown
-
-    const typedResponse = response as { _pending?: boolean } & T
-
-    // If pending, return pending status
-    if (typedResponse._pending) {
-      return {
-        answer: 'Waiting for response...' as T,
-        channel,
-      }
-    }
-
-    return {
-      answer: typedResponse as T,
-      answeredBy: askee,
-      answeredAt: new Date(),
-      channel,
-    }
+  if (!channel) {
+    throw new Error('No valid channel available to ask question')
   }
 
-  // For unstructured questions, use simple text response
-  const askFn = define.human({
-    name: 'askSimpleQuestion',
-    description: 'Ask a question and get a text response',
-    args: {
-      question: 'The question to ask',
-      contextInfo: 'Additional context for answering',
-    },
-    returnType: {
-      answer: 'The answer to the question',
-    },
-    channel,
-    instructions: `Please answer the following question:
-
-${question}
-
-${context ? `Context: ${JSON.stringify(context, null, 2)}` : ''}`,
-    assignee: askee,
+  // Send the question and wait for response
+  const response = await sendQuestion<T>(channel, question, contacts, {
+    schema,
     timeout,
+    context,
+    recipient,
   })
 
-  const response = await askFn.call({
-    question,
-    contextInfo: context ? JSON.stringify(context) : '',
-  }) as unknown
-
-  const typedResponse = response as { answer: string; _pending?: boolean }
-
-  if (typedResponse._pending) {
-    return {
-      answer: 'Waiting for response...' as T,
-      channel,
-    }
-  }
-
   return {
-    answer: typedResponse.answer as T,
-    answeredBy: askee,
+    answer: response.answer,
+    answeredBy: recipient,
     answeredAt: new Date(),
-    channel,
+    via: channel,
   }
 }
 
 /**
- * Ask a question and get an AI-generated answer
- *
- * Uses AI to answer the question based on available context.
- *
- * @param question - The question to ask
- * @param context - Context for the AI to use when answering
- * @param schema - Optional schema for structured response
- * @returns Promise resolving to the answer
+ * Ask an AI agent directly (no human routing)
  *
  * @example
  * ```ts
@@ -191,50 +119,186 @@ ask.ai = async <T = string>(
 /**
  * Ask multiple questions at once
  *
- * @param questions - Array of questions
- * @param options - Ask options
- * @returns Promise resolving to array of answers
- *
  * @example
  * ```ts
- * const results = await ask.batch([
+ * const results = await ask.batch(hr, [
  *   'What is the vacation policy?',
  *   'What is the remote work policy?',
  *   'What is the expense policy?',
- * ], {
- *   channel: 'email',
- *   askee: 'hr@company.com',
- * })
+ * ], { via: 'email' })
  * ```
  */
 ask.batch = async <T = string>(
+  target: ActionTarget,
   questions: string[],
   options: AskOptions = {}
 ): Promise<Array<AskResult<T>>> => {
-  return Promise.all(questions.map((q) => ask<T>(q, options)))
+  return Promise.all(questions.map((q) => ask<T>(target, q, options)))
 }
 
 /**
  * Ask for clarification on something
  *
- * @param statement - The statement to clarify
- * @param options - Ask options
- * @returns Promise resolving to clarification
- *
  * @example
  * ```ts
- * const clarification = await ask.clarify(
- *   'The deployment process is unclear',
- *   { askee: 'devops@company.com' }
- * )
+ * const clarification = await ask.clarify(devops, 'The deployment process')
  * ```
  */
 ask.clarify = async (
-  statement: string,
+  target: ActionTarget,
+  topic: string,
   options: AskOptions = {}
 ): Promise<AskResult<string>> => {
-  return ask<string>(
-    `Can you clarify: ${statement}`,
-    options
-  )
+  return ask<string>(target, `Can you clarify: ${topic}`, options)
+}
+
+/**
+ * Ask a yes/no question
+ *
+ * @example
+ * ```ts
+ * const result = await ask.yesNo(manager, 'Should we proceed with the release?', {
+ *   via: 'slack',
+ * })
+ * if (result.answer === 'yes') {
+ *   // proceed
+ * }
+ * ```
+ */
+ask.yesNo = async (
+  target: ActionTarget,
+  question: string,
+  options: AskOptions = {}
+): Promise<AskResult<'yes' | 'no'>> => {
+  return ask<'yes' | 'no'>(target, question, {
+    ...options,
+    schema: {
+      answer: 'Answer: yes or no',
+    },
+  })
+}
+
+/**
+ * Ask for a choice from options
+ *
+ * @example
+ * ```ts
+ * const result = await ask.choose(designer, 'Which color scheme?', {
+ *   choices: ['Light', 'Dark', 'System'],
+ *   via: 'slack',
+ * })
+ * ```
+ */
+ask.choose = async <T extends string>(
+  target: ActionTarget,
+  question: string,
+  choices: T[],
+  options: AskOptions = {}
+): Promise<AskResult<T>> => {
+  const choiceList = choices.map((c, i) => `${i + 1}. ${c}`).join('\n')
+  const fullQuestion = `${question}\n\nOptions:\n${choiceList}`
+
+  return ask<T>(target, fullQuestion, {
+    ...options,
+    schema: {
+      answer: `One of: ${choices.join(', ')}`,
+    },
+  })
+}
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
+
+/**
+ * Resolve an action target to contacts and recipient
+ */
+function resolveTarget(target: ActionTarget): {
+  contacts: Contacts
+  recipient: WorkerRef
+} {
+  if (typeof target === 'string') {
+    return {
+      contacts: {},
+      recipient: { id: target },
+    }
+  }
+
+  if ('contacts' in target) {
+    // Worker or Team
+    let recipient: WorkerRef
+    if ('members' in target) {
+      // Team - ask lead or first member
+      recipient = target.lead ?? target.members[0] ?? { id: target.id }
+    } else {
+      // Worker
+      recipient = { id: target.id, type: target.type, name: target.name }
+    }
+
+    return {
+      contacts: target.contacts,
+      recipient,
+    }
+  }
+
+  // WorkerRef
+  return {
+    contacts: {},
+    recipient: target,
+  }
+}
+
+/**
+ * Determine which channel to use
+ */
+function resolveChannel(
+  via: ContactChannel | ContactChannel[] | undefined,
+  contacts: Contacts
+): ContactChannel | null {
+  if (via) {
+    const requested = Array.isArray(via) ? via[0] : via
+    if (requested && contacts[requested] !== undefined) {
+      return requested
+    }
+  }
+
+  // Default to first available
+  const available = Object.keys(contacts) as ContactChannel[]
+  const first = available[0]
+  return first ?? null
+}
+
+/**
+ * Send a question to a channel and wait for response
+ */
+async function sendQuestion<T>(
+  channel: ContactChannel,
+  question: string,
+  contacts: Contacts,
+  options: {
+    schema?: SimpleSchema
+    timeout?: number
+    context?: Record<string, unknown>
+    recipient: WorkerRef
+  }
+): Promise<{ answer: T }> {
+  const contact = contacts[channel]
+
+  if (!contact) {
+    throw new Error(`No ${channel} contact configured`)
+  }
+
+  // In a real implementation, this would:
+  // 1. Format the question for the channel
+  // 2. Send via the appropriate API
+  // 3. Wait for response (polling, webhook, etc.)
+  // 4. Parse and validate the response
+
+  // For now, simulate a pending response
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  // Return a placeholder - real impl would wait for actual response
+  return {
+    answer: 'Waiting for response...' as T,
+  }
 }

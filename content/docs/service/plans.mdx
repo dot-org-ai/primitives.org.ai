@@ -1,0 +1,294 @@
+---
+title: Plans
+description: Create subscription plans
+---
+
+# Plans
+
+Define subscription plans with features, entitlements, and pricing tiers.
+
+## Basic Plan
+
+```typescript
+import { Service, Plan } from 'services-as-software'
+
+const service = Service({
+  name: 'my-service',
+  plans: [
+    {
+      id: 'pro',
+      name: 'Pro Plan',
+      pricing: {
+        model: 'subscription',
+        basePrice: 49.99,
+        currency: 'USD',
+        interval: 'monthly',
+      },
+      features: ['Unlimited API calls', '24/7 support'],
+    },
+  ],
+})
+```
+
+## Plan Helper
+
+Use the `Plan()` helper for better ergonomics:
+
+```typescript
+import { Service, Plan } from 'services-as-software'
+
+const service = Service({
+  name: 'my-service',
+  plans: [
+    Plan({
+      id: 'starter',
+      name: 'Starter',
+      pricing: {
+        model: 'subscription',
+        basePrice: 29,
+        currency: 'USD',
+        interval: 'monthly',
+      },
+      entitlements: ['api-access', 'basic-support'],
+      features: [
+        '1,000 requests/month',
+        'Email support',
+        'Basic analytics',
+      ],
+    }),
+  ],
+})
+```
+
+## Plan Properties
+
+| Property | Description |
+|----------|-------------|
+| `id` | Unique identifier |
+| `name` | Display name |
+| `pricing` | Pricing configuration |
+| `entitlements` | Access permissions |
+| `features` | Feature list for display |
+| `limits` | Usage limits |
+
+## Entitlements
+
+Control access to features:
+
+```typescript
+Plan({
+  id: 'pro',
+  name: 'Pro',
+  entitlements: [
+    'api-access',
+    'webhook-access',
+    'priority-support',
+    'advanced-analytics',
+    'custom-integrations',
+  ],
+})
+```
+
+Check entitlements at runtime:
+
+```typescript
+POST({
+  name: 'advanced-feature',
+  handler: async (input, context) => {
+    if (!context.entitlements.includes('advanced-analytics')) {
+      throw new Error('Upgrade to Pro for this feature')
+    }
+    // Feature logic
+  },
+})
+```
+
+## Usage Limits
+
+Set plan limits:
+
+```typescript
+Plan({
+  id: 'starter',
+  name: 'Starter',
+  limits: {
+    requestsPerMonth: 1000,
+    storageGB: 5,
+    teamMembers: 3,
+    projects: 10,
+  },
+})
+```
+
+## Complete Example
+
+```typescript
+import { Service, Plan } from 'services-as-software'
+
+const analyticService = Service({
+  name: 'analytics-service',
+  version: '1.0.0',
+
+  plans: [
+    Plan({
+      id: 'free',
+      name: 'Free',
+      pricing: { model: 'free' },
+      entitlements: ['basic-analytics'],
+      features: [
+        '100 events/day',
+        '7 day retention',
+        'Basic reports',
+      ],
+      limits: {
+        eventsPerDay: 100,
+        retentionDays: 7,
+        dashboards: 1,
+      },
+    }),
+
+    Plan({
+      id: 'startup',
+      name: 'Startup',
+      pricing: {
+        model: 'subscription',
+        basePrice: 49,
+        currency: 'USD',
+        interval: 'monthly',
+      },
+      entitlements: ['basic-analytics', 'custom-events', 'export'],
+      features: [
+        '10,000 events/day',
+        '30 day retention',
+        'Custom events',
+        'CSV export',
+        'Email reports',
+      ],
+      limits: {
+        eventsPerDay: 10000,
+        retentionDays: 30,
+        dashboards: 5,
+        teamMembers: 5,
+      },
+    }),
+
+    Plan({
+      id: 'growth',
+      name: 'Growth',
+      pricing: {
+        model: 'subscription',
+        basePrice: 199,
+        currency: 'USD',
+        interval: 'monthly',
+      },
+      entitlements: ['basic-analytics', 'custom-events', 'export', 'api-access', 'webhooks'],
+      features: [
+        '100,000 events/day',
+        '90 day retention',
+        'API access',
+        'Webhooks',
+        'Priority support',
+        'Custom dashboards',
+      ],
+      limits: {
+        eventsPerDay: 100000,
+        retentionDays: 90,
+        dashboards: 20,
+        teamMembers: 20,
+        apiRequestsPerDay: 10000,
+      },
+    }),
+
+    Plan({
+      id: 'enterprise',
+      name: 'Enterprise',
+      pricing: {
+        model: 'custom',
+        contactUrl: 'https://analytics.example.com/enterprise',
+      },
+      entitlements: ['*'],  // All entitlements
+      features: [
+        'Unlimited events',
+        'Unlimited retention',
+        'Dedicated support',
+        'SLA guarantee',
+        'On-premise option',
+        'Custom integrations',
+      ],
+      limits: {
+        eventsPerDay: Infinity,
+        retentionDays: Infinity,
+        dashboards: Infinity,
+        teamMembers: Infinity,
+      },
+    }),
+  ],
+})
+```
+
+## Annual Discounts
+
+Offer yearly pricing:
+
+```typescript
+Plan({
+  id: 'pro-monthly',
+  name: 'Pro (Monthly)',
+  pricing: {
+    model: 'subscription',
+    basePrice: 99,
+    currency: 'USD',
+    interval: 'monthly',
+  },
+}),
+
+Plan({
+  id: 'pro-yearly',
+  name: 'Pro (Yearly)',
+  pricing: {
+    model: 'subscription',
+    basePrice: 948,  // $79/month equivalent (20% off)
+    currency: 'USD',
+    interval: 'yearly',
+  },
+})
+```
+
+## Trial Periods
+
+Add free trials:
+
+```typescript
+Plan({
+  id: 'pro',
+  name: 'Pro',
+  pricing: {
+    model: 'subscription',
+    basePrice: 99,
+    currency: 'USD',
+    interval: 'monthly',
+  },
+  trial: {
+    days: 14,
+    requiresCard: false,
+  },
+})
+```
+
+## Type Definition
+
+```typescript
+interface PlanDefinition {
+  id: string
+  name: string
+  pricing: PricingDefinition
+  entitlements?: string[]
+  features?: string[]
+  limits?: Record<string, number>
+  trial?: {
+    days: number
+    requiresCard?: boolean
+  }
+  metadata?: Record<string, unknown>
+}
+```

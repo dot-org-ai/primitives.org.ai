@@ -1,0 +1,5 @@
+{
+  "title": "Code",
+  "description": "Code generation and structured output",
+  "pages": ["index", "code", "diagram", "slides"]
+}

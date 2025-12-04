@@ -1,0 +1,69 @@
+---
+title: Nouns
+description: Entity type definitions
+---
+
+# Nouns
+
+Nouns are semantic type definitions that describe entities with their properties, relationships, actions, and events.
+
+## What is a Noun?
+
+A Noun represents an entity type with all its metadata:
+
+```typescript
+import { defineNoun } from 'ai-database'
+
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  description: 'A blog post or article',
+
+  properties: {
+    title: { type: 'string', description: 'The post title' },
+    content: { type: 'markdown', description: 'The post body' },
+  },
+
+  relationships: {
+    author: { type: 'Author', backref: 'posts' },
+  },
+
+  actions: ['create', 'update', 'delete', 'publish'],
+  events: ['created', 'updated', 'deleted', 'published'],
+})
+```
+
+## Why Nouns?
+
+| Benefit | Description |
+|---------|-------------|
+| **Self-documenting** | Schema describes itself |
+| **AI Generation** | Descriptions guide content generation |
+| **Introspection** | Query types at runtime |
+| **Consistency** | Single source of truth |
+
+## Self-Describing Database
+
+Every type you create is stored as a Noun:
+
+```typescript
+const db = DB({
+  Post: { title: 'string', author: 'Author.posts' },
+})
+
+// Query types at runtime
+const types = await db.Noun.list()
+// [{ name: 'Post', singular: 'post', plural: 'posts', ... }]
+
+const postNoun = await db.Noun.get('Post')
+postNoun.singular  // 'post'
+postNoun.plural    // 'posts'
+```
+
+## Sections
+
+| Section | Description |
+|---------|-------------|
+| [Defining](/docs/database/nouns/defining) | Create Noun definitions |
+| [Properties](/docs/database/nouns/properties) | Define entity properties |
+| [Inference](/docs/database/nouns/inference) | Auto-generate linguistic forms |

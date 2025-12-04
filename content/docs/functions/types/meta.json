@@ -1,0 +1,5 @@
+{
+  "title": "Function Types",
+  "description": "The four types of AI functions",
+  "pages": ["index", "generative", "code", "agentic", "human"]
+}

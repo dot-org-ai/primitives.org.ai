@@ -1,0 +1,284 @@
+---
+title: Action Patterns
+description: Common patterns for durable execution
+---
+
+# Action Patterns
+
+Common patterns for long-running tasks.
+
+## Batch Generation
+
+Generate large amounts of content:
+
+```typescript
+// Generate posts for all personas × topics
+const personas = await db.Persona.list()
+const topics = await db.Topic.list()
+
+const action = await db.action.create({
+  type: 'generate-all-posts',
+  data: {
+    personas: personas.map(p => p.$id),
+    topics: topics.map(t => t.$id),
+  },
+})
+
+for (let i = 0; i < personas.length; i++) {
+  const persona = personas[i]
+
+  for (let j = 0; j < topics.length; j++) {
+    const topic = topics[j]
+
+    await db.generate({
+      type: 'Post',
+      data: { persona: persona.$id, topic: topic.$id },
+    })
+
+    await db.action.update(action.id, {
+      progress: i * topics.length + j + 1,
+      total: personas.length * topics.length,
+    })
+  }
+}
+```
+
+## Embedding Pipeline
+
+Embed all content with checkpoints:
+
+```typescript
+async function embedAll() {
+  const action = await db.action.create({ type: 'embed-all' })
+
+  const posts = await db.Post.list()
+
+  for (let i = 0; i < posts.length; i++) {
+    const post = posts[i]
+
+    // Skip if already embedded
+    const existing = await db.artifact.get(post.$id, 'embedding')
+    if (existing) continue
+
+    // Generate embedding
+    const embedding = await db.embed(post.content)
+    await db.artifact.set(post.$id, 'embedding', {
+      vectors: embedding,
+      model: 'gemini-embedding-001',
+    })
+
+    // Update progress
+    await db.action.update(action.id, {
+      progress: i + 1,
+      total: posts.length,
+    })
+  }
+
+  await db.action.update(action.id, { status: 'completed' })
+}
+```
+
+## Import with Progress
+
+Import large datasets:
+
+```typescript
+async function importData(records: any[]) {
+  const action = await db.action.create({
+    type: 'import',
+    data: { total: records.length },
+  })
+
+  const errors = []
+
+  for (let i = 0; i < records.length; i++) {
+    try {
+      await db.Post.create(records[i])
+    } catch (error) {
+      errors.push({ index: i, error: error.message })
+    }
+
+    await db.action.update(action.id, {
+      progress: i + 1,
+      total: records.length,
+      results: { imported: i + 1 - errors.length, errors: errors.length },
+    })
+  }
+
+  await db.action.update(action.id, {
+    status: errors.length > 0 ? 'completed_with_errors' : 'completed',
+    results: { errors },
+  })
+}
+```
+
+## Scheduled Tasks
+
+Run tasks on a schedule:
+
+```typescript
+// Create scheduled action
+const action = await db.action.create({
+  type: 'daily-digest',
+  schedule: '0 9 * * *',  // 9 AM daily
+})
+
+// Cron handler
+async function runScheduled(action) {
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+  const posts = await db.Post.find({
+    createdAt: { $gte: yesterday },
+  })
+
+  await sendDigestEmail(posts)
+}
+```
+
+## Fan-Out Pattern
+
+Split work across multiple actions:
+
+```typescript
+async function processLarge(items: any[]) {
+  const BATCH_SIZE = 100
+  const batches = chunk(items, BATCH_SIZE)
+
+  // Create sub-actions
+  const subActions = await Promise.all(
+    batches.map((batch, i) =>
+      db.action.create({
+        type: 'process-batch',
+        data: { batch, index: i },
+      })
+    )
+  )
+
+  // Wait for all to complete
+  await Promise.all(
+    subActions.map(a => waitForAction(a.id))
+  )
+}
+```
+
+## Retry with Backoff
+
+Handle transient failures:
+
+```typescript
+async function withRetry(fn, maxAttempts = 3) {
+  let lastError
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error
+
+      if (attempt < maxAttempts) {
+        const delay = Math.pow(2, attempt) * 1000  // exponential backoff
+        await sleep(delay)
+      }
+    }
+  }
+
+  throw lastError
+}
+
+// Usage
+await withRetry(() => db.generate({
+  type: 'Post',
+  data: { topic: 'AI' },
+}))
+```
+
+## Checkpoint Recovery
+
+Resume from checkpoint on failure:
+
+```typescript
+async function processWithCheckpoint(action) {
+  let checkpoint = action.data.checkpoint || 0
+  const items = action.data.items
+
+  for (let i = checkpoint; i < items.length; i++) {
+    await processItem(items[i])
+
+    // Save checkpoint
+    await db.action.update(action.id, {
+      progress: i + 1,
+      data: { ...action.data, checkpoint: i + 1 },
+    })
+  }
+}
+
+// On restart, resume from checkpoint
+const failed = await db.action.list({ status: 'failed' })
+for (const action of failed) {
+  await processWithCheckpoint(action)
+}
+```
+
+## Concurrency Control
+
+Limit concurrent operations:
+
+```typescript
+import pLimit from 'p-limit'
+
+async function processWithLimit(items: any[]) {
+  const limit = pLimit(5)  // max 5 concurrent
+
+  const action = await db.action.create({
+    type: 'process-limited',
+    data: { total: items.length },
+  })
+
+  let completed = 0
+
+  await Promise.all(
+    items.map(item =>
+      limit(async () => {
+        await processItem(item)
+        completed++
+        await db.action.update(action.id, {
+          progress: completed,
+        })
+      })
+    )
+  )
+}
+```
+
+## Action Queue
+
+Process actions sequentially:
+
+```typescript
+async function actionWorker() {
+  while (true) {
+    const [next] = await db.action.list({
+      status: 'pending',
+      limit: 1,
+      orderBy: 'createdAt',
+    })
+
+    if (!next) {
+      await sleep(5000)
+      continue
+    }
+
+    await db.action.update(next.id, { status: 'active' })
+
+    try {
+      await processAction(next)
+      await db.action.update(next.id, { status: 'completed' })
+    } catch (error) {
+      await db.action.update(next.id, {
+        status: 'failed',
+        error: error.message,
+      })
+    }
+  }
+}
+```

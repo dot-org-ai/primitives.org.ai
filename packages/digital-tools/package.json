@@ -1,0 +1,32 @@
+{
+  "name": "digital-tools",
+  "version": "0.0.1",
+  "description": "Tools that can be used by both humans and AI agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./registry": {
+      "import": "./dist/registry.js",
+      "types": "./dist/registry.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "ai-functions": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "keywords": ["ai", "tools", "agents", "humans", "primitives", "mcp"],
+  "license": "MIT"
+}

@@ -1,0 +1,5 @@
+{
+  "title": "Artifacts",
+  "description": "Cached embeddings and computed content",
+  "pages": ["index", "embeddings", "custom"]
+}

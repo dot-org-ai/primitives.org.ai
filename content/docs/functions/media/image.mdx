@@ -1,0 +1,73 @@
+---
+title: image
+description: Generate images from text descriptions
+---
+
+# image
+
+Generate images from text descriptions.
+
+## Syntax
+
+```typescript
+image`description`
+image`description`(options)
+image(description: string, options?: ImageOptions)
+```
+
+## Examples
+
+```typescript
+import { image } from 'ai-functions'
+
+// Tagged template
+const logo = await image`minimalist logo for ${companyName}`
+const hero = await image`hero image for ${{ brand, mood, style }}`
+
+// With options
+const illustration = await image('robot reading a book', {
+  style: 'cartoon',
+  size: '1024x1024',
+})
+
+// For content
+const metadata = { title: 'AI in Healthcare' }
+const heroImage = await image`
+  minimalist illustration for: ${metadata.title}
+  ${{ style: 'modern tech blog', colors: 'blue and purple gradients' }}
+`
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `size` | string | Image dimensions |
+| `style` | string | Visual style |
+| `format` | `'png'` \| `'jpg'` \| `'webp'` | Output format |
+| `model` | string | Image model to use |
+
+## Use Cases
+
+```typescript
+// Logos and branding
+const logo = await image`logo for ${brand}`
+const icon = await image`app icon for ${product}`
+
+// Content imagery
+const hero = await image`hero for blog post about ${topic}`
+const thumbnail = await image`youtube thumbnail for ${video}`
+
+// Social media
+const og = await image`open graph image for ${page}`
+const banner = await image`twitter banner for ${profile}`
+```
+
+## Return Type
+
+Returns a Buffer containing the image data:
+
+```typescript
+const imageBuffer = await image`logo for Acme Corp`
+await fs.writeFile('logo.png', imageBuffer)
+```

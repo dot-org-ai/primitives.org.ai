@@ -1,0 +1,213 @@
+---
+title: Subscribing to Events
+description: React to events in real-time
+---
+
+# Subscribing to Events
+
+React to database changes in real-time.
+
+## Basic Subscription
+
+```typescript
+db.events.on('Post.created', async (event) => {
+  console.log('New post:', event.data.title)
+})
+```
+
+## Event Patterns
+
+### Specific Type
+
+```typescript
+db.events.on('Post.created', handler)
+db.events.on('Post.updated', handler)
+db.events.on('Post.deleted', handler)
+```
+
+### Wildcard Patterns
+
+```typescript
+// All Post events
+db.events.on('Post.*', (event) => {
+  console.log(`Post ${event.type}:`, event.url)
+})
+
+// All created events
+db.events.on('*.created', (event) => {
+  console.log(`Created:`, event.url)
+})
+
+// Everything
+db.events.on('*.*', (event) => {
+  console.log(event.type, event.url)
+})
+```
+
+## Handler Function
+
+```typescript
+interface EventHandler {
+  (event: Event): void | Promise<void>
+}
+
+db.events.on('Post.created', async (event) => {
+  // event.id        - unique event ID
+  // event.type      - 'Post.created'
+  // event.url       - entity URL
+  // event.data      - entity data
+  // event.timestamp - when it happened
+  // event.actor     - who triggered it
+})
+```
+
+## Async Handlers
+
+Handlers can be async:
+
+```typescript
+db.events.on('Post.created', async (event) => {
+  // Generate social posts
+  await db.generate({
+    type: 'SocialPost',
+    data: { post: event.url },
+  })
+
+  // Send notifications
+  await sendNotification(event)
+
+  // Update analytics
+  await analytics.track('post_created', event.data)
+})
+```
+
+## Unsubscribing
+
+```typescript
+const unsubscribe = db.events.on('Post.created', handler)
+
+// Later...
+unsubscribe()
+```
+
+## Workflow Examples
+
+### Content Pipeline
+
+```typescript
+// When post created, generate social content
+db.events.on('Post.created', async (event) => {
+  await db.generate({
+    type: 'Tweet',
+    data: { post: event.url },
+  })
+
+  await db.generate({
+    type: 'LinkedInPost',
+    data: { post: event.url },
+  })
+})
+```
+
+### Cache Invalidation
+
+```typescript
+db.events.on('Product.*', async (event) => {
+  await cache.invalidate(`product:${event.url}`)
+  await cache.invalidate('products:list')
+})
+```
+
+### Audit Logging
+
+```typescript
+db.events.on('*.*', async (event) => {
+  await auditLog.create({
+    action: event.type,
+    entity: event.url,
+    actor: event.actor,
+    timestamp: event.timestamp,
+    changes: event.changes,
+  })
+})
+```
+
+### Search Indexing
+
+```typescript
+db.events.on('*.created', async (event) => {
+  await searchIndex.add(event.url, event.data)
+})
+
+db.events.on('*.updated', async (event) => {
+  await searchIndex.update(event.url, event.data)
+})
+
+db.events.on('*.deleted', async (event) => {
+  await searchIndex.remove(event.url)
+})
+```
+
+### Notifications
+
+```typescript
+db.events.on('Comment.created', async (event) => {
+  const post = await db.Post.get(event.data.post)
+  const author = await post.author
+
+  await notify(author.$id, {
+    type: 'new_comment',
+    message: `New comment on "${post.title}"`,
+  })
+})
+```
+
+## Error Handling
+
+```typescript
+db.events.on('Post.created', async (event) => {
+  try {
+    await processPost(event)
+  } catch (error) {
+    console.error('Failed to process post:', error)
+    // Don't rethrow - other handlers should still run
+  }
+})
+```
+
+## Multiple Handlers
+
+Multiple handlers can subscribe to the same event:
+
+```typescript
+// Handler 1: Generate social posts
+db.events.on('Post.created', generateSocialPosts)
+
+// Handler 2: Send notifications
+db.events.on('Post.created', sendNotifications)
+
+// Handler 3: Update analytics
+db.events.on('Post.created', updateAnalytics)
+
+// All three run (order not guaranteed)
+```
+
+## Conditional Handling
+
+```typescript
+db.events.on('Post.updated', async (event) => {
+  // Only handle publishing
+  if (event.changes?.published?.to === true) {
+    await notifySubscribers(event)
+  }
+})
+```
+
+## One-Time Handlers
+
+```typescript
+const unsubscribe = db.events.on('Post.created', (event) => {
+  console.log('First post created!')
+  unsubscribe()  // Only run once
+})
+```

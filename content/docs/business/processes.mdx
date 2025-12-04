@@ -1,0 +1,216 @@
+---
+title: Processes
+description: Define business processes with steps and metrics
+---
+
+# Processes
+
+The `Process()` function defines business processes with ordered steps, metrics, and automation levels.
+
+## Basic Usage
+
+```typescript
+import { Process } from 'business-as-code'
+
+const process = Process({
+  name: 'Customer Onboarding',
+  description: 'Process for onboarding new customers',
+  category: 'core',
+  owner: 'Customer Success Team',
+  inputs: ['Customer Information', 'Subscription Plan'],
+  outputs: ['Configured Account', 'Training Materials'],
+})
+```
+
+## Process Categories
+
+| Category | Description |
+|----------|-------------|
+| `core` | Primary value-creating processes |
+| `support` | Supporting business operations |
+| `management` | Planning and control processes |
+
+## Defining Steps
+
+```typescript
+const process = Process({
+  name: 'Customer Onboarding',
+  steps: [
+    {
+      order: 1,
+      name: 'Welcome Email',
+      description: 'Send personalized welcome email',
+      responsible: 'CS Manager',
+      duration: '5 minutes',
+      automationLevel: 'automated',
+    },
+    {
+      order: 2,
+      name: 'Initial Setup Call',
+      description: 'Schedule and conduct setup call',
+      responsible: 'CS Rep',
+      duration: '30 minutes',
+      automationLevel: 'manual',
+    },
+    {
+      order: 3,
+      name: 'Account Configuration',
+      description: 'Configure account based on requirements',
+      responsible: 'CS Rep',
+      duration: '1 hour',
+      automationLevel: 'semi-automated',
+    },
+  ],
+})
+```
+
+## Automation Levels
+
+| Level | Description |
+|-------|-------------|
+| `manual` | Fully human-performed |
+| `semi-automated` | Human with tool assistance |
+| `automated` | Fully automated |
+
+## Process Metrics
+
+Track performance with metrics:
+
+```typescript
+const process = Process({
+  name: 'Customer Onboarding',
+  metrics: [
+    {
+      name: 'Time to First Value',
+      description: 'Days until customer sees first value',
+      target: 7,
+      current: 5,
+      unit: 'days',
+    },
+    {
+      name: 'Completion Rate',
+      target: 95,
+      current: 92,
+      unit: 'percent',
+    },
+  ],
+})
+```
+
+## Helper Functions
+
+### Step Management
+
+```typescript
+import {
+  getStepsInOrder,
+  getStepsByAutomationLevel,
+  addStep,
+  removeStep,
+} from 'business-as-code'
+
+// Get steps in order
+const ordered = getStepsInOrder(process.steps!)
+// Steps sorted by order property
+
+// Filter by automation level
+const automated = getStepsByAutomationLevel(process.steps!, 'automated')
+const manual = getStepsByAutomationLevel(process.steps!, 'manual')
+
+// Add a new step
+const withStep = addStep(process, {
+  order: 4,
+  name: 'Follow-up Survey',
+  automationLevel: 'automated',
+})
+
+// Remove a step
+const withoutStep = removeStep(process, 'Welcome Email')
+```
+
+### Duration Calculations
+
+```typescript
+import { calculateTotalDuration, formatDuration } from 'business-as-code'
+
+// Calculate total process duration
+const total = calculateTotalDuration(process)
+// { hours: 1, minutes: 35 }
+
+// Format duration for display
+const formatted = formatDuration(total)
+// "1 hour 35 minutes"
+```
+
+### Automation Analysis
+
+```typescript
+import { calculateAutomationPercentage } from 'business-as-code'
+
+const automationPct = calculateAutomationPercentage(process)
+// 33.3 (1 of 3 steps automated)
+```
+
+### Metrics Management
+
+```typescript
+import { getMetric, meetsTarget, updateMetric, calculateMetricAchievement } from 'business-as-code'
+
+// Get a specific metric
+const ttfv = getMetric(process, 'Time to First Value')
+
+// Check if metric meets target
+const onTarget = meetsTarget(ttfv)
+// true (5 <= 7)
+
+// Update metric value
+const updated = updateMetric(process, 'Time to First Value', { current: 4 })
+
+// Calculate achievement percentage
+const achievement = calculateMetricAchievement(ttfv)
+// 140% (exceeding target by 40%)
+```
+
+## Validation
+
+```typescript
+import { validateProcess } from 'business-as-code'
+
+const errors = validateProcess(process)
+if (errors.length > 0) {
+  console.error('Invalid process:', errors)
+}
+```
+
+## Type Definition
+
+```typescript
+interface ProcessDefinition {
+  name: string
+  description?: string
+  category?: 'core' | 'support' | 'management'
+  owner?: string
+  steps?: ProcessStep[]
+  inputs?: string[]
+  outputs?: string[]
+  metrics?: ProcessMetric[]
+  metadata?: Record<string, unknown>
+}
+
+interface ProcessStep {
+  order: number
+  name: string
+  description?: string
+  responsible?: string
+  duration?: string
+  automationLevel?: 'manual' | 'semi-automated' | 'automated'
+}
+
+interface ProcessMetric {
+  name: string
+  description?: string
+  target?: number
+  current?: number
+  unit?: string
+}
+```

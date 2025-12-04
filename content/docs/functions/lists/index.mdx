@@ -1,0 +1,42 @@
+---
+title: Lists
+description: Generate and extract lists of items
+---
+
+# List Functions
+
+Generate lists and extract structured data.
+
+## Functions
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `list` | string[] | Generate a list of items |
+| `lists` | Record | Generate multiple named lists |
+| `extract` | T[] | Extract structured data from text |
+
+## Quick Examples
+
+```typescript
+import { list, lists, extract } from 'ai-functions'
+
+// list - single list
+const ideas = await list`startup ideas for ${industry}`
+
+// lists - multiple named lists
+const { pros, cons } = await lists`pros and cons of ${topic}`
+
+// extract - structured extraction
+const names = await extract`person names from ${article}`
+```
+
+## Streaming Support
+
+All list functions support async iteration:
+
+```typescript
+for await (const idea of list`startup ideas`) {
+  console.log(idea)
+  // Process each item as it streams
+}
+```

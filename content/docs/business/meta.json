@@ -1,0 +1,20 @@
+{
+  "title": "Business",
+  "description": "Business-as-Code",
+  "root": true,
+  "icon": "Building2",
+  "pages": [
+    "index",
+    "entities",
+    "vision",
+    "goals",
+    "products",
+    "services",
+    "processes",
+    "workflows",
+    "kpis",
+    "okrs",
+    "financials",
+    "dollar-helper"
+  ]
+}

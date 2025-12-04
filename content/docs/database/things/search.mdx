@@ -1,0 +1,175 @@
+---
+title: Search
+description: Semantic and full-text search
+---
+
+# Search
+
+ai-database provides hybrid search combining vector similarity and full-text matching.
+
+## Basic Search
+
+```typescript
+const results = await db.search('machine learning tutorials')
+```
+
+Searches across all types by semantic similarity.
+
+## Type-Specific Search
+
+```typescript
+const posts = await db.Post.search('beginner AI tutorials')
+```
+
+## Search Options
+
+```typescript
+const results = await db.search({
+  query: 'productivity software',
+  type: 'Product',        // filter by type
+  limit: 10,              // max results
+  minScore: 0.7,          // minimum relevance
+})
+```
+
+## Search Modes
+
+```typescript
+// Hybrid (default) - vector + full-text
+const results = await db.search({
+  query: 'error handling',
+  mode: 'hybrid',
+})
+
+// Vector only - pure semantic similarity
+const results = await db.search({
+  query: 'error handling',
+  mode: 'vector',
+})
+
+// Text only - BM25 full-text
+const results = await db.search({
+  query: 'error handling',
+  mode: 'text',
+})
+```
+
+## How It Works
+
+### Hybrid Search (Default)
+
+1. **Query embedding** - Your query becomes a vector
+2. **Vector search** - Find semantically similar content
+3. **Full-text search** - Find keyword matches (BM25)
+4. **Fusion** - Combine results with reciprocal rank fusion
+5. **Re-ranking** - Score by combined relevance
+
+### Why Hybrid?
+
+| Query | Vector Only | Text Only | Hybrid |
+|-------|-------------|-----------|--------|
+| "ML guides for newcomers" | ✓ Finds "machine learning tutorials" | ✗ No keyword match | ✓ Best of both |
+| "TypeScript interface" | ✓ Semantic match | ✓ Exact keyword | ✓ High confidence |
+| "React useState hook" | ✓ Conceptual match | ✓ Exact terms | ✓ Highest relevance |
+
+## With Filters
+
+Combine search with structured filters:
+
+```typescript
+const results = await db.Post.search({
+  query: 'TypeScript best practices',
+  where: {
+    published: true,
+    createdAt: { $gte: lastMonth },
+  },
+  limit: 10,
+})
+```
+
+## Field-Specific Search
+
+Search specific fields:
+
+```typescript
+const results = await db.Post.search({
+  query: 'TypeScript',
+  fields: ['title', 'content'],  // only search these fields
+})
+```
+
+## Embeddings
+
+Search uses automatic embeddings. When you create entities, embeddings are generated:
+
+```typescript
+const post = await db.Post.create({
+  title: 'Getting Started with TypeScript',
+  content: '...',
+})
+
+// Embedding auto-generated
+// Now searchable by semantic similarity
+```
+
+### Embedding Models
+
+Configure model per database or type:
+
+```typescript
+const db = DB({
+  model: 'google/gemini-embedding-001',
+  dimensions: 3072,
+
+  types: {
+    Post: {
+      model: 'baai/bge-m3',  // override for this type
+      dimensions: 1024,
+    },
+  },
+})
+```
+
+## Direct Embedding
+
+Generate embeddings manually:
+
+```typescript
+// Single text
+const embedding = await db.embed('Hello world')
+// Float32Array [0.1, -0.2, 0.3, ...]
+
+// Multiple texts
+const embeddings = await db.embed(['doc1', 'doc2', 'doc3'])
+
+// Find similar
+const similar = await db.embed.findSimilar(queryEmbedding, embeddings, {
+  topK: 5,
+  minScore: 0.7,
+})
+```
+
+## Natural Language
+
+For complex queries, use natural language:
+
+```typescript
+const results = await db`what posts are about AI for beginners?`
+```
+
+See [Natural Language](/docs/database/natural-language) for more.
+
+## SearchOptions
+
+```typescript
+interface SearchOptions {
+  query: string
+  type?: string
+  fields?: string[]
+  where?: Record<string, unknown>
+  limit?: number
+  offset?: number
+  minScore?: number
+  mode?: 'hybrid' | 'vector' | 'text'
+}
+```

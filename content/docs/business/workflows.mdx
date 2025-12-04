@@ -1,0 +1,284 @@
+---
+title: Workflows
+description: Define automated business sequences
+---
+
+# Workflows
+
+The `Workflow()` function defines automated sequences triggered by events, schedules, or webhooks.
+
+## Basic Usage
+
+```typescript
+import { Workflow } from 'business-as-code'
+
+const workflow = Workflow({
+  name: 'New Customer Welcome',
+  description: 'Automated welcome sequence for new customers',
+  trigger: {
+    type: 'event',
+    event: 'Customer.created',
+  },
+  actions: [
+    {
+      order: 1,
+      type: 'send',
+      description: 'Send welcome email',
+      params: {
+        template: 'welcome_email',
+        to: '{{customer.email}}',
+      },
+    },
+  ],
+})
+```
+
+## Trigger Types
+
+### Event Triggers
+
+React to business events:
+
+```typescript
+const workflow = Workflow({
+  name: 'Order Processing',
+  trigger: {
+    type: 'event',
+    event: 'Order.placed',
+  },
+  // ...
+})
+```
+
+### Schedule Triggers
+
+Run on a schedule:
+
+```typescript
+const workflow = Workflow({
+  name: 'Daily Report',
+  trigger: {
+    type: 'schedule',
+    schedule: '0 9 * * *', // Every day at 9 AM
+  },
+  // ...
+})
+```
+
+### Webhook Triggers
+
+Respond to external webhooks:
+
+```typescript
+const workflow = Workflow({
+  name: 'Payment Received',
+  trigger: {
+    type: 'webhook',
+    webhook: 'https://api.example.com/webhooks/payment',
+  },
+  // ...
+})
+```
+
+### Manual Triggers
+
+Start manually:
+
+```typescript
+const workflow = Workflow({
+  name: 'Ad-hoc Report',
+  trigger: {
+    type: 'manual',
+  },
+  // ...
+})
+```
+
+## Action Types
+
+| Type | Description |
+|------|-------------|
+| `send` | Send email, notification, or message |
+| `create` | Create a new record or task |
+| `update` | Update existing data |
+| `delete` | Remove data |
+| `notify` | Send a notification |
+| `call` | Make an API call |
+| `wait` | Pause execution |
+
+## Complex Workflow Example
+
+```typescript
+const workflow = Workflow({
+  name: 'Customer Onboarding',
+  trigger: {
+    type: 'event',
+    event: 'Customer.created',
+  },
+  actions: [
+    {
+      order: 1,
+      type: 'send',
+      description: 'Send welcome email',
+      params: {
+        template: 'welcome_email',
+        to: '{{customer.email}}',
+      },
+    },
+    {
+      order: 2,
+      type: 'wait',
+      description: 'Wait 24 hours',
+      params: { duration: '24h' },
+    },
+    {
+      order: 3,
+      type: 'create',
+      description: 'Create onboarding task',
+      params: {
+        type: 'Task',
+        title: 'Onboard {{customer.name}}',
+        assignee: 'customer_success_team',
+      },
+      condition: '{{customer.plan}} == "enterprise"',
+    },
+    {
+      order: 4,
+      type: 'notify',
+      description: 'Alert sales team',
+      params: {
+        channel: 'slack',
+        message: 'New enterprise customer: {{customer.name}}',
+      },
+      condition: '{{customer.plan}} == "enterprise"',
+    },
+  ],
+})
+```
+
+## Helper Functions
+
+### Action Management
+
+```typescript
+import {
+  getActionsInOrder,
+  getActionsByType,
+  getConditionalActions,
+  addAction,
+  removeAction,
+  updateAction,
+} from 'business-as-code'
+
+// Get actions in order
+const ordered = getActionsInOrder(workflow.actions!)
+
+// Filter by type
+const sendActions = getActionsByType(workflow.actions!, 'send')
+const waitActions = getActionsByType(workflow.actions!, 'wait')
+
+// Get actions with conditions
+const conditional = getConditionalActions(workflow.actions!)
+
+// Add an action
+const withAction = addAction(workflow, {
+  order: 5,
+  type: 'send',
+  description: 'Send follow-up',
+})
+
+// Remove an action
+const withoutAction = removeAction(workflow, 1)
+
+// Update an action
+const updated = updateAction(workflow, 1, {
+  params: { template: 'new_template' },
+})
+```
+
+### Trigger Helpers
+
+```typescript
+import { isEventTrigger, isScheduleTrigger, isWebhookTrigger } from 'business-as-code'
+
+if (isEventTrigger(workflow.trigger)) {
+  console.log('Event:', workflow.trigger.event)
+}
+
+if (isScheduleTrigger(workflow.trigger)) {
+  console.log('Schedule:', workflow.trigger.schedule)
+}
+```
+
+### Duration Parsing
+
+```typescript
+import { parseWaitDuration } from 'business-as-code'
+
+const waitAction = { type: 'wait', params: { duration: '24h' } }
+const milliseconds = parseWaitDuration(waitAction)
+// 86400000 (24 hours in ms)
+```
+
+### Template Filling
+
+```typescript
+import { fillTemplate } from 'business-as-code'
+
+const template = 'Hello {{customer.name}}, welcome to {{company}}!'
+const filled = fillTemplate(template, {
+  'customer.name': 'John',
+  'company': 'Acme Corp',
+})
+// "Hello John, welcome to Acme Corp!"
+```
+
+### Condition Evaluation
+
+```typescript
+import { evaluateCondition } from 'business-as-code'
+
+const condition = '{{customer.plan}} == "enterprise"'
+const shouldRun = evaluateCondition(condition, {
+  'customer.plan': 'enterprise',
+})
+// true
+```
+
+## Validation
+
+```typescript
+import { validateWorkflow } from 'business-as-code'
+
+const errors = validateWorkflow(workflow)
+if (errors.length > 0) {
+  console.error('Invalid workflow:', errors)
+}
+```
+
+## Type Definition
+
+```typescript
+interface WorkflowDefinition {
+  name: string
+  description?: string
+  trigger?: WorkflowTrigger
+  actions?: WorkflowAction[]
+  metadata?: Record<string, unknown>
+}
+
+interface WorkflowTrigger {
+  type: 'event' | 'schedule' | 'webhook' | 'manual'
+  event?: string
+  schedule?: string
+  webhook?: string
+}
+
+interface WorkflowAction {
+  order: number
+  type: 'send' | 'create' | 'update' | 'delete' | 'notify' | 'call' | 'wait'
+  description?: string
+  params?: Record<string, unknown>
+  condition?: string
+}
+```

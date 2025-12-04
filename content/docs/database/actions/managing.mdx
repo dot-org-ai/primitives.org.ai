@@ -1,0 +1,203 @@
+---
+title: Managing Actions
+description: Monitor, retry, and cancel actions
+---
+
+# Managing Actions
+
+Monitor progress, retry failures, and cancel pending actions.
+
+## Getting Status
+
+```typescript
+const action = await db.action.get(action.id)
+
+action.status    // 'pending' | 'active' | 'completed' | 'failed'
+action.progress  // items completed
+action.total     // total items
+action.error     // error message if failed
+```
+
+## Listing Actions
+
+```typescript
+// All actions
+const actions = await db.action.list()
+
+// By status
+const pending = await db.action.list({ status: 'pending' })
+const active = await db.action.list({ status: 'active' })
+const failed = await db.action.list({ status: 'failed' })
+const completed = await db.action.list({ status: 'completed' })
+```
+
+### With Filters
+
+```typescript
+const actions = await db.action.list({
+  status: 'active',
+  type: 'generate',
+  since: lastHour,
+  limit: 10,
+})
+```
+
+## Retrying Failed Actions
+
+```typescript
+// Retry a failed action
+await db.action.retry(action.id)
+
+// Retry all failed actions
+const failed = await db.action.list({ status: 'failed' })
+for (const action of failed) {
+  await db.action.retry(action.id)
+}
+```
+
+### Retry Options
+
+```typescript
+await db.action.retry(action.id, {
+  maxAttempts: 3,      // max retry attempts
+  backoff: 'exponential',  // 'none' | 'linear' | 'exponential'
+})
+```
+
+## Canceling Actions
+
+```typescript
+// Cancel pending action
+await db.action.cancel(action.id)
+
+// Cancel all pending actions of a type
+const pending = await db.action.list({
+  status: 'pending',
+  type: 'generate',
+})
+for (const action of pending) {
+  await db.action.cancel(action.id)
+}
+```
+
+Only `pending` and `active` actions can be canceled.
+
+## Progress Monitoring
+
+### Polling
+
+```typescript
+async function waitForAction(actionId) {
+  while (true) {
+    const action = await db.action.get(actionId)
+
+    console.log(`${action.progress}/${action.total} (${action.status})`)
+
+    if (action.status === 'completed') return action.results
+    if (action.status === 'failed') throw new Error(action.error)
+
+    await sleep(1000)
+  }
+}
+```
+
+### With Callback
+
+```typescript
+const action = await db.generate({
+  type: 'Post',
+  count: 100,
+  mode: 'background',
+  onProgress: (progress, total) => {
+    console.log(`${progress}/${total}`)
+  },
+})
+```
+
+## Partial Results
+
+Get results before completion:
+
+```typescript
+const action = await db.action.get(actionId)
+
+// Results so far
+const partial = action.results
+console.log(`Got ${partial.length} of ${action.total}`)
+```
+
+## Action History
+
+```typescript
+// Recent actions
+const recent = await db.action.list({
+  since: lastDay,
+  orderBy: 'startedAt',
+  order: 'desc',
+})
+
+// Actions for specific entity
+const entityActions = await db.action.list({
+  where: { 'data.url': entity.$id },
+})
+```
+
+## Statistics
+
+```typescript
+const stats = await db.action.stats()
+
+// {
+//   pending: 5,
+//   active: 2,
+//   completed: 1234,
+//   failed: 12,
+//   avgDuration: 4500,  // ms
+// }
+```
+
+## Cleanup
+
+Remove old completed actions:
+
+```typescript
+const old = await db.action.list({
+  status: 'completed',
+  completedAt: { $lt: thirtyDaysAgo },
+})
+
+for (const action of old) {
+  await db.action.delete(action.id)
+}
+```
+
+## Dashboard Example
+
+```typescript
+async function actionDashboard() {
+  const [pending, active, failed, recent] = await Promise.all([
+    db.action.list({ status: 'pending' }),
+    db.action.list({ status: 'active' }),
+    db.action.list({ status: 'failed' }),
+    db.action.list({ status: 'completed', limit: 10, order: 'desc' }),
+  ])
+
+  return {
+    pending: pending.length,
+    active: active.map(a => ({
+      id: a.id,
+      type: a.type,
+      progress: `${a.progress}/${a.total}`,
+    })),
+    failed: failed.map(a => ({
+      id: a.id,
+      error: a.error,
+    })),
+    recent: recent.map(a => ({
+      id: a.id,
+      type: a.type,
+      duration: a.completedAt - a.startedAt,
+    })),
+  }
+}
+```

@@ -1,0 +1,46 @@
+---
+title: Function Types
+description: The four types of AI functions
+---
+
+# Function Types
+
+Every AI function is one of four types, inferred from the **name + arguments**.
+
+## Type Overview
+
+| Type | Description | Returns | Examples |
+|------|-------------|---------|----------|
+| **Generative** | Generate content | Text, JSON, media | `ai`, `write`, `list`, `is` |
+| **Code** | Generate/execute code | Code string | `code`, `evaluate` |
+| **Agentic** | Multi-step with tools | Varies | `do`, `research`, `browse` |
+| **Human** | Requires human input | Depends on human | `ask`, `approve` |
+
+## Type Inference
+
+The AI infers function type from context:
+
+```typescript
+// ai.fizzBuzz({ max: 100 })
+// → "fizzBuzz" + algorithmic args → CodeFunction
+const fizzBuzz = await ai.fizzBuzz({ max: 100 })
+
+// ai.storyBrand({ hero: 'developers', guide: 'ai-functions' })
+// → "storyBrand" + marketing args → GenerativeFunction
+const brand = await ai.storyBrand({ hero: 'developers', guide: 'ai-functions' })
+
+// ai.launchProductHunt({ product, description, images })
+// → "launch" + external platform → AgenticFunction
+const launch = await ai.launchProductHunt({ product, description, images })
+
+// ai.processRefund({ order, amount: 50000, reason })
+// → large amount → HumanFunction (needs approval!)
+const refund = await ai.processRefund({ order, amount: 50000, reason })
+```
+
+## Choosing the Right Type
+
+- **Generative** - Content creation, analysis, classification
+- **Code** - Algorithms, data processing, calculations
+- **Agentic** - External interactions, research, multi-step tasks
+- **Human** - Approvals, reviews, high-stakes decisions

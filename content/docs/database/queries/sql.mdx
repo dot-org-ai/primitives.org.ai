@@ -1,0 +1,240 @@
+---
+title: SQL-Style Queries
+description: Relational query patterns with comparison operators
+---
+
+# SQL-Style Queries
+
+Familiar relational patterns for filtering, sorting, and pagination.
+
+## Comparison Operators
+
+```typescript
+// Greater than
+const expensive = await db.Product.find({
+  price: { $gt: 100 },
+})
+
+// Less than or equal
+const lowStock = await db.Product.find({
+  stock: { $lte: 10 },
+})
+
+// Range
+const midRange = await db.Product.find({
+  price: { $gte: 50, $lte: 200 },
+})
+
+// Not equal
+const available = await db.Product.find({
+  status: { $ne: 'sold' },
+})
+```
+
+### Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$eq` | Equal (default) | `{ status: 'active' }` |
+| `$ne` | Not equal | `{ status: { $ne: 'deleted' } }` |
+| `$gt` | Greater than | `{ price: { $gt: 100 } }` |
+| `$gte` | Greater than or equal | `{ age: { $gte: 18 } }` |
+| `$lt` | Less than | `{ stock: { $lt: 5 } }` |
+| `$lte` | Less than or equal | `{ rating: { $lte: 3 } }` |
+
+## Set Operators
+
+```typescript
+// In set
+const selected = await db.Product.find({
+  category: { $in: ['electronics', 'gadgets', 'accessories'] },
+})
+
+// Not in set
+const excluded = await db.Product.find({
+  status: { $nin: ['draft', 'archived'] },
+})
+```
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$in` | Value in array | `{ role: { $in: ['admin', 'mod'] } }` |
+| `$nin` | Value not in array | `{ status: { $nin: ['deleted'] } }` |
+
+## Logical Operators
+
+```typescript
+// OR
+const privileged = await db.User.find({
+  $or: [
+    { role: 'admin' },
+    { role: 'moderator' },
+  ],
+})
+
+// AND (explicit)
+const verified = await db.User.find({
+  $and: [
+    { active: true },
+    { emailVerified: true },
+  ],
+})
+
+// NOT
+const notDeleted = await db.Post.find({
+  $not: { deleted: true },
+})
+```
+
+### Complex Logic
+
+```typescript
+// (admin OR moderator) AND active
+const activeStaff = await db.User.find({
+  $and: [
+    { $or: [{ role: 'admin' }, { role: 'moderator' }] },
+    { active: true },
+  ],
+})
+
+// Nested conditions
+const featured = await db.Product.find({
+  $or: [
+    { featured: true },
+    {
+      $and: [
+        { rating: { $gte: 4.5 } },
+        { reviews: { $gte: 100 } },
+      ],
+    },
+  ],
+})
+```
+
+## Sorting
+
+```typescript
+// Single field
+const recent = await db.Post.list({
+  orderBy: 'createdAt',
+  order: 'desc',
+})
+
+// Multiple fields
+const sorted = await db.Post.list({
+  orderBy: ['featured', 'createdAt'],
+  order: 'desc',
+})
+```
+
+## Pagination
+
+```typescript
+// Basic pagination
+const page2 = await db.Post.list({
+  limit: 20,
+  offset: 20,
+})
+
+// Cursor-based (recommended for large datasets)
+const nextPage = await db.Post.list({
+  where: { createdAt: { $lt: lastPost.createdAt } },
+  orderBy: 'createdAt',
+  order: 'desc',
+  limit: 20,
+})
+```
+
+## Select Fields
+
+```typescript
+const users = await db.User.find({
+  select: ['name', 'email'],
+  where: { active: true },
+})
+// Returns only { name, email } for each user
+```
+
+## Date Queries
+
+```typescript
+const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+// Recent posts
+const recent = await db.Post.find({
+  createdAt: { $gte: lastWeek },
+})
+
+// Date range
+const thisMonth = await db.Post.find({
+  createdAt: {
+    $gte: startOfMonth,
+    $lt: endOfMonth,
+  },
+})
+```
+
+## Null Handling
+
+```typescript
+// Is null
+const unassigned = await db.Task.find({
+  assignee: null,
+})
+
+// Is not null
+const assigned = await db.Task.find({
+  assignee: { $ne: null },
+})
+```
+
+## Count
+
+```typescript
+const count = await db.Post.find({
+  where: { published: true },
+  count: true,
+})
+// Returns number instead of array
+```
+
+## Real-World Examples
+
+### E-commerce
+
+```typescript
+// Products on sale with good ratings
+const deals = await db.Product.find({
+  $and: [
+    { salePrice: { $lt: '$originalPrice' } },
+    { rating: { $gte: 4 } },
+    { stock: { $gt: 0 } },
+  ],
+  orderBy: 'salePrice',
+  order: 'asc',
+})
+```
+
+### User Management
+
+```typescript
+// Inactive users for cleanup
+const inactive = await db.User.find({
+  $and: [
+    { lastLoginAt: { $lt: sixMonthsAgo } },
+    { role: { $nin: ['admin', 'system'] } },
+  ],
+})
+```
+
+### Content Management
+
+```typescript
+// Scheduled posts ready to publish
+const ready = await db.Post.find({
+  $and: [
+    { status: 'scheduled' },
+    { publishAt: { $lte: new Date() } },
+  ],
+})
+```

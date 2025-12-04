@@ -1,0 +1,19 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---Getting Started---",
+    "introduction",
+    "---Primitives---",
+    "function",
+    "database",
+    "workflow",
+    "task",
+    "agent",
+    "human",
+    "product",
+    "service",
+    "business",
+    "---Reference---",
+    "packages"
+  ]
+}

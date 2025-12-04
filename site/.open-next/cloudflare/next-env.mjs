@@ -1,0 +1,3 @@
+export const production = {"AI_GATEWAY_TOKEN":"oS40l795q0Hrn-uKQ2Zew6utQV-GPrey6d9lUrlt","AI_GATEWAY_URL":"https://gateway.ai.cloudflare.com/v1/b6641681fe423910342b9ffa1364c76d/mdxai"};
+export const development = {"AI_GATEWAY_TOKEN":"oS40l795q0Hrn-uKQ2Zew6utQV-GPrey6d9lUrlt","AI_GATEWAY_URL":"https://gateway.ai.cloudflare.com/v1/b6641681fe423910342b9ffa1364c76d/mdxai"};
+export const test = {"AI_GATEWAY_TOKEN":"oS40l795q0Hrn-uKQ2Zew6utQV-GPrey6d9lUrlt","AI_GATEWAY_URL":"https://gateway.ai.cloudflare.com/v1/b6641681fe423910342b9ffa1364c76d/mdxai"};

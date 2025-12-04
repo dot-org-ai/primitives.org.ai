@@ -118,12 +118,12 @@ describe('defineFunction', () => {
       type: 'human',
       name: 'approve',
       args: { amount: 'Amount (number)' },
-      channel: 'slack',
+      channel: 'workspace',
       instructions: 'Review and approve.',
     })
 
     expect(fn.definition.type).toBe('human')
-    expect((fn.definition as { channel: string }).channel).toBe('slack')
+    expect((fn.definition as { channel: string }).channel).toBe('workspace')
   })
 
   it('creates a code function definition', () => {

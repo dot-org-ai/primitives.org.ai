@@ -2,138 +2,100 @@
  * Approval request functionality for digital workers
  */
 
-import { define } from 'ai-functions'
-import type { ApprovalResult, ApprovalOptions } from './types.js'
+import type {
+  Worker,
+  Team,
+  WorkerRef,
+  ActionTarget,
+  ContactChannel,
+  ApprovalResult,
+  ApprovalOptions,
+  Contacts,
+} from './types.js'
 
 /**
- * Request approval from a human or authorized agent
+ * Request approval from a worker or team
  *
- * Creates a human-in-the-loop approval request that can be routed
- * through various channels (Slack, email, web UI, etc.).
+ * Routes approval requests through the specified channel and waits for a response.
  *
  * @param request - What is being requested for approval
- * @param options - Approval options (channel, approver, timeout, etc.)
- * @returns Promise resolving to approval result
- *
- * @example
- * ```ts
- * // Request approval for an expense
- * const result = await approve('Expense: $500 for AWS services', {
- *   channel: 'slack',
- *   approver: 'manager@company.com',
- *   context: {
- *     amount: 500,
- *     category: 'Infrastructure',
- *     vendor: 'AWS',
- *   },
- * })
- *
- * if (result.approved) {
- *   console.log(`Approved by ${result.approvedBy}`)
- *   // Proceed with expense
- * }
- * ```
- *
- * @example
- * ```ts
- * // Request deployment approval
- * const result = await approve('Deploy v2.1.0 to production', {
- *   channel: 'web',
- *   approver: 'ops-team',
- *   context: {
- *     version: 'v2.1.0',
- *     environment: 'production',
- *     changes: ['New feature X', 'Bug fix Y', 'Performance improvements'],
- *   },
- * })
- * ```
- */
-export async function approve(
-  request: string,
-  options: ApprovalOptions = {}
-): Promise<ApprovalResult> {
-  const {
-    channel = 'web',
-    approver,
-    timeout,
-    context,
-  } = options
-
-  // Use ai-functions to define a human function for approval
-  const approvalFn = define.human({
-    name: 'requestApproval',
-    description: 'Request approval from a human',
-    args: {
-      request: 'What is being requested for approval',
-      contextInfo: 'Additional context for the approval decision',
-    },
-    returnType: {
-      approved: 'Whether the request was approved (boolean)',
-      notes: 'Any notes or feedback from the approver',
-    },
-    channel,
-    instructions: `Please review the following approval request and approve or reject it.
-
-Request: ${request}
-
-${context ? `Context: ${JSON.stringify(context, null, 2)}` : ''}
-
-Make your decision based on company policies and best judgment.`,
-    assignee: approver,
-    timeout,
-  })
-
-  // Call the approval function
-  const response = await approvalFn.call({
-    request,
-    contextInfo: context ? JSON.stringify(context) : '',
-  }) as unknown
-
-  const typedResponse = response as { approved: boolean; notes?: string; _pending?: boolean }
-
-  // If the response is pending (waiting for human input)
-  if (typedResponse._pending) {
-    // In a real implementation, this would poll or wait for the response
-    // For now, return a pending status
-    return {
-      approved: false,
-      channel,
-      notes: 'Approval pending - waiting for human response',
-    }
-  }
-
-  return {
-    approved: typedResponse.approved,
-    approvedBy: approver,
-    approvedAt: new Date(),
-    notes: typedResponse.notes,
-    channel,
-  }
-}
-
-/**
- * Request approval with a structured decision context
- *
- * @param request - Approval request
- * @param decision - Decision context with pros, cons, risks, etc.
+ * @param target - The worker or team to request approval from
  * @param options - Approval options
  * @returns Promise resolving to approval result
  *
  * @example
  * ```ts
- * const result = await approve.withContext('Migrate to new database', {
- *   pros: ['Better performance', 'Lower cost', 'Managed service'],
- *   cons: ['Migration effort', 'Downtime required', 'Learning curve'],
- *   risks: ['Data loss', 'Service disruption'],
- *   mitigations: ['Backup strategy', 'Staged rollout', 'Rollback plan'],
- * }, {
- *   channel: 'slack',
- *   approver: 'cto@company.com',
+ * // Request approval from a worker
+ * const result = await approve('Expense: $500 for AWS', manager, {
+ *   via: 'slack',
+ *   context: { amount: 500, category: 'Infrastructure' },
  * })
+ *
+ * if (result.approved) {
+ *   console.log(`Approved by ${result.approvedBy?.name}`)
+ * }
+ *
+ * // Request approval from a team
+ * const result = await approve('Deploy v2.1.0 to production', opsTeam, {
+ *   via: 'slack',
+ * })
+ * ```
+ */
+export async function approve(
+  request: string,
+  target: ActionTarget,
+  options: ApprovalOptions = {}
+): Promise<ApprovalResult> {
+  const { via, timeout, context, escalate = false } = options
+
+  // Resolve target to get contacts and approver info
+  const { contacts, approver } = resolveTarget(target)
+
+  // Determine which channel to use
+  const channel = resolveChannel(via, contacts)
+
+  if (!channel) {
+    throw new Error('No valid channel available for approval request')
+  }
+
+  // Send the approval request and wait for response
+  const response = await sendApprovalRequest(channel, request, contacts, {
+    timeout,
+    context,
+    approver,
+    escalate,
+  })
+
+  return {
+    approved: response.approved,
+    approvedBy: approver,
+    approvedAt: new Date(),
+    notes: response.notes,
+    via: channel,
+  }
+}
+
+/**
+ * Request approval with structured decision context
+ *
+ * @example
+ * ```ts
+ * const result = await approve.withContext(
+ *   'Migrate to new database',
+ *   cto,
+ *   {
+ *     pros: ['Better performance', 'Lower cost'],
+ *     cons: ['Migration effort', 'Downtime required'],
+ *     risks: ['Data loss', 'Service disruption'],
+ *     mitigations: ['Backup strategy', 'Staged rollout'],
+ *   },
+ *   { via: 'email' }
+ * )
  * ```
  */
 approve.withContext = async (
   request: string,
+  target: ActionTarget,
   decision: {
     pros?: string[]
     cons?: string[]
@@ -143,7 +105,7 @@ approve.withContext = async (
   },
   options: ApprovalOptions = {}
 ): Promise<ApprovalResult> => {
-  return approve(request, {
+  return approve(request, target, {
     ...options,
     context: {
       ...options.context,
@@ -155,29 +117,201 @@ approve.withContext = async (
 /**
  * Request batch approval for multiple items
  *
- * @param requests - Array of approval requests
- * @param options - Approval options
- * @returns Promise resolving to array of approval results
- *
  * @example
  * ```ts
  * const results = await approve.batch([
  *   'Expense: $500 for AWS',
  *   'Expense: $200 for office supplies',
  *   'Expense: $1000 for conference ticket',
- * ], {
- *   channel: 'email',
- *   approver: 'finance@company.com',
- * })
+ * ], finance, { via: 'email' })
  *
  * const approved = results.filter(r => r.approved)
- * console.log(`Approved ${approved.length} of ${results.length} requests`)
  * ```
  */
 approve.batch = async (
   requests: string[],
+  target: ActionTarget,
   options: ApprovalOptions = {}
 ): Promise<ApprovalResult[]> => {
-  // Process approvals in parallel
-  return Promise.all(requests.map((request) => approve(request, options)))
+  return Promise.all(requests.map((request) => approve(request, target, options)))
+}
+
+/**
+ * Request approval with a deadline
+ *
+ * @example
+ * ```ts
+ * const result = await approve.withDeadline(
+ *   'Release v2.0',
+ *   manager,
+ *   new Date('2024-01-15T17:00:00Z'),
+ *   { via: 'slack' }
+ * )
+ * ```
+ */
+approve.withDeadline = async (
+  request: string,
+  target: ActionTarget,
+  deadline: Date,
+  options: ApprovalOptions = {}
+): Promise<ApprovalResult> => {
+  const timeout = deadline.getTime() - Date.now()
+  return approve(request, target, {
+    ...options,
+    timeout: Math.max(0, timeout),
+    context: {
+      ...options.context,
+      deadline: deadline.toISOString(),
+    },
+  })
+}
+
+/**
+ * Request approval from multiple approvers (any one can approve)
+ *
+ * @example
+ * ```ts
+ * const result = await approve.any(
+ *   'Urgent: Production fix',
+ *   [alice, bob, charlie],
+ *   { via: 'slack' }
+ * )
+ * ```
+ */
+approve.any = async (
+  request: string,
+  targets: ActionTarget[],
+  options: ApprovalOptions = {}
+): Promise<ApprovalResult> => {
+  // Race all approval requests - first to respond wins
+  return Promise.race(targets.map((target) => approve(request, target, options)))
+}
+
+/**
+ * Request approval from multiple approvers (all must approve)
+ *
+ * @example
+ * ```ts
+ * const result = await approve.all(
+ *   'Major infrastructure change',
+ *   [cto, vpe, securityLead],
+ *   { via: 'email' }
+ * )
+ * ```
+ */
+approve.all = async (
+  request: string,
+  targets: ActionTarget[],
+  options: ApprovalOptions = {}
+): Promise<ApprovalResult & { approvals: ApprovalResult[] }> => {
+  const results = await Promise.all(targets.map((target) => approve(request, target, options)))
+
+  const allApproved = results.every((r) => r.approved)
+
+  return {
+    approved: allApproved,
+    approvedAt: new Date(),
+    notes: allApproved
+      ? 'All approvers approved'
+      : `${results.filter((r) => !r.approved).length} rejection(s)`,
+    approvals: results,
+  }
+}
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
+
+/**
+ * Resolve an action target to contacts and approver
+ */
+function resolveTarget(target: ActionTarget): {
+  contacts: Contacts
+  approver: WorkerRef
+} {
+  if (typeof target === 'string') {
+    return {
+      contacts: {},
+      approver: { id: target },
+    }
+  }
+
+  if ('contacts' in target) {
+    // Worker or Team
+    let approver: WorkerRef
+    if ('members' in target) {
+      // Team - use lead or first member
+      approver = target.lead ?? target.members[0] ?? { id: target.id }
+    } else {
+      // Worker
+      approver = { id: target.id, type: target.type, name: target.name }
+    }
+
+    return {
+      contacts: target.contacts,
+      approver,
+    }
+  }
+
+  // WorkerRef
+  return {
+    contacts: {},
+    approver: target,
+  }
+}
+
+/**
+ * Determine which channel to use
+ */
+function resolveChannel(
+  via: ContactChannel | ContactChannel[] | undefined,
+  contacts: Contacts
+): ContactChannel | null {
+  if (via) {
+    const requested = Array.isArray(via) ? via[0] : via
+    if (requested && contacts[requested] !== undefined) {
+      return requested
+    }
+  }
+
+  // Default to first available
+  const available = Object.keys(contacts) as ContactChannel[]
+  const first = available[0]
+  return first ?? null
+}
+
+/**
+ * Send an approval request to a channel and wait for response
+ */
+async function sendApprovalRequest(
+  channel: ContactChannel,
+  request: string,
+  contacts: Contacts,
+  options: {
+    timeout?: number
+    context?: Record<string, unknown>
+    approver: WorkerRef
+    escalate?: boolean
+  }
+): Promise<{ approved: boolean; notes?: string }> {
+  const contact = contacts[channel]
+
+  if (!contact) {
+    throw new Error(`No ${channel} contact configured`)
+  }
+
+  // In a real implementation, this would:
+  // 1. Format the request for the channel (Slack blocks, email HTML, etc.)
+  // 2. Send via the appropriate API
+  // 3. Wait for response (polling, webhook, interactive message, etc.)
+  // 4. Handle timeout and escalation
+
+  // For now, simulate a pending response
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  // Return a placeholder - real impl would wait for actual response
+  return {
+    approved: false,
+    notes: 'Approval pending - waiting for response',
+  }
 }

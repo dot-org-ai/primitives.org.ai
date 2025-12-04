@@ -1,0 +1,288 @@
+---
+title: API Reference
+description: Complete API reference for ai-database
+---
+
+# API Reference
+
+## DB Factory
+
+```typescript
+import { DB } from 'ai-database'
+
+const db = DB(schema)
+```
+
+Creates a typed database from a schema definition.
+
+## Entity Operations
+
+Every type gets these operations:
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `get` | `(id: string) => Promise<T \| null>` | Get by ID |
+| `list` | `(options?: ListOptions) => Promise<T[]>` | List all |
+| `find` | `(where: Partial<T>) => Promise<T[]>` | Find matching |
+| `search` | `(query: string, options?: SearchOptions) => Promise<T[]>` | Semantic search |
+| `create` | `(data) => Promise<T>` | Create new |
+| `create` | `(id, data) => Promise<T>` | Create with ID |
+| `update` | `(id, data) => Promise<T>` | Partial update |
+| `upsert` | `(id, data) => Promise<T>` | Create or update |
+| `delete` | `(id: string) => Promise<boolean>` | Delete |
+| `forEach` | `(callback) => Promise<void>` | Iterate |
+
+### Examples
+
+```typescript
+// Get
+const post = await db.Post.get('hello-world')
+
+// List with options
+const posts = await db.Post.list({
+  where: { published: true },
+  orderBy: 'createdAt',
+  order: 'desc',
+  limit: 10,
+  offset: 0,
+})
+
+// Find
+const drafts = await db.Post.find({ status: 'draft' })
+
+// Search
+const results = await db.Post.search('AI tutorials', { limit: 5 })
+
+// Create
+const post = await db.Post.create({ title: 'Hello', content: '...' })
+const post = await db.Post.create('hello-world', { title: 'Hello' })
+
+// Update
+await db.Post.update('hello-world', { published: true })
+
+// Upsert
+await db.Post.upsert('hello-world', { title: 'Hello', content: '...' })
+
+// Delete
+await db.Post.delete('hello-world')
+
+// Iterate
+await db.Post.forEach(async (post) => {
+  console.log(post.title)
+})
+```
+
+## Global Operations
+
+```typescript
+// Get by URL
+const entity = await db.get('https://example.com/posts/hello')
+
+// Search all types
+const results = await db.search('query')
+
+// Natural language query
+const results = await db`what posts are about AI?`
+```
+
+## Options Types
+
+### ListOptions
+
+```typescript
+interface ListOptions {
+  where?: Record<string, unknown>
+  orderBy?: string
+  order?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}
+```
+
+### SearchOptions
+
+```typescript
+interface SearchOptions extends ListOptions {
+  fields?: string[]
+  minScore?: number
+  mode?: 'hybrid' | 'vector' | 'text'
+}
+```
+
+## Schema Functions
+
+### defineNoun
+
+```typescript
+import { defineNoun } from 'ai-database'
+
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  description: 'A blog post',
+  properties: {
+    title: { type: 'string' },
+  },
+  relationships: {
+    author: { type: 'Author', backref: 'posts' },
+  },
+  actions: ['create', 'update', 'delete'],
+  events: ['created', 'updated', 'deleted'],
+})
+```
+
+### defineVerb
+
+```typescript
+import { defineVerb } from 'ai-database'
+
+const publish = defineVerb({
+  action: 'publish',
+  actor: 'publisher',
+  act: 'publishes',
+  activity: 'publishing',
+  result: 'publication',
+  reverse: { at: 'publishedAt', by: 'publishedBy' },
+  inverse: 'unpublish',
+})
+```
+
+### nounToSchema
+
+```typescript
+import { nounToSchema } from 'ai-database'
+
+const db = DB({
+  Post: nounToSchema(postNoun),
+})
+```
+
+## Linguistic Functions
+
+### conjugate
+
+```typescript
+import { conjugate } from 'ai-database'
+
+conjugate('publish')
+// => { action, actor, act, activity, result, reverse }
+```
+
+### pluralize / singularize
+
+```typescript
+import { pluralize, singularize } from 'ai-database'
+
+pluralize('category')   // 'categories'
+singularize('people')   // 'person'
+```
+
+### inferNoun
+
+```typescript
+import { inferNoun } from 'ai-database'
+
+inferNoun('BlogPost')
+// => { singular: 'blog post', plural: 'blog posts', ... }
+```
+
+### Type
+
+```typescript
+import { Type } from 'ai-database'
+
+const meta = Type('BlogPost')
+meta.singular   // 'blog post'
+meta.slug       // 'blog-post'
+meta.created    // 'BlogPost.created'
+```
+
+## Configuration
+
+### setProvider
+
+```typescript
+import { setProvider, MemoryProvider } from 'ai-database'
+
+setProvider(new MemoryProvider())
+```
+
+### setNLQueryGenerator
+
+```typescript
+import { setNLQueryGenerator } from 'ai-database'
+
+setNLQueryGenerator(async (question, context) => {
+  // Return NLQueryPlan
+})
+```
+
+## Types
+
+### Entity
+
+Every entity has these fields:
+
+```typescript
+{
+  $id: string     // Unique ID
+  $type: string   // Type name
+  // ...your fields
+}
+```
+
+### NLQueryResult
+
+```typescript
+interface NLQueryResult<T> {
+  interpretation: string
+  confidence: number
+  results: T[]
+  query?: string
+  explanation?: string
+}
+```
+
+### TypeMeta
+
+```typescript
+interface TypeMeta {
+  name: string
+  singular: string
+  plural: string
+  slug: string
+  slugPlural: string
+  creator: string
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+  created: string
+  updated: string
+  deleted: string
+}
+```
+
+## Pre-defined Verbs
+
+```typescript
+import { Verbs } from 'ai-database'
+
+Verbs.create   // create, creator, creates, creating, creation
+Verbs.update   // update, updater, updates, updating, update
+Verbs.delete   // delete, deleter, deletes, deleting, deletion
+Verbs.publish  // publish, publisher, publishes, publishing, publication
+Verbs.archive  // archive, archiver, archives, archiving, archive
+```
+
+## System Schema
+
+```typescript
+import { SystemSchema, ThingSchema, NounSchema, VerbSchema, EdgeSchema } from 'ai-database'
+
+// SystemSchema combines all:
+// - Thing: base entity type
+// - Noun: type definitions
+// - Verb: action definitions
+// - Edge: relationships
+```

@@ -1,0 +1,307 @@
+---
+title: SDK
+description: Define software development kits
+---
+
+# SDK
+
+The `SDK()` function defines software development kits with exports, documentation, and examples.
+
+## Basic Usage
+
+```typescript
+import { SDK } from 'digital-products'
+
+const mySDK = SDK({
+  id: 'my-sdk',
+  name: 'My SDK',
+  description: 'JavaScript SDK for My API',
+  version: '1.0.0',
+  language: 'typescript',
+  api: 'my-api',
+})
+```
+
+## Languages
+
+| Language | Description |
+|----------|-------------|
+| `typescript` | TypeScript/JavaScript |
+| `javascript` | JavaScript only |
+| `python` | Python |
+| `go` | Go |
+| `rust` | Rust |
+| `java` | Java |
+| `csharp` | C# |
+| `ruby` | Ruby |
+| `php` | PHP |
+
+## Exports
+
+Define what the SDK exports:
+
+```typescript
+import { SDK, Export } from 'digital-products'
+
+const mySDK = SDK({
+  id: 'my-sdk',
+  name: 'My SDK',
+  version: '1.0.0',
+  language: 'typescript',
+  api: 'my-api',
+  exports: [
+    Export('function', 'createClient', 'Create an API client', {
+      parameters: {
+        apiKey: 'API key for authentication',
+        baseUrl: 'Optional base URL',
+      },
+      returns: 'API client instance',
+    }),
+    Export('class', 'APIClient', 'Main API client', {
+      methods: [
+        Export('function', 'get', 'GET request', {
+          parameters: { path: 'Request path' },
+          returns: 'Response data',
+        }),
+        Export('function', 'post', 'POST request', {
+          parameters: { path: 'Request path', data: 'Request body' },
+          returns: 'Response data',
+        }),
+        Export('function', 'put', 'PUT request', {
+          parameters: { path: 'Request path', data: 'Request body' },
+          returns: 'Response data',
+        }),
+        Export('function', 'delete', 'DELETE request', {
+          parameters: { path: 'Request path' },
+          returns: 'Response data',
+        }),
+      ],
+    }),
+    Export('type', 'ClientOptions', 'Client configuration options', {
+      properties: {
+        apiKey: 'API key',
+        baseUrl: 'Base URL',
+        timeout: 'Request timeout (number)',
+      },
+    }),
+  ],
+})
+```
+
+### Export Types
+
+| Type | Description |
+|------|-------------|
+| `function` | Exported function |
+| `class` | Exported class |
+| `type` | Type definition |
+| `const` | Constant value |
+| `interface` | Interface definition |
+
+## Installation
+
+Specify installation instructions:
+
+```typescript
+const mySDK = SDK({
+  id: 'my-sdk',
+  name: 'My SDK',
+  version: '1.0.0',
+  language: 'typescript',
+  install: 'npm install my-sdk',
+})
+```
+
+## Examples
+
+Add usage examples:
+
+```typescript
+import { SDK, Export, Example } from 'digital-products'
+
+const mySDK = SDK({
+  id: 'my-sdk',
+  name: 'My SDK',
+  version: '1.0.0',
+  language: 'typescript',
+  api: 'my-api',
+  install: 'npm install my-sdk',
+  examples: [
+    Example(
+      'Basic Usage',
+      'Create a client and make a request',
+      `import { createClient } from 'my-sdk'
+
+const client = createClient({ apiKey: 'YOUR_API_KEY' })
+const users = await client.get('/users')
+console.log(users)`,
+      '{ users: [...] }'
+    ),
+    Example(
+      'With TypeScript',
+      'Type-safe API calls',
+      `import { createClient, User } from 'my-sdk'
+
+const client = createClient({ apiKey: 'YOUR_API_KEY' })
+const user = await client.get<User>('/users/123')
+console.log(user.name)`,
+      '{ id: "123", name: "John" }'
+    ),
+    Example(
+      'Error Handling',
+      'Handle API errors',
+      `import { createClient, APIError } from 'my-sdk'
+
+const client = createClient({ apiKey: 'YOUR_API_KEY' })
+
+try {
+  const user = await client.get('/users/999')
+} catch (error) {
+  if (error instanceof APIError) {
+    console.error(\`API Error: \${error.status} - \${error.message}\`)
+  }
+}`,
+      'API Error: 404 - User not found'
+    ),
+  ],
+})
+```
+
+### Example Helper
+
+```typescript
+Example(title, description, code, output?)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `title` | string | Example title |
+| `description` | string | What the example shows |
+| `code` | string | Code snippet |
+| `output` | string | Expected output |
+
+## Complete Example
+
+```typescript
+import { SDK, Export, Example } from 'digital-products'
+
+const paymentsSDK = SDK({
+  id: 'payments-sdk',
+  name: 'Payments SDK',
+  description: 'Official SDK for the Payments API',
+  version: '2.0.0',
+  language: 'typescript',
+  api: 'payments-api',
+  install: 'npm install @company/payments-sdk',
+
+  exports: [
+    Export('function', 'createPaymentsClient', 'Create a payments client', {
+      parameters: {
+        apiKey: 'Your API key',
+        environment: 'sandbox | production',
+      },
+      returns: 'PaymentsClient instance',
+    }),
+
+    Export('class', 'PaymentsClient', 'Main payments client', {
+      methods: [
+        Export('function', 'createPayment', 'Create a payment', {
+          parameters: {
+            amount: 'Amount in cents (number)',
+            currency: 'Currency code',
+            customerId: 'Customer ID',
+          },
+          returns: 'Payment object',
+        }),
+        Export('function', 'getPayment', 'Get payment by ID', {
+          parameters: { paymentId: 'Payment ID' },
+          returns: 'Payment object',
+        }),
+        Export('function', 'refundPayment', 'Refund a payment', {
+          parameters: {
+            paymentId: 'Payment ID',
+            amount: 'Refund amount (optional)',
+          },
+          returns: 'Refund object',
+        }),
+        Export('function', 'listPayments', 'List payments', {
+          parameters: {
+            customerId: 'Filter by customer',
+            limit: 'Max results (number)',
+          },
+          returns: 'Array of payments',
+        }),
+      ],
+    }),
+
+    Export('type', 'Payment', 'Payment object', {
+      properties: {
+        id: 'Payment ID',
+        amount: 'Amount in cents (number)',
+        currency: 'Currency code',
+        status: 'pending | succeeded | failed',
+        customerId: 'Customer ID',
+        createdAt: 'Created timestamp (date)',
+      },
+    }),
+
+    Export('type', 'PaymentError', 'Payment error', {
+      properties: {
+        code: 'Error code',
+        message: 'Error message',
+        type: 'card_error | api_error | validation_error',
+      },
+    }),
+  ],
+
+  examples: [
+    Example(
+      'Create a Payment',
+      'Charge a customer',
+      `import { createPaymentsClient } from '@company/payments-sdk'
+
+const payments = createPaymentsClient({
+  apiKey: 'sk_test_xxx',
+  environment: 'sandbox',
+})
+
+const payment = await payments.createPayment({
+  amount: 2000, // $20.00
+  currency: 'usd',
+  customerId: 'cus_123',
+})
+
+console.log(payment.id)`,
+      'pay_abc123'
+    ),
+    Example(
+      'Process Refund',
+      'Refund a payment',
+      `const refund = await payments.refundPayment({
+  paymentId: 'pay_abc123',
+  amount: 1000, // Partial refund of $10
+})
+
+console.log(refund.status)`,
+      'succeeded'
+    ),
+  ],
+})
+```
+
+## Type Definition
+
+```typescript
+interface SDKDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  language?: 'typescript' | 'javascript' | 'python' | 'go' | 'rust' | 'java' | 'csharp' | 'ruby' | 'php'
+  api?: string
+  exports?: ExportDefinition[]
+  install?: string
+  examples?: ExampleDefinition[]
+  metadata?: Record<string, unknown>
+}
+```

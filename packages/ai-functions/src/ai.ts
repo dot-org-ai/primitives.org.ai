@@ -34,6 +34,7 @@ import type {
   GenerativeFunctionDefinition,
   AgenticFunctionDefinition,
   HumanFunctionDefinition,
+  HumanChannel,
   CodeLanguage,
   FunctionRegistry,
   AutoDefineResult
@@ -878,7 +879,7 @@ Determine:
       definition = {
         ...baseDefinition,
         type: 'human' as const,
-        channel: (analysis.channel || 'web') as 'slack' | 'email' | 'web' | 'sms' | 'custom',
+        channel: (analysis.channel || 'web') as HumanChannel,
         instructions: analysis.instructions || `Please review and respond to this ${readableName} request`,
         promptTemplate: analysis.promptTemplate,
       }

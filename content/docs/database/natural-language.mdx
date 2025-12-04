@@ -1,0 +1,150 @@
+---
+title: Natural Language Queries
+description: Query your database using natural language
+---
+
+# Natural Language Queries
+
+Query your database using natural language. The database knows its own schema, so AI can translate questions into structured queries.
+
+## Basic Usage
+
+```typescript
+// Query across all types
+const results = await db`what is happening with joe in california?`
+// => {
+//   interpretation: "Find activity for customer 'joe' in CA",
+//   confidence: 0.92,
+//   results: [...orders, ...events, ...tickets]
+// }
+
+// Query specific type
+const orders = await db.Order`which pending orders are delayed?`
+// => {
+//   interpretation: "Orders where status='pending' and shipped_at < expected_at",
+//   confidence: 0.89,
+//   results: [...]
+// }
+```
+
+## Template Interpolation
+
+```typescript
+const customer = 'joe'
+const state = 'CA'
+const results = await db`show me ${customer}'s orders in ${state}`
+```
+
+## How It Works
+
+1. **Schema Context** - The database provides the AI with:
+   - All type names (singular, plural forms)
+   - Field names and types
+   - Relationships between types
+
+2. **Query Planning** - AI generates:
+   - Which types to query
+   - Filters to apply
+   - Search terms
+   - How to interpret results
+
+3. **Execution** - Database executes the plan and returns structured results
+
+```typescript
+// The AI sees this context:
+{
+  types: [
+    { name: 'Order', singular: 'order', plural: 'orders',
+      fields: ['status', 'total', 'shipped_at'],
+      relationships: [{ name: 'customer', to: 'Customer' }] },
+    { name: 'Customer', singular: 'customer', plural: 'customers',
+      fields: ['name', 'state', 'email'] }
+  ]
+}
+
+// And generates a plan:
+{
+  types: ['Order'],
+  filters: { status: 'pending', 'customer.state': 'CA' },
+  search: 'joe',
+  interpretation: "Pending orders for customers named 'joe' in California"
+}
+```
+
+## Configuring the AI
+
+```typescript
+import { setNLQueryGenerator } from 'ai-database'
+import { generate } from 'ai-functions'
+
+setNLQueryGenerator(async (question, context) => {
+  return generate({
+    prompt: `Given this schema: ${JSON.stringify(context.types)}
+             Question: ${question}
+             Generate a query plan with types, filters, and interpretation.`,
+    schema: NLQueryPlanSchema
+  })
+})
+```
+
+## Result Type
+
+```typescript
+interface NLQueryResult<T> {
+  /** The interpreted query */
+  interpretation: string
+  /** Confidence in the interpretation (0-1) */
+  confidence: number
+  /** The results */
+  results: T[]
+  /** SQL/filter equivalent (for debugging) */
+  query?: string
+  /** Explanation of what was found */
+  explanation?: string
+}
+```
+
+## Fallback Behavior
+
+If no AI generator is configured, natural language queries fall back to keyword search:
+
+```typescript
+const results = await db`what posts are about AI?`
+// Falls back to: db.search('what posts are about AI')
+// interpretation: "Search for 'what posts are about AI?'"
+// confidence: 0.5
+// explanation: "Fallback to keyword search (no AI generator configured)"
+```
+
+## Type-Specific Queries
+
+Query a specific type using tagged template on the type accessor:
+
+```typescript
+// All orders
+const delayed = await db.Order`which orders are behind schedule?`
+
+// All posts
+const drafts = await db.Post`what posts are still drafts?`
+
+// All users
+const inactive = await db.User`who hasn't logged in recently?`
+```
+
+## Complex Questions
+
+Natural language queries can understand complex intent:
+
+```typescript
+// Time-based
+const recent = await db`what changed in the last hour?`
+
+// Relationship-based
+const activity = await db`what has joe been working on?`
+
+// Aggregation
+const summary = await db`how many orders are pending by region?`
+
+// Comparison
+const trending = await db`which topics are getting more engagement this week?`
+```

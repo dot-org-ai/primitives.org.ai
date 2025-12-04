@@ -1,0 +1,80 @@
+---
+title: Events
+description: Immutable event log for reactivity
+---
+
+# Events
+
+Every mutation emits an immutable event. Build reactive systems, audit trails, and event-driven workflows.
+
+## Automatic Events
+
+All mutations emit events automatically:
+
+```typescript
+await db.Post.create({ title: 'Hello' })
+// Emits: Post.created
+
+await db.Post.update('hello', { published: true })
+// Emits: Post.updated
+
+await db.Post.delete('hello')
+// Emits: Post.deleted
+```
+
+## Event Types
+
+| Event | Emitted When |
+|-------|--------------|
+| `{Type}.created` | Entity created |
+| `{Type}.updated` | Entity updated |
+| `{Type}.deleted` | Entity deleted |
+| `{Type}.generated` | Entity AI-generated |
+| `Relation.created` | Relationship created |
+| `Relation.deleted` | Relationship deleted |
+| `Action.started` | Action began |
+| `Action.completed` | Action succeeded |
+| `Action.failed` | Action failed |
+
+## Event Structure
+
+```typescript
+interface Event {
+  id: string
+  type: string          // 'Post.created'
+  url: string           // entity URL
+  data: unknown         // entity data or changes
+  timestamp: Date
+  actor?: string        // who triggered it
+}
+```
+
+## Using Events
+
+| Operation | Description |
+|-----------|-------------|
+| [Subscribing](/docs/database/events/subscribing) | React to events in real-time |
+| [Querying](/docs/database/events/emitting) | Query the event log |
+| [Replaying](/docs/database/events/replaying) | Replay events for recovery |
+
+## Quick Example
+
+```typescript
+// Subscribe to new posts
+db.events.on('Post.created', async (event) => {
+  // Generate social posts
+  await db.generate({
+    type: 'SocialPost',
+    data: { post: event.url },
+  })
+
+  // Notify subscribers
+  await notify(event.data)
+})
+
+// Query events
+const changes = await db.events.list({
+  type: 'Post.*',
+  since: lastWeek,
+})
+```

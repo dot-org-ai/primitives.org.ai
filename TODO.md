@@ -1,5 +1,7 @@
 # AI Primitives
 
+- [ ] Define concise and informative README syntax
+
 - [ ] `ai-functions`
   - [ ] `AI()`
   - [ ] `ai()`
@@ -31,12 +33,17 @@
   - [ ] `db.delete()`
   - [ ] `db.forEach()`
 - [ ] `ai-workflows`
-  - [ ] `Workflow()`
+  - [x] `Workflow()` - Event-driven workflows
   - [ ] `StateMachine()`
-  - [ ] `on()`
-  - [ ] `every()`
-  - [ ] `send()`
+  - [x] `on()` - Event handlers
+  - [x] `every()` - Scheduled tasks
+  - [x] `send()` - Emit events
   - [ ] `schedule()`
+  - [ ] Task-based Workflows (from digital-tasks)
+    - [ ] `TaskWorkflow()` - DAG-based task workflow
+    - [ ] `parallel()` - Parallel task execution
+    - [ ] `sequential()` - Sequential task execution
+    - [ ] Integrate with Function types (code, generative, agentic, human)
 - [ ] `ai-experiments`
   - [ ] `Experiment()`
   - [ ] `cartesian()`
@@ -86,6 +93,24 @@
   - [ ] `MCP()`
   - [ ] `SDK()`
   - [ ] `Site()`
+- [ ] `digital-tools`
+  - [x] `Tool` interface
+  - [x] Tool ontology (12 categories)
+  - [x] `defineTool()` - Define a tool
+  - [x] `registry` - Tool registry
+  - [x] `toMCP()` - MCP compatibility
+  - [x] Pre-built tools (web, data, communication)
+- [x] `digital-tasks`
+  - [x] `Task` = Function + metadata
+  - [x] Task lifecycle (status, progress, events)
+  - [x] `createTask()` - Create from function
+  - [x] `taskQueue` - Priority queue
+  - [x] Worker assignment
+  - [x] Dependencies (parallel/sequential)
+  - [x] `parseMarkdown()` / `toMarkdown()` - Markdown task lists
+  - [x] `task()`, `parallel()`, `sequential()` - DSL
+  - [x] Full test coverage (122 tests)
+  - [x] Documentation in site/content
 - [ ] `digital-workers`
   - [ ] `Role()`
   - [ ] `Team()`

@@ -445,6 +445,102 @@ await human.escalateRequest('req_123', 'manager@example.com')
 await human.cancelRequest('req_123')
 ```
 
+## Integration with digital-workers
+
+Human-in-the-loop implements the `Worker` interface from `digital-workers`, enabling humans to:
+- Receive notifications, questions, and approval requests via Worker Actions
+- Be targeted by workflow actions
+- Communicate through configured contact channels
+
+### Using Worker Actions in Workflows
+
+```typescript
+import { Workflow } from 'ai-workflows'
+import { registerWorkerActions, withWorkers } from 'digital-workers'
+import type { Worker } from 'digital-workers'
+
+// Define a human worker with contacts
+const alice: Worker = {
+  id: 'alice',
+  name: 'Alice',
+  type: 'human',
+  status: 'available',
+  contacts: {
+    email: 'alice@company.com',
+    slack: { workspace: 'company', user: 'U123' },
+    phone: '+1-555-1234',
+  },
+}
+
+const workflow = Workflow($ => {
+  registerWorkerActions($)
+  const worker$ = withWorkers($)
+
+  $.on.Expense.submitted(async (expense) => {
+    // Request approval from manager using Worker Actions
+    const approval = await worker$.approve(
+      `Expense: $${expense.amount} for ${expense.description}`,
+      alice,
+      { via: 'slack', timeout: 86400000 }
+    )
+
+    if (approval.approved) {
+      await worker$.notify(
+        expense.submitter,
+        'Your expense has been approved!',
+        { via: 'email' }
+      )
+    }
+  })
+
+  $.on.Deployment.requested(async (deploy) => {
+    // Ask human for confirmation
+    const confirmed = await worker$.ask(
+      alice,
+      `Proceed with deployment of ${deploy.version} to ${deploy.env}?`,
+      { schema: { proceed: 'boolean', notes: 'string' } }
+    )
+
+    if (confirmed.answer.proceed) {
+      $.send('Deployment.approved', deploy)
+    }
+  })
+})
+```
+
+### Human as Worker Target
+
+```typescript
+import { registerHuman } from 'human-in-the-loop'
+import { notify, ask, approve } from 'digital-workers'
+
+// Register a human worker
+const manager = registerHuman({
+  id: 'manager',
+  name: 'Manager',
+  email: 'manager@company.com',
+  roles: ['approver'],
+  teams: ['finance'],
+  channels: {
+    slack: '@manager',
+    email: 'manager@company.com',
+  },
+})
+
+// Use digital-workers actions directly
+await notify(manager, 'Weekly report ready', { via: 'email' })
+
+const answer = await ask(manager, 'What is the Q2 budget?', {
+  via: 'slack',
+  schema: { amount: 'number', notes: 'string' },
+})
+
+const approval = await approve('Hire contractor', manager, {
+  via: 'slack',
+  context: { role: 'Senior Developer', rate: '$150/hr' },
+})
+```
+
 ## Integration Examples
 
 ### With AI Workflows

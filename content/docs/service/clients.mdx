@@ -1,0 +1,263 @@
+---
+title: Clients
+description: Connect to services
+---
+
+# Clients
+
+Use the `Client()` function to connect to and consume services.
+
+## Basic Usage
+
+```typescript
+import { Client } from 'services-as-software'
+
+const client = Client({
+  url: 'https://api.example.com/service',
+})
+
+const result = await client.call('translate', {
+  text: 'Hello',
+  to: 'es',
+})
+```
+
+## Authentication
+
+### API Key
+
+```typescript
+const client = Client({
+  url: 'https://api.example.com/service',
+  auth: {
+    type: 'api-key',
+    credentials: {
+      apiKey: 'your-api-key',
+    },
+  },
+})
+```
+
+### Bearer Token
+
+```typescript
+const client = Client({
+  url: 'https://api.example.com/service',
+  auth: {
+    type: 'bearer',
+    credentials: {
+      token: 'your-jwt-token',
+    },
+  },
+})
+```
+
+### OAuth
+
+```typescript
+const client = Client({
+  url: 'https://api.example.com/service',
+  auth: {
+    type: 'oauth',
+    credentials: {
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      tokenUrl: 'https://auth.example.com/token',
+    },
+  },
+})
+```
+
+### Basic Auth
+
+```typescript
+const client = Client({
+  url: 'https://api.example.com/service',
+  auth: {
+    type: 'basic',
+    credentials: {
+      username: 'user',
+      password: 'pass',
+    },
+  },
+})
+```
+
+## Client Methods
+
+### call(endpoint, input)
+
+Call a service endpoint:
+
+```typescript
+const result = await client.call('endpoint-name', {
+  param1: 'value1',
+  param2: 'value2',
+})
+```
+
+### do(action, input)
+
+Execute an action (alias for call):
+
+```typescript
+const result = await client.do('translate', {
+  text: 'Hello',
+  to: 'es',
+})
+```
+
+## Service Operations
+
+Services expose helpers for common operations:
+
+### ask()
+
+Ask a question:
+
+```typescript
+const answer = await client.ask('What is the capital of France?')
+```
+
+### generate()
+
+Generate content:
+
+```typescript
+const content = await client.generate({
+  type: 'blog-post',
+  topic: 'AI trends',
+  length: 'medium',
+})
+```
+
+### is()
+
+Type checking/validation:
+
+```typescript
+const valid = await client.is(email, 'valid-email')
+```
+
+## Error Handling
+
+```typescript
+import { Client, ServiceError } from 'services-as-software'
+
+const client = Client({ url: 'https://api.example.com' })
+
+try {
+  const result = await client.call('process', { data: '...' })
+} catch (error) {
+  if (error instanceof ServiceError) {
+    console.error(`Service error: ${error.code} - ${error.message}`)
+    console.error(`Status: ${error.status}`)
+  }
+}
+```
+
+## Retry Configuration
+
+```typescript
+const client = Client({
+  url: 'https://api.example.com/service',
+  retry: {
+    attempts: 3,
+    delay: 1000,        // ms
+    backoff: 'exponential',
+  },
+})
+```
+
+## Timeout Configuration
+
+```typescript
+const client = Client({
+  url: 'https://api.example.com/service',
+  timeout: 30000,  // 30 seconds
+})
+```
+
+## Complete Example
+
+```typescript
+import { Client, ServiceError } from 'services-as-software'
+
+// Create client
+const translationClient = Client({
+  url: 'https://translation.api.example.com',
+  auth: {
+    type: 'api-key',
+    credentials: {
+      apiKey: process.env.TRANSLATION_API_KEY,
+    },
+  },
+  timeout: 10000,
+  retry: {
+    attempts: 3,
+    delay: 500,
+    backoff: 'exponential',
+  },
+})
+
+// Use client
+async function translateDocument(text: string, targetLang: string) {
+  try {
+    const result = await translationClient.call('translate', {
+      text,
+      to: targetLang,
+    })
+
+    return {
+      translated: result.translatedText,
+      confidence: result.confidence,
+      detectedLanguage: result.sourceLanguage,
+    }
+  } catch (error) {
+    if (error instanceof ServiceError) {
+      if (error.status === 429) {
+        // Rate limited
+        throw new Error('Translation service rate limit exceeded')
+      }
+      throw new Error(`Translation failed: ${error.message}`)
+    }
+    throw error
+  }
+}
+
+// Usage
+const result = await translateDocument('Hello, world!', 'es')
+console.log(result.translated)
+// "¡Hola, mundo!"
+```
+
+## Batch Requests
+
+For multiple requests:
+
+```typescript
+const results = await Promise.all([
+  client.call('translate', { text: 'Hello', to: 'es' }),
+  client.call('translate', { text: 'Goodbye', to: 'es' }),
+  client.call('translate', { text: 'Thank you', to: 'es' }),
+])
+```
+
+## Type Definition
+
+```typescript
+interface ClientConfig {
+  url: string
+  auth?: {
+    type: 'api-key' | 'bearer' | 'oauth' | 'basic'
+    credentials: Record<string, string>
+  }
+  timeout?: number
+  retry?: {
+    attempts: number
+    delay: number
+    backoff?: 'linear' | 'exponential'
+  }
+  headers?: Record<string, string>
+}
+```

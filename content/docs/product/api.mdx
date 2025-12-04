@@ -1,0 +1,247 @@
+---
+title: API
+description: Define programmatic interfaces
+---
+
+# API
+
+The `API()` function defines programmatic interfaces with endpoints, authentication, and rate limiting.
+
+## Basic Usage
+
+```typescript
+import { API, Endpoint } from 'digital-products'
+
+const myAPI = API({
+  id: 'my-api',
+  name: 'My API',
+  description: 'A RESTful API',
+  version: '1.0.0',
+  style: 'rest',
+  baseUrl: 'https://api.example.com',
+})
+```
+
+## Endpoints
+
+Define API endpoints:
+
+```typescript
+import { API, Endpoint } from 'digital-products'
+
+const myAPI = API({
+  id: 'my-api',
+  name: 'My API',
+  version: '1.0.0',
+  style: 'rest',
+  baseUrl: 'https://api.example.com',
+  endpoints: [
+    Endpoint('GET', '/users', 'List all users', {
+      response: {
+        users: ['Array of user objects'],
+        total: 'Total count (number)',
+      },
+    }),
+    Endpoint('GET', '/users/:id', 'Get user by ID', {
+      response: {
+        id: 'User ID',
+        name: 'User name',
+        email: 'User email',
+      },
+    }),
+    Endpoint('POST', '/users', 'Create a user', {
+      request: {
+        name: 'User name',
+        email: 'User email',
+      },
+      response: {
+        id: 'User ID',
+        name: 'User name',
+        email: 'User email',
+      },
+      auth: true,
+    }),
+    Endpoint('PUT', '/users/:id', 'Update user', {
+      request: {
+        name: 'User name',
+        email: 'User email',
+      },
+      auth: true,
+    }),
+    Endpoint('DELETE', '/users/:id', 'Delete user', {
+      auth: true,
+    }),
+  ],
+})
+```
+
+### Endpoint Helper
+
+```typescript
+Endpoint(method, path, description, options?)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `method` | string | HTTP method |
+| `path` | string | URL path |
+| `description` | string | Endpoint description |
+| `options.request` | schema | Request body schema |
+| `options.response` | schema | Response schema |
+| `options.auth` | boolean | Requires auth |
+
+## API Styles
+
+| Style | Description |
+|-------|-------------|
+| `rest` | RESTful API |
+| `graphql` | GraphQL API |
+| `rpc` | Remote procedure call |
+| `grpc` | gRPC API |
+| `websocket` | WebSocket API |
+
+## Authentication
+
+Add API authentication:
+
+```typescript
+import { API, APIAuth } from 'digital-products'
+
+const myAPI = API({
+  id: 'my-api',
+  name: 'My API',
+  version: '1.0.0',
+  style: 'rest',
+  auth: APIAuth({
+    type: 'bearer',   // or 'api-key', 'oauth2', 'basic'
+    header: 'Authorization',
+  }),
+})
+```
+
+### Auth Types
+
+| Type | Description |
+|------|-------------|
+| `bearer` | Bearer token in header |
+| `api-key` | API key authentication |
+| `oauth2` | OAuth 2.0 flow |
+| `basic` | Basic authentication |
+
+## Rate Limiting
+
+Configure rate limits:
+
+```typescript
+import { API, RateLimit } from 'digital-products'
+
+const myAPI = API({
+  id: 'my-api',
+  name: 'My API',
+  version: '1.0.0',
+  style: 'rest',
+  rateLimit: RateLimit({
+    requests: 100,      // Max requests
+    window: 60,         // Per 60 seconds
+    onExceeded: 'reject', // or 'queue'
+  }),
+})
+```
+
+## Complete Example
+
+```typescript
+import { API, Endpoint, APIAuth, RateLimit } from 'digital-products'
+
+const ordersAPI = API({
+  id: 'orders-api',
+  name: 'Orders API',
+  description: 'E-commerce orders management API',
+  version: '2.0.0',
+  style: 'rest',
+  baseUrl: 'https://api.store.com/v2',
+
+  endpoints: [
+    Endpoint('GET', '/orders', 'List orders', {
+      response: {
+        orders: [{
+          id: 'Order ID',
+          status: 'pending | processing | shipped | delivered',
+          total: 'Order total (number)',
+          items: ['Array of order items'],
+        }],
+        pagination: {
+          page: 'Current page (number)',
+          totalPages: 'Total pages (number)',
+        },
+      },
+    }),
+    Endpoint('POST', '/orders', 'Create order', {
+      request: {
+        items: [{
+          productId: 'Product ID',
+          quantity: 'Quantity (number)',
+        }],
+        shippingAddress: {
+          street: 'Street address',
+          city: 'City',
+          zip: 'ZIP code',
+        },
+      },
+      response: {
+        id: 'Order ID',
+        status: 'Order status',
+      },
+      auth: true,
+    }),
+    Endpoint('GET', '/orders/:id', 'Get order details', {
+      response: {
+        id: 'Order ID',
+        status: 'Order status',
+        items: ['Order items'],
+        total: 'Total (number)',
+        createdAt: 'Created date (date)',
+      },
+      auth: true,
+    }),
+  ],
+
+  auth: APIAuth({
+    type: 'bearer',
+    header: 'Authorization',
+  }),
+
+  rateLimit: RateLimit({
+    requests: 1000,
+    window: 3600,
+    onExceeded: 'reject',
+  }),
+})
+```
+
+## OpenAPI/Swagger
+
+APIs automatically generate OpenAPI specs:
+
+```typescript
+// Access the OpenAPI spec
+const spec = myAPI.toOpenAPI()
+// Returns OpenAPI 3.0 compliant specification
+```
+
+## Type Definition
+
+```typescript
+interface APIDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  style?: 'rest' | 'graphql' | 'rpc' | 'grpc' | 'websocket'
+  baseUrl?: string
+  endpoints?: EndpointDefinition[]
+  auth?: APIAuthDefinition
+  rateLimit?: RateLimitDefinition
+  metadata?: Record<string, unknown>
+}
+```

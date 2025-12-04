@@ -1,0 +1,262 @@
+---
+title: OKRs
+description: Set objectives and key results
+---
+
+# OKRs
+
+The `okrs()` function creates Objectives and Key Results for ambitious goal setting with measurable outcomes.
+
+## Basic Usage
+
+```typescript
+import { okrs, okr } from 'business-as-code'
+
+// Create multiple OKRs
+const okrList = okrs([
+  {
+    objective: 'Achieve Product-Market Fit',
+    description: 'Validate that our product solves a real problem',
+    period: 'Q2 2024',
+    owner: 'CEO',
+    keyResults: [
+      {
+        description: 'Increase Net Promoter Score',
+        metric: 'NPS',
+        startValue: 40,
+        targetValue: 60,
+        currentValue: 52,
+        unit: 'score',
+      },
+      {
+        description: 'Reduce monthly churn rate',
+        metric: 'Churn Rate',
+        startValue: 8,
+        targetValue: 4,
+        currentValue: 5.5,
+        unit: 'percent',
+      },
+      {
+        description: 'Achieve customer retention',
+        metric: 'Customers with 3+ months',
+        startValue: 50,
+        targetValue: 200,
+        currentValue: 125,
+        unit: 'customers',
+      },
+    ],
+    status: 'on-track',
+    confidence: 75,
+  },
+])
+
+// Create a single OKR
+const growthOKR = okr({
+  objective: 'Scale User Acquisition',
+  owner: 'Growth Team',
+  period: 'Q3 2024',
+  keyResults: [
+    {
+      description: 'Increase monthly active users',
+      metric: 'MAU',
+      targetValue: 100000,
+      currentValue: 65000,
+    },
+  ],
+})
+```
+
+## OKR Status
+
+| Status | Description |
+|--------|-------------|
+| `not-started` | OKR period not yet begun |
+| `on-track` | Progressing as expected |
+| `at-risk` | May not achieve objectives |
+| `completed` | Successfully achieved |
+
+## Helper Functions
+
+### Progress Calculation
+
+```typescript
+import { calculateKeyResultProgress, calculateOKRProgress } from 'business-as-code'
+
+// Calculate progress for a single key result
+const krProgress = calculateKeyResultProgress(okrList[0].keyResults![0])
+// 60 (52 - 40) / (60 - 40) * 100 = 60%
+
+// Calculate overall OKR progress (average of KRs)
+const okrProgress = calculateOKRProgress(okrList[0])
+// Average of all key result progress
+```
+
+### Confidence Assessment
+
+```typescript
+import { calculateConfidence } from 'business-as-code'
+
+// Calculate confidence based on progress and time remaining
+const confidence = calculateConfidence(okrList[0])
+// 0-100 confidence score
+```
+
+### Updating Key Results
+
+```typescript
+import { updateKeyResult } from 'business-as-code'
+
+// Update a key result value
+const updated = updateKeyResult(okrList[0], 'NPS', { currentValue: 55 })
+```
+
+### Tracking Status
+
+```typescript
+import { isKeyResultOnTrack, isOKROnTrack, getKeyResultsOnTrack, getKeyResultsAtRisk } from 'business-as-code'
+
+// Check if key result is on track
+const krOnTrack = isKeyResultOnTrack(okrList[0].keyResults![0])
+
+// Check if OKR is on track
+const okrOnTrack = isOKROnTrack(okrList[0])
+
+// Get key results by status
+const onTrack = getKeyResultsOnTrack(okrList[0].keyResults!)
+const atRisk = getKeyResultsAtRisk(okrList[0].keyResults!)
+```
+
+### Filtering OKRs
+
+```typescript
+import { getOKRsByOwner, getOKRsByPeriod, getOKRsByStatus } from 'business-as-code'
+
+// Filter by owner
+const ceoOKRs = getOKRsByOwner(okrList, 'CEO')
+
+// Filter by period
+const q2OKRs = getOKRsByPeriod(okrList, 'Q2 2024')
+
+// Filter by status
+const atRiskOKRs = getOKRsByStatus(okrList, 'at-risk')
+```
+
+### Success Metrics
+
+```typescript
+import { calculateSuccessRate } from 'business-as-code'
+
+// Calculate historical success rate
+const successRate = calculateSuccessRate(completedOKRs)
+// Percentage of OKRs that met 70%+ achievement
+```
+
+### Formatting
+
+```typescript
+import { formatKeyResult } from 'business-as-code'
+
+const formatted = formatKeyResult(okrList[0].keyResults![0])
+// "NPS: 52 / 60 (60%)"
+```
+
+### Comparison
+
+```typescript
+import { compareOKRPerformance } from 'business-as-code'
+
+const comparison = compareOKRPerformance(currentOKRs, previousOKRs)
+// { improved: [...], declined: [...] }
+```
+
+## Validation
+
+```typescript
+import { validateOKRs } from 'business-as-code'
+
+const errors = validateOKRs(okrList)
+if (errors.length > 0) {
+  console.error('Invalid OKRs:', errors)
+}
+```
+
+## Best Practices
+
+### Good Objectives
+
+- **Qualitative**: Describe what you want to achieve
+- **Inspirational**: Motivate the team
+- **Time-bound**: Have a clear period
+
+### Good Key Results
+
+- **Quantitative**: Measurable with numbers
+- **Specific**: Clear metric definition
+- **Ambitious**: 70% achievement = success
+- **Limited**: 3-5 per objective
+
+## Example OKRs by Function
+
+### Engineering
+
+```typescript
+okr({
+  objective: 'Deliver a world-class developer experience',
+  keyResults: [
+    { description: 'Reduce p99 latency', metric: 'p99', targetValue: 100, unit: 'ms' },
+    { description: 'Achieve uptime', metric: 'uptime', targetValue: 99.9, unit: 'percent' },
+    { description: 'Ship features', metric: 'features', targetValue: 10, unit: 'count' },
+  ],
+})
+```
+
+### Sales
+
+```typescript
+okr({
+  objective: 'Accelerate revenue growth',
+  keyResults: [
+    { description: 'Close new ARR', metric: 'new ARR', targetValue: 1000000, unit: 'USD' },
+    { description: 'Increase ACV', metric: 'ACV', targetValue: 50000, unit: 'USD' },
+    { description: 'Improve win rate', metric: 'win rate', targetValue: 30, unit: 'percent' },
+  ],
+})
+```
+
+### Customer Success
+
+```typescript
+okr({
+  objective: 'Create delighted customers',
+  keyResults: [
+    { description: 'Increase NPS', metric: 'NPS', targetValue: 70, unit: 'score' },
+    { description: 'Reduce churn', metric: 'churn', targetValue: 2, unit: 'percent' },
+    { description: 'Expand revenue', metric: 'expansion', targetValue: 20, unit: 'percent' },
+  ],
+})
+```
+
+## Type Definition
+
+```typescript
+interface OKRDefinition {
+  objective: string
+  description?: string
+  period?: string
+  owner?: string
+  keyResults?: KeyResult[]
+  status?: 'not-started' | 'on-track' | 'at-risk' | 'completed'
+  confidence?: number
+  metadata?: Record<string, unknown>
+}
+
+interface KeyResult {
+  description: string
+  metric: string
+  startValue?: number
+  targetValue: number
+  currentValue?: number
+  unit?: string
+  progress?: number
+}
+```

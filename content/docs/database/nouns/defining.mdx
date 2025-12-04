@@ -1,0 +1,227 @@
+---
+title: Defining Nouns
+description: Create semantic type definitions
+---
+
+# Defining Nouns
+
+Create rich type definitions with `defineNoun`.
+
+## Basic Definition
+
+```typescript
+import { defineNoun } from 'ai-database'
+
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  description: 'A blog post or article',
+})
+```
+
+## With Properties
+
+```typescript
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  description: 'A blog post or article',
+
+  properties: {
+    title: {
+      type: 'string',
+      description: 'The post title',
+    },
+    content: {
+      type: 'markdown',
+      description: 'The post body in markdown',
+    },
+    status: {
+      type: 'string',
+      description: 'draft | published | archived',
+      optional: true,
+    },
+    tags: {
+      type: 'string',
+      array: true,
+      description: 'Categorization tags',
+    },
+  },
+})
+```
+
+## With Relationships
+
+```typescript
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+
+  relationships: {
+    author: {
+      type: 'Author',
+      backref: 'posts',
+      description: 'Who wrote this post',
+    },
+    tags: {
+      type: 'Tag[]',
+      backref: 'posts',
+      description: 'Categorization',
+    },
+    editor: {
+      type: 'Author',
+      backref: 'editedPosts',
+      description: 'Who edited this post',
+      required: false,
+    },
+  },
+})
+```
+
+## With Actions & Events
+
+```typescript
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+
+  actions: ['create', 'update', 'delete', 'publish', 'archive'],
+
+  events: ['created', 'updated', 'deleted', 'published', 'archived'],
+})
+```
+
+## With Metadata
+
+```typescript
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+
+  metadata: {
+    icon: 'document',
+    color: 'blue',
+    category: 'content',
+  },
+})
+```
+
+## Using with DB()
+
+Convert Noun to schema:
+
+```typescript
+import { defineNoun, nounToSchema, DB } from 'ai-database'
+
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  properties: {
+    title: { type: 'string' },
+    content: { type: 'markdown' },
+  },
+  relationships: {
+    author: { type: 'Author', backref: 'posts' },
+  },
+})
+
+const db = DB({
+  Post: nounToSchema(Post),
+  Author: { name: 'string' },
+})
+```
+
+## Complete Example
+
+```typescript
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  description: 'A blog post or article',
+
+  properties: {
+    title: {
+      type: 'string',
+      description: 'Compelling title (50-70 chars)',
+    },
+    slug: {
+      type: 'string',
+      description: 'URL-safe identifier',
+    },
+    excerpt: {
+      type: 'string',
+      description: 'Brief summary (150-200 chars)',
+      optional: true,
+    },
+    content: {
+      type: 'markdown',
+      description: 'Full post body',
+    },
+    status: {
+      type: 'string',
+      description: 'draft | published | archived',
+      default: 'draft',
+    },
+    publishedAt: {
+      type: 'datetime',
+      optional: true,
+    },
+    tags: {
+      type: 'string',
+      array: true,
+      examples: ['typescript', 'ai', 'tutorial'],
+    },
+  },
+
+  relationships: {
+    author: {
+      type: 'Author',
+      backref: 'posts',
+      required: true,
+    },
+    category: {
+      type: 'Category',
+      backref: 'posts',
+    },
+  },
+
+  actions: ['create', 'update', 'delete', 'publish', 'archive'],
+  events: ['created', 'updated', 'deleted', 'published', 'archived'],
+
+  metadata: {
+    icon: 'document-text',
+    searchable: true,
+  },
+})
+```
+
+## Noun Interface
+
+```typescript
+interface Noun {
+  singular: string
+  plural: string
+  description?: string
+  properties?: Record<string, NounProperty>
+  relationships?: Record<string, NounRelationship>
+  actions?: Array<string | Verb>
+  events?: string[]
+  metadata?: Record<string, unknown>
+}
+
+interface NounProperty {
+  type: PrimitiveType | string
+  description?: string
+  optional?: boolean
+  array?: boolean
+  default?: unknown
+  examples?: unknown[]
+}
+
+interface NounRelationship {
+  type: string
+  backref?: string
+  description?: string
+  required?: boolean
+}
+```

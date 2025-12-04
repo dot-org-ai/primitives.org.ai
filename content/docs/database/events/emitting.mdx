@@ -1,0 +1,194 @@
+---
+title: Event Log
+description: Querying the immutable event log
+---
+
+# Event Log
+
+Query the immutable log of all events.
+
+## Listing Events
+
+```typescript
+const events = await db.events.list()
+```
+
+### By Type
+
+```typescript
+// Specific type
+const postEvents = await db.events.list({
+  type: 'Post.created',
+})
+
+// Wildcard
+const allPostEvents = await db.events.list({
+  type: 'Post.*',
+})
+
+// All creates
+const allCreates = await db.events.list({
+  type: '*.created',
+})
+```
+
+### By Time
+
+```typescript
+const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+const recentEvents = await db.events.list({
+  since: lastWeek,
+})
+
+const dateRange = await db.events.list({
+  since: startDate,
+  until: endDate,
+})
+```
+
+### By Entity
+
+```typescript
+const postEvents = await db.events.list({
+  url: 'posts/hello-world',
+})
+```
+
+### Pagination
+
+```typescript
+const page = await db.events.list({
+  limit: 100,
+  offset: 0,
+  order: 'desc',  // newest first
+})
+```
+
+## Event Data
+
+Events contain different data based on type:
+
+### Created
+
+```typescript
+{
+  id: 'evt_123',
+  type: 'Post.created',
+  url: 'posts/hello',
+  data: {
+    title: 'Hello',
+    content: '...',
+    author: 'alice',
+  },
+  timestamp: Date,
+  actor: 'user_456',
+}
+```
+
+### Updated
+
+```typescript
+{
+  id: 'evt_124',
+  type: 'Post.updated',
+  url: 'posts/hello',
+  data: {
+    title: 'Hello World',  // new value
+    published: true,       // new value
+  },
+  changes: {
+    title: { from: 'Hello', to: 'Hello World' },
+    published: { from: false, to: true },
+  },
+  timestamp: Date,
+  actor: 'user_456',
+}
+```
+
+### Deleted
+
+```typescript
+{
+  id: 'evt_125',
+  type: 'Post.deleted',
+  url: 'posts/hello',
+  timestamp: Date,
+  actor: 'user_456',
+}
+```
+
+## Custom Events
+
+Emit custom events:
+
+```typescript
+await db.events.emit('Post.viewed', {
+  url: post.$id,
+  data: {
+    viewer: user.$id,
+    duration: 120,
+  },
+})
+```
+
+## Audit Trail
+
+Events provide a complete audit trail:
+
+```typescript
+// What changed in the last hour?
+const audit = await db.events.list({
+  since: hourAgo,
+  type: '*.*',
+})
+
+for (const event of audit) {
+  console.log(`${event.type} by ${event.actor} at ${event.timestamp}`)
+}
+```
+
+## Event Sourcing
+
+Rebuild state from events:
+
+```typescript
+// Get all events for an entity
+const history = await db.events.list({
+  url: entity.$id,
+  order: 'asc',
+})
+
+// Reconstruct state at any point
+let state = {}
+for (const event of history) {
+  if (event.type.endsWith('.created')) {
+    state = event.data
+  } else if (event.type.endsWith('.updated')) {
+    state = { ...state, ...event.data }
+  } else if (event.type.endsWith('.deleted')) {
+    state = null
+  }
+}
+```
+
+## Analytics
+
+Use events for analytics:
+
+```typescript
+// Count events by type
+const counts = await db.events.list({
+  since: today,
+  groupBy: 'type',
+  count: true,
+})
+// { 'Post.created': 42, 'Post.updated': 156, ... }
+
+// Activity over time
+const activity = await db.events.list({
+  since: lastMonth,
+  groupBy: 'day',
+  count: true,
+})
+```

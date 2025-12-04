@@ -1,0 +1,7 @@
+{
+  "title": "Workflow",
+  "description": "Durable execution and state machines",
+  "root": true,
+  "icon": "GitBranch",
+  "pages": ["index"]
+}

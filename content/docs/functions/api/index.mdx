@@ -1,0 +1,73 @@
+---
+title: API Reference
+description: Complete API documentation
+---
+
+# API Reference
+
+Complete reference for all AI functions.
+
+## Function Summary
+
+| Function | Returns | Description |
+|----------|---------|-------------|
+| `ai` | `string` | Basic text generation |
+| `generate` | `T` | Core generation with schema |
+| `write` | `string` | Formatted text content |
+| `summarize` | `string` | Condense text |
+| `is` | `boolean` | Boolean classification |
+| `decide` | `T` | Pick best option |
+| `list` | `string[]` | Generate list |
+| `lists` | `Record<string, string[]>` | Multiple lists |
+| `extract` | `T[]` | Extract from text |
+| `code` | `string` | Generate code |
+| `diagram` | `string` | Generate diagram |
+| `slides` | `string` | Generate presentation |
+| `image` | `Buffer` | Generate image |
+| `video` | `Buffer` | Generate video |
+| `do` | `unknown` | Single-pass task |
+| `research` | `Research` | Web research |
+| `read` | `string` | URL to markdown |
+| `browse` | `Page` | Browser automation |
+| `define` | `AIFunction` | Define custom function |
+| `AI` | `TypedAI` | Typed factory |
+
+## Type Signatures
+
+```typescript
+// Tagged template + function call pattern
+type AIFunction<TArgs, TReturn> = {
+  (prompt: string): Promise<TReturn>
+  (prompt: string, args: TArgs): Promise<TReturn>
+  (strings: TemplateStringsArray, ...values: unknown[]): Promise<TReturn>
+}
+```
+
+## Common Types
+
+```typescript
+interface Research {
+  summary: string
+  sources: Array<{ url: string; title: string; relevance: number }>
+  findings: string[]
+  confidence: number
+}
+
+interface Page {
+  extract(query: TemplateStringsArray, ...values: unknown[]): Promise<unknown>
+  do(action: TemplateStringsArray, ...values: unknown[]): Promise<void>
+}
+
+interface AIOptions {
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  thinking?: 'low' | 'medium' | 'high' | number
+}
+```
+
+## Related Packages
+
+- [`ai-database`](/database) - AI-powered database operations
+- [`ai-providers`](/packages/ai-providers) - Model provider abstraction
+- [`language-models`](/packages/language-models) - Model definitions

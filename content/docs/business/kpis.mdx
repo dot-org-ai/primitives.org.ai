@@ -1,0 +1,220 @@
+---
+title: KPIs
+description: Track key performance indicators
+---
+
+# KPIs
+
+The `kpis()` function creates a list of key performance indicators for tracking business health.
+
+## Basic Usage
+
+```typescript
+import { kpis, kpi } from 'business-as-code'
+
+// Create multiple KPIs
+const kpiList = kpis([
+  {
+    name: 'Monthly Recurring Revenue',
+    description: 'Total predictable revenue per month',
+    category: 'financial',
+    unit: 'USD',
+    target: 100000,
+    current: 85000,
+    frequency: 'monthly',
+    dataSource: 'Billing System',
+    formula: 'SUM(active_subscriptions.price)',
+  },
+  {
+    name: 'Customer Churn Rate',
+    category: 'customer',
+    unit: 'percent',
+    target: 5,
+    current: 3.2,
+    frequency: 'monthly',
+  },
+])
+
+// Create a single KPI
+const nps = kpi({
+  name: 'Net Promoter Score',
+  category: 'customer',
+  unit: 'score',
+  target: 50,
+  current: 48,
+})
+```
+
+## KPI Categories
+
+| Category | Description |
+|----------|-------------|
+| `financial` | Revenue, costs, margins |
+| `customer` | Satisfaction, retention, churn |
+| `operations` | Efficiency, throughput, quality |
+| `people` | Employee metrics, productivity |
+| `growth` | User growth, market expansion |
+
+## Measurement Frequency
+
+| Frequency | Description |
+|-----------|-------------|
+| `daily` | Measured every day |
+| `weekly` | Measured every week |
+| `monthly` | Measured every month |
+| `quarterly` | Measured every quarter |
+| `yearly` | Measured annually |
+
+## Helper Functions
+
+### Achievement Calculation
+
+```typescript
+import { calculateAchievement, kpiMeetsTarget, calculateVariance } from 'business-as-code'
+
+// Calculate achievement percentage
+const achievement = calculateAchievement(kpiList[0])
+// 85 (85000 / 100000 * 100)
+
+// Check if KPI meets target
+const onTarget = kpiMeetsTarget(kpiList[1])
+// true (3.2 <= 5 for churn - lower is better)
+
+// Calculate variance from target
+const variance = calculateVariance(kpiList[0])
+// -15000 (85000 - 100000)
+
+const variancePct = calculateVariancePercentage(kpiList[0])
+// -15 (-15%)
+```
+
+### Filtering and Grouping
+
+```typescript
+import {
+  getKPIsByCategory,
+  getKPIsByFrequency,
+  getKPIsOnTarget,
+  getKPIsOffTarget,
+  groupByCategory,
+} from 'business-as-code'
+
+// Filter by category
+const financial = getKPIsByCategory(kpiList, 'financial')
+const customer = getKPIsByCategory(kpiList, 'customer')
+
+// Filter by frequency
+const monthly = getKPIsByFrequency(kpiList, 'monthly')
+
+// Get KPIs on/off target
+const onTarget = getKPIsOnTarget(kpiList)
+const offTarget = getKPIsOffTarget(kpiList)
+
+// Group by category
+const grouped = groupByCategory(kpiList)
+// { financial: [...], customer: [...] }
+```
+
+### Health Score
+
+Calculate overall KPI health:
+
+```typescript
+import { calculateHealthScore } from 'business-as-code'
+
+const healthScore = calculateHealthScore(kpiList)
+// 0-100 score based on target achievement
+```
+
+### Updating Values
+
+```typescript
+import { updateCurrent, updateTarget } from 'business-as-code'
+
+// Update current value
+const updated = updateCurrent(kpiList[0], 90000)
+
+// Update target
+const newTarget = updateTarget(kpiList[0], 120000)
+```
+
+### Formatting
+
+```typescript
+import { formatValue } from 'business-as-code'
+
+const formatted = formatValue(kpiList[0])
+// "$85,000" or "85000 USD"
+```
+
+### Comparison
+
+```typescript
+import { comparePerformance } from 'business-as-code'
+
+const comparison = comparePerformance(currentKPIs, previousKPIs)
+// { improved: [...], declined: [...], unchanged: [...] }
+```
+
+## Validation
+
+```typescript
+import { validateKPIs } from 'business-as-code'
+
+const errors = validateKPIs(kpiList)
+if (errors.length > 0) {
+  console.error('Invalid KPIs:', errors)
+}
+```
+
+## Common KPIs by Category
+
+### Financial
+
+- Monthly Recurring Revenue (MRR)
+- Annual Recurring Revenue (ARR)
+- Gross Margin
+- Customer Acquisition Cost (CAC)
+- Customer Lifetime Value (LTV)
+- Burn Rate
+- Runway
+
+### Customer
+
+- Net Promoter Score (NPS)
+- Customer Satisfaction Score (CSAT)
+- Customer Effort Score (CES)
+- Churn Rate
+- Retention Rate
+
+### Operations
+
+- Uptime
+- Response Time
+- Error Rate
+- Throughput
+- Cycle Time
+
+### Growth
+
+- User Growth Rate
+- Revenue Growth Rate
+- Market Share
+- Active Users
+
+## Type Definition
+
+```typescript
+interface KPIDefinition {
+  name: string
+  description?: string
+  category?: 'financial' | 'customer' | 'operations' | 'people' | 'growth'
+  unit?: string
+  target?: number
+  current?: number
+  frequency?: TimePeriod
+  dataSource?: string
+  formula?: string
+  metadata?: Record<string, unknown>
+}
+```

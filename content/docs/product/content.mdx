@@ -1,0 +1,248 @@
+---
+title: Content
+description: Define content structures
+---
+
+# Content
+
+The `Content()` function defines content structures with schemas, workflows, and publishing pipelines.
+
+## Basic Usage
+
+```typescript
+import { Content } from 'digital-products'
+
+const blogContent = Content({
+  id: 'blog',
+  name: 'Blog Posts',
+  description: 'Blog content for the website',
+  version: '1.0.0',
+  format: 'mdx',
+  source: './content/blog',
+})
+```
+
+## Content Formats
+
+| Format | Description |
+|--------|-------------|
+| `mdx` | MDX (Markdown + JSX) |
+| `markdown` | Standard Markdown |
+| `html` | HTML content |
+| `json` | JSON data |
+| `yaml` | YAML data |
+
+## Frontmatter Schema
+
+Define content metadata:
+
+```typescript
+const blogContent = Content({
+  id: 'blog',
+  name: 'Blog Posts',
+  format: 'mdx',
+  source: './content/blog',
+  frontmatter: {
+    title: 'Post title',
+    author: 'Author name',
+    date: 'Publication date (date)',
+    tags: ['Array of tags'],
+    featured: 'Featured post (boolean)',
+    category: 'tech | business | design',
+  },
+})
+```
+
+## Categories
+
+Organize content by category:
+
+```typescript
+const blogContent = Content({
+  id: 'blog',
+  name: 'Blog Posts',
+  format: 'mdx',
+  source: './content/blog',
+  categories: ['Technology', 'Business', 'Design', 'Marketing'],
+})
+```
+
+## Publishing Workflow
+
+Define content workflows with states and transitions:
+
+```typescript
+import { Content, Workflow } from 'digital-products'
+
+const blogContent = Content({
+  id: 'blog',
+  name: 'Blog Posts',
+  format: 'mdx',
+  source: './content/blog',
+  workflow: Workflow({
+    states: ['draft', 'review', 'approved', 'published', 'archived'],
+    initialState: 'draft',
+    transitions: [
+      { from: 'draft', to: 'review', action: 'submit' },
+      { from: 'review', to: 'approved', action: 'approve' },
+      { from: 'review', to: 'draft', action: 'reject' },
+      { from: 'approved', to: 'published', action: 'publish' },
+      { from: 'published', to: 'archived', action: 'archive' },
+    ],
+    approvals: [
+      { state: 'review', roles: ['editor', 'admin'] },
+      { state: 'approved', roles: ['admin'] },
+    ],
+  }),
+})
+```
+
+### Workflow States
+
+Common workflow states:
+
+| State | Description |
+|-------|-------------|
+| `draft` | Work in progress |
+| `review` | Awaiting review |
+| `approved` | Approved for publish |
+| `published` | Live content |
+| `archived` | Removed from site |
+
+### Workflow Approvals
+
+Control who can transition content:
+
+```typescript
+approvals: [
+  { state: 'review', roles: ['editor', 'admin'] },
+  { state: 'approved', roles: ['admin'] },
+]
+```
+
+## Complete Example
+
+```typescript
+import { Content, Workflow } from 'digital-products'
+
+const documentation = Content({
+  id: 'docs',
+  name: 'Documentation',
+  description: 'Product documentation',
+  version: '1.0.0',
+  format: 'mdx',
+  source: './content/docs',
+
+  frontmatter: {
+    title: 'Page title',
+    description: 'Page description',
+    section: 'getting-started | guides | api | reference',
+    order: 'Sort order (number)',
+    lastUpdated: 'Last update date (date)',
+    authors: ['Array of author names'],
+  },
+
+  categories: [
+    'Getting Started',
+    'Guides',
+    'API Reference',
+    'Examples',
+  ],
+
+  workflow: Workflow({
+    states: ['draft', 'review', 'published'],
+    initialState: 'draft',
+    transitions: [
+      { from: 'draft', to: 'review', action: 'submit' },
+      { from: 'review', to: 'published', action: 'approve' },
+      { from: 'review', to: 'draft', action: 'revise' },
+      { from: 'published', to: 'draft', action: 'unpublish' },
+    ],
+    approvals: [
+      { state: 'review', roles: ['tech-writer', 'admin'] },
+    ],
+  }),
+})
+```
+
+## Blog Example
+
+```typescript
+import { Content, Workflow } from 'digital-products'
+
+const blog = Content({
+  id: 'blog',
+  name: 'Company Blog',
+  description: 'News, updates, and insights',
+  version: '1.0.0',
+  format: 'mdx',
+  source: './content/blog',
+
+  frontmatter: {
+    title: 'Post title',
+    slug: 'URL slug',
+    excerpt: 'Short description',
+    author: {
+      name: 'Author name',
+      avatar: 'Avatar URL',
+      twitter: 'Twitter handle',
+    },
+    date: 'Publication date (date)',
+    updatedAt: 'Last updated (date)',
+    tags: ['Array of tags'],
+    category: 'engineering | product | company | culture',
+    featured: 'Featured article (boolean)',
+    coverImage: 'Cover image URL',
+    readingTime: 'Estimated reading time',
+  },
+
+  categories: ['Engineering', 'Product', 'Company', 'Culture'],
+
+  workflow: Workflow({
+    states: ['draft', 'review', 'scheduled', 'published', 'archived'],
+    initialState: 'draft',
+    transitions: [
+      { from: 'draft', to: 'review', action: 'submit' },
+      { from: 'review', to: 'draft', action: 'revise' },
+      { from: 'review', to: 'scheduled', action: 'schedule' },
+      { from: 'review', to: 'published', action: 'publish-now' },
+      { from: 'scheduled', to: 'published', action: 'auto-publish' },
+      { from: 'published', to: 'archived', action: 'archive' },
+    ],
+    approvals: [
+      { state: 'review', roles: ['editor', 'content-manager'] },
+    ],
+  }),
+})
+```
+
+## Type Definition
+
+```typescript
+interface ContentDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  format?: 'mdx' | 'markdown' | 'html' | 'json' | 'yaml'
+  source?: string
+  frontmatter?: SimpleSchema
+  categories?: string[]
+  workflow?: WorkflowDefinition
+  metadata?: Record<string, unknown>
+}
+
+interface WorkflowDefinition {
+  states: string[]
+  initialState: string
+  transitions: {
+    from: string
+    to: string
+    action: string
+  }[]
+  approvals?: {
+    state: string
+    roles: string[]
+  }[]
+}
+```

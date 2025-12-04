@@ -1,0 +1,262 @@
+---
+title: Pricing
+description: Configure service pricing
+---
+
+# Pricing
+
+Services-as-software supports multiple pricing models to match your business needs.
+
+## Pricing Models
+
+| Model | Description |
+|-------|-------------|
+| `free` | No cost |
+| `fixed` | One-time payment |
+| `per-use` | Pay per request |
+| `subscription` | Recurring payment |
+| `tiered` | Volume-based tiers |
+| `custom` | Custom pricing |
+
+## Free
+
+No payment required:
+
+```typescript
+const service = Service({
+  name: 'free-service',
+  pricing: {
+    model: 'free',
+  },
+})
+```
+
+## Fixed Price
+
+One-time payment:
+
+```typescript
+const service = Service({
+  name: 'fixed-service',
+  pricing: {
+    model: 'fixed',
+    price: 99.00,
+    currency: 'USD',
+  },
+})
+```
+
+## Per-Use
+
+Pay per request or unit:
+
+```typescript
+const service = Service({
+  name: 'usage-service',
+  pricing: {
+    model: 'per-use',
+    pricePerUnit: 0.01,   // $0.01 per request
+    currency: 'USD',
+  },
+})
+```
+
+### Usage with Multipliers
+
+Different rates for different operations:
+
+```typescript
+const service = Service({
+  name: 'ai-service',
+  pricing: {
+    model: 'per-use',
+    pricePerUnit: 0.01,
+    currency: 'USD',
+    multipliers: {
+      'basic-query': 1,      // $0.01
+      'advanced-query': 5,   // $0.05
+      'batch-process': 10,   // $0.10
+    },
+  },
+})
+```
+
+## Subscription
+
+Recurring payments:
+
+```typescript
+const service = Service({
+  name: 'subscription-service',
+  pricing: {
+    model: 'subscription',
+    basePrice: 49.99,
+    currency: 'USD',
+    interval: 'monthly',  // or 'yearly'
+  },
+})
+```
+
+### With Usage Limits
+
+```typescript
+const service = Service({
+  name: 'limited-subscription',
+  pricing: {
+    model: 'subscription',
+    basePrice: 99,
+    currency: 'USD',
+    interval: 'monthly',
+    includes: 1000,              // 1000 requests included
+    overagePrice: 0.05,          // $0.05 per additional request
+  },
+})
+```
+
+## Tiered Pricing
+
+Volume-based pricing:
+
+```typescript
+const service = Service({
+  name: 'tiered-service',
+  pricing: {
+    model: 'tiered',
+    currency: 'USD',
+    tiers: [
+      { upTo: 1000, pricePerUnit: 0.10 },    // First 1000: $0.10
+      { upTo: 10000, pricePerUnit: 0.08 },   // 1001-10000: $0.08
+      { upTo: 100000, pricePerUnit: 0.05 },  // 10001-100000: $0.05
+      { upTo: Infinity, pricePerUnit: 0.02 }, // 100001+: $0.02
+    ],
+  },
+})
+```
+
+## Custom Pricing
+
+For enterprise or special cases:
+
+```typescript
+const service = Service({
+  name: 'enterprise-service',
+  pricing: {
+    model: 'custom',
+    contactUrl: 'https://example.com/contact-sales',
+    description: 'Contact us for enterprise pricing',
+  },
+})
+```
+
+## Currency Support
+
+Supported currencies:
+
+```typescript
+pricing: {
+  model: 'subscription',
+  basePrice: 49.99,
+  currency: 'USD',  // or 'EUR', 'GBP', 'JPY', etc.
+}
+```
+
+| Currency | Code |
+|----------|------|
+| US Dollar | `USD` |
+| Euro | `EUR` |
+| British Pound | `GBP` |
+| Japanese Yen | `JPY` |
+| Canadian Dollar | `CAD` |
+| Australian Dollar | `AUD` |
+
+## Billing Intervals
+
+For subscriptions:
+
+| Interval | Description |
+|----------|-------------|
+| `monthly` | Billed monthly |
+| `yearly` | Billed annually |
+| `quarterly` | Billed quarterly |
+
+## Example: SaaS Pricing
+
+```typescript
+const saasService = Service({
+  name: 'saas-platform',
+  version: '1.0.0',
+
+  // Default pricing
+  pricing: {
+    model: 'subscription',
+    basePrice: 0,
+    currency: 'USD',
+    interval: 'monthly',
+  },
+
+  // Subscription plans
+  plans: [
+    {
+      id: 'free',
+      name: 'Free',
+      pricing: { model: 'free' },
+      features: ['100 requests/month', 'Community support'],
+    },
+    {
+      id: 'starter',
+      name: 'Starter',
+      pricing: {
+        model: 'subscription',
+        basePrice: 29,
+        currency: 'USD',
+        interval: 'monthly',
+      },
+      features: ['1,000 requests/month', 'Email support', 'API access'],
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      pricing: {
+        model: 'subscription',
+        basePrice: 99,
+        currency: 'USD',
+        interval: 'monthly',
+        includes: 10000,
+        overagePrice: 0.01,
+      },
+      features: ['10,000 requests/month', 'Priority support', 'Custom integrations'],
+    },
+    {
+      id: 'enterprise',
+      name: 'Enterprise',
+      pricing: {
+        model: 'custom',
+        contactUrl: 'https://example.com/enterprise',
+      },
+      features: ['Unlimited requests', 'Dedicated support', 'SLA guarantee', 'Custom deployment'],
+    },
+  ],
+})
+```
+
+## Type Definition
+
+```typescript
+interface PricingDefinition {
+  model: 'free' | 'fixed' | 'per-use' | 'subscription' | 'tiered' | 'custom'
+  price?: number
+  basePrice?: number
+  pricePerUnit?: number
+  currency?: string
+  interval?: 'monthly' | 'yearly' | 'quarterly'
+  includes?: number
+  overagePrice?: number
+  multipliers?: Record<string, number>
+  tiers?: Array<{
+    upTo: number
+    pricePerUnit: number
+  }>
+  contactUrl?: string
+  description?: string
+}
+```

@@ -2,337 +2,302 @@
  * Notification functionality for digital workers
  */
 
-import { generateObject } from 'ai-functions'
-import type { Channel, NotifyResult, NotifyOptions } from './types.js'
+import type {
+  Worker,
+  Team,
+  WorkerRef,
+  ActionTarget,
+  ContactChannel,
+  NotifyResult,
+  NotifyOptions,
+  Contacts,
+} from './types.js'
 
 /**
- * Send a notification to one or more channels
+ * Send a notification to a worker or team
  *
- * Routes notifications through various channels (Slack, email, SMS, etc.)
- * with appropriate formatting for each channel.
+ * Routes notifications through the specified channel(s), falling back
+ * to the target's preferred channel if not specified.
  *
+ * @param target - The worker or team to notify
  * @param message - The notification message
  * @param options - Notification options
  * @returns Promise resolving to notification result
  *
  * @example
  * ```ts
- * // Send a simple notification
- * const result = await notify('Deployment completed successfully', {
- *   channels: 'slack',
- *   recipients: ['#engineering', '@alice'],
- *   priority: 'medium',
- * })
- * ```
+ * // Notify a worker via their preferred channel
+ * await notify(alice, 'Deployment completed successfully')
  *
- * @example
- * ```ts
- * // Send to multiple channels
- * const result = await notify('Critical: Database connection lost', {
- *   channels: ['slack', 'email', 'sms'],
- *   recipients: ['oncall@company.com'],
- *   priority: 'urgent',
- *   metadata: {
- *     service: 'api',
- *     timestamp: new Date().toISOString(),
- *     severity: 'critical',
- *   },
- * })
+ * // Notify via specific channel
+ * await notify(alice, 'Urgent: Server down!', { via: 'slack' })
+ *
+ * // Notify via multiple channels
+ * await notify(alice, 'Critical alert', { via: ['slack', 'sms'] })
+ *
+ * // Notify a team
+ * await notify(engineering, 'Sprint planning tomorrow', { via: 'slack' })
  * ```
  */
 export async function notify(
+  target: ActionTarget,
   message: string,
   options: NotifyOptions = {}
 ): Promise<NotifyResult> {
-  const {
-    channels = 'web',
-    recipients = [],
-    priority = 'medium',
-    metadata = {},
-  } = options
+  const { via, priority = 'normal', fallback = false, timeout, context, metadata } = options
 
-  const channelList = Array.isArray(channels) ? channels : [channels]
+  // Resolve target to get contacts
+  const { contacts, recipients } = resolveTarget(target)
 
-  // Generate channel-specific message formats
-  const channelMessages = await Promise.all(
-    channelList.map((channel) =>
-      generateChannelMessage(message, channel, { priority, metadata })
-    )
+  // Determine which channels to use
+  const channels = resolveChannels(via, contacts, priority)
+
+  if (channels.length === 0) {
+    return {
+      sent: false,
+      via: [],
+      sentAt: new Date(),
+      messageId: generateMessageId(),
+      delivery: [],
+    }
+  }
+
+  // Send to each channel
+  const delivery = await Promise.all(
+    channels.map(async (channel) => {
+      try {
+        await sendToChannel(channel, message, contacts, { priority, metadata })
+        return { channel, status: 'sent' as const }
+      } catch (error) {
+        return {
+          channel,
+          status: 'failed' as const,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        }
+      }
+    })
   )
 
-  // In a real implementation, this would:
-  // 1. Format the message for each channel
-  // 2. Send to appropriate APIs/services
-  // 3. Handle delivery confirmation
-  // 4. Track message IDs
+  const sent = delivery.some((d) => d.status === 'sent')
 
-  // For now, simulate successful delivery
   return {
-    sent: true,
-    channels: channelList,
-    recipients: recipients.length > 0 ? recipients : undefined,
+    sent,
+    via: channels,
+    recipients,
     sentAt: new Date(),
-    messageId: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    messageId: generateMessageId(),
+    delivery,
   }
 }
 
 /**
- * Generate a message formatted for a specific channel
- */
-async function generateChannelMessage(
-  message: string,
-  channel: Channel,
-  options: { priority?: string; metadata?: Record<string, unknown> }
-): Promise<unknown> {
-  const { priority, metadata } = options
-
-  const channelSchemas: Record<Channel, object> = {
-    slack: {
-      text: 'Plain text fallback',
-      blocks: ['Slack BlockKit blocks as JSON array'],
-    },
-    email: {
-      subject: 'Email subject line',
-      html: 'HTML email body',
-      text: 'Plain text email body',
-    },
-    web: {
-      title: 'Notification title',
-      body: 'Notification body',
-      icon: 'Icon name or emoji',
-    },
-    sms: {
-      text: 'SMS message text (max 160 chars)',
-    },
-    custom: {
-      message: 'The formatted message',
-      format: 'The format used',
-    },
-  }
-
-  const result = await generateObject({
-    model: 'sonnet',
-    schema: channelSchemas[channel],
-    system: `You are a notification formatter. Create ${channel}-appropriate messages.
-
-Priority: ${priority || 'medium'}
-${metadata && Object.keys(metadata).length > 0 ? `Metadata: ${JSON.stringify(metadata)}` : ''}`,
-    prompt: `Format this notification for ${channel}:
-
-${message}
-
-Create an appropriate message format for this channel.`,
-  })
-
-  return result.object
-}
-
-/**
- * Send a notification with rich formatting
- *
- * @param title - Notification title
- * @param body - Notification body
- * @param options - Notification options
- * @returns Promise resolving to notification result
+ * Send a high-priority alert notification
  *
  * @example
  * ```ts
- * const result = await notify.rich(
- *   'Deployment Complete',
- *   'Version 2.1.0 has been deployed to production successfully.',
- *   {
- *     channels: 'slack',
- *     recipients: ['#engineering'],
- *     metadata: {
- *       version: '2.1.0',
- *       environment: 'production',
- *       duration: '3m 42s',
- *     },
- *   }
- * )
+ * await notify.alert(oncallEngineer, 'Production is down!')
+ * ```
+ */
+notify.alert = async (
+  target: ActionTarget,
+  message: string,
+  options: NotifyOptions = {}
+): Promise<NotifyResult> => {
+  return notify(target, message, { ...options, priority: 'urgent' })
+}
+
+/**
+ * Send a low-priority info notification
+ *
+ * @example
+ * ```ts
+ * await notify.info(team, 'Weekly sync notes posted')
+ * ```
+ */
+notify.info = async (
+  target: ActionTarget,
+  message: string,
+  options: NotifyOptions = {}
+): Promise<NotifyResult> => {
+  return notify(target, message, { ...options, priority: 'low' })
+}
+
+/**
+ * Send a rich notification with title and body
+ *
+ * @example
+ * ```ts
+ * await notify.rich(alice, 'Deployment Complete', 'Version 2.1.0 deployed to production', {
+ *   via: 'slack',
+ *   metadata: { version: '2.1.0', environment: 'production' },
+ * })
  * ```
  */
 notify.rich = async (
+  target: ActionTarget,
   title: string,
   body: string,
   options: NotifyOptions = {}
 ): Promise<NotifyResult> => {
   const message = `**${title}**\n\n${body}`
-  return notify(message, options)
-}
-
-/**
- * Send an alert notification (high priority)
- *
- * @param message - Alert message
- * @param options - Notification options
- * @returns Promise resolving to notification result
- *
- * @example
- * ```ts
- * const result = await notify.alert(
- *   'High memory usage detected: 95%',
- *   {
- *     channels: ['slack', 'sms'],
- *     recipients: ['oncall@company.com'],
- *   }
- * )
- * ```
- */
-notify.alert = async (
-  message: string,
-  options: NotifyOptions = {}
-): Promise<NotifyResult> => {
-  return notify(message, {
-    ...options,
-    priority: 'urgent',
-  })
-}
-
-/**
- * Send an info notification (low priority)
- *
- * @param message - Info message
- * @param options - Notification options
- * @returns Promise resolving to notification result
- *
- * @example
- * ```ts
- * const result = await notify.info(
- *   'Weekly backup completed',
- *   { channels: 'email' }
- * )
- * ```
- */
-notify.info = async (
-  message: string,
-  options: NotifyOptions = {}
-): Promise<NotifyResult> => {
-  return notify(message, {
-    ...options,
-    priority: 'low',
-  })
-}
-
-/**
- * Send a notification to a specific team
- *
- * @param team - Team identifier
- * @param message - Message to send
- * @param options - Notification options
- * @returns Promise resolving to notification result
- *
- * @example
- * ```ts
- * const result = await notify.team(
- *   'engineering',
- *   'New PR ready for review',
- *   { channels: 'slack' }
- * )
- * ```
- */
-notify.team = async (
-  team: string,
-  message: string,
-  options: NotifyOptions = {}
-): Promise<NotifyResult> => {
-  return notify(message, {
-    ...options,
-    recipients: [...(options.recipients || []), `@team-${team}`],
-  })
-}
-
-/**
- * Send a notification to a specific person
- *
- * @param person - Person identifier (email, username, etc.)
- * @param message - Message to send
- * @param options - Notification options
- * @returns Promise resolving to notification result
- *
- * @example
- * ```ts
- * const result = await notify.person(
- *   'alice@company.com',
- *   'Your approval is needed for expense #1234',
- *   { channels: ['email', 'slack'] }
- * )
- * ```
- */
-notify.person = async (
-  person: string,
-  message: string,
-  options: NotifyOptions = {}
-): Promise<NotifyResult> => {
-  return notify(message, {
-    ...options,
-    recipients: [...(options.recipients || []), person],
-  })
+  return notify(target, message, options)
 }
 
 /**
  * Send notifications in batch
  *
- * @param notifications - Array of notification configurations
- * @returns Promise resolving to array of notification results
- *
  * @example
  * ```ts
- * const results = await notify.batch([
- *   { message: 'Task 1 completed', channels: 'slack' },
- *   { message: 'Task 2 completed', channels: 'email' },
- *   { message: 'Task 3 completed', channels: 'sms' },
+ * await notify.batch([
+ *   { target: alice, message: 'Task 1 complete' },
+ *   { target: bob, message: 'Task 2 complete' },
+ *   { target: team, message: 'All tasks done', options: { via: 'slack' } },
  * ])
  * ```
  */
 notify.batch = async (
-  notifications: Array<{ message: string; options?: NotifyOptions }>
+  notifications: Array<{
+    target: ActionTarget
+    message: string
+    options?: NotifyOptions
+  }>
 ): Promise<NotifyResult[]> => {
   return Promise.all(
-    notifications.map(({ message, options }) => notify(message, options))
+    notifications.map(({ target, message, options }) => notify(target, message, options))
   )
 }
 
 /**
  * Schedule a notification for later
  *
- * @param message - Message to send
- * @param when - When to send (Date or delay in ms)
- * @param options - Notification options
- * @returns Promise resolving to scheduled notification info
- *
  * @example
  * ```ts
  * // Schedule for specific time
- * const result = await notify.schedule(
- *   'Reminder: Team meeting in 15 minutes',
- *   new Date('2024-01-15T14:45:00Z'),
- *   { channels: 'slack' }
- * )
+ * await notify.schedule(alice, 'Meeting in 15 minutes', new Date('2024-01-15T14:45:00Z'))
  *
  * // Schedule with delay
- * const result = await notify.schedule(
- *   'Reminder: Review PR',
- *   60000, // 1 minute
- *   { channels: 'slack' }
- * )
+ * await notify.schedule(alice, 'Reminder', 60000)  // 1 minute
  * ```
  */
 notify.schedule = async (
+  target: ActionTarget,
   message: string,
   when: Date | number,
   options: NotifyOptions = {}
 ): Promise<{ scheduled: true; scheduledFor: Date; messageId: string }> => {
   const scheduledFor = when instanceof Date ? when : new Date(Date.now() + when)
 
-  // In a real implementation, this would:
-  // 1. Store the scheduled notification
-  // 2. Use a job queue or scheduler
-  // 3. Send at the specified time
-
+  // In a real implementation, this would store the scheduled notification
   return {
     scheduled: true,
     scheduledFor,
-    messageId: `scheduled_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    messageId: generateMessageId('scheduled'),
   }
+}
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
+
+/**
+ * Resolve an action target to contacts and recipients
+ */
+function resolveTarget(target: ActionTarget): {
+  contacts: Contacts
+  recipients: WorkerRef[]
+} {
+  if (typeof target === 'string') {
+    // Just an ID - return empty contacts, would need to look up
+    return {
+      contacts: {},
+      recipients: [{ id: target }],
+    }
+  }
+
+  if ('contacts' in target) {
+    // Worker or Team
+    const recipients: WorkerRef[] =
+      'members' in target
+        ? target.members // Team
+        : [{ id: target.id, type: target.type, name: target.name }] // Worker
+
+    return {
+      contacts: target.contacts,
+      recipients,
+    }
+  }
+
+  // WorkerRef - no contacts available
+  return {
+    contacts: {},
+    recipients: [target],
+  }
+}
+
+/**
+ * Determine which channels to use based on options and contacts
+ */
+function resolveChannels(
+  via: ContactChannel | ContactChannel[] | undefined,
+  contacts: Contacts,
+  priority: string
+): ContactChannel[] {
+  // If specific channels requested, use those
+  if (via) {
+    const requested = Array.isArray(via) ? via : [via]
+    // Filter to only channels that exist in contacts
+    return requested.filter((channel) => contacts[channel] !== undefined)
+  }
+
+  // Otherwise, use available channels based on priority
+  const available = Object.keys(contacts) as ContactChannel[]
+
+  if (available.length === 0) {
+    return []
+  }
+
+  const firstChannel = available[0]
+  if (!firstChannel) {
+    return []
+  }
+
+  // For urgent, try multiple channels
+  if (priority === 'urgent') {
+    const urgentChannels: ContactChannel[] = ['slack', 'sms', 'phone']
+    return available.filter((c) => urgentChannels.includes(c))
+  }
+
+  // Default to first available
+  return [firstChannel]
+}
+
+/**
+ * Send a notification to a specific channel
+ */
+async function sendToChannel(
+  channel: ContactChannel,
+  message: string,
+  contacts: Contacts,
+  options: { priority?: string; metadata?: Record<string, unknown> }
+): Promise<void> {
+  const contact = contacts[channel]
+
+  if (!contact) {
+    throw new Error(`No ${channel} contact configured`)
+  }
+
+  // In a real implementation, this would:
+  // 1. Format the message for the channel
+  // 2. Send via the appropriate API (Slack, SendGrid, Twilio, etc.)
+  // 3. Handle delivery confirmation
+
+  // For now, simulate success
+  await new Promise((resolve) => setTimeout(resolve, 10))
+}
+
+/**
+ * Generate a unique message ID
+ */
+function generateMessageId(prefix = 'msg'): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }

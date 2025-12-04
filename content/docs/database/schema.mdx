@@ -1,0 +1,198 @@
+---
+title: Schema Types
+description: Define schemas with Noun, Verb, and TypeMeta
+---
+
+# Schema Types
+
+ai-database uses semantic types—Noun and Verb—to create self-documenting schemas.
+
+## Defining Schemas
+
+The simplest schema uses string field definitions:
+
+```typescript
+const db = DB({
+  Post: {
+    title: 'string',
+    content: 'markdown',
+    author: 'Author.posts',  // bi-directional relation
+  },
+  Author: {
+    name: 'string',
+    // posts: Post[] auto-created from backref
+  }
+})
+```
+
+## Field Types
+
+| Type | Description |
+|------|-------------|
+| `'string'` | Text field |
+| `'number'` | Numeric field |
+| `'boolean'` | True/false |
+| `'date'` | Date only |
+| `'datetime'` | Date and time |
+| `'json'` | JSON object |
+| `'markdown'` | Markdown text |
+| `'url'` | URL string |
+
+### Modifiers
+
+- `'string?'` - Optional field
+- `'string[]'` - Array of strings
+- `'Author.posts'` - Relation with backref
+- `['Tag.posts']` - Many-to-many relation
+
+## Nouns
+
+A Noun describes an entity type with all its metadata:
+
+```typescript
+import { defineNoun, nounToSchema } from 'ai-database'
+
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  description: 'A blog post or article',
+
+  properties: {
+    title: { type: 'string', description: 'The post title' },
+    content: { type: 'markdown', description: 'The post body' },
+    status: { type: 'string', optional: true },
+  },
+
+  relationships: {
+    author: { type: 'Author', backref: 'posts' },
+    tags: { type: 'Tag[]', backref: 'posts' },
+  },
+
+  actions: ['create', 'update', 'delete', 'publish'],
+  events: ['created', 'updated', 'deleted', 'published'],
+})
+
+// Use with DB()
+const db = DB({
+  Post: nounToSchema(Post),
+})
+```
+
+## Verbs
+
+A Verb describes an action with all its conjugations:
+
+```typescript
+import { defineVerb, Verbs } from 'ai-database'
+
+// Define custom verb
+const publish = defineVerb({
+  action: 'publish',
+  actor: 'publisher',      // who does it
+  act: 'publishes',        // present tense
+  activity: 'publishing',  // gerund
+  result: 'publication',   // result noun
+  reverse: {
+    at: 'publishedAt',
+    by: 'publishedBy'
+  },
+  inverse: 'unpublish',    // opposite action
+})
+
+// Pre-defined verbs
+Verbs.create   // { action: 'create', actor: 'creator', ... }
+Verbs.update   // { action: 'update', actor: 'updater', ... }
+Verbs.delete   // { action: 'delete', actor: 'deleter', ... }
+Verbs.publish  // { action: 'publish', actor: 'publisher', ... }
+Verbs.archive  // { action: 'archive', actor: 'archiver', ... }
+```
+
+## AI Auto-Generation
+
+The database auto-generates linguistic forms:
+
+```typescript
+import { conjugate, pluralize, singularize, inferNoun, Type } from 'ai-database'
+
+// Verb conjugation
+conjugate('publish')
+// => {
+//   action: 'publish',
+//   actor: 'publisher',
+//   act: 'publishes',
+//   activity: 'publishing',
+//   result: 'publication',
+//   reverse: { at: 'publishedAt', by: 'publishedBy', ... }
+// }
+
+// Noun pluralization
+pluralize('post')      // 'posts'
+pluralize('category')  // 'categories'
+pluralize('person')    // 'people'
+
+// Reverse
+singularize('posts')   // 'post'
+singularize('people')  // 'person'
+
+// Infer from type name
+inferNoun('BlogPost')
+// => { singular: 'blog post', plural: 'blog posts', ... }
+```
+
+## TypeMeta
+
+Get metadata for any type:
+
+```typescript
+import { Type } from 'ai-database'
+
+const Post = Type('Post')
+Post.name       // 'Post'
+Post.singular   // 'post'
+Post.plural     // 'posts'
+Post.slug       // 'post'
+Post.slugPlural // 'posts'
+Post.created    // 'Post.created' (event type)
+Post.createdAt  // 'createdAt' (field name)
+Post.createdBy  // 'createdBy' (field name)
+
+const BlogPost = Type('BlogPost')
+BlogPost.singular   // 'blog post'
+BlogPost.slug       // 'blog-post'
+BlogPost.slugPlural // 'blog-posts'
+```
+
+## Self-Describing Schema
+
+Every type is stored as a Noun in the database itself:
+
+```typescript
+// When you define:
+const db = DB({
+  Post: { title: 'string', author: 'Author.posts' },
+  Author: { name: 'string' }
+})
+
+// The database auto-creates:
+// Noun('Post')   => { singular: 'post', plural: 'posts', ... }
+// Noun('Author') => { singular: 'author', plural: 'authors', ... }
+// Edge('Post.author') => { from: 'Post', to: 'Author', cardinality: 'many-to-one' }
+
+// Query all types
+const types = await db.Noun.list()
+
+// Get metadata for a type
+const postNoun = await db.Noun.get('Post')
+
+// Get all instances of a type
+const allPosts = await postNoun.things
+```
+
+### System Types
+
+| Type | Description |
+|------|-------------|
+| `Thing` | Base type—every entity is a Thing |
+| `Noun` | Type definitions |
+| `Verb` | Action definitions |
+| `Edge` | Relationships between types |

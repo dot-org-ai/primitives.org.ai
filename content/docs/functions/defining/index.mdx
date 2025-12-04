@@ -1,0 +1,40 @@
+---
+title: Defining Functions
+description: Define custom AI functions
+---
+
+# Defining Functions
+
+Three ways to create custom AI functions.
+
+## Methods
+
+| Method | Use Case |
+|--------|----------|
+| `define()` | Explicit function definition |
+| `AI()` | Typed factory with schemas |
+| `ai.*` | Magic proxy (auto-inferred) |
+
+## Quick Examples
+
+```typescript
+import { define, AI, ai } from 'ai-functions'
+
+// define - explicit definition
+const planTrip = define('planTrip', {
+  destination: 'Travel destination',
+  budget: 'Budget in USD (number)',
+})
+
+// AI() - typed factory
+const ai = AI({
+  recipe: {
+    name: 'Recipe name',
+    ingredients: ['List of ingredients'],
+  },
+})
+const recipe = await ai.recipe('pasta carbonara')
+
+// ai.* - magic proxy
+const trip = await ai.planTrip({ destination: 'Tokyo', budget: 5000 })
+```

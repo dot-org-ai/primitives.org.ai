@@ -98,6 +98,954 @@ export interface ParsedSchema {
 }
 
 // =============================================================================
+// Noun & Verb - Semantic Types for Self-Documenting Schemas
+// =============================================================================
+
+/**
+ * Verb conjugations and related forms
+ *
+ * Maps an action to its various grammatical forms and semantic relationships.
+ *
+ * @example
+ * ```ts
+ * const create: Verb = {
+ *   action: 'create',      // Base form (imperative)
+ *   actor: 'creator',      // Who does it (noun)
+ *   act: 'creates',        // Present tense (3rd person)
+ *   activity: 'creating',  // Gerund/continuous
+ *   result: 'creation',    // Result noun
+ *   reverse: {             // Passive/result properties
+ *     at: 'createdAt',
+ *     by: 'createdBy',
+ *     in: 'createdIn',
+ *     for: 'createdFor',
+ *   },
+ *   inverse: 'delete',     // Opposite action
+ * }
+ * ```
+ */
+export interface Verb {
+  /** Base form / imperative (create, update, delete, publish) */
+  action: string
+
+  /** Agent noun - who performs the action (creator, updater, author, publisher) */
+  actor?: string
+
+  /** Present tense 3rd person singular (creates, updates, deletes, publishes) */
+  act?: string
+
+  /** Present participle / gerund (creating, updating, deleting, publishing) */
+  activity?: string
+
+  /** Result noun - what is produced (creation, update, deletion, publication) */
+  result?: string
+
+  /** Reverse/passive forms - properties resulting from the action */
+  reverse?: {
+    /** Timestamp field (createdAt, updatedAt, deletedAt, publishedAt) */
+    at?: string
+    /** Actor reference (createdBy, updatedBy, deletedBy, publishedBy) */
+    by?: string
+    /** Location/context (createdIn, updatedIn, publishedIn) */
+    in?: string
+    /** Purpose/target (createdFor, publishedFor) */
+    for?: string
+    /** Additional reverse forms */
+    [key: string]: string | undefined
+  }
+
+  /** Inverse action (create ↔ delete, publish ↔ unpublish, activate ↔ deactivate) */
+  inverse?: string
+
+  /** Description of what this action does */
+  description?: string
+}
+
+/**
+ * Standard CRUD verbs with pre-defined conjugations
+ */
+export const Verbs = {
+  create: {
+    action: 'create',
+    actor: 'creator',
+    act: 'creates',
+    activity: 'creating',
+    result: 'creation',
+    reverse: { at: 'createdAt', by: 'createdBy', in: 'createdIn', for: 'createdFor' },
+    inverse: 'delete',
+  },
+  update: {
+    action: 'update',
+    actor: 'updater',
+    act: 'updates',
+    activity: 'updating',
+    result: 'update',
+    reverse: { at: 'updatedAt', by: 'updatedBy' },
+  },
+  delete: {
+    action: 'delete',
+    actor: 'deleter',
+    act: 'deletes',
+    activity: 'deleting',
+    result: 'deletion',
+    reverse: { at: 'deletedAt', by: 'deletedBy' },
+    inverse: 'create',
+  },
+  publish: {
+    action: 'publish',
+    actor: 'publisher',
+    act: 'publishes',
+    activity: 'publishing',
+    result: 'publication',
+    reverse: { at: 'publishedAt', by: 'publishedBy' },
+    inverse: 'unpublish',
+  },
+  archive: {
+    action: 'archive',
+    actor: 'archiver',
+    act: 'archives',
+    activity: 'archiving',
+    result: 'archive',
+    reverse: { at: 'archivedAt', by: 'archivedBy' },
+    inverse: 'unarchive',
+  },
+} as const satisfies Record<string, Verb>
+
+/**
+ * Noun definition - semantic description of an entity type
+ *
+ * Describes a Thing with its properties, relationships, available actions,
+ * and metadata like singular/plural forms for natural language generation.
+ *
+ * @example
+ * ```ts
+ * const Post: Noun = {
+ *   singular: 'post',
+ *   plural: 'posts',
+ *   description: 'A blog post or article',
+ *
+ *   properties: {
+ *     title: { type: 'string', description: 'The post title' },
+ *     content: { type: 'markdown', description: 'The post body' },
+ *     status: { type: 'string', description: 'draft | published | archived' },
+ *   },
+ *
+ *   relationships: {
+ *     author: { type: 'Author', backref: 'posts', description: 'Who wrote this' },
+ *     tags: { type: 'Tag[]', backref: 'posts', description: 'Categorization' },
+ *   },
+ *
+ *   actions: ['create', 'update', 'delete', 'publish', 'archive'],
+ *
+ *   events: ['created', 'updated', 'deleted', 'published', 'archived'],
+ * }
+ * ```
+ */
+export interface Noun {
+  /** Singular form (post, user, category) */
+  singular: string
+
+  /** Plural form (posts, users, categories) */
+  plural: string
+
+  /** Human-readable description */
+  description?: string
+
+  /** Property definitions with descriptions */
+  properties?: Record<string, NounProperty>
+
+  /** Relationship definitions with descriptions */
+  relationships?: Record<string, NounRelationship>
+
+  /** Actions that can be performed on this noun (verbs) */
+  actions?: Array<string | Verb>
+
+  /** Events that can occur to this noun */
+  events?: string[]
+
+  /** Additional metadata */
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Property definition within a Noun
+ */
+export interface NounProperty {
+  /** Field type */
+  type: PrimitiveType | string
+
+  /** Human-readable description (also used as generation prompt) */
+  description?: string
+
+  /** Whether the field is optional */
+  optional?: boolean
+
+  /** Whether the field is an array */
+  array?: boolean
+
+  /** Default value */
+  default?: unknown
+
+  /** Example values for documentation/generation */
+  examples?: unknown[]
+}
+
+/**
+ * Relationship definition within a Noun
+ */
+export interface NounRelationship {
+  /** Related entity type (e.g., 'Author', 'Tag[]') */
+  type: string
+
+  /** Backref field name on the related entity */
+  backref?: string
+
+  /** Human-readable description */
+  description?: string
+
+  /** Whether this is a required relationship */
+  required?: boolean
+}
+
+/**
+ * Create a Noun definition with type inference
+ *
+ * @example
+ * ```ts
+ * const Post = defineNoun({
+ *   singular: 'post',
+ *   plural: 'posts',
+ *   description: 'A blog post',
+ *   properties: {
+ *     title: { type: 'string', description: 'Post title' },
+ *     content: { type: 'markdown' },
+ *   },
+ *   relationships: {
+ *     author: { type: 'Author', backref: 'posts' },
+ *   },
+ * })
+ * ```
+ */
+export function defineNoun<T extends Noun>(noun: T): T {
+  return noun
+}
+
+/**
+ * Create a Verb definition with type inference
+ *
+ * @example
+ * ```ts
+ * const publish = defineVerb({
+ *   action: 'publish',
+ *   actor: 'publisher',
+ *   act: 'publishes',
+ *   activity: 'publishing',
+ *   result: 'publication',
+ *   reverse: { at: 'publishedAt', by: 'publishedBy' },
+ *   inverse: 'unpublish',
+ * })
+ * ```
+ */
+export function defineVerb<T extends Verb>(verb: T): T {
+  return verb
+}
+
+/**
+ * Convert a Noun to an EntitySchema for use with DB()
+ *
+ * @example
+ * ```ts
+ * const postNoun = defineNoun({
+ *   singular: 'post',
+ *   plural: 'posts',
+ *   properties: { title: { type: 'string' } },
+ *   relationships: { author: { type: 'Author', backref: 'posts' } },
+ * })
+ *
+ * const db = DB({
+ *   Post: nounToSchema(postNoun),
+ * })
+ * ```
+ */
+export function nounToSchema(noun: Noun): EntitySchema {
+  const schema: EntitySchema = {}
+
+  // Add properties
+  if (noun.properties) {
+    for (const [name, prop] of Object.entries(noun.properties)) {
+      let type = prop.type
+      if (prop.array) type = `${type}[]`
+      if (prop.optional) type = `${type}?`
+      schema[name] = type
+    }
+  }
+
+  // Add relationships
+  if (noun.relationships) {
+    for (const [name, rel] of Object.entries(noun.relationships)) {
+      const baseType = rel.type.replace('[]', '')
+      const isArray = rel.type.endsWith('[]')
+
+      if (rel.backref) {
+        schema[name] = isArray ? [`${baseType}.${rel.backref}`] : `${baseType}.${rel.backref}`
+      } else {
+        schema[name] = rel.type
+      }
+    }
+  }
+
+  return schema
+}
+
+/**
+ * Get reverse property names for a verb action
+ *
+ * @example
+ * ```ts
+ * getVerbFields('create')
+ * // => { at: 'createdAt', by: 'createdBy', in: 'createdIn', for: 'createdFor' }
+ *
+ * getVerbFields('publish')
+ * // => { at: 'publishedAt', by: 'publishedBy' }
+ * ```
+ */
+export function getVerbFields(action: keyof typeof Verbs): Record<string, string> {
+  return Verbs[action]?.reverse ?? {}
+}
+
+// =============================================================================
+// AI Auto-Generation - Linguistic Inference
+// =============================================================================
+
+/**
+ * Auto-conjugate a verb from just the base form
+ *
+ * Given just "publish", generates all forms:
+ * - actor: publisher
+ * - act: publishes
+ * - activity: publishing
+ * - result: publication
+ * - reverse: { at: publishedAt, by: publishedBy, ... }
+ *
+ * @example
+ * ```ts
+ * conjugate('publish')
+ * // => { action: 'publish', actor: 'publisher', act: 'publishes', activity: 'publishing', ... }
+ *
+ * conjugate('create')
+ * // => { action: 'create', actor: 'creator', act: 'creates', activity: 'creating', ... }
+ * ```
+ */
+export function conjugate(action: string): Verb {
+  // Check if it's a known verb first
+  if (action in Verbs) {
+    return Verbs[action as keyof typeof Verbs]
+  }
+
+  const base = action.toLowerCase()
+  const pastParticiple = toPastParticiple(base)
+  const capitalized = capitalize(pastParticiple)
+
+  return {
+    action: base,
+    actor: toActor(base),
+    act: toPresent(base),
+    activity: toGerund(base),
+    result: toResult(base),
+    reverse: {
+      at: `${pastParticiple}At`,
+      by: `${pastParticiple}By`,
+      in: `${pastParticiple}In`,
+      for: `${pastParticiple}For`,
+    },
+  }
+}
+
+/**
+ * Auto-pluralize a noun
+ *
+ * @example
+ * ```ts
+ * pluralize('post')     // => 'posts'
+ * pluralize('category') // => 'categories'
+ * pluralize('person')   // => 'people'
+ * pluralize('child')    // => 'children'
+ * ```
+ */
+export function pluralize(singular: string): string {
+  const lower = singular.toLowerCase()
+
+  // Irregular plurals
+  const irregulars: Record<string, string> = {
+    person: 'people',
+    child: 'children',
+    man: 'men',
+    woman: 'women',
+    foot: 'feet',
+    tooth: 'teeth',
+    goose: 'geese',
+    mouse: 'mice',
+    ox: 'oxen',
+    leaf: 'leaves',
+    life: 'lives',
+    knife: 'knives',
+    wife: 'wives',
+    half: 'halves',
+    self: 'selves',
+    calf: 'calves',
+    analysis: 'analyses',
+    crisis: 'crises',
+    thesis: 'theses',
+    datum: 'data',
+    medium: 'media',
+    criterion: 'criteria',
+    phenomenon: 'phenomena',
+  }
+
+  if (irregulars[lower]) {
+    return preserveCase(singular, irregulars[lower])
+  }
+
+  // Rules for regular plurals
+  if (lower.endsWith('y') && !isVowel(lower[lower.length - 2])) {
+    return singular.slice(0, -1) + 'ies'
+  }
+  // Words ending in z that double: quiz → quizzes, fez → fezzes
+  if (lower.endsWith('z') && !lower.endsWith('zz')) {
+    return singular + 'zes'
+  }
+  if (lower.endsWith('s') || lower.endsWith('x') || lower.endsWith('zz') ||
+      lower.endsWith('ch') || lower.endsWith('sh')) {
+    return singular + 'es'
+  }
+  if (lower.endsWith('f')) {
+    return singular.slice(0, -1) + 'ves'
+  }
+  if (lower.endsWith('fe')) {
+    return singular.slice(0, -2) + 'ves'
+  }
+
+  return singular + 's'
+}
+
+/**
+ * Auto-singularize a noun (reverse of pluralize)
+ *
+ * @example
+ * ```ts
+ * singularize('posts')      // => 'post'
+ * singularize('categories') // => 'category'
+ * singularize('people')     // => 'person'
+ * ```
+ */
+export function singularize(plural: string): string {
+  const lower = plural.toLowerCase()
+
+  // Irregular singulars
+  const irregulars: Record<string, string> = {
+    people: 'person',
+    children: 'child',
+    men: 'man',
+    women: 'woman',
+    feet: 'foot',
+    teeth: 'tooth',
+    geese: 'goose',
+    mice: 'mouse',
+    oxen: 'ox',
+    leaves: 'leaf',
+    lives: 'life',
+    knives: 'knife',
+    wives: 'wife',
+    halves: 'half',
+    selves: 'self',
+    calves: 'calf',
+    analyses: 'analysis',
+    crises: 'crisis',
+    theses: 'thesis',
+    data: 'datum',
+    media: 'medium',
+    criteria: 'criterion',
+    phenomena: 'phenomenon',
+  }
+
+  if (irregulars[lower]) {
+    return preserveCase(plural, irregulars[lower])
+  }
+
+  // Rules for regular singulars
+  if (lower.endsWith('ies')) {
+    return plural.slice(0, -3) + 'y'
+  }
+  if (lower.endsWith('ves')) {
+    return plural.slice(0, -3) + 'f'
+  }
+  if (lower.endsWith('es') && (
+    lower.endsWith('sses') || lower.endsWith('xes') || lower.endsWith('zes') ||
+    lower.endsWith('ches') || lower.endsWith('shes')
+  )) {
+    return plural.slice(0, -2)
+  }
+  if (lower.endsWith('s') && !lower.endsWith('ss')) {
+    return plural.slice(0, -1)
+  }
+
+  return plural
+}
+
+/**
+ * Infer a complete Noun from just a type name
+ *
+ * @example
+ * ```ts
+ * inferNoun('BlogPost')
+ * // => { singular: 'blog post', plural: 'blog posts', ... }
+ *
+ * inferNoun('Category')
+ * // => { singular: 'category', plural: 'categories', ... }
+ * ```
+ */
+export function inferNoun(typeName: string): Noun {
+  const words = splitCamelCase(typeName)
+  const singular = words.join(' ').toLowerCase()
+  const plural = words.slice(0, -1).concat(pluralize(words[words.length - 1]!)).join(' ').toLowerCase()
+
+  return {
+    singular,
+    plural,
+    actions: ['create', 'update', 'delete'],
+    events: ['created', 'updated', 'deleted'],
+  }
+}
+
+/**
+ * Type metadata - automatically inferred from type name
+ *
+ * Available on every entity via `entity.$type` or `db.Post.$meta`
+ */
+export interface TypeMeta {
+  /** Type name as defined in schema (e.g., 'Post', 'BlogPost') */
+  name: string
+  /** Singular form (e.g., 'post', 'blog post') */
+  singular: string
+  /** Plural form (e.g., 'posts', 'blog posts') */
+  plural: string
+  /** URL-safe slug (e.g., 'post', 'blog-post') */
+  slug: string
+  /** Plural slug (e.g., 'posts', 'blog-posts') */
+  slugPlural: string
+
+  // Verb-derived accessors
+  /** Creator relationship name */
+  creator: string
+  /** Created timestamp field */
+  createdAt: string
+  /** Created by field */
+  createdBy: string
+  /** Updated timestamp field */
+  updatedAt: string
+  /** Updated by field */
+  updatedBy: string
+
+  // Event types
+  /** Event type for creation (e.g., 'Post.created') */
+  created: string
+  /** Event type for update (e.g., 'Post.updated') */
+  updated: string
+  /** Event type for deletion (e.g., 'Post.deleted') */
+  deleted: string
+}
+
+/**
+ * Create TypeMeta from a type name - all linguistic forms auto-inferred
+ *
+ * @example
+ * ```ts
+ * const meta = createTypeMeta('BlogPost')
+ * meta.singular  // 'blog post'
+ * meta.plural    // 'blog posts'
+ * meta.slug      // 'blog-post'
+ * meta.created   // 'BlogPost.created'
+ * meta.createdAt // 'createdAt'
+ * meta.creator   // 'creator'
+ * ```
+ */
+export function createTypeMeta(typeName: string): TypeMeta {
+  const noun = inferNoun(typeName)
+  const slug = noun.singular.replace(/\s+/g, '-')
+  const slugPlural = noun.plural.replace(/\s+/g, '-')
+
+  return {
+    name: typeName,
+    singular: noun.singular,
+    plural: noun.plural,
+    slug,
+    slugPlural,
+
+    // From Verbs.create
+    creator: 'creator',
+    createdAt: 'createdAt',
+    createdBy: 'createdBy',
+    updatedAt: 'updatedAt',
+    updatedBy: 'updatedBy',
+
+    // Event types
+    created: `${typeName}.created`,
+    updated: `${typeName}.updated`,
+    deleted: `${typeName}.deleted`,
+  }
+}
+
+/** Cache of TypeMeta by type name */
+const typeMetaCache = new Map<string, TypeMeta>()
+
+/**
+ * Get or create TypeMeta for a type name (cached)
+ */
+export function getTypeMeta(typeName: string): TypeMeta {
+  let meta = typeMetaCache.get(typeName)
+  if (!meta) {
+    meta = createTypeMeta(typeName)
+    typeMetaCache.set(typeName, meta)
+  }
+  return meta
+}
+
+/**
+ * Type proxy - provides dynamic access to type metadata
+ *
+ * @example
+ * ```ts
+ * const Post = Type('Post')
+ * Post.singular  // 'post'
+ * Post.plural    // 'posts'
+ * Post.created   // 'Post.created'
+ *
+ * // In event handlers:
+ * on.create(thing => {
+ *   console.log(thing.$type.plural)  // 'posts'
+ * })
+ * ```
+ */
+export function Type(name: string): TypeMeta {
+  return getTypeMeta(name)
+}
+
+// =============================================================================
+// Built-in Schema Types - Self-Describing Database
+// =============================================================================
+
+/**
+ * Built-in Thing schema - base type for all entities
+ *
+ * Every entity instance is a Thing with a relationship to its Noun.
+ * This creates a complete graph: Thing.type -> Noun.things
+ *
+ * @example
+ * ```ts
+ * // Every post instance:
+ * post.$type   // 'Post' (string)
+ * post.type    // -> Noun('Post') (relationship)
+ *
+ * // From Noun, get all instances:
+ * const postNoun = await db.Noun.get('Post')
+ * const allPosts = await postNoun.things  // -> Post[]
+ * ```
+ */
+export const ThingSchema: EntitySchema = {
+  // Every Thing has a type that links to its Noun
+  type: 'Noun.things',      // Thing.type -> Noun, Noun.things -> Thing[]
+}
+
+/**
+ * Built-in Noun schema for storing type definitions
+ *
+ * Every Type/Collection automatically gets a Noun record stored in the database.
+ * This enables introspection and self-describing schemas.
+ *
+ * @example
+ * ```ts
+ * // When you define:
+ * const db = DB({ Post: { title: 'string' } })
+ *
+ * // The database auto-creates:
+ * // db.Noun.get('Post') => { singular: 'post', plural: 'posts', ... }
+ *
+ * // Query all types:
+ * const types = await db.Noun.list()
+ *
+ * // Get all instances of a type:
+ * const postNoun = await db.Noun.get('Post')
+ * const allPosts = await postNoun.things
+ *
+ * // Listen for new types:
+ * on.Noun.created(noun => console.log(`New type: ${noun.name}`))
+ * ```
+ */
+export const NounSchema: EntitySchema = {
+  // Identity
+  name: 'string',           // 'Post', 'BlogPost'
+  singular: 'string',       // 'post', 'blog post'
+  plural: 'string',         // 'posts', 'blog posts'
+  slug: 'string',           // 'post', 'blog-post'
+  slugPlural: 'string',     // 'posts', 'blog-posts'
+  description: 'string?',   // Human description
+
+  // Schema
+  properties: 'json?',      // Property definitions
+  relationships: 'json?',   // Relationship definitions
+
+  // Behavior
+  actions: 'json?',         // Available actions (verbs)
+  events: 'json?',          // Event types
+
+  // Metadata
+  metadata: 'json?',        // Additional metadata
+
+  // Relationships - auto-created by bi-directional system
+  // things: Thing[]        // All instances of this type (backref from Thing.type)
+}
+
+/**
+ * Built-in Verb schema for storing action definitions
+ */
+export const VerbSchema: EntitySchema = {
+  action: 'string',         // 'create', 'publish'
+  actor: 'string?',         // 'creator', 'publisher'
+  act: 'string?',           // 'creates', 'publishes'
+  activity: 'string?',      // 'creating', 'publishing'
+  result: 'string?',        // 'creation', 'publication'
+  reverse: 'json?',         // { at, by, in, for }
+  inverse: 'string?',       // 'delete', 'unpublish'
+  description: 'string?',
+}
+
+/**
+ * Built-in Edge schema for relationships between types
+ *
+ * Every relationship in a schema creates an Edge record.
+ * This enables graph queries across the type system.
+ *
+ * @example
+ * ```ts
+ * // Post.author -> Author creates:
+ * // Edge { from: 'Post', name: 'author', to: 'Author', backref: 'posts', cardinality: 'many-to-one' }
+ *
+ * // Query the graph:
+ * const edges = await db.Edge.find({ to: 'Author' })
+ * // => [{ from: 'Post', name: 'author' }, { from: 'Comment', name: 'author' }]
+ *
+ * // What types reference Author?
+ * const referencing = edges.map(e => e.from)  // ['Post', 'Comment']
+ * ```
+ */
+export const EdgeSchema: EntitySchema = {
+  from: 'string',           // Source type: 'Post'
+  name: 'string',           // Field name: 'author'
+  to: 'string',             // Target type: 'Author'
+  backref: 'string?',       // Inverse field: 'posts'
+  cardinality: 'string',    // 'one-to-one', 'one-to-many', 'many-to-one', 'many-to-many'
+  required: 'boolean?',     // Is this relationship required?
+  description: 'string?',   // Human description
+}
+
+/**
+ * System types that are auto-created in every database
+ *
+ * The graph structure:
+ * - Thing.type -> Noun (every instance links to its type)
+ * - Noun.things -> Thing[] (every type has its instances)
+ * - Edge connects Nouns (relationships between types)
+ * - Verb describes actions on Nouns
+ */
+export const SystemSchema: DatabaseSchema = {
+  Thing: ThingSchema,
+  Noun: NounSchema,
+  Verb: VerbSchema,
+  Edge: EdgeSchema,
+}
+
+/**
+ * Create Edge records from schema relationships
+ *
+ * @internal Used by DB() to auto-populate Edge records
+ */
+export function createEdgeRecords(
+  typeName: string,
+  schema: EntitySchema,
+  parsedEntity: ParsedEntity
+): Array<Record<string, unknown>> {
+  const edges: Array<Record<string, unknown>> = []
+
+  for (const [fieldName, field] of parsedEntity.fields) {
+    if (field.isRelation && field.relatedType) {
+      const cardinality = field.isArray
+        ? field.backref ? 'many-to-many' : 'one-to-many'
+        : field.backref ? 'many-to-one' : 'one-to-one'
+
+      edges.push({
+        from: typeName,
+        name: fieldName,
+        to: field.relatedType,
+        backref: field.backref,
+        cardinality,
+      })
+    }
+  }
+
+  return edges
+}
+
+/**
+ * Create a Noun record from a type name and optional schema
+ *
+ * @internal Used by DB() to auto-populate Noun records
+ */
+export function createNounRecord(
+  typeName: string,
+  schema?: EntitySchema,
+  nounDef?: Partial<Noun>
+): Record<string, unknown> {
+  const meta = getTypeMeta(typeName)
+  const inferred = inferNoun(typeName)
+
+  return {
+    name: typeName,
+    singular: nounDef?.singular ?? meta.singular,
+    plural: nounDef?.plural ?? meta.plural,
+    slug: meta.slug,
+    slugPlural: meta.slugPlural,
+    description: nounDef?.description,
+    properties: nounDef?.properties ?? (schema ? schemaToProperties(schema) : undefined),
+    relationships: nounDef?.relationships,
+    actions: nounDef?.actions ?? inferred.actions,
+    events: nounDef?.events ?? inferred.events,
+    metadata: nounDef?.metadata,
+  }
+}
+
+/**
+ * Convert EntitySchema to NounProperty format
+ */
+function schemaToProperties(schema: EntitySchema): Record<string, NounProperty> {
+  const properties: Record<string, NounProperty> = {}
+
+  for (const [name, def] of Object.entries(schema)) {
+    const defStr = Array.isArray(def) ? def[0] : def
+    const isOptional = defStr.endsWith('?')
+    const isArray = defStr.endsWith('[]') || Array.isArray(def)
+    const baseType = defStr.replace(/[\?\[\]]/g, '').split('.')[0]!
+
+    properties[name] = {
+      type: baseType,
+      optional: isOptional,
+      array: isArray,
+    }
+  }
+
+  return properties
+}
+
+// =============================================================================
+// Linguistic Helpers (internal)
+// =============================================================================
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function preserveCase(original: string, replacement: string): string {
+  if (original[0] === original[0]?.toUpperCase()) {
+    return capitalize(replacement)
+  }
+  return replacement
+}
+
+function isVowel(char: string | undefined): boolean {
+  return char ? 'aeiou'.includes(char.toLowerCase()) : false
+}
+
+function splitCamelCase(s: string): string[] {
+  return s.replace(/([a-z])([A-Z])/g, '$1 $2').split(' ')
+}
+
+/** Check if we should double the final consonant (CVC pattern) */
+function shouldDoubleConsonant(verb: string): boolean {
+  if (verb.length < 2) return false
+  const last = verb[verb.length - 1]!
+  const secondLast = verb[verb.length - 2]!
+  // Don't double w, x, y
+  if ('wxy'.includes(last)) return false
+  // Must end in consonant preceded by vowel
+  if (isVowel(last) || !isVowel(secondLast)) return false
+  // Common verbs that double the final consonant
+  const doublingVerbs = ['submit', 'commit', 'permit', 'omit', 'admit', 'emit', 'transmit', 'refer', 'prefer', 'defer', 'occur', 'recur', 'begin', 'stop', 'drop', 'shop', 'plan', 'scan', 'ban', 'run', 'gun', 'stun', 'cut', 'shut', 'hit', 'sit', 'fit', 'spit', 'quit', 'knit', 'get', 'set', 'pet', 'wet', 'bet', 'let', 'put', 'drag', 'brag', 'flag', 'tag', 'bag', 'nag', 'wag', 'hug', 'bug', 'mug', 'tug', 'rub', 'scrub', 'grab', 'stab', 'rob', 'sob', 'throb', 'nod', 'prod', 'plod', 'plot', 'rot', 'blot', 'spot', 'knot', 'trot', 'chat', 'pat', 'bat', 'mat', 'rat', 'slap', 'clap', 'flap', 'tap', 'wrap', 'snap', 'trap', 'cap', 'map', 'nap', 'zap', 'tip', 'sip', 'dip', 'rip', 'zip', 'slip', 'trip', 'drip', 'chip', 'clip', 'flip', 'grip', 'ship', 'skip', 'whip', 'strip', 'equip', 'hop', 'pop', 'mop', 'cop', 'chop', 'crop', 'prop', 'flop', 'swim', 'trim', 'slim', 'skim', 'dim', 'rim', 'brim', 'grim', 'hem', 'stem', 'jam', 'cram', 'ram', 'slam', 'dam', 'ham', 'scam', 'spam', 'tram', 'hum', 'drum', 'strum', 'sum', 'gum', 'chum', 'plum']
+  // Short words (3 letters) almost always double
+  if (verb.length <= 3) return true
+  // Check if verb matches any known doubling pattern
+  return doublingVerbs.some(v => verb === v || verb.endsWith(v))
+}
+
+/** Convert verb to past participle (create → created, publish → published) */
+function toPastParticiple(verb: string): string {
+  if (verb.endsWith('e')) return verb + 'd'
+  if (verb.endsWith('y') && !isVowel(verb[verb.length - 2])) {
+    return verb.slice(0, -1) + 'ied'
+  }
+  if (shouldDoubleConsonant(verb)) {
+    return verb + verb[verb.length - 1] + 'ed'
+  }
+  return verb + 'ed'
+}
+
+/** Convert verb to actor noun (create → creator, publish → publisher) */
+function toActor(verb: string): string {
+  if (verb.endsWith('e')) return verb + 'r'
+  if (verb.endsWith('y') && !isVowel(verb[verb.length - 2])) {
+    return verb.slice(0, -1) + 'ier'
+  }
+  if (shouldDoubleConsonant(verb)) {
+    return verb + verb[verb.length - 1] + 'er'
+  }
+  return verb + 'er'
+}
+
+/** Convert verb to present 3rd person (create → creates, publish → publishes) */
+function toPresent(verb: string): string {
+  if (verb.endsWith('y') && !isVowel(verb[verb.length - 2])) {
+    return verb.slice(0, -1) + 'ies'
+  }
+  if (verb.endsWith('s') || verb.endsWith('x') || verb.endsWith('z') ||
+      verb.endsWith('ch') || verb.endsWith('sh')) {
+    return verb + 'es'
+  }
+  return verb + 's'
+}
+
+/** Convert verb to gerund (create → creating, publish → publishing) */
+function toGerund(verb: string): string {
+  if (verb.endsWith('ie')) return verb.slice(0, -2) + 'ying'
+  if (verb.endsWith('e') && !verb.endsWith('ee')) return verb.slice(0, -1) + 'ing'
+  if (shouldDoubleConsonant(verb)) {
+    return verb + verb[verb.length - 1] + 'ing'
+  }
+  return verb + 'ing'
+}
+
+/** Convert verb to result noun (create → creation, publish → publication) */
+function toResult(verb: string): string {
+  // Common -ate → -ation
+  if (verb.endsWith('ate')) return verb.slice(0, -1) + 'ion'
+  // Common -ify → -ification
+  if (verb.endsWith('ify')) return verb.slice(0, -1) + 'ication'
+  // Common -ize → -ization
+  if (verb.endsWith('ize')) return verb.slice(0, -1) + 'ation'
+  // Common -e → -ion (but not always correct)
+  if (verb.endsWith('e')) return verb.slice(0, -1) + 'ion'
+  // Default: just add -ion
+  return verb + 'ion'
+}
+
+// =============================================================================
 // Schema Parsing
 // =============================================================================
 
@@ -318,10 +1266,47 @@ export interface SearchOptions extends ListOptions {
 // =============================================================================
 
 /**
+ * Natural language query result
+ */
+export interface NLQueryResult<T = unknown> {
+  /** The interpreted query */
+  interpretation: string
+  /** Confidence in the interpretation (0-1) */
+  confidence: number
+  /** The results */
+  results: T[]
+  /** SQL/filter equivalent (for debugging) */
+  query?: string
+  /** Explanation of what was found */
+  explanation?: string
+}
+
+/**
+ * Tagged template for natural language queries
+ *
+ * @example
+ * ```ts
+ * // Query across all types
+ * const results = await db`what is happening with joe in ca?`
+ *
+ * // Query specific type
+ * const orders = await db.Orders`what pending orders are delayed?`
+ *
+ * // With interpolation
+ * const name = 'joe'
+ * const results = await db`find all orders for ${name}`
+ * ```
+ */
+export type NLQueryFn<T = unknown> = (
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+) => Promise<NLQueryResult<T>>
+
+/**
  * Typed database client based on schema
  */
 export type TypedDB<TSchema extends DatabaseSchema> = {
-  [K in keyof TSchema]: EntityOperations<InferEntity<TSchema, K>>
+  [K in keyof TSchema]: EntityOperations<InferEntity<TSchema, K>> & NLQueryFn<InferEntity<TSchema, K>>
 } & {
   /** The parsed schema */
   readonly $schema: ParsedSchema
@@ -331,6 +1316,205 @@ export type TypedDB<TSchema extends DatabaseSchema> = {
 
   /** Search across all entities */
   search(query: string, options?: SearchOptions): Promise<unknown[]>
+
+  /**
+   * Natural language query across all types
+   *
+   * @example
+   * ```ts
+   * const results = await db`what orders are pending for customers in california?`
+   * const results = await db`show me joe's recent activity`
+   * const results = await db`what changed in the last hour?`
+   * ```
+   */
+  ask: NLQueryFn
+}
+
+// =============================================================================
+// Natural Language Query Implementation
+// =============================================================================
+
+/**
+ * AI generator function type for NL queries
+ * This is injected by the user or resolved from environment
+ */
+export type NLQueryGenerator = (prompt: string, context: NLQueryContext) => Promise<NLQueryPlan>
+
+/**
+ * Context provided to the AI for query generation
+ */
+export interface NLQueryContext {
+  /** Available types with their schemas */
+  types: Array<{
+    name: string
+    singular: string
+    plural: string
+    fields: string[]
+    relationships: Array<{ name: string; to: string; cardinality: string }>
+  }>
+  /** The specific type being queried (if any) */
+  targetType?: string
+  /** Recent events for context */
+  recentEvents?: Array<{ type: string; timestamp: Date }>
+}
+
+/**
+ * Query plan generated by AI
+ */
+export interface NLQueryPlan {
+  /** Types to query */
+  types: string[]
+  /** Filters to apply */
+  filters?: Record<string, unknown>
+  /** Search terms */
+  search?: string
+  /** Time range */
+  timeRange?: { since?: Date; until?: Date }
+  /** Relationships to follow */
+  include?: string[]
+  /** How to interpret results */
+  interpretation: string
+  /** Confidence score */
+  confidence: number
+}
+
+let nlQueryGenerator: NLQueryGenerator | null = null
+
+/**
+ * Set the AI generator for natural language queries
+ *
+ * @example
+ * ```ts
+ * import { generate } from 'ai-functions'
+ *
+ * setNLQueryGenerator(async (prompt, context) => {
+ *   return generate({
+ *     prompt: `Given this schema: ${JSON.stringify(context.types)}
+ *              Answer this question: ${prompt}
+ *              Return a query plan as JSON.`,
+ *     schema: NLQueryPlanSchema
+ *   })
+ * })
+ * ```
+ */
+export function setNLQueryGenerator(generator: NLQueryGenerator): void {
+  nlQueryGenerator = generator
+}
+
+/**
+ * Build schema context for NL queries
+ */
+function buildNLQueryContext(schema: ParsedSchema, targetType?: string): NLQueryContext {
+  const types: NLQueryContext['types'] = []
+
+  for (const [name, entity] of schema.entities) {
+    const fields: string[] = []
+    const relationships: NLQueryContext['types'][0]['relationships'] = []
+
+    for (const [fieldName, field] of entity.fields) {
+      if (field.isRelation && field.relatedType) {
+        relationships.push({
+          name: fieldName,
+          to: field.relatedType,
+          cardinality: field.isArray ? 'many' : 'one',
+        })
+      } else {
+        fields.push(fieldName)
+      }
+    }
+
+    const meta = getTypeMeta(name)
+    types.push({
+      name,
+      singular: meta.singular,
+      plural: meta.plural,
+      fields,
+      relationships,
+    })
+  }
+
+  return { types, targetType }
+}
+
+/**
+ * Execute a natural language query
+ */
+async function executeNLQuery<T>(
+  question: string,
+  schema: ParsedSchema,
+  targetType?: string
+): Promise<NLQueryResult<T>> {
+  // If no AI generator configured, fall back to search
+  if (!nlQueryGenerator) {
+    // Simple fallback: search across all types or target type
+    const provider = await resolveProvider()
+    const results: T[] = []
+
+    if (targetType) {
+      const searchResults = await provider.search(targetType, question)
+      results.push(...(searchResults as T[]))
+    } else {
+      for (const [typeName] of schema.entities) {
+        const searchResults = await provider.search(typeName, question)
+        results.push(...(searchResults as T[]))
+      }
+    }
+
+    return {
+      interpretation: `Search for "${question}"`,
+      confidence: 0.5,
+      results,
+      explanation: 'Fallback to keyword search (no AI generator configured)',
+    }
+  }
+
+  // Build context and get AI-generated query plan
+  const context = buildNLQueryContext(schema, targetType)
+  const plan = await nlQueryGenerator(question, context)
+
+  // Execute the plan
+  const provider = await resolveProvider()
+  const results: T[] = []
+
+  for (const typeName of plan.types) {
+    let typeResults: Record<string, unknown>[]
+
+    if (plan.search) {
+      typeResults = await provider.search(typeName, plan.search, {
+        where: plan.filters,
+      })
+    } else {
+      typeResults = await provider.list(typeName, {
+        where: plan.filters,
+      })
+    }
+
+    results.push(...(typeResults as T[]))
+  }
+
+  return {
+    interpretation: plan.interpretation,
+    confidence: plan.confidence,
+    results,
+    query: JSON.stringify({ types: plan.types, filters: plan.filters, search: plan.search }),
+  }
+}
+
+/**
+ * Create a natural language query function for a specific type
+ */
+function createNLQueryFn<T>(
+  schema: ParsedSchema,
+  typeName?: string
+): NLQueryFn<T> {
+  return async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    // Interpolate the template
+    const question = strings.reduce((acc, str, i) => {
+      return acc + str + (values[i] !== undefined ? String(values[i]) : '')
+    }, '')
+
+    return executeNLQuery<T>(question, schema, typeName)
+  }
 }
 
 // =============================================================================

@@ -1,0 +1,250 @@
+---
+title: Data
+description: Define data structures
+---
+
+# Data
+
+The `Data()` function defines data structures with schemas, indexes, relationships, and validation rules.
+
+## Basic Usage
+
+```typescript
+import { Data } from 'digital-products'
+
+const userData = Data({
+  id: 'users',
+  name: 'Users',
+  description: 'User data store',
+  version: '1.0.0',
+  schema: {
+    id: 'User ID',
+    name: 'User name',
+    email: 'User email',
+    createdAt: 'Creation timestamp (date)',
+  },
+})
+```
+
+## Schema Definition
+
+Define data structure with types:
+
+```typescript
+const userData = Data({
+  id: 'users',
+  name: 'Users',
+  schema: {
+    id: 'User ID',
+    name: 'User name',
+    email: 'User email',
+    age: 'User age (number)',
+    active: 'Account active (boolean)',
+    role: 'admin | user | guest',
+    createdAt: 'Creation timestamp (date)',
+    settings: {
+      theme: 'light | dark',
+      notifications: 'Notifications enabled (boolean)',
+    },
+    tags: ['Array of tags'],
+  },
+})
+```
+
+## Database Providers
+
+| Provider | Description |
+|----------|-------------|
+| `postgres` | PostgreSQL |
+| `mysql` | MySQL |
+| `sqlite` | SQLite |
+| `mongodb` | MongoDB |
+| `planetscale` | PlanetScale |
+| `supabase` | Supabase |
+| `firebase` | Firebase Firestore |
+
+```typescript
+const userData = Data({
+  id: 'users',
+  name: 'Users',
+  provider: 'postgres',
+  schema: { /* ... */ },
+})
+```
+
+## Indexes
+
+Add database indexes:
+
+```typescript
+import { Data, Index } from 'digital-products'
+
+const userData = Data({
+  id: 'users',
+  name: 'Users',
+  schema: {
+    id: 'User ID',
+    email: 'User email',
+    role: 'User role',
+    createdAt: 'Creation date (date)',
+  },
+  indexes: [
+    Index('email_idx', ['email'], { unique: true }),
+    Index('role_idx', ['role']),
+    Index('created_idx', ['createdAt']),
+    Index('role_created_idx', ['role', 'createdAt']),
+  ],
+})
+```
+
+### Index Options
+
+| Option | Description |
+|--------|-------------|
+| `unique` | Enforce unique values |
+| `sparse` | Skip null values |
+| `partial` | Conditional index |
+
+## Relationships
+
+Define relationships between data types:
+
+```typescript
+import { Data, Relationship } from 'digital-products'
+
+const userData = Data({
+  id: 'users',
+  name: 'Users',
+  schema: {
+    id: 'User ID',
+    name: 'User name',
+    email: 'User email',
+  },
+  relationships: [
+    Relationship('one-to-many', 'userId', 'posts', 'author'),
+    Relationship('one-to-many', 'userId', 'comments', 'user'),
+    Relationship('many-to-many', 'userId', 'teams', 'members'),
+  ],
+})
+```
+
+### Relationship Types
+
+| Type | Description |
+|------|-------------|
+| `one-to-one` | Single reference |
+| `one-to-many` | Multiple references |
+| `many-to-many` | Many references both ways |
+
+## Validation
+
+Add validation rules:
+
+```typescript
+import { Data, Validate } from 'digital-products'
+
+const userData = Data({
+  id: 'users',
+  name: 'Users',
+  schema: {
+    id: 'User ID',
+    name: 'User name',
+    email: 'User email',
+    age: 'User age (number)',
+  },
+  validation: [
+    Validate('email', 'email', 'Must be a valid email'),
+    Validate('name', 'required', 'Name is required'),
+    Validate('name', 'minLength:2', 'Name must be at least 2 characters'),
+    Validate('age', 'min:0', 'Age must be positive'),
+    Validate('age', 'max:150', 'Age must be realistic'),
+  ],
+})
+```
+
+### Validation Rules
+
+| Rule | Description |
+|------|-------------|
+| `required` | Field must be present |
+| `email` | Valid email format |
+| `url` | Valid URL format |
+| `min:n` | Minimum value |
+| `max:n` | Maximum value |
+| `minLength:n` | Minimum string length |
+| `maxLength:n` | Maximum string length |
+| `pattern:regex` | Match regex pattern |
+
+## Complete Example
+
+```typescript
+import { Data, Index, Relationship, Validate } from 'digital-products'
+
+const orderData = Data({
+  id: 'orders',
+  name: 'Orders',
+  description: 'E-commerce order data',
+  version: '1.0.0',
+  provider: 'postgres',
+
+  schema: {
+    id: 'Order ID',
+    userId: 'Customer ID',
+    status: 'pending | processing | shipped | delivered | cancelled',
+    items: [{
+      productId: 'Product ID',
+      name: 'Product name',
+      quantity: 'Quantity (number)',
+      price: 'Unit price (number)',
+    }],
+    subtotal: 'Subtotal (number)',
+    tax: 'Tax amount (number)',
+    shipping: 'Shipping cost (number)',
+    total: 'Total amount (number)',
+    shippingAddress: {
+      street: 'Street address',
+      city: 'City',
+      state: 'State',
+      zip: 'ZIP code',
+      country: 'Country',
+    },
+    createdAt: 'Order date (date)',
+    updatedAt: 'Last updated (date)',
+  },
+
+  indexes: [
+    Index('user_idx', ['userId']),
+    Index('status_idx', ['status']),
+    Index('created_idx', ['createdAt']),
+    Index('user_status_idx', ['userId', 'status']),
+  ],
+
+  relationships: [
+    Relationship('many-to-one', 'userId', 'users', 'customer'),
+    Relationship('one-to-many', 'orderId', 'shipments', 'order'),
+  ],
+
+  validation: [
+    Validate('userId', 'required', 'Customer ID is required'),
+    Validate('items', 'minLength:1', 'Order must have at least one item'),
+    Validate('total', 'min:0', 'Total must be positive'),
+  ],
+})
+```
+
+## Type Definition
+
+```typescript
+interface DataDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  schema: SimpleSchema
+  provider?: 'postgres' | 'mysql' | 'sqlite' | 'mongodb' | 'planetscale' | 'supabase' | 'firebase'
+  indexes?: IndexDefinition[]
+  relationships?: RelationshipDefinition[]
+  validation?: ValidationRule[]
+  metadata?: Record<string, unknown>
+}
+```

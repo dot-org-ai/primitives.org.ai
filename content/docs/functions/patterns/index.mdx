@@ -1,0 +1,37 @@
+---
+title: Patterns
+description: Common usage patterns
+---
+
+# Patterns
+
+Common patterns for working with AI functions.
+
+## Topics
+
+| Pattern | Description |
+|---------|-------------|
+| [Streaming](/functions/patterns/streaming) | Process results as they generate |
+| [Batch](/functions/patterns/batch) | Process multiple items efficiently |
+| [Schema](/functions/patterns/schema) | Define output structure |
+| [Options](/functions/patterns/options) | Configure model and behavior |
+
+## Quick Examples
+
+```typescript
+// Streaming
+for await (const item of list`ideas`) {
+  console.log(item)
+}
+
+// Batch
+const posts = await write.batch(titles.map(t => ({ title: t })))
+
+// Schema
+const user = await generate('json', 'user', {
+  schema: { name: 'string', age: 'number' }
+})
+
+// Options
+await ai`complex task`({ model: 'claude-opus-4-5', thinking: 'high' })
+```

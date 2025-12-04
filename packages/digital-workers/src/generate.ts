@@ -146,7 +146,9 @@ export async function generate<T = string>(
           model,
           tokens: result.usage?.totalTokens,
           duration: Date.now() - startTime,
-        } as GenerateResult<T>['metadata'] & { language: string; explanation: string },
+          language: codeResult.language,
+          explanation: codeResult.explanation,
+        },
       }
     }
 

@@ -1,0 +1,20 @@
+{
+  "title": "Database",
+  "description": "Schema-first database with AI-native primitives",
+  "root": true,
+  "icon": "Database",
+  "pages": [
+    "index",
+    "things",
+    "relationships",
+    "queries",
+    "events",
+    "actions",
+    "artifacts",
+    "nouns",
+    "verbs",
+    "natural-language",
+    "providers",
+    "api"
+  ]
+}

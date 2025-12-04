@@ -1,0 +1,80 @@
+---
+title: lists
+description: Generate multiple named lists at once
+---
+
+# lists
+
+Generate multiple named lists at once.
+
+## Syntax
+
+```typescript
+lists`prompt`
+lists`prompt`(options)
+```
+
+## Examples
+
+```typescript
+import { lists } from 'ai-functions'
+
+// Tagged template
+const { pros, cons } = await lists`pros and cons of ${topic}`
+
+// SWOT analysis
+const { strengths, weaknesses, opportunities, threats } = await lists`
+  SWOT analysis for ${{ company, market, competitors }}
+`
+
+// Content gaps
+const { existing, missing, opportunities } = await lists`
+  content gap analysis for ${{ topic, competitors }}
+`
+```
+
+## Use Cases
+
+```typescript
+// Decision making
+const { reasons, risks } = await lists`
+  reasons to proceed and risks for ${decision}
+`
+
+// Competitive analysis
+const { ourAdvantages, theirAdvantages } = await lists`
+  comparison of ${ourProduct} vs ${competitor}
+`
+
+// Planning
+const { mustHave, niceToHave, outOfScope } = await lists`
+  requirements prioritization for ${project}
+`
+```
+
+## Return Type
+
+Returns an object with string arrays:
+
+```typescript
+const result = await lists`pros and cons of ${topic}`
+// {
+//   pros: ['Pro 1', 'Pro 2', ...],
+//   cons: ['Con 1', 'Con 2', ...]
+// }
+```
+
+## vs Multiple list() Calls
+
+```typescript
+// These achieve similar results:
+
+// Single call - faster, contextual
+const { pros, cons } = await lists`pros and cons of ${topic}`
+
+// Multiple calls - separate context
+const pros = await list`pros of ${topic}`
+const cons = await list`cons of ${topic}`
+```
+
+Use `lists` when items are related and should be generated together.

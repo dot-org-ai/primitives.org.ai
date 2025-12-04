@@ -1,0 +1,71 @@
+---
+title: Artifacts
+description: Cached embeddings and computed content
+---
+
+# Artifacts
+
+Artifacts store computed content with automatic cache invalidation.
+
+## What Are Artifacts?
+
+Artifacts are cached outputs associated with entities:
+
+| Use | Example |
+|-----|---------|
+| Embeddings | Vector representations for search |
+| Rendered HTML | Markdown to HTML conversion |
+| Bundles | Compiled JavaScript/CSS |
+| AST | Parsed code/content |
+
+## Automatic Embeddings
+
+When you create entities, embeddings are auto-generated:
+
+```typescript
+const post = await db.Post.create({
+  title: 'Hello',
+  content: 'This is my post...',
+})
+
+// Embedding artifact auto-created
+const embedding = await db.artifact.get(post.$id, 'embedding')
+// { vectors: Float32Array, model: '...', dimensions: 3072 }
+```
+
+## Cache Invalidation
+
+When source content changes, artifacts invalidate:
+
+```typescript
+await db.Post.update(post.$id, {
+  content: 'New content...',
+})
+
+// Embedding is regenerated automatically
+// Custom artifacts return null until rebuilt
+```
+
+## Operations
+
+| Operation | Description |
+|-----------|-------------|
+| [Embeddings](/docs/database/artifacts/embeddings) | Vector embeddings for search |
+| [Custom](/docs/database/artifacts/custom) | Custom artifact types |
+
+## Quick Reference
+
+```typescript
+// Get artifact
+const embedding = await db.artifact.get(entityId, 'embedding')
+
+// Set artifact
+await db.artifact.set(entityId, 'html', {
+  content: renderedHtml,
+  sourceHash: hash(content),
+})
+
+// Delete artifact
+await db.artifact.delete(entityId, 'html')    // specific
+await db.artifact.delete(entityId)            // all
+```

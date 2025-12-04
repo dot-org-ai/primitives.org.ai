@@ -1,0 +1,229 @@
+---
+title: Defining Services
+description: Create AI-powered services
+---
+
+# Defining Services
+
+The `Service()` function creates AI-powered services that operate as software—scalable, always-on, and continuously improving.
+
+## Basic Usage
+
+```typescript
+import { Service, POST } from 'services-as-software'
+
+const translationService = Service({
+  name: 'translation-service',
+  version: '1.0.0',
+  description: 'AI-powered translation service',
+
+  pricing: {
+    model: 'per-use',
+    pricePerUnit: 0.01,
+    currency: 'USD',
+  },
+
+  endpoints: [
+    POST({
+      name: 'translate',
+      path: '/translate',
+      handler: async (input) => {
+        // Translation logic
+        return {
+          translatedText: `Translated: ${input.text}`,
+          confidence: 0.95,
+        }
+      },
+    }),
+  ],
+})
+```
+
+## Service Properties
+
+| Property | Description |
+|----------|-------------|
+| `name` | Service identifier |
+| `version` | Semantic version |
+| `description` | Service description |
+| `pricing` | Pricing configuration |
+| `endpoints` | Service endpoints |
+| `plans` | Subscription plans |
+| `kpis` | Performance metrics |
+
+## Complete Example
+
+```typescript
+import { Service, POST, GET } from 'services-as-software'
+
+const codeReviewService = Service({
+  name: 'code-review',
+  version: '2.0.0',
+  description: 'AI-powered code review service',
+
+  pricing: {
+    model: 'per-use',
+    pricePerUnit: 0.10,
+    currency: 'USD',
+  },
+
+  endpoints: [
+    POST({
+      name: 'review',
+      path: '/review',
+      handler: async (input, context) => {
+        const { code, language } = input
+
+        // Perform AI code review
+        const issues = await analyzeCode(code, language)
+        const suggestions = await generateSuggestions(issues)
+
+        return {
+          issues,
+          suggestions,
+          score: calculateScore(issues),
+          reviewed_at: new Date().toISOString(),
+        }
+      },
+    }),
+
+    GET({
+      name: 'languages',
+      path: '/languages',
+      handler: async () => {
+        return {
+          supported: ['javascript', 'typescript', 'python', 'go', 'rust'],
+        }
+      },
+    }),
+  ],
+
+  plans: [
+    {
+      id: 'starter',
+      name: 'Starter',
+      pricing: { model: 'subscription', basePrice: 29, currency: 'USD', interval: 'monthly' },
+      entitlements: ['basic-review'],
+      features: ['100 reviews/month', 'Basic suggestions'],
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      pricing: { model: 'subscription', basePrice: 99, currency: 'USD', interval: 'monthly' },
+      entitlements: ['basic-review', 'advanced-review', 'security-scan'],
+      features: ['Unlimited reviews', 'Security scanning', 'Custom rules'],
+    },
+  ],
+
+  kpis: [
+    {
+      id: 'reviews-per-day',
+      name: 'Daily Reviews',
+      calculate: async () => getDailyReviewCount(),
+      target: 1000,
+    },
+    {
+      id: 'avg-response-time',
+      name: 'Avg Response Time',
+      calculate: async () => getAvgResponseTime(),
+      target: 5000, // 5 seconds
+    },
+  ],
+})
+```
+
+## Calling the Service
+
+```typescript
+// Direct invocation
+const result = await translationService.call('translate', {
+  text: 'Hello, world!',
+  to: 'es',
+})
+console.log(result.translatedText)
+// "¡Hola, mundo!"
+```
+
+## Service Types
+
+### Analysis Services
+
+Transform data into insights:
+
+```typescript
+const sentimentService = Service({
+  name: 'sentiment-analysis',
+  version: '1.0.0',
+
+  endpoints: [
+    POST({
+      name: 'analyze',
+      handler: async ({ text }) => ({
+        sentiment: 'positive',
+        confidence: 0.92,
+        emotions: ['joy', 'trust'],
+      }),
+    }),
+  ],
+})
+```
+
+### Creation Services
+
+Generate content and artifacts:
+
+```typescript
+const contentService = Service({
+  name: 'content-generation',
+  version: '1.0.0',
+
+  endpoints: [
+    POST({
+      name: 'generate',
+      handler: async ({ topic, type, tone }) => ({
+        content: '...',
+        wordCount: 500,
+        readingTime: '2 min',
+      }),
+    }),
+  ],
+})
+```
+
+### Processing Services
+
+Handle operational tasks:
+
+```typescript
+const invoiceService = Service({
+  name: 'invoice-processing',
+  version: '1.0.0',
+
+  endpoints: [
+    POST({
+      name: 'extract',
+      handler: async ({ document }) => ({
+        vendor: 'Acme Corp',
+        amount: 1500.00,
+        currency: 'USD',
+        dueDate: '2024-12-31',
+      }),
+    }),
+  ],
+})
+```
+
+## Type Definition
+
+```typescript
+interface ServiceDefinition {
+  name: string
+  version?: string
+  description?: string
+  pricing?: PricingDefinition
+  endpoints?: EndpointDefinition[]
+  plans?: PlanDefinition[]
+  kpis?: KPIDefinition[]
+  metadata?: Record<string, unknown>
+}
+```

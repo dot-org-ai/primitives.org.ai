@@ -276,9 +276,9 @@ decide.withApproval = async <T = string>(
   const { approve } = await import('./approve.js')
   const approval = await approve(
     `Approve decision: ${decision.choice}`,
+    { id: approver },
     {
-      channel: 'slack',
-      approver,
+      via: 'slack',
       context: {
         decision,
         options: options.options,
@@ -290,6 +290,6 @@ decide.withApproval = async <T = string>(
   return {
     ...decision,
     approved: approval.approved,
-    approvedBy: approval.approvedBy,
+    approvedBy: approval.approvedBy?.id ?? approval.approvedBy?.name,
   }
 }

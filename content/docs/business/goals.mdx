@@ -1,0 +1,157 @@
+---
+title: Goals
+description: Track strategic and operational objectives
+---
+
+# Goals
+
+The `Goals()` function creates a list of objectives with progress tracking, dependencies, and categorization.
+
+## Basic Usage
+
+```typescript
+import { Goals, Goal } from 'business-as-code'
+
+// Create multiple goals
+const goals = Goals([
+  {
+    name: 'Launch MVP',
+    description: 'Ship minimum viable product to early customers',
+    category: 'strategic',
+    targetDate: new Date('2024-06-30'),
+    owner: 'Product Team',
+    metrics: ['User signups', 'Feature completion rate'],
+    status: 'in-progress',
+    progress: 65,
+  },
+  {
+    name: 'Achieve Product-Market Fit',
+    category: 'strategic',
+    targetDate: new Date('2024-12-31'),
+    status: 'in-progress',
+    progress: 30,
+    dependencies: ['Launch MVP'],
+  },
+])
+
+// Create a single goal
+const goal = Goal({
+  name: 'Increase Revenue',
+  category: 'financial',
+  target: 1000000,
+})
+```
+
+## Goal Categories
+
+| Category | Description |
+|----------|-------------|
+| `strategic` | Long-term company direction |
+| `operational` | Day-to-day efficiency |
+| `financial` | Revenue and cost targets |
+| `customer` | Customer satisfaction |
+| `internal` | Internal processes |
+| `learning` | Team development |
+
+## Goal Status
+
+| Status | Description |
+|--------|-------------|
+| `not-started` | Goal not yet begun |
+| `in-progress` | Work actively ongoing |
+| `at-risk` | Behind schedule or blocked |
+| `completed` | Successfully achieved |
+| `cancelled` | No longer pursuing |
+
+## Helper Functions
+
+### Progress Management
+
+```typescript
+import { updateProgress, markAtRisk, complete } from 'business-as-code'
+
+// Update progress
+const updated = updateProgress(goal, 75)
+
+// Mark as at risk
+const atRisk = markAtRisk(goal, 'Blocked by dependency')
+
+// Mark complete
+const done = complete(goal)
+```
+
+### Filtering Goals
+
+```typescript
+import {
+  getGoalsByCategory,
+  getGoalsByStatus,
+  getGoalsByOwner
+} from 'business-as-code'
+
+const strategic = getGoalsByCategory(goals, 'strategic')
+const inProgress = getGoalsByStatus(goals, 'in-progress')
+const productGoals = getGoalsByOwner(goals, 'Product Team')
+```
+
+### Checking Deadlines
+
+```typescript
+import { isOverdue } from 'business-as-code'
+
+if (isOverdue(goal)) {
+  console.warn('Goal is past due date!')
+}
+```
+
+### Progress Aggregation
+
+```typescript
+import { calculateOverallProgress } from 'business-as-code'
+
+const overall = calculateOverallProgress(goals)
+// Average progress across all goals
+```
+
+### Dependency Management
+
+```typescript
+import { hasCircularDependencies, sortByDependencies } from 'business-as-code'
+
+// Check for circular dependencies
+if (hasCircularDependencies(goals)) {
+  console.error('Circular dependency detected!')
+}
+
+// Sort goals by dependency order
+const sorted = sortByDependencies(goals)
+// Goals with no dependencies come first
+```
+
+## Validation
+
+```typescript
+import { validateGoals } from 'business-as-code'
+
+const errors = validateGoals(goals)
+if (errors.length > 0) {
+  console.error('Invalid goals:', errors)
+}
+```
+
+## Type Definition
+
+```typescript
+interface GoalDefinition {
+  name: string
+  description?: string
+  category?: 'strategic' | 'operational' | 'financial' | 'customer' | 'internal' | 'learning'
+  targetDate?: Date
+  owner?: string
+  metrics?: string[]
+  status?: 'not-started' | 'in-progress' | 'at-risk' | 'completed' | 'cancelled'
+  progress?: number
+  dependencies?: string[]
+  metadata?: Record<string, unknown>
+}
+```

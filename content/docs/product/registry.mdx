@@ -1,0 +1,228 @@
+---
+title: Registry
+description: Manage products centrally
+---
+
+# Registry
+
+The `registry` provides a central place to store, retrieve, and manage all your products.
+
+## Basic Usage
+
+```typescript
+import { registry, App, API, Site } from 'digital-products'
+
+// Products are automatically registered when created
+const myApp = App({ id: 'my-app', name: 'My App' })
+const myAPI = API({ id: 'my-api', name: 'My API' })
+const mySite = Site({ id: 'my-site', name: 'My Site' })
+
+// List all products
+const products = registry.list()
+console.log(products.map(p => p.name))
+// ['My App', 'My API', 'My Site']
+```
+
+## Methods
+
+### list()
+
+Get all registered products:
+
+```typescript
+const allProducts = registry.list()
+console.log(allProducts.length)  // Number of products
+```
+
+### get(id)
+
+Retrieve a specific product by ID:
+
+```typescript
+const myApp = registry.get('my-app')
+if (myApp) {
+  console.log(myApp.name)  // 'My App'
+}
+```
+
+### listByType(type)
+
+List products by type:
+
+```typescript
+// Get all apps
+const apps = registry.listByType('app')
+console.log(apps.map(a => a.name))
+
+// Get all APIs
+const apis = registry.listByType('api')
+
+// Get all sites
+const sites = registry.listByType('site')
+
+// Available types: 'product', 'app', 'api', 'content', 'data', 'dataset', 'site', 'mcp', 'sdk'
+```
+
+### remove(id)
+
+Remove a product from the registry:
+
+```typescript
+registry.remove('my-app')
+console.log(registry.get('my-app'))  // undefined
+```
+
+### clear()
+
+Remove all products:
+
+```typescript
+registry.clear()
+console.log(registry.list().length)  // 0
+```
+
+## Product Discovery
+
+Use the registry for product discovery and introspection:
+
+```typescript
+import { registry } from 'digital-products'
+
+// List all APIs in the system
+const apis = registry.listByType('api')
+for (const api of apis) {
+  console.log(`${api.name}: ${api.baseUrl}`)
+}
+
+// Find products by criteria
+const allProducts = registry.list()
+const published = allProducts.filter(p => p.version && !p.version.includes('alpha'))
+```
+
+## Example: API Gateway
+
+Build an API gateway from registered APIs:
+
+```typescript
+import { registry, API } from 'digital-products'
+
+// Register multiple APIs
+API({ id: 'users-api', name: 'Users', baseUrl: '/api/users' })
+API({ id: 'orders-api', name: 'Orders', baseUrl: '/api/orders' })
+API({ id: 'products-api', name: 'Products', baseUrl: '/api/products' })
+
+// Create gateway from registry
+function createGateway() {
+  const apis = registry.listByType('api')
+
+  return {
+    routes: apis.map(api => ({
+      prefix: api.baseUrl,
+      target: api,
+    })),
+
+    getAPI(id: string) {
+      return registry.get(id)
+    },
+  }
+}
+
+const gateway = createGateway()
+```
+
+## Example: Documentation Generator
+
+Generate documentation from registered products:
+
+```typescript
+import { registry } from 'digital-products'
+
+function generateDocs() {
+  const products = registry.list()
+
+  return products.map(product => ({
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    version: product.version,
+    type: product.type,
+  }))
+}
+
+const docs = generateDocs()
+console.log(JSON.stringify(docs, null, 2))
+```
+
+## Example: Health Check
+
+Check health of all registered services:
+
+```typescript
+import { registry } from 'digital-products'
+
+async function healthCheck() {
+  const apis = registry.listByType('api')
+
+  const results = await Promise.all(
+    apis.map(async (api) => {
+      try {
+        const response = await fetch(`${api.baseUrl}/health`)
+        return {
+          id: api.id,
+          name: api.name,
+          healthy: response.ok,
+          status: response.status,
+        }
+      } catch (error) {
+        return {
+          id: api.id,
+          name: api.name,
+          healthy: false,
+          error: error.message,
+        }
+      }
+    })
+  )
+
+  return results
+}
+```
+
+## Type Safety
+
+The registry preserves type information:
+
+```typescript
+import { registry, App, API } from 'digital-products'
+
+// Create typed products
+const app = App({ id: 'typed-app', name: 'Typed App', framework: 'react' })
+const api = API({ id: 'typed-api', name: 'Typed API', style: 'rest' })
+
+// Get with type assertion
+const retrievedApp = registry.get('typed-app') as AppDefinition
+console.log(retrievedApp.framework)  // 'react'
+
+// Or use listByType for automatic typing
+const apps = registry.listByType('app')
+apps[0].framework  // TypeScript knows this is AppDefinition
+```
+
+## Clearing for Tests
+
+In tests, clear the registry between runs:
+
+```typescript
+import { registry } from 'digital-products'
+
+describe('My Tests', () => {
+  beforeEach(() => {
+    registry.clear()
+  })
+
+  it('should register products', () => {
+    App({ id: 'test-app', name: 'Test' })
+    expect(registry.list().length).toBe(1)
+  })
+})
+```

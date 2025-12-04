@@ -1,0 +1,47 @@
+---
+title: Generative Functions
+description: Generate content - text, JSON, images
+---
+
+# Generative Functions
+
+Generate content - text, JSON, structured data, images, video.
+
+## Functions
+
+| Function | Output | Example |
+|----------|--------|---------|
+| `ai` | string | `ai\`explain ${topic}\`` |
+| `generate` | T | `generate('json', prompt, { schema })` |
+| `write` | string | `write\`blog post about ${topic}\`` |
+| `summarize` | string | `summarize\`${longText}\`` |
+| `is` | boolean | `is\`${text} spam?\`` |
+| `list` | string[] | `list\`ideas for ${topic}\`` |
+| `lists` | Record | `lists\`pros and cons of ${topic}\`` |
+| `extract` | T[] | `extract\`names from ${text}\`` |
+| `decide` | T | `decide\`which is better?\`(a, b)` |
+| `image` | Buffer | `image\`logo for ${company}\`` |
+| `video` | Buffer | `video\`explainer for ${product}\`` |
+
+## Characteristics
+
+- **Stateless** - Each call is independent
+- **Deterministic output type** - Returns known shape
+- **Fast** - Single LLM call typically
+- **Cacheable** - Same input → same output
+
+## Example
+
+```typescript
+import { write, list, is, summarize } from 'ai-functions'
+
+const topic = 'TypeScript'
+
+// Check relevance
+if (await is`${topic} relevant for developers?`) {
+  // Generate content
+  const ideas = await list`5 blog post ideas about ${topic}`
+  const post = await write`blog post about ${ideas[0]}`
+  const summary = await summarize`${post}`
+}
+```

@@ -110,7 +110,7 @@ Team.removeMember = (team: WorkerTeam, memberId: string): WorkerTeam => ({
  * console.log(aiMembers) // [Support Bot Alpha, Support Bot Beta]
  * ```
  */
-Team.aiMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 'ai')
+Team.aiMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 'agent')
 
 /**
  * Get all human members of a team

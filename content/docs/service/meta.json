@@ -1,0 +1,17 @@
+{
+  "title": "Service",
+  "description": "Services-as-Software",
+  "root": true,
+  "icon": "Briefcase",
+  "pages": [
+    "index",
+    "defining",
+    "endpoints",
+    "pricing",
+    "plans",
+    "clients",
+    "providers",
+    "operations",
+    "metrics"
+  ]
+}

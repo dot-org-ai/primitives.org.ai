@@ -1,0 +1,85 @@
+---
+title: Vision
+description: Articulate long-term business direction
+---
+
+# Vision
+
+The `Vision()` function defines your company's long-term direction with measurable success indicators.
+
+## Basic Usage
+
+```typescript
+import { Vision } from 'business-as-code'
+
+const vision = Vision({
+  statement: "To become the world's most trusted widget platform",
+  timeframe: '5 years',
+  successIndicators: [
+    '10M+ active users',
+    'Present in 50+ countries',
+    'Industry-leading NPS score',
+    '$1B+ annual revenue',
+  ],
+})
+```
+
+## Tracking Progress
+
+### checkIndicator
+
+Check if a specific indicator has been achieved:
+
+```typescript
+import { checkIndicator } from 'business-as-code'
+
+const achieved = checkIndicator(vision, '10M+ active users', {
+  activeUsers: 12000000,
+})
+// true
+```
+
+### calculateProgress
+
+Calculate overall vision progress:
+
+```typescript
+import { calculateProgress } from 'business-as-code'
+
+const progress = calculateProgress(vision, {
+  activeUsers: 5000000,
+  countries: 30,
+  nps: 65,
+  revenue: 500000000,
+})
+// { overall: 50, indicators: { ... } }
+```
+
+## Validation
+
+```typescript
+import { validateVision } from 'business-as-code'
+
+const errors = validateVision(vision)
+if (errors.length > 0) {
+  console.error('Invalid vision:', errors)
+}
+```
+
+## Best Practices
+
+1. **Be Specific**: Include measurable outcomes
+2. **Set Timeframes**: Define when you expect to achieve the vision
+3. **Track Progress**: Use success indicators to measure advancement
+4. **Review Regularly**: Update as market conditions change
+
+## Type Definition
+
+```typescript
+interface VisionDefinition {
+  statement: string
+  timeframe?: string
+  successIndicators?: string[]
+  metadata?: Record<string, unknown>
+}
+```

@@ -2,40 +2,164 @@
  * In-memory Database Provider
  *
  * Simple provider implementation for testing and development.
+ * Includes concurrency control via Semaphore for rate limiting.
  */
 
 import type { DBProvider, ListOptions, SearchOptions } from './schema.js'
 
+// =============================================================================
+// Semaphore for Concurrency Control
+// =============================================================================
+
 /**
- * Generate a unique ID
+ * Simple semaphore for concurrency control
+ * Used to limit parallel operations (e.g., embedding, generation)
  */
+export class Semaphore {
+  private queue: Array<() => void> = []
+  private running = 0
+
+  constructor(private concurrency: number) {}
+
+  /**
+   * Acquire a slot. Returns a release function.
+   */
+  async acquire(): Promise<() => void> {
+    if (this.running < this.concurrency) {
+      this.running++
+      return () => this.release()
+    }
+
+    return new Promise((resolve) => {
+      this.queue.push(() => {
+        this.running++
+        resolve(() => this.release())
+      })
+    })
+  }
+
+  private release(): void {
+    this.running--
+    const next = this.queue.shift()
+    if (next) next()
+  }
+
+  /**
+   * Run a function with concurrency control
+   */
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    const release = await this.acquire()
+    try {
+      return await fn()
+    } finally {
+      release()
+    }
+  }
+
+  /**
+   * Run multiple functions with concurrency control
+   */
+  async map<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+    return Promise.all(items.map((item) => this.run(() => fn(item))))
+  }
+
+  get pending(): number {
+    return this.queue.length
+  }
+
+  get active(): number {
+    return this.running
+  }
+}
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface Event {
+  id: string
+  type: string
+  url?: string
+  data: unknown
+  timestamp: Date
+}
+
+export interface Action {
+  id: string
+  type: string
+  status: 'pending' | 'active' | 'completed' | 'failed'
+  progress?: number
+  total?: number
+  data: unknown
+  result?: unknown
+  error?: string
+  createdAt: Date
+  startedAt?: Date
+  completedAt?: Date
+}
+
+export interface Artifact {
+  url: string
+  type: string
+  sourceHash: string
+  content: unknown
+  metadata?: Record<string, unknown>
+  createdAt: Date
+}
+
+export interface MemoryProviderOptions {
+  /** Concurrency limit for operations (default: 10) */
+  concurrency?: number
+}
+
+// =============================================================================
+// Generate ID
+// =============================================================================
+
 function generateId(): string {
   return crypto.randomUUID()
 }
 
+// =============================================================================
+// In-memory Provider
+// =============================================================================
+
 /**
- * In-memory storage for entities and relationships
+ * In-memory storage for entities, relationships, events, actions, and artifacts
  */
 export class MemoryProvider implements DBProvider {
-  // type -> id -> entity
+  // Things: type -> id -> entity
   private entities = new Map<string, Map<string, Record<string, unknown>>>()
 
-  // from:relation -> Set<to>
+  // Relationships: from:relation -> Set<to>
   private relations = new Map<string, Set<string>>()
+
+  // Events: chronological log
+  private events: Event[] = []
+  private eventHandlers = new Map<string, Array<(event: Event) => void | Promise<void>>>()
+
+  // Actions: id -> action
+  private actions = new Map<string, Action>()
+
+  // Artifacts: url:type -> artifact
+  private artifacts = new Map<string, Artifact>()
+
+  // Concurrency control
+  private semaphore: Semaphore
+
+  constructor(options: MemoryProviderOptions = {}) {
+    this.semaphore = new Semaphore(options.concurrency ?? 10)
+  }
+
+  // ===========================================================================
+  // Things (Records)
+  // ===========================================================================
 
   private getTypeStore(type: string): Map<string, Record<string, unknown>> {
     if (!this.entities.has(type)) {
       this.entities.set(type, new Map())
     }
     return this.entities.get(type)!
-  }
-
-  private relationKey(
-    fromType: string,
-    fromId: string,
-    relation: string
-  ): string {
-    return `${fromType}:${fromId}:${relation}`
   }
 
   async get(
@@ -154,6 +278,9 @@ export class MemoryProvider implements DBProvider {
 
     store.set(entityId, entity)
 
+    // Emit event
+    await this.emit(`${type}.created`, { $id: entityId, $type: type, ...entity })
+
     return { ...entity, $id: entityId, $type: type }
   }
 
@@ -177,6 +304,12 @@ export class MemoryProvider implements DBProvider {
 
     store.set(id, updated)
 
+    // Emit event
+    await this.emit(`${type}.updated`, { $id: id, $type: type, ...updated })
+
+    // Invalidate artifacts when data changes
+    await this.invalidateArtifacts(`${type}/${id}`)
+
     return { ...updated, $id: id, $type: type }
   }
 
@@ -189,16 +322,33 @@ export class MemoryProvider implements DBProvider {
 
     store.delete(id)
 
-    // Also clean up any relations
+    // Emit event
+    await this.emit(`${type}.deleted`, { $id: id, $type: type })
+
+    // Clean up relations
     for (const [key, targets] of this.relations) {
       if (key.startsWith(`${type}:${id}:`)) {
         this.relations.delete(key)
       }
-      // Remove from reverse relations
       targets.delete(`${type}:${id}`)
     }
 
+    // Clean up artifacts
+    await this.deleteArtifact(`${type}/${id}`)
+
     return true
+  }
+
+  // ===========================================================================
+  // Relationships
+  // ===========================================================================
+
+  private relationKey(
+    fromType: string,
+    fromId: string,
+    relation: string
+  ): string {
+    return `${fromType}:${fromId}:${relation}`
   }
 
   async related(
@@ -237,6 +387,13 @@ export class MemoryProvider implements DBProvider {
     }
 
     this.relations.get(key)!.add(`${toType}:${toId}`)
+
+    // Emit event
+    await this.emit('Relation.created', {
+      from: `${fromType}/${fromId}`,
+      type: relation,
+      to: `${toType}/${toId}`,
+    })
   }
 
   async unrelate(
@@ -251,7 +408,307 @@ export class MemoryProvider implements DBProvider {
 
     if (targets) {
       targets.delete(`${toType}:${toId}`)
+
+      // Emit event
+      await this.emit('Relation.deleted', {
+        from: `${fromType}/${fromId}`,
+        type: relation,
+        to: `${toType}/${toId}`,
+      })
     }
+  }
+
+  // ===========================================================================
+  // Events
+  // ===========================================================================
+
+  async emit(type: string, data: unknown): Promise<void> {
+    const event: Event = {
+      id: generateId(),
+      type,
+      data,
+      timestamp: new Date(),
+    }
+
+    this.events.push(event)
+
+    // Trigger handlers (with concurrency control)
+    const handlers = this.getEventHandlers(type)
+    await this.semaphore.map(handlers, (handler) =>
+      Promise.resolve(handler(event))
+    )
+  }
+
+  private getEventHandlers(type: string): Array<(event: Event) => void | Promise<void>> {
+    const handlers: Array<(event: Event) => void | Promise<void>> = []
+
+    for (const [pattern, patternHandlers] of this.eventHandlers) {
+      if (this.matchesPattern(type, pattern)) {
+        handlers.push(...patternHandlers)
+      }
+    }
+
+    return handlers
+  }
+
+  private matchesPattern(type: string, pattern: string): boolean {
+    if (pattern === type) return true
+    if (pattern === '*') return true
+    if (pattern.endsWith('.*')) {
+      const prefix = pattern.slice(0, -2)
+      return type.startsWith(prefix + '.')
+    }
+    if (pattern.startsWith('*.')) {
+      const suffix = pattern.slice(2)
+      return type.endsWith('.' + suffix)
+    }
+    return false
+  }
+
+  on(pattern: string, handler: (event: Event) => void | Promise<void>): () => void {
+    if (!this.eventHandlers.has(pattern)) {
+      this.eventHandlers.set(pattern, [])
+    }
+    this.eventHandlers.get(pattern)!.push(handler)
+
+    // Return unsubscribe function
+    return () => {
+      const handlers = this.eventHandlers.get(pattern)
+      if (handlers) {
+        const index = handlers.indexOf(handler)
+        if (index !== -1) handlers.splice(index, 1)
+      }
+    }
+  }
+
+  async listEvents(options?: {
+    type?: string
+    since?: Date
+    until?: Date
+    limit?: number
+  }): Promise<Event[]> {
+    let results = [...this.events]
+
+    if (options?.type) {
+      results = results.filter((e) => this.matchesPattern(e.type, options.type!))
+    }
+    if (options?.since) {
+      results = results.filter((e) => e.timestamp >= options.since!)
+    }
+    if (options?.until) {
+      results = results.filter((e) => e.timestamp <= options.until!)
+    }
+    if (options?.limit) {
+      results = results.slice(-options.limit)
+    }
+
+    return results
+  }
+
+  async replayEvents(options: {
+    type?: string
+    since?: Date
+    handler: (event: Event) => void | Promise<void>
+  }): Promise<void> {
+    const events = await this.listEvents({
+      type: options.type,
+      since: options.since,
+    })
+
+    for (const event of events) {
+      await this.semaphore.run(() => Promise.resolve(options.handler(event)))
+    }
+  }
+
+  // ===========================================================================
+  // Actions
+  // ===========================================================================
+
+  async createAction(data: {
+    type: string
+    data: unknown
+    total?: number
+  }): Promise<Action> {
+    const action: Action = {
+      id: generateId(),
+      type: data.type,
+      status: 'pending',
+      progress: 0,
+      total: data.total,
+      data: data.data,
+      createdAt: new Date(),
+    }
+
+    this.actions.set(action.id, action)
+
+    await this.emit('Action.created', action)
+
+    return action
+  }
+
+  async getAction(id: string): Promise<Action | null> {
+    return this.actions.get(id) ?? null
+  }
+
+  async updateAction(
+    id: string,
+    updates: Partial<Pick<Action, 'status' | 'progress' | 'result' | 'error'>>
+  ): Promise<Action> {
+    const action = this.actions.get(id)
+    if (!action) {
+      throw new Error(`Action not found: ${id}`)
+    }
+
+    Object.assign(action, updates)
+
+    if (updates.status === 'active' && !action.startedAt) {
+      action.startedAt = new Date()
+      await this.emit('Action.started', action)
+    }
+
+    if (updates.status === 'completed') {
+      action.completedAt = new Date()
+      await this.emit('Action.completed', action)
+    }
+
+    if (updates.status === 'failed') {
+      action.completedAt = new Date()
+      await this.emit('Action.failed', action)
+    }
+
+    return action
+  }
+
+  async listActions(options?: {
+    status?: Action['status']
+    type?: string
+    limit?: number
+  }): Promise<Action[]> {
+    let results = Array.from(this.actions.values())
+
+    if (options?.status) {
+      results = results.filter((a) => a.status === options.status)
+    }
+    if (options?.type) {
+      results = results.filter((a) => a.type === options.type)
+    }
+    if (options?.limit) {
+      results = results.slice(0, options.limit)
+    }
+
+    return results
+  }
+
+  async retryAction(id: string): Promise<Action> {
+    const action = this.actions.get(id)
+    if (!action) {
+      throw new Error(`Action not found: ${id}`)
+    }
+    if (action.status !== 'failed') {
+      throw new Error(`Can only retry failed actions: ${id}`)
+    }
+
+    action.status = 'pending'
+    action.error = undefined
+    action.startedAt = undefined
+    action.completedAt = undefined
+
+    return action
+  }
+
+  async cancelAction(id: string): Promise<void> {
+    const action = this.actions.get(id)
+    if (!action) {
+      throw new Error(`Action not found: ${id}`)
+    }
+    if (action.status === 'completed' || action.status === 'failed') {
+      throw new Error(`Cannot cancel finished action: ${id}`)
+    }
+
+    action.status = 'failed'
+    action.error = 'Cancelled'
+    action.completedAt = new Date()
+
+    await this.emit('Action.cancelled', action)
+  }
+
+  // ===========================================================================
+  // Artifacts
+  // ===========================================================================
+
+  private artifactKey(url: string, type: string): string {
+    return `${url}:${type}`
+  }
+
+  async getArtifact(url: string, type: string): Promise<Artifact | null> {
+    return this.artifacts.get(this.artifactKey(url, type)) ?? null
+  }
+
+  async setArtifact(
+    url: string,
+    type: string,
+    data: { content: unknown; sourceHash: string; metadata?: Record<string, unknown> }
+  ): Promise<void> {
+    const artifact: Artifact = {
+      url,
+      type,
+      sourceHash: data.sourceHash,
+      content: data.content,
+      metadata: data.metadata,
+      createdAt: new Date(),
+    }
+
+    this.artifacts.set(this.artifactKey(url, type), artifact)
+  }
+
+  async deleteArtifact(url: string, type?: string): Promise<void> {
+    if (type) {
+      this.artifacts.delete(this.artifactKey(url, type))
+    } else {
+      // Delete all artifacts for this URL
+      for (const key of this.artifacts.keys()) {
+        if (key.startsWith(`${url}:`)) {
+          this.artifacts.delete(key)
+        }
+      }
+    }
+  }
+
+  private async invalidateArtifacts(url: string): Promise<void> {
+    // Keep embedding artifact but mark others for regeneration
+    for (const [key, artifact] of this.artifacts) {
+      if (key.startsWith(`${url}:`) && artifact.type !== 'embedding') {
+        this.artifacts.delete(key)
+      }
+    }
+  }
+
+  async listArtifacts(url: string): Promise<Artifact[]> {
+    const results: Artifact[] = []
+    for (const [key, artifact] of this.artifacts) {
+      if (key.startsWith(`${url}:`)) {
+        results.push(artifact)
+      }
+    }
+    return results
+  }
+
+  // ===========================================================================
+  // Utilities
+  // ===========================================================================
+
+  /**
+   * Run an operation with concurrency control
+   */
+  async withConcurrency<T>(fn: () => Promise<T>): Promise<T> {
+    return this.semaphore.run(fn)
+  }
+
+  /**
+   * Run multiple operations with concurrency control
+   */
+  async mapWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+    return this.semaphore.map(items, fn)
   }
 
   /**
@@ -260,12 +717,23 @@ export class MemoryProvider implements DBProvider {
   clear(): void {
     this.entities.clear()
     this.relations.clear()
+    this.events.length = 0
+    this.actions.clear()
+    this.artifacts.clear()
+    this.eventHandlers.clear()
   }
 
   /**
    * Get stats
    */
-  stats(): { entities: number; relations: number } {
+  stats(): {
+    entities: number
+    relations: number
+    events: number
+    actions: { pending: number; active: number; completed: number; failed: number }
+    artifacts: number
+    concurrency: { active: number; pending: number }
+  } {
     let entityCount = 0
     for (const store of this.entities.values()) {
       entityCount += store.size
@@ -276,13 +744,28 @@ export class MemoryProvider implements DBProvider {
       relationCount += targets.size
     }
 
-    return { entities: entityCount, relations: relationCount }
+    const actionStats = { pending: 0, active: 0, completed: 0, failed: 0 }
+    for (const action of this.actions.values()) {
+      actionStats[action.status]++
+    }
+
+    return {
+      entities: entityCount,
+      relations: relationCount,
+      events: this.events.length,
+      actions: actionStats,
+      artifacts: this.artifacts.size,
+      concurrency: {
+        active: this.semaphore.active,
+        pending: this.semaphore.pending,
+      },
+    }
   }
 }
 
 /**
  * Create an in-memory provider
  */
-export function createMemoryProvider(): MemoryProvider {
-  return new MemoryProvider()
+export function createMemoryProvider(options?: MemoryProviderOptions): MemoryProvider {
+  return new MemoryProvider(options)
 }

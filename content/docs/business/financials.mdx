@@ -1,0 +1,257 @@
+---
+title: Financials
+description: Calculate financial metrics
+---
+
+# Financials
+
+The `financials()` function calculates comprehensive financial metrics from your business data.
+
+## Basic Usage
+
+```typescript
+import { financials } from 'business-as-code'
+
+const metrics = financials({
+  revenue: 1000000,
+  cogs: 300000,
+  operatingExpenses: 500000,
+  currency: 'USD',
+  period: 'monthly',
+})
+
+// Automatically calculates:
+console.log(metrics.grossProfit)     // 700000
+console.log(metrics.grossMargin)     // 70
+console.log(metrics.operatingIncome) // 200000
+console.log(metrics.operatingMargin) // 20
+console.log(metrics.netIncome)       // 200000
+console.log(metrics.netMargin)       // 20
+```
+
+## Calculated Metrics
+
+The `financials()` function automatically calculates:
+
+| Metric | Formula |
+|--------|---------|
+| Gross Profit | Revenue - COGS |
+| Gross Margin | (Gross Profit / Revenue) × 100 |
+| Operating Income | Gross Profit - Operating Expenses |
+| Operating Margin | (Operating Income / Revenue) × 100 |
+| Net Income | Operating Income (simplified) |
+| Net Margin | (Net Income / Revenue) × 100 |
+
+## Margin Calculations
+
+```typescript
+import {
+  calculateGrossMargin,
+  calculateOperatingMargin,
+  calculateNetMargin,
+  calculateEBITDAMargin,
+} from 'business-as-code'
+
+// Gross margin
+const grossMargin = calculateGrossMargin(1000000, 300000)
+// 70%
+
+// Operating margin
+const opMargin = calculateOperatingMargin(1000000, 200000)
+// 20%
+
+// Net margin
+const netMargin = calculateNetMargin(1000000, 150000)
+// 15%
+
+// EBITDA margin
+const ebitdaMargin = calculateEBITDAMargin(1000000, 250000)
+// 25%
+```
+
+## SaaS Metrics
+
+```typescript
+import { calculateMRR, calculateARR, calculateLTV, calculateCAC, calculateLTVtoCAC } from 'business-as-code'
+
+// Monthly Recurring Revenue
+const mrr = calculateMRR(subscriptions)
+// Sum of all subscription amounts
+
+// Annual Recurring Revenue
+const arr = calculateARR(mrr)
+// MRR × 12
+
+// Customer Lifetime Value
+const ltv = calculateLTV(avgRevenue, churnRate)
+// Average revenue / churn rate
+
+// Customer Acquisition Cost
+const cac = calculateCAC(marketingSpend, newCustomers)
+// Marketing spend / new customers
+
+// LTV to CAC ratio
+const ratio = calculateLTVtoCAC(ltv, cac)
+// LTV / CAC (target: > 3)
+```
+
+## Startup Metrics
+
+```typescript
+import { calculateBurnRate, calculateRunway, calculatePaybackPeriod } from 'business-as-code'
+
+// Monthly burn rate
+const burnRate = calculateBurnRate(100000, 70000, 3)
+// (100000 - 70000) / 3 = 10000 per month
+
+// Runway in months
+const runway = calculateRunway(100000, 10000)
+// 100000 / 10000 = 10 months
+
+// CAC payback period
+const payback = calculatePaybackPeriod(cac, avgMonthlyRevenue, grossMargin)
+// Months to recover CAC
+```
+
+## Growth Metrics
+
+```typescript
+import { calculateGrowthRate, calculateCAGR } from 'business-as-code'
+
+// Period-over-period growth
+const growth = calculateGrowthRate(120, 100)
+// 20%
+
+// Compound Annual Growth Rate
+const cagr = calculateCAGR(1000000, 100000, 5)
+// ~58% (growth over 5 years)
+```
+
+## Return Metrics
+
+```typescript
+import { calculateROI, calculateROE, calculateROA } from 'business-as-code'
+
+// Return on Investment
+const roi = calculateROI(150000, 100000)
+// 50%
+
+// Return on Equity
+const roe = calculateROE(200000, 1000000)
+// 20%
+
+// Return on Assets
+const roa = calculateROA(200000, 2000000)
+// 10%
+```
+
+## Liquidity Ratios
+
+```typescript
+import { calculateQuickRatio, calculateCurrentRatio, calculateDebtToEquity } from 'business-as-code'
+
+// Quick ratio (acid test)
+const quickRatio = calculateQuickRatio(500000, 200000)
+// 2.5
+
+// Current ratio
+const currentRatio = calculateCurrentRatio(600000, 200000)
+// 3.0
+
+// Debt to equity
+const debtToEquity = calculateDebtToEquity(500000, 1000000)
+// 0.5
+```
+
+## Financial Statements
+
+Create and query financial statements:
+
+```typescript
+import { createStatement, getLineItem } from 'business-as-code'
+
+// Create income statement
+const incomeStatement = createStatement({
+  type: 'income',
+  period: 'Q1 2024',
+  lineItems: {
+    revenue: 1000000,
+    cogs: 300000,
+    grossProfit: 700000,
+    operatingExpenses: 500000,
+    operatingIncome: 200000,
+  },
+  currency: 'USD',
+})
+
+// Get specific line item
+const revenue = getLineItem(incomeStatement, 'revenue')
+// 1000000
+```
+
+## Comparison
+
+```typescript
+import { compareMetrics } from 'business-as-code'
+
+const comparison = compareMetrics(currentMetrics, previousMetrics)
+// {
+//   revenueGrowth: 20,
+//   marginChange: 5,
+//   improved: ['revenue', 'grossMargin'],
+//   declined: ['operatingExpenses'],
+// }
+```
+
+## Currency Formatting
+
+```typescript
+import { formatCurrency } from 'business-as-code'
+
+const formatted = formatCurrency(1234567.89, 'USD')
+// "$1,234,567.89"
+
+const euros = formatCurrency(1234567.89, 'EUR')
+// "€1,234,567.89"
+```
+
+## Validation
+
+```typescript
+import { validateFinancials } from 'business-as-code'
+
+const errors = validateFinancials(metrics)
+if (errors.length > 0) {
+  console.error('Invalid financials:', errors)
+}
+```
+
+## Type Definition
+
+```typescript
+interface FinancialMetrics {
+  revenue?: number
+  cogs?: number
+  grossProfit?: number
+  grossMargin?: number
+  operatingExpenses?: number
+  operatingIncome?: number
+  operatingMargin?: number
+  netIncome?: number
+  netMargin?: number
+  ebitda?: number
+  ebitdaMargin?: number
+  operatingCashFlow?: number
+  freeCashFlow?: number
+  currency?: Currency
+  period?: TimePeriod
+}
+
+interface FinancialStatement {
+  type: 'income' | 'balance-sheet' | 'cash-flow'
+  period: string
+  lineItems: Record<string, number>
+  currency: Currency
+  metadata?: Record<string, unknown>
+}
+```

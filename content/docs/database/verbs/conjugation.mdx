@@ -1,0 +1,207 @@
+---
+title: Verb Conjugation
+description: Auto-conjugate verbs from base form
+---
+
+# Verb Conjugation
+
+Auto-generate all verb forms from just the base action.
+
+## conjugate
+
+```typescript
+import { conjugate } from 'ai-database'
+
+conjugate('publish')
+// {
+//   action: 'publish',
+//   actor: 'publisher',
+//   act: 'publishes',
+//   activity: 'publishing',
+//   result: 'publication',
+//   reverse: {
+//     at: 'publishedAt',
+//     by: 'publishedBy',
+//     in: 'publishedIn',
+//     for: 'publishedFor',
+//   },
+// }
+```
+
+## Examples
+
+### Regular Verbs
+
+```typescript
+conjugate('create')
+// actor: 'creator'
+// act: 'creates'
+// activity: 'creating'
+// result: 'creation'
+
+conjugate('update')
+// actor: 'updater'
+// act: 'updates'
+// activity: 'updating'
+// result: 'updation'
+
+conjugate('delete')
+// actor: 'deleter'
+// act: 'deletes'
+// activity: 'deleting'
+// result: 'deletion'
+```
+
+### -e Endings
+
+```typescript
+conjugate('approve')
+// actor: 'approver'
+// activity: 'approving'
+// result: 'approvion'
+
+conjugate('archive')
+// actor: 'archiver'
+// activity: 'archiving'
+```
+
+### -y Endings
+
+```typescript
+conjugate('apply')
+// act: 'applies'
+// actor: 'applier'
+// activity: 'applying'
+// result: 'application'
+```
+
+### Consonant Doubling
+
+```typescript
+conjugate('submit')
+// actor: 'submitter' (double t)
+// activity: 'submitting'
+// result: 'submission'
+
+conjugate('commit')
+// actor: 'committer'
+// activity: 'committing'
+
+conjugate('plan')
+// actor: 'planner'
+// activity: 'planning'
+```
+
+### -ish Endings
+
+```typescript
+conjugate('publish')
+// act: 'publishes'
+// activity: 'publishing'
+// result: 'publication'
+
+conjugate('finish')
+// act: 'finishes'
+// activity: 'finishing'
+```
+
+## Known Verbs
+
+Standard verbs return pre-defined forms:
+
+```typescript
+import { Verbs } from 'ai-database'
+
+// conjugate('create') returns Verbs.create
+// conjugate('update') returns Verbs.update
+// conjugate('delete') returns Verbs.delete
+// conjugate('publish') returns Verbs.publish
+// conjugate('archive') returns Verbs.archive
+```
+
+## Past Participle
+
+The `reverse` fields use past participle:
+
+```typescript
+conjugate('create').reverse.at   // 'createdAt'
+conjugate('submit').reverse.at   // 'submittedAt'
+conjugate('approve').reverse.by  // 'approvedBy'
+```
+
+## Usage Patterns
+
+### Dynamic Field Names
+
+```typescript
+function getTimestampField(action: string): string {
+  const verb = conjugate(action)
+  return verb.reverse?.at || `${action}At`
+}
+
+getTimestampField('create')  // 'createdAt'
+getTimestampField('approve') // 'approvedAt'
+```
+
+### Event Types
+
+```typescript
+function getEventType(type: string, action: string): string {
+  const verb = conjugate(action)
+  return `${type}.${verb.action}d`
+}
+
+getEventType('Post', 'create')  // 'Post.created'
+getEventType('Post', 'publish') // 'Post.published'
+```
+
+### Progress Messages
+
+```typescript
+function getProgressMessage(action: string): string {
+  const verb = conjugate(action)
+  return `${verb.activity}...`
+}
+
+getProgressMessage('publish')  // 'publishing...'
+getProgressMessage('submit')   // 'submitting...'
+```
+
+### Actor Labels
+
+```typescript
+function getActorLabel(action: string): string {
+  const verb = conjugate(action)
+  return verb.actor || `${action}er`
+}
+
+getActorLabel('create')  // 'creator'
+getActorLabel('publish') // 'publisher'
+getActorLabel('review')  // 'reviewer'
+```
+
+## Handling Edge Cases
+
+For verbs that don't follow standard patterns:
+
+```typescript
+// Define explicitly
+const irregularVerb = defineVerb({
+  action: 'run',
+  actor: 'runner',
+  act: 'runs',
+  activity: 'running',
+  result: 'run',  // irregular
+  reverse: { at: 'ranAt' },  // irregular past
+})
+```
+
+## Linguistic Rules
+
+The `conjugate` function applies these rules:
+
+1. **Past participle**: -e → -ed, consonant → doubled + ed
+2. **Actor**: -e → -er, consonant → doubled + er
+3. **Present 3rd**: -y → -ies, -s/-x/-z/-ch/-sh → -es
+4. **Gerund**: -e → -ing, consonant → doubled + ing
+5. **Result**: -ate → -ation, -ify → -ification, etc.

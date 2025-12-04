@@ -1,0 +1,7 @@
+{
+  "title": "Packages",
+  "description": "NPM packages and libraries",
+  "root": true,
+  "icon": "Boxes",
+  "pages": ["index"]
+}

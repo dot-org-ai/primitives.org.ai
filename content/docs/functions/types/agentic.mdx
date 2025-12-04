@@ -1,0 +1,56 @@
+---
+title: Agentic Functions
+description: Multi-step functions with tools
+---
+
+# Agentic Functions
+
+Multi-step operations that use tools and loop until complete.
+
+## Functions
+
+| Function | Output | Example |
+|----------|--------|---------|
+| `do` | unknown | `do\`analyze this article\`` |
+| `research` | Research | `research\`market trends 2025\`` |
+| `read` | string | `read\`${url}\`` |
+| `browse` | Page | `browse\`${url}\`` |
+
+## Characteristics
+
+- **Multi-step** - Plans and executes multiple actions
+- **Tool-using** - Can call other AI functions
+- **Stateful** - Maintains context across steps
+- **External** - Can interact with web, APIs
+
+## Examples
+
+```typescript
+import { do as act, research, browse } from 'ai-functions'
+
+// do - single-pass task with tools
+const analysis = await act`
+  analyze this article and give me
+  summary, key people, and action items
+  ${article}
+`
+
+// research - agentic web research
+const findings = await research`AI market trends 2025`
+// { summary, sources, findings, confidence }
+
+// browse - browser automation
+const page = await browse`https://competitor.com/pricing`
+const pricing = await page.extract`all plan names and prices`
+await page.do`click on Enterprise plan`
+```
+
+## do vs Agents
+
+| Feature | `do` | Full Agent |
+|---------|------|------------|
+| Steps | Single pass | Loops until done |
+| Planning | Pick tools once | Re-evaluates |
+| Complexity | Simple tasks | Complex goals |
+
+Think of `do` as one step of what an agent would do.

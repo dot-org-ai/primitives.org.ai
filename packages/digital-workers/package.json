@@ -20,7 +20,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*"
+    "ai-functions": "workspace:*",
+    "ai-workflows": "workspace:*"
   },
   "keywords": ["ai", "agents", "humans", "workers", "primitives"],
   "license": "MIT"

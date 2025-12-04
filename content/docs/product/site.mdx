@@ -1,0 +1,270 @@
+---
+title: Site
+description: Define websites and documentation
+---
+
+# Site
+
+The `Site()` function defines websites and documentation sites with navigation, SEO, and analytics.
+
+## Basic Usage
+
+```typescript
+import { Site } from 'digital-products'
+
+const docsSite = Site({
+  id: 'docs',
+  name: 'Documentation Site',
+  description: 'Product documentation',
+  version: '1.0.0',
+  generator: 'fumadocs',
+})
+```
+
+## Site Generators
+
+| Generator | Description |
+|-----------|-------------|
+| `fumadocs` | Fumadocs documentation |
+| `next` | Next.js |
+| `astro` | Astro |
+| `vitepress` | VitePress |
+| `docusaurus` | Docusaurus |
+| `gatsby` | Gatsby |
+
+## Site Structure
+
+Define pages and content:
+
+```typescript
+const docsSite = Site({
+  id: 'docs',
+  name: 'Documentation',
+  generator: 'fumadocs',
+  structure: {
+    home: '/docs/index.mdx',
+    docs: [
+      '/docs/getting-started.mdx',
+      '/docs/installation.mdx',
+      '/docs/api-reference.mdx',
+      '/docs/guides/authentication.mdx',
+      '/docs/guides/deployment.mdx',
+    ],
+  },
+})
+```
+
+## Navigation
+
+Build site navigation:
+
+```typescript
+import { Site, Nav } from 'digital-products'
+
+const docsSite = Site({
+  id: 'docs',
+  name: 'Documentation',
+  generator: 'fumadocs',
+  navigation: [
+    Nav('Home', '/'),
+    Nav('Docs', '/docs', {
+      children: [
+        Nav('Getting Started', '/docs/getting-started'),
+        Nav('Installation', '/docs/installation'),
+        Nav('Guides', '/docs/guides', {
+          children: [
+            Nav('Authentication', '/docs/guides/auth'),
+            Nav('Deployment', '/docs/guides/deploy'),
+          ],
+        }),
+        Nav('API Reference', '/docs/api'),
+      ],
+    }),
+    Nav('Blog', '/blog'),
+    Nav('GitHub', 'https://github.com/example/repo', {
+      external: true,
+    }),
+  ],
+})
+```
+
+## SEO Configuration
+
+Optimize for search engines:
+
+```typescript
+import { Site, SEO } from 'digital-products'
+
+const docsSite = Site({
+  id: 'docs',
+  name: 'Documentation',
+  generator: 'fumadocs',
+  seo: SEO({
+    titleTemplate: '%s | My Product',
+    description: 'Official documentation for My Product',
+    keywords: ['docs', 'api', 'reference', 'guide'],
+    ogImage: '/og-image.png',
+    twitterCard: 'summary_large_image',
+    twitterSite: '@myproduct',
+  }),
+})
+```
+
+### SEO Options
+
+| Option | Description |
+|--------|-------------|
+| `titleTemplate` | Page title template |
+| `description` | Default meta description |
+| `keywords` | SEO keywords |
+| `ogImage` | Open Graph image |
+| `twitterCard` | Twitter card type |
+| `twitterSite` | Twitter @handle |
+
+## Analytics
+
+Add analytics tracking:
+
+```typescript
+import { Site, Analytics } from 'digital-products'
+
+const docsSite = Site({
+  id: 'docs',
+  name: 'Documentation',
+  generator: 'fumadocs',
+  analytics: Analytics('plausible', 'docs.example.com'),
+})
+```
+
+### Analytics Providers
+
+| Provider | Usage |
+|----------|-------|
+| `plausible` | `Analytics('plausible', 'domain.com')` |
+| `google` | `Analytics('google', 'UA-XXXXX')` |
+| `fathom` | `Analytics('fathom', 'SITEID')` |
+| `posthog` | `Analytics('posthog', 'KEY')` |
+
+## Complete Example
+
+```typescript
+import { Site, Nav, SEO, Analytics } from 'digital-products'
+
+const productDocs = Site({
+  id: 'product-docs',
+  name: 'Product Documentation',
+  description: 'Complete documentation for Product',
+  version: '2.0.0',
+  generator: 'fumadocs',
+
+  structure: {
+    home: '/docs/index.mdx',
+    docs: [
+      '/docs/introduction.mdx',
+      '/docs/quickstart.mdx',
+      '/docs/installation.mdx',
+      '/docs/configuration.mdx',
+      '/docs/guides/index.mdx',
+      '/docs/api/index.mdx',
+      '/docs/examples/index.mdx',
+      '/docs/changelog.mdx',
+    ],
+  },
+
+  navigation: [
+    Nav('Docs', '/docs', {
+      children: [
+        Nav('Introduction', '/docs/introduction'),
+        Nav('Quickstart', '/docs/quickstart'),
+        Nav('Guides', '/docs/guides', {
+          children: [
+            Nav('Authentication', '/docs/guides/auth'),
+            Nav('Database', '/docs/guides/database'),
+            Nav('Deployment', '/docs/guides/deployment'),
+          ],
+        }),
+        Nav('API Reference', '/docs/api'),
+        Nav('Examples', '/docs/examples'),
+      ],
+    }),
+    Nav('Blog', '/blog'),
+    Nav('Changelog', '/docs/changelog'),
+    Nav('GitHub', 'https://github.com/example/product', { external: true }),
+  ],
+
+  seo: SEO({
+    titleTemplate: '%s - Product Docs',
+    description: 'Learn how to build with Product',
+    keywords: ['product', 'documentation', 'api', 'sdk'],
+    ogImage: 'https://docs.product.com/og.png',
+    twitterCard: 'summary_large_image',
+    twitterSite: '@product',
+  }),
+
+  analytics: Analytics('plausible', 'docs.product.com'),
+})
+```
+
+## Marketing Site
+
+```typescript
+import { Site, Nav, SEO, Analytics } from 'digital-products'
+
+const marketingSite = Site({
+  id: 'marketing',
+  name: 'Product Website',
+  description: 'Marketing website',
+  version: '1.0.0',
+  generator: 'next',
+
+  structure: {
+    home: '/index.tsx',
+    pages: [
+      '/features.tsx',
+      '/pricing.tsx',
+      '/about.tsx',
+      '/contact.tsx',
+      '/blog/index.tsx',
+    ],
+  },
+
+  navigation: [
+    Nav('Home', '/'),
+    Nav('Features', '/features'),
+    Nav('Pricing', '/pricing'),
+    Nav('Blog', '/blog'),
+    Nav('Docs', 'https://docs.product.com', { external: true }),
+    Nav('Login', '/login'),
+    Nav('Sign Up', '/signup', { cta: true }),
+  ],
+
+  seo: SEO({
+    titleTemplate: '%s | Product',
+    description: 'The best product for your needs',
+    ogImage: '/og.png',
+  }),
+
+  analytics: Analytics('google', 'G-XXXXXXXXXX'),
+})
+```
+
+## Type Definition
+
+```typescript
+interface SiteDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  generator?: 'fumadocs' | 'next' | 'astro' | 'vitepress' | 'docusaurus' | 'gatsby'
+  structure?: {
+    home: string
+    docs?: string[]
+    pages?: string[]
+  }
+  navigation?: NavDefinition[]
+  seo?: SEODefinition
+  analytics?: AnalyticsDefinition
+  metadata?: Record<string, unknown>
+}
+```

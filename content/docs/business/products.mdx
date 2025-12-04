@@ -1,0 +1,158 @@
+---
+title: Products
+description: Define product offerings
+---
+
+# Products
+
+The `Product()` function defines product offerings with pricing models, features, and roadmaps.
+
+## Basic Usage
+
+```typescript
+import { Product } from 'business-as-code'
+
+const product = Product({
+  name: 'Widget Pro',
+  description: 'Enterprise-grade widget management platform',
+  category: 'SaaS',
+  targetSegment: 'Enterprise',
+  valueProposition: 'Reduce widget management costs by 50%',
+  pricingModel: 'subscription',
+  price: 99,
+  currency: 'USD',
+  cogs: 20,
+  features: [
+    'Unlimited widgets',
+    'Advanced analytics',
+    'API access',
+    '24/7 support',
+  ],
+})
+```
+
+## Pricing Models
+
+| Model | Description |
+|-------|-------------|
+| `one-time` | Single purchase price |
+| `subscription` | Recurring payment |
+| `usage-based` | Pay per use |
+| `freemium` | Free tier with paid upgrades |
+| `tiered` | Multiple pricing tiers |
+
+## Product Roadmap
+
+Define planned features and releases:
+
+```typescript
+const product = Product({
+  name: 'Widget Pro',
+  price: 99,
+  roadmap: [
+    {
+      name: 'Mobile app',
+      description: 'Native iOS and Android apps',
+      targetDate: new Date('2024-09-01'),
+      priority: 'high',
+      status: 'in-progress',
+    },
+    {
+      name: 'AI features',
+      description: 'Smart widget recommendations',
+      targetDate: new Date('2024-12-01'),
+      priority: 'medium',
+      status: 'planned',
+    },
+  ],
+})
+```
+
+## Helper Functions
+
+### Financial Calculations
+
+```typescript
+import { calculateGrossMargin, calculateGrossProfit } from 'business-as-code'
+
+const margin = calculateGrossMargin(product)
+// 79.8% ((99 - 20) / 99 * 100)
+
+const profit = calculateGrossProfit(product)
+// 79 (99 - 20)
+```
+
+### Roadmap Management
+
+```typescript
+import {
+  getRoadmapByStatus,
+  getRoadmapByPriority,
+  getOverdueRoadmapItems,
+  updateRoadmapItem,
+} from 'business-as-code'
+
+// Filter by status
+const inProgress = getRoadmapByStatus(product.roadmap!, 'in-progress')
+
+// Filter by priority
+const highPriority = getRoadmapByPriority(product.roadmap!, 'high')
+
+// Find overdue items
+const overdue = getOverdueRoadmapItems(product.roadmap!)
+
+// Update an item
+const updated = updateRoadmapItem(product.roadmap!, 'Mobile app', {
+  status: 'completed',
+})
+```
+
+### Feature Management
+
+```typescript
+import { addFeature, removeFeature } from 'business-as-code'
+
+// Add a feature
+const withFeature = addFeature(product, 'Custom branding')
+
+// Remove a feature
+const withoutFeature = removeFeature(product, 'API access')
+```
+
+## Validation
+
+```typescript
+import { validateProduct } from 'business-as-code'
+
+const errors = validateProduct(product)
+if (errors.length > 0) {
+  console.error('Invalid product:', errors)
+}
+```
+
+## Type Definition
+
+```typescript
+interface ProductDefinition {
+  name: string
+  description?: string
+  category?: string
+  targetSegment?: string
+  valueProposition?: string
+  pricingModel?: 'one-time' | 'subscription' | 'usage-based' | 'freemium' | 'tiered'
+  price?: number
+  currency?: Currency
+  cogs?: number
+  features?: string[]
+  roadmap?: RoadmapItem[]
+  metadata?: Record<string, unknown>
+}
+
+interface RoadmapItem {
+  name: string
+  description?: string
+  targetDate?: Date
+  priority?: 'critical' | 'high' | 'medium' | 'low'
+  status?: 'planned' | 'in-progress' | 'completed' | 'cancelled'
+}
+```

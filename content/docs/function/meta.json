@@ -1,0 +1,7 @@
+{
+  "title": "Function",
+  "description": "The atomic unit of computation",
+  "root": true,
+  "icon": "Code",
+  "pages": ["index"]
+}

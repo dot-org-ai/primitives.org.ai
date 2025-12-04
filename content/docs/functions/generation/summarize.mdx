@@ -1,0 +1,61 @@
+---
+title: summarize
+description: Condense text to key points
+---
+
+# summarize
+
+Condense text to its key points.
+
+## Syntax
+
+```typescript
+summarize`${text}`
+summarize`${text}`(options)
+```
+
+## Examples
+
+```typescript
+import { summarize } from 'ai-functions'
+
+// Quick summary
+const summary = await summarize`${longArticle}`
+
+// With length control
+const brief = await summarize`${document}`({ length: 'short' })   // 1-2 sentences
+const detailed = await summarize`${document}`({ length: 'long' }) // paragraphs
+
+// For specific audience
+const execSummary = await summarize`${technicalReport}${{
+  audience: 'executives',
+  focus: 'business impact',
+}}`
+```
+
+## Options
+
+| Option | Values | Description |
+|--------|--------|-------------|
+| `length` | `'short'` \| `'medium'` \| `'long'` | Output length |
+| `audience` | string | Target audience |
+| `focus` | string | What to emphasize |
+| `format` | `'bullets'` \| `'paragraph'` | Output format |
+
+## Combining with Other Functions
+
+```typescript
+// Summarize research results
+const research = await research`AI market trends 2025`
+const keyPoints = await summarize`${research}`
+
+// Chain with write
+const article = await write`blog post about ${topic}`
+const tldr = await summarize`${article}`({ length: 'short' })
+
+// Process multiple documents
+const summaries = await Promise.all(
+  documents.map(doc => summarize`${doc}`({ length: 'short' }))
+)
+const overview = await write`overview based on ${summaries}`
+```

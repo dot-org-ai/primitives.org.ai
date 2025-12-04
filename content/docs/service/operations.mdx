@@ -1,0 +1,307 @@
+---
+title: Operations
+description: Service operation helpers
+---
+
+# Operations
+
+Services-as-software provides helper functions for common service operations.
+
+## Available Helpers
+
+| Helper | Description |
+|--------|-------------|
+| `ask()` | Ask a question |
+| `deliver()` | Deliver results |
+| `do()` | Execute a task |
+| `every()` | Scheduled tasks |
+| `generate()` | Generate content |
+| `is()` | Validation |
+| `notify()` | Send notifications |
+| `on()` | Event handlers |
+| `order()` | Place orders |
+| `queue()` | Queue management |
+| `quote()` | Request quotes |
+| `subscribe()` | Subscriptions |
+
+## ask()
+
+Ask a question and get an answer:
+
+```typescript
+import { ask } from 'services-as-software'
+
+const answer = await ask('What is the capital of France?')
+// "Paris"
+
+const answer = await ask({
+  question: 'What are the top 3 programming languages?',
+  context: 'For web development in 2024',
+})
+// ["JavaScript", "TypeScript", "Python"]
+```
+
+## deliver()
+
+Deliver results to a destination:
+
+```typescript
+import { deliver } from 'services-as-software'
+
+await deliver({
+  to: 'webhook',
+  url: 'https://example.com/webhook',
+  payload: { result: 'data' },
+})
+
+await deliver({
+  to: 'email',
+  address: 'user@example.com',
+  subject: 'Your report is ready',
+  body: reportContent,
+})
+```
+
+## do()
+
+Execute a task:
+
+```typescript
+import { do as execute } from 'services-as-software'
+
+const result = await execute('translate', {
+  text: 'Hello',
+  to: 'es',
+})
+
+const result = await execute({
+  task: 'analyze-sentiment',
+  input: { text: 'I love this product!' },
+})
+```
+
+## every()
+
+Schedule recurring tasks:
+
+```typescript
+import { every } from 'services-as-software'
+
+// Run every hour
+every('1h', async () => {
+  await generateReport()
+})
+
+// Run daily at 9 AM
+every('0 9 * * *', async () => {
+  await sendDailySummary()
+})
+
+// Run every 30 minutes
+every('30m', async () => {
+  await checkHealth()
+})
+```
+
+### Schedule Formats
+
+| Format | Description |
+|--------|-------------|
+| `'30s'` | Every 30 seconds |
+| `'5m'` | Every 5 minutes |
+| `'1h'` | Every hour |
+| `'1d'` | Every day |
+| `'* * * * *'` | Cron syntax |
+
+## generate()
+
+Generate content:
+
+```typescript
+import { generate } from 'services-as-software'
+
+const content = await generate({
+  type: 'blog-post',
+  topic: 'AI in healthcare',
+  length: 'medium',
+  tone: 'professional',
+})
+
+const image = await generate({
+  type: 'image',
+  prompt: 'A futuristic city at sunset',
+  style: 'photorealistic',
+})
+```
+
+## is()
+
+Validate or check types:
+
+```typescript
+import { is } from 'services-as-software'
+
+const valid = await is(email, 'valid-email')
+// true
+
+const spam = await is(content, 'spam')
+// false
+
+const appropriate = await is(text, 'appropriate-content')
+// true
+```
+
+## notify()
+
+Send notifications:
+
+```typescript
+import { notify } from 'services-as-software'
+
+await notify({
+  channel: 'slack',
+  message: 'Deployment complete!',
+  webhook: process.env.SLACK_WEBHOOK,
+})
+
+await notify({
+  channel: 'email',
+  to: 'team@example.com',
+  subject: 'Alert: High CPU Usage',
+  body: 'Server load exceeded threshold.',
+})
+
+await notify({
+  channel: 'sms',
+  to: '+1234567890',
+  message: 'Your order has shipped!',
+})
+```
+
+## on()
+
+Register event handlers:
+
+```typescript
+import { on } from 'services-as-software'
+
+on('order.created', async (event) => {
+  await sendConfirmationEmail(event.order)
+  await updateInventory(event.order.items)
+})
+
+on('payment.succeeded', async (event) => {
+  await fulfillOrder(event.orderId)
+})
+
+on('user.signup', async (event) => {
+  await sendWelcomeEmail(event.user)
+  await createTrialSubscription(event.user)
+})
+```
+
+## order()
+
+Place orders:
+
+```typescript
+import { order } from 'services-as-software'
+
+const confirmation = await order({
+  service: 'translation',
+  input: {
+    document: 'path/to/doc.pdf',
+    targetLanguages: ['es', 'fr', 'de'],
+  },
+  delivery: 'express',
+})
+```
+
+## queue()
+
+Manage job queues:
+
+```typescript
+import { queue } from 'services-as-software'
+
+// Add to queue
+const job = await queue.add('process-video', {
+  videoUrl: 'https://example.com/video.mp4',
+  format: 'mp4',
+})
+
+// Check status
+const status = await queue.status(job.id)
+// { status: 'processing', progress: 45 }
+
+// Get result
+const result = await queue.result(job.id)
+```
+
+## quote()
+
+Request a quote:
+
+```typescript
+import { quote } from 'services-as-software'
+
+const estimate = await quote({
+  service: 'translation',
+  input: {
+    wordCount: 5000,
+    sourceLanguage: 'en',
+    targetLanguage: 'ja',
+  },
+})
+// { price: 150, currency: 'USD', turnaround: '24h' }
+```
+
+## subscribe()
+
+Manage subscriptions:
+
+```typescript
+import { subscribe } from 'services-as-software'
+
+// Subscribe to a plan
+const subscription = await subscribe({
+  plan: 'pro',
+  customer: 'cus_123',
+})
+
+// Subscribe to events
+const unsubscribe = subscribe.events('order.*', (event) => {
+  console.log('Order event:', event)
+})
+
+// Later: unsubscribe
+unsubscribe()
+```
+
+## Combining Helpers
+
+```typescript
+import { on, notify, queue, generate } from 'services-as-software'
+
+on('document.uploaded', async (event) => {
+  // Queue processing
+  const job = await queue.add('process-document', {
+    documentId: event.documentId,
+  })
+
+  // Generate summary
+  const summary = await generate({
+    type: 'summary',
+    source: event.documentUrl,
+    length: 'short',
+  })
+
+  // Notify user
+  await notify({
+    channel: 'email',
+    to: event.user.email,
+    subject: 'Document processed',
+    body: `Summary: ${summary}`,
+  })
+})
+```

@@ -1,0 +1,223 @@
+---
+title: Dataset
+description: Define curated data collections
+---
+
+# Dataset
+
+The `Dataset()` function defines curated data collections with schemas, licensing, and update schedules.
+
+## Basic Usage
+
+```typescript
+import { Dataset } from 'digital-products'
+
+const movieDataset = Dataset({
+  id: 'movies',
+  name: 'Movie Database',
+  description: 'Comprehensive movie information dataset',
+  version: '2024.1',
+  format: 'parquet',
+  source: 's3://datasets/movies.parquet',
+})
+```
+
+## Data Formats
+
+| Format | Description |
+|--------|-------------|
+| `json` | JSON format |
+| `csv` | Comma-separated values |
+| `parquet` | Apache Parquet |
+| `arrow` | Apache Arrow |
+| `avro` | Apache Avro |
+
+## Schema Definition
+
+Define the dataset structure:
+
+```typescript
+const movieDataset = Dataset({
+  id: 'movies',
+  name: 'Movie Database',
+  format: 'parquet',
+  schema: {
+    id: 'Movie ID',
+    title: 'Movie title',
+    year: 'Release year (number)',
+    genres: ['Array of genre names'],
+    rating: 'Average rating (number)',
+    votes: 'Number of votes (number)',
+    runtime: 'Runtime in minutes (number)',
+    director: 'Director name',
+    cast: ['Array of actor names'],
+    plot: 'Plot summary',
+  },
+})
+```
+
+## Dataset Metadata
+
+Add comprehensive metadata:
+
+```typescript
+const movieDataset = Dataset({
+  id: 'movies',
+  name: 'Movie Database',
+  description: 'Comprehensive movie information from 1900 to present',
+  version: '2024.1',
+  format: 'parquet',
+  source: 's3://datasets/movies.parquet',
+  size: 1000000,           // Number of records
+  license: 'CC-BY-4.0',    // License identifier
+  updateFrequency: 'daily', // Update schedule
+  schema: { /* ... */ },
+})
+```
+
+## Licenses
+
+Common data licenses:
+
+| License | Description |
+|---------|-------------|
+| `CC0` | Public domain |
+| `CC-BY-4.0` | Attribution |
+| `CC-BY-SA-4.0` | Attribution ShareAlike |
+| `MIT` | MIT License |
+| `Apache-2.0` | Apache License |
+| `proprietary` | Proprietary data |
+
+## Update Frequency
+
+| Frequency | Description |
+|-----------|-------------|
+| `realtime` | Continuous updates |
+| `hourly` | Every hour |
+| `daily` | Every day |
+| `weekly` | Every week |
+| `monthly` | Every month |
+| `quarterly` | Every quarter |
+| `yearly` | Once a year |
+| `static` | No updates |
+
+## Complete Example
+
+```typescript
+import { Dataset } from 'digital-products'
+
+const stockDataset = Dataset({
+  id: 'stock-prices',
+  name: 'Historical Stock Prices',
+  description: 'Daily stock prices for S&P 500 companies from 2000 to present',
+  version: '2024.12',
+  format: 'parquet',
+  source: 's3://financial-data/stocks.parquet',
+
+  schema: {
+    symbol: 'Stock ticker symbol',
+    date: 'Trading date (date)',
+    open: 'Opening price (number)',
+    high: 'Daily high (number)',
+    low: 'Daily low (number)',
+    close: 'Closing price (number)',
+    adjustedClose: 'Adjusted close (number)',
+    volume: 'Trading volume (number)',
+    dividends: 'Dividends paid (number)',
+    splits: 'Stock splits (number)',
+  },
+
+  size: 5000000,
+  license: 'CC-BY-4.0',
+  updateFrequency: 'daily',
+})
+```
+
+## E-commerce Dataset
+
+```typescript
+import { Dataset } from 'digital-products'
+
+const productsDataset = Dataset({
+  id: 'product-catalog',
+  name: 'Product Catalog',
+  description: 'Complete product catalog with pricing and inventory',
+  version: '1.0.0',
+  format: 'json',
+  source: './data/products.json',
+
+  schema: {
+    id: 'Product ID',
+    sku: 'Stock keeping unit',
+    name: 'Product name',
+    description: 'Product description',
+    category: 'Category path',
+    brand: 'Brand name',
+    price: 'Current price (number)',
+    salePrice: 'Sale price (number)',
+    currency: 'Price currency',
+    inStock: 'In stock (boolean)',
+    quantity: 'Available quantity (number)',
+    images: ['Array of image URLs'],
+    attributes: {
+      color: 'Product color',
+      size: 'Product size',
+      weight: 'Weight in kg (number)',
+    },
+    createdAt: 'Created date (date)',
+    updatedAt: 'Updated date (date)',
+  },
+
+  size: 50000,
+  license: 'proprietary',
+  updateFrequency: 'hourly',
+})
+```
+
+## ML Training Dataset
+
+```typescript
+import { Dataset } from 'digital-products'
+
+const sentimentDataset = Dataset({
+  id: 'sentiment-reviews',
+  name: 'Product Review Sentiment',
+  description: 'Labeled product reviews for sentiment analysis training',
+  version: '3.0.0',
+  format: 'csv',
+  source: 's3://ml-datasets/sentiment-reviews.csv',
+
+  schema: {
+    id: 'Review ID',
+    text: 'Review text',
+    rating: 'Star rating 1-5 (number)',
+    sentiment: 'positive | neutral | negative',
+    category: 'Product category',
+    verified: 'Verified purchase (boolean)',
+    helpfulVotes: 'Helpful vote count (number)',
+    date: 'Review date (date)',
+  },
+
+  size: 2500000,
+  license: 'CC-BY-4.0',
+  updateFrequency: 'monthly',
+})
+```
+
+## Type Definition
+
+```typescript
+interface DatasetDefinition {
+  id: string
+  name: string
+  description?: string
+  version?: string
+  format?: 'json' | 'csv' | 'parquet' | 'arrow' | 'avro'
+  schema?: SimpleSchema
+  source?: string
+  size?: number
+  license?: string
+  updateFrequency?: 'realtime' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'static'
+  metadata?: Record<string, unknown>
+}
+```

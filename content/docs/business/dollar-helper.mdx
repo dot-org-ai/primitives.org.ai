@@ -1,0 +1,253 @@
+---
+title: $ Helper
+description: Convenient business calculations
+---
+
+# $ Helper
+
+The `$` helper provides convenient methods for common business calculations and context management.
+
+## Basic Usage
+
+```typescript
+import { $ } from 'business-as-code'
+
+// Currency formatting
+$.format(1234.56)        // "$1,234.56"
+$.format(1234.56, 'EUR') // "€1,234.56"
+
+// Percentages
+$.percent(25, 100)       // 25
+
+// Growth
+$.growth(120, 100)       // 20 (20% growth)
+
+// Margins
+$.margin(100, 60)        // 40 (40% margin)
+```
+
+## Available Methods
+
+### format(amount, currency?)
+
+Format a number as currency:
+
+```typescript
+$.format(1234.56)        // "$1,234.56"
+$.format(1234.56, 'EUR') // "€1,234.56"
+$.format(1234.56, 'GBP') // "£1,234.56"
+$.format(1234.56, 'JPY') // "¥1,235" (no decimals)
+```
+
+### percent(value, total)
+
+Calculate percentage:
+
+```typescript
+$.percent(25, 100)  // 25
+$.percent(3, 12)    // 25
+$.percent(0, 100)   // 0
+```
+
+### growth(current, previous)
+
+Calculate growth rate:
+
+```typescript
+$.growth(120, 100)  // 20 (20% growth)
+$.growth(80, 100)   // -20 (-20% decline)
+$.growth(100, 100)  // 0 (no change)
+```
+
+### margin(revenue, cost)
+
+Calculate profit margin:
+
+```typescript
+$.margin(100, 60)   // 40 (40% margin)
+$.margin(100, 80)   // 20 (20% margin)
+$.margin(100, 100)  // 0 (no margin)
+```
+
+### roi(gain, cost)
+
+Calculate return on investment:
+
+```typescript
+$.roi(150, 100)     // 50 (50% ROI)
+$.roi(200, 100)     // 100 (100% ROI)
+$.roi(80, 100)      // -20 (-20% ROI)
+```
+
+### ltv(averageValue, frequency, lifetime)
+
+Calculate customer lifetime value:
+
+```typescript
+// $100 average order, 12 orders/year, 2 year lifetime
+$.ltv(100, 12, 2)   // 2400
+
+// $50/month subscription, 24 month average lifetime
+$.ltv(50, 12, 2)    // 1200
+```
+
+### cac(marketingSpend, newCustomers)
+
+Calculate customer acquisition cost:
+
+```typescript
+$.cac(10000, 100)   // 100 ($100 CAC)
+$.cac(50000, 500)   // 100 ($100 CAC)
+```
+
+### burnRate(cashStart, cashEnd, months)
+
+Calculate monthly burn rate:
+
+```typescript
+// Started with $100k, ended with $70k after 3 months
+$.burnRate(100000, 70000, 3)  // 10000 ($10k/month)
+```
+
+### runway(cash, burnRate)
+
+Calculate runway in months:
+
+```typescript
+$.runway(100000, 10000)  // 10 (10 months runway)
+$.runway(500000, 25000)  // 20 (20 months runway)
+```
+
+## Context Management
+
+The `$` helper maintains a business context that can be shared across your application.
+
+### Accessing Context
+
+```typescript
+// Access the current context
+console.log($.context)
+// { business: {...}, goals: [...], kpis: [...], ... }
+```
+
+### Logging Business Events
+
+```typescript
+// Log a business event
+$.log('goal-completed', { goalName: 'Launch MVP' })
+$.log('kpi-updated', { kpi: 'MRR', value: 100000 })
+```
+
+## Context Functions
+
+For more control over context, use the dedicated functions:
+
+```typescript
+import { updateContext, getContext, resetContext } from 'business-as-code'
+
+// Set context
+updateContext({
+  business: company,
+  goals: goals,
+  kpis: kpiList,
+  financials: metrics,
+})
+
+// Get current context
+const ctx = getContext()
+console.log(ctx.business?.name)
+
+// Reset context
+resetContext()
+```
+
+## Creating Custom Operations
+
+Create a customized operations helper:
+
+```typescript
+import { createBusinessOperations } from 'business-as-code'
+
+const ops = createBusinessOperations({
+  currency: 'EUR',
+  locale: 'de-DE',
+})
+
+ops.format(1234.56)  // "1.234,56 €"
+```
+
+## Type Definition
+
+```typescript
+interface BusinessOperations {
+  format: (amount: number, currency?: Currency) => string
+  percent: (value: number, total: number) => number
+  growth: (current: number, previous: number) => number
+  margin: (revenue: number, cost: number) => number
+  roi: (gain: number, cost: number) => number
+  ltv: (averageValue: number, frequency: number, lifetime: number) => number
+  cac: (marketingSpend: number, newCustomers: number) => number
+  burnRate: (cashStart: number, cashEnd: number, months: number) => number
+  runway: (cash: number, burnRate: number) => number
+  context: BusinessContext
+  log: (event: string, data?: unknown) => void
+}
+
+interface BusinessContext {
+  business?: BusinessDefinition
+  goals?: GoalDefinition[]
+  okrs?: OKRDefinition[]
+  kpis?: KPIDefinition[]
+  financials?: FinancialMetrics
+  [key: string]: unknown
+}
+```
+
+## Examples
+
+### Dashboard Metrics
+
+```typescript
+import { $, kpis } from 'business-as-code'
+
+const metrics = kpis([
+  { name: 'MRR', current: 85000, target: 100000 },
+  { name: 'Customers', current: 500, target: 600 },
+])
+
+// Display formatted metrics
+console.log(`MRR: ${$.format(metrics[0].current!)}`)
+console.log(`Growth: ${$.growth(metrics[0].current!, 75000)}%`)
+console.log(`Achievement: ${$.percent(metrics[0].current!, metrics[0].target!)}%`)
+```
+
+### Financial Analysis
+
+```typescript
+import { $ } from 'business-as-code'
+
+const revenue = 1000000
+const cogs = 300000
+const marketing = 100000
+const newCustomers = 500
+
+console.log(`Revenue: ${$.format(revenue)}`)
+console.log(`Gross Margin: ${$.margin(revenue, cogs)}%`)
+console.log(`CAC: ${$.format($.cac(marketing, newCustomers))}`)
+```
+
+### Startup Metrics
+
+```typescript
+import { $ } from 'business-as-code'
+
+const cashStart = 1000000
+const cashNow = 700000
+const monthsElapsed = 6
+
+const burn = $.burnRate(cashStart, cashNow, monthsElapsed)
+const months = $.runway(cashNow, burn)
+
+console.log(`Burn Rate: ${$.format(burn)}/month`)
+console.log(`Runway: ${months} months`)
+```

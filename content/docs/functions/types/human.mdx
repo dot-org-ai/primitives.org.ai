@@ -1,0 +1,65 @@
+---
+title: Human Functions
+description: Functions requiring human input or approval
+---
+
+# Human Functions
+
+Functions that pause for human input, approval, or review.
+
+## Functions
+
+| Function | Output | Example |
+|----------|--------|---------|
+| `ask` | string | `ask\`should we proceed?\`` |
+| `approve` | boolean | `approve\`${expense} for $${amount}\`` |
+| `review` | Review | `review\`${document}\`` |
+
+## Characteristics
+
+- **Blocking** - Waits for human response
+- **High-stakes** - Used for important decisions
+- **Auditable** - Records human decisions
+
+## Auto-Detection
+
+Human functions are inferred from context:
+
+```typescript
+// Small amount → GenerativeFunction (automated)
+await ai.processRefund({ order, amount: 12.99, reason })
+
+// Large amount → HumanFunction (needs approval!)
+await ai.processRefund({ order, amount: 50000, reason })
+
+// "approve" keyword → always HumanFunction
+await ai.approveAdvertisingBudget({ campaign, amount })
+```
+
+## Examples
+
+```typescript
+import { ask, approve } from 'ai-functions'
+
+// Simple question
+const decision = await ask`should we proceed with ${plan}?`
+
+// Approval workflow
+const approved = await approve`
+  ${expense.description}
+  Amount: $${expense.amount}
+  Requester: ${expense.requester}
+`
+
+if (approved) {
+  await processExpense(expense)
+}
+```
+
+## Integration
+
+Human functions integrate with:
+- Slack / Teams notifications
+- Email approval flows
+- Custom approval UIs
+- Audit logging systems

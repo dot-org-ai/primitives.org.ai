@@ -1,0 +1,140 @@
+---
+title: Services
+description: Define professional services
+---
+
+# Services
+
+The `Service()` function defines professional services with delivery times, SLAs, and pricing.
+
+## Basic Usage
+
+```typescript
+import { Service } from 'business-as-code'
+
+const service = Service({
+  name: 'Widget Consulting',
+  description: 'Expert widget implementation and optimization',
+  category: 'Consulting',
+  targetSegment: 'Enterprise',
+  valueProposition: 'Get expert help implementing widgets in 2 weeks',
+  pricingModel: 'fixed',
+  price: 5000,
+  currency: 'USD',
+  deliveryTime: '2 weeks',
+})
+```
+
+## Pricing Models
+
+| Model | Description |
+|-------|-------------|
+| `hourly` | Billed by the hour |
+| `fixed` | Fixed project price |
+| `retainer` | Monthly retainer fee |
+| `value-based` | Priced on delivered value |
+
+## Service Level Agreements
+
+Define SLAs for quality guarantees:
+
+```typescript
+const service = Service({
+  name: 'Premium Support',
+  pricingModel: 'retainer',
+  price: 10000,
+  sla: {
+    uptime: 99.9,
+    responseTime: '< 1 hour',
+    supportHours: '24/7',
+    penalties: '10% refund per hour of downtime',
+  },
+})
+```
+
+## Helper Functions
+
+### Price Calculations
+
+```typescript
+import {
+  calculateHourlyPrice,
+  calculateMonthlyRetainer,
+  calculateValueBasedPrice,
+} from 'business-as-code'
+
+// Calculate hourly rate from fixed price
+const hourlyRate = calculateHourlyPrice(service, 40)
+// 125 (5000 / 40 hours)
+
+// Calculate monthly retainer
+const monthly = calculateMonthlyRetainer(service, 10)
+// 1000 (10 hours * 100/hour)
+
+// Calculate value-based price
+const valuePrice = calculateValueBasedPrice({
+  expectedValue: 100000,
+  sharePercentage: 10,
+})
+// 10000
+```
+
+### Delivery Estimation
+
+```typescript
+import { parseDeliveryTimeToDays, estimateCompletionDate } from 'business-as-code'
+
+// Parse delivery time to days
+const days = parseDeliveryTimeToDays(service)
+// 14 (2 weeks)
+
+// Estimate completion date
+const completion = estimateCompletionDate(service)
+// Date object 2 weeks from now
+```
+
+### SLA Validation
+
+```typescript
+import { checkSLAUptime } from 'business-as-code'
+
+// Check if uptime meets SLA
+const meetsUptime = checkSLAUptime(service, 99.95)
+// true (99.95 >= 99.9)
+```
+
+## Validation
+
+```typescript
+import { validateService } from 'business-as-code'
+
+const errors = validateService(service)
+if (errors.length > 0) {
+  console.error('Invalid service:', errors)
+}
+```
+
+## Type Definition
+
+```typescript
+interface ServiceDefinition {
+  name: string
+  description?: string
+  category?: string
+  targetSegment?: string
+  valueProposition?: string
+  pricingModel?: 'hourly' | 'fixed' | 'retainer' | 'value-based'
+  price?: number
+  currency?: Currency
+  deliveryTime?: string
+  sla?: ServiceLevelAgreement
+  metadata?: Record<string, unknown>
+}
+
+interface ServiceLevelAgreement {
+  uptime?: number
+  responseTime?: string
+  supportHours?: string
+  penalties?: string
+}
+```

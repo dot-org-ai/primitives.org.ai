@@ -1,0 +1,319 @@
+---
+title: Metrics
+description: Track service performance
+---
+
+# Metrics
+
+Track service health and performance with KPIs and OKRs.
+
+## KPIs
+
+Define Key Performance Indicators for your service:
+
+```typescript
+import { Service, KPI } from 'services-as-software'
+
+const service = Service({
+  name: 'translation-service',
+  kpis: [
+    {
+      id: 'daily-requests',
+      name: 'Daily Requests',
+      calculate: async () => {
+        return await db.requests.countToday()
+      },
+      target: 10000,
+    },
+    {
+      id: 'avg-response-time',
+      name: 'Average Response Time',
+      calculate: async () => {
+        return await metrics.getAvgResponseTime()
+      },
+      target: 500,  // 500ms
+      unit: 'ms',
+    },
+    {
+      id: 'error-rate',
+      name: 'Error Rate',
+      calculate: async () => {
+        const errors = await metrics.getErrorCount()
+        const total = await metrics.getTotalRequests()
+        return (errors / total) * 100
+      },
+      target: 1,  // Less than 1%
+      unit: '%',
+    },
+  ],
+})
+```
+
+### KPI Helper
+
+```typescript
+import { KPI } from 'services-as-software'
+
+const requestsKPI = KPI({
+  id: 'requests',
+  name: 'Total Requests',
+  calculate: async () => db.requests.count(),
+  target: 100000,
+  period: 'monthly',
+})
+```
+
+### KPI Properties
+
+| Property | Description |
+|----------|-------------|
+| `id` | Unique identifier |
+| `name` | Display name |
+| `calculate` | Async function to get current value |
+| `target` | Target value |
+| `unit` | Unit of measurement |
+| `period` | Measurement period |
+
+## OKRs
+
+Define Objectives and Key Results:
+
+```typescript
+import { Service, OKR } from 'services-as-software'
+
+const service = Service({
+  name: 'ai-service',
+  okrs: [
+    {
+      objective: 'Improve Service Reliability',
+      keyResults: [
+        {
+          description: 'Achieve 99.9% uptime',
+          metric: 'uptime',
+          target: 99.9,
+          current: 99.5,
+        },
+        {
+          description: 'Reduce p99 latency to under 200ms',
+          metric: 'p99_latency',
+          target: 200,
+          current: 350,
+        },
+        {
+          description: 'Reduce error rate to under 0.1%',
+          metric: 'error_rate',
+          target: 0.1,
+          current: 0.5,
+        },
+      ],
+      period: 'Q1 2024',
+    },
+  ],
+})
+```
+
+### OKR Helper
+
+```typescript
+import { OKR } from 'services-as-software'
+
+const reliabilityOKR = OKR({
+  objective: 'World-class reliability',
+  period: 'Q1 2024',
+  owner: 'Engineering',
+  keyResults: [
+    {
+      description: 'Achieve 99.99% uptime',
+      target: 99.99,
+      current: 99.9,
+    },
+  ],
+})
+```
+
+## Accessing Metrics
+
+### kpis()
+
+Get current KPI values:
+
+```typescript
+import { kpis } from 'services-as-software'
+
+const metrics = await kpis(service)
+// [
+//   { id: 'daily-requests', name: 'Daily Requests', value: 8500, target: 10000, achievement: 85 },
+//   { id: 'avg-response-time', name: 'Average Response Time', value: 450, target: 500, achievement: 110 },
+// ]
+```
+
+### okrs()
+
+Get current OKR progress:
+
+```typescript
+import { okrs } from 'services-as-software'
+
+const progress = await okrs(service)
+// [
+//   {
+//     objective: 'Improve Service Reliability',
+//     progress: 75,
+//     keyResults: [
+//       { description: 'Achieve 99.9% uptime', progress: 99.5 },
+//       ...
+//     ]
+//   }
+// ]
+```
+
+### entitlements()
+
+Check user entitlements:
+
+```typescript
+import { entitlements } from 'services-as-software'
+
+const userEntitlements = await entitlements(userId)
+// ['api-access', 'premium-features', 'priority-support']
+```
+
+## Common KPIs
+
+### Response Time
+
+```typescript
+KPI({
+  id: 'response-time',
+  name: 'Average Response Time',
+  calculate: async () => {
+    const times = await metrics.getResponseTimes()
+    return times.reduce((a, b) => a + b, 0) / times.length
+  },
+  target: 100,
+  unit: 'ms',
+})
+```
+
+### Throughput
+
+```typescript
+KPI({
+  id: 'throughput',
+  name: 'Requests per Second',
+  calculate: async () => {
+    return await metrics.getRPS()
+  },
+  target: 1000,
+  unit: 'rps',
+})
+```
+
+### Error Rate
+
+```typescript
+KPI({
+  id: 'error-rate',
+  name: 'Error Rate',
+  calculate: async () => {
+    const errors = await metrics.getErrors()
+    const total = await metrics.getTotal()
+    return (errors / total) * 100
+  },
+  target: 0.1,
+  unit: '%',
+})
+```
+
+### Availability
+
+```typescript
+KPI({
+  id: 'availability',
+  name: 'Service Availability',
+  calculate: async () => {
+    const uptime = await health.getUptime()
+    const total = await health.getTotalTime()
+    return (uptime / total) * 100
+  },
+  target: 99.9,
+  unit: '%',
+})
+```
+
+## Dashboards
+
+Build dashboards from metrics:
+
+```typescript
+import { kpis } from 'services-as-software'
+
+async function getDashboardData() {
+  const metrics = await kpis(service)
+
+  return {
+    summary: {
+      healthy: metrics.filter(k => k.achievement >= 100).length,
+      atRisk: metrics.filter(k => k.achievement < 100 && k.achievement >= 80).length,
+      critical: metrics.filter(k => k.achievement < 80).length,
+    },
+    metrics: metrics.map(k => ({
+      name: k.name,
+      value: k.value,
+      target: k.target,
+      achievement: k.achievement,
+      status: k.achievement >= 100 ? 'healthy' : k.achievement >= 80 ? 'warning' : 'critical',
+    })),
+  }
+}
+```
+
+## Alerts
+
+Set up alerts based on metrics:
+
+```typescript
+import { kpis, notify } from 'services-as-software'
+
+async function checkMetrics() {
+  const metrics = await kpis(service)
+
+  for (const metric of metrics) {
+    if (metric.achievement < 80) {
+      await notify({
+        channel: 'slack',
+        message: `Alert: ${metric.name} is at ${metric.achievement}% of target`,
+        webhook: process.env.SLACK_ALERTS_WEBHOOK,
+      })
+    }
+  }
+}
+
+// Check every 5 minutes
+every('5m', checkMetrics)
+```
+
+## Type Definition
+
+```typescript
+interface KPIDefinition {
+  id: string
+  name: string
+  calculate: () => Promise<number>
+  target: number
+  unit?: string
+  period?: 'daily' | 'weekly' | 'monthly' | 'quarterly'
+}
+
+interface OKRDefinition {
+  objective: string
+  keyResults: {
+    description: string
+    metric?: string
+    target: number
+    current?: number
+  }[]
+  period?: string
+  owner?: string
+}
+```
