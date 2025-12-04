@@ -1,5 +1,0 @@
-{
-  "title": "Things",
-  "description": "Entities with typed schemas",
-  "pages": ["index", "create", "read", "update", "delete", "search"]
-}

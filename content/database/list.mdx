@@ -1,0 +1,108 @@
+---
+title: list
+description: List all entities of a type
+---
+
+Retrieve all entities of a type with optional filtering and pagination.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', published: 'boolean' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.list()
+db.Type.list(options)
+```
+
+## Examples
+
+```typescript
+// List all
+const posts = await db.Post.list()
+
+// With pagination
+const posts = await db.Post.list({
+  limit: 10,
+  offset: 20,
+})
+
+// With sorting
+const recent = await db.Post.list({
+  orderBy: 'createdAt',
+  order: 'desc',
+})
+
+// With filtering
+const published = await db.Post.list({
+  where: { published: true },
+})
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `where` | object | Filter criteria |
+| `orderBy` | string | Field to sort by |
+| `order` | `'asc'` \| `'desc'` | Sort direction |
+| `limit` | number | Max results |
+| `offset` | number | Skip results |
+| `include` | string[] | Relationships to eager load |
+
+## Filtering
+
+```typescript
+const posts = await db.Post.list({
+  where: {
+    published: true,
+    createdAt: { $gte: lastWeek },
+  },
+})
+```
+
+## Pagination
+
+```typescript
+// First page
+const page1 = await db.Post.list({ limit: 10, offset: 0 })
+
+// Second page
+const page2 = await db.Post.list({ limit: 10, offset: 10 })
+```
+
+## Sorting
+
+```typescript
+// Newest first
+const recent = await db.Post.list({
+  orderBy: 'createdAt',
+  order: 'desc',
+})
+
+// Alphabetical
+const alphabetical = await db.Post.list({
+  orderBy: 'title',
+  order: 'asc',
+})
+```
+
+## Return Type
+
+Returns an array of entities:
+
+```typescript
+const posts = await db.Post.list()
+// Post[]
+
+posts.forEach(post => {
+  console.log(post.$id, post.title)
+})
+```

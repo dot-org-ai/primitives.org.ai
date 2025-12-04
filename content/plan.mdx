@@ -1,0 +1,151 @@
+---
+title: Plan
+description: Strategies and approaches to achieve goals
+icon: Map
+---
+
+# Plan
+
+Plans define the strategy and approach to achieve [Goals](/goal). Plans break down into [Projects](/project) with concrete deliverables.
+
+## Overview
+
+A **Plan** bridges the gap between aspirational goals and executable work. It outlines the approach, resources, milestones, and success criteria.
+
+```typescript
+import { Plan } from 'business-as-code'
+
+const plan = Plan('Customer Retention Initiative', {
+  goal: retentionGoal,
+
+  approach: `
+    Focus on early warning detection and proactive engagement.
+    Invest in customer success tooling and expand the CS team.
+  `,
+
+  phases: [
+    { name: 'Discovery', duration: '2 weeks' },
+    { name: 'Build', duration: '6 weeks' },
+    { name: 'Rollout', duration: '4 weeks' },
+  ],
+})
+```
+
+## Creating Plans
+
+```typescript
+import { Plan } from 'business-as-code'
+
+const plan = Plan('Mobile App Launch', {
+  // Link to goal
+  goal: Goal.get('launch-mobile-app'),
+
+  // High-level approach
+  approach: 'Build native apps with shared business logic',
+
+  // Key decisions
+  decisions: [
+    'Use React Native for cross-platform development',
+    'Launch iOS first, Android 2 weeks later',
+    'Soft launch to beta users before public release',
+  ],
+
+  // Resource requirements
+  resources: {
+    team: ['2 mobile devs', '1 designer', '0.5 PM'],
+    budget: 150000,
+    duration: '4 months',
+  },
+
+  // Risk mitigation
+  risks: [
+    { risk: 'App Store rejection', mitigation: 'Early TestFlight reviews' },
+    { risk: 'Scope creep', mitigation: 'Strict MVP definition' },
+  ],
+})
+```
+
+## Plan Phases
+
+```typescript
+const plan = Plan('Platform Migration', {
+  phases: [
+    {
+      name: 'Assessment',
+      duration: '2 weeks',
+      deliverables: ['Current state analysis', 'Migration roadmap'],
+    },
+    {
+      name: 'Pilot',
+      duration: '4 weeks',
+      deliverables: ['Migrate 1 service', 'Validate approach'],
+    },
+    {
+      name: 'Migration',
+      duration: '8 weeks',
+      deliverables: ['All services migrated', 'Data validated'],
+    },
+    {
+      name: 'Cutover',
+      duration: '1 week',
+      deliverables: ['Production traffic switched', 'Old system decommissioned'],
+    },
+  ],
+})
+
+// Track phase progress
+plan.currentPhase  // 'Pilot'
+plan.phaseProgress // 0.6 (60% through current phase)
+```
+
+## Plans to Projects
+
+Plans spawn concrete projects:
+
+```typescript
+import { Project } from 'business-as-code'
+
+// Generate projects from plan
+const projects = await plan.createProjects()
+
+// Or manually
+const project = Project.for(plan, {
+  name: 'Build Churn Prediction Model',
+  phase: 'Build',
+  deliverables: ['ML model', 'Integration API', 'Dashboard'],
+})
+```
+
+## AI-Assisted Planning
+
+```typescript
+import { AI } from 'ai-functions'
+
+// Generate plan from goal
+const plan = await AI.plan(goal, {
+  constraints: ['Budget under $100k', '3 month timeline'],
+  context: await getCompanyContext(),
+})
+
+// Critique and improve plan
+const feedback = await AI.review(plan, {
+  criteria: ['feasibility', 'completeness', 'risk coverage'],
+})
+```
+
+## Plan States
+
+```typescript
+plan.status  // 'draft' | 'approved' | 'in_progress' | 'completed' | 'cancelled'
+
+await plan.submit()   // Submit for approval
+await plan.approve()  // Approve and start
+await plan.complete() // Mark as done
+```
+
+## See Also
+
+- [Goal](/goal) - What plans aim to achieve
+- [Project](/project) - Concrete initiatives from plans
+- [Task](/task) - Work items within projects
+- [Workflow](/workflow) - Automated execution

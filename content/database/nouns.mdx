@@ -1,0 +1,121 @@
+---
+title: nouns
+description: Entity type definitions
+---
+
+Nouns are semantic type definitions that describe entities with their properties, relationships, actions, and events.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db, nouns } = DB({
+  Post: { title: 'string', author: 'Author.posts' },
+  Author: { name: 'string' },
+})
+```
+
+## What is a Noun?
+
+A Noun represents an entity type with all its metadata:
+
+```typescript
+import { defineNoun } from 'ai-database'
+
+const Post = defineNoun({
+  singular: 'post',
+  plural: 'posts',
+  description: 'A blog post or article',
+
+  properties: {
+    title: { type: 'string', description: 'The post title' },
+    content: { type: 'markdown', description: 'The post body' },
+  },
+
+  relationships: {
+    author: { type: 'Author', backref: 'posts' },
+  },
+
+  actions: ['create', 'update', 'delete', 'publish'],
+  events: ['created', 'updated', 'deleted', 'published'],
+})
+```
+
+## Operations
+
+### get
+
+Get a noun definition:
+
+```typescript
+const postNoun = await nouns.get('Post')
+postNoun.singular  // 'post'
+postNoun.plural    // 'posts'
+```
+
+### list
+
+List all nouns:
+
+```typescript
+const allNouns = await nouns.list()
+// [{ name: 'Post', singular: 'post', ... }, ...]
+```
+
+### define
+
+Define a new noun:
+
+```typescript
+await nouns.define({
+  name: 'Comment',
+  singular: 'comment',
+  plural: 'comments',
+  properties: {
+    content: { type: 'string' },
+    post: { type: 'Post', backref: 'comments' },
+  },
+})
+```
+
+## Auto-Inference
+
+When you define a schema, nouns are auto-created:
+
+```typescript
+const { db, nouns } = DB({
+  BlogPost: { title: 'string' },
+})
+
+const noun = await nouns.get('BlogPost')
+noun.singular   // 'blog post'
+noun.plural     // 'blog posts'
+noun.slug       // 'blog-post'
+noun.slugPlural // 'blog-posts'
+```
+
+## Why Nouns?
+
+| Benefit | Description |
+|---------|-------------|
+| **Self-documenting** | Schema describes itself |
+| **AI Generation** | Descriptions guide content generation |
+| **Introspection** | Query types at runtime |
+| **Consistency** | Single source of truth |
+
+## Helpers
+
+```typescript
+import { pluralize, singularize, inferNoun } from 'ai-database'
+
+pluralize('post')      // 'posts'
+pluralize('category')  // 'categories'
+pluralize('person')    // 'people'
+
+singularize('posts')   // 'post'
+singularize('people')  // 'person'
+
+inferNoun('BlogPost')
+// { singular: 'blog post', plural: 'blog posts', ... }
+```

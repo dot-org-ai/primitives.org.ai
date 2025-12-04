@@ -1,0 +1,156 @@
+---
+title: db
+description: Database instance for CRUD operations
+---
+
+The main database instance for creating, reading, updating, deleting, and searching entities.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', content: 'markdown' },
+})
+```
+
+## Operations
+
+### create
+
+Create new entities:
+
+```typescript
+// Auto-generated ID
+const post = await db.Post.create({
+  title: 'Hello World',
+  content: 'My first post...',
+})
+
+// Custom ID
+const post = await db.Post.create('hello-world', {
+  title: 'Hello World',
+})
+```
+
+### get
+
+Get entity by ID:
+
+```typescript
+const post = await db.Post.get('hello-world')
+```
+
+### list
+
+List all entities of a type:
+
+```typescript
+const posts = await db.Post.list()
+
+// With options
+const recent = await db.Post.list({
+  where: { published: true },
+  orderBy: 'createdAt',
+  order: 'desc',
+  limit: 10,
+})
+```
+
+### find
+
+Find entities matching criteria:
+
+```typescript
+const published = await db.Post.find({
+  status: 'published',
+})
+
+// With operators
+const recent = await db.Post.find({
+  createdAt: { $gte: lastWeek },
+  tags: { $contains: 'ai' },
+})
+```
+
+### update
+
+Update existing entities:
+
+```typescript
+await db.Post.update('hello-world', {
+  content: 'Updated content...',
+})
+```
+
+### delete
+
+Delete entities:
+
+```typescript
+await db.Post.delete('hello-world')
+```
+
+### upsert
+
+Create or update:
+
+```typescript
+await db.Post.upsert('hello-world', {
+  title: 'Hello World',
+  content: 'Creates if new, updates if exists',
+})
+```
+
+### search
+
+Semantic search across entities:
+
+```typescript
+const results = await db.Post.search('AI tutorials for beginners')
+
+// With filters
+const results = await db.Post.search({
+  query: 'AI tutorials',
+  where: { published: true },
+  limit: 10,
+})
+```
+
+### generate
+
+AI-powered entity creation:
+
+```typescript
+const post = await db.generate({
+  type: 'Post',
+  data: { topic: 'TypeScript best practices' },
+})
+
+// Batch generation
+await db.generate({
+  type: 'Post',
+  count: 10,
+  data: { topic: 'AI trends' },
+})
+```
+
+## Entity Structure
+
+Every entity has these built-in fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `$id` | `string` | Unique identifier |
+| `$type` | `string` | Type name |
+| `createdAt` | `Date` | Creation timestamp |
+| `updatedAt` | `Date` | Last update timestamp |
+
+## Natural Language
+
+Query with natural language:
+
+```typescript
+const results = await db`what posts about AI are trending this week?`
+```

@@ -1,5 +1,0 @@
-{
-  "title": "Relationships",
-  "description": "Bi-directional edges between entities",
-  "pages": ["index", "defining", "querying"]
-}

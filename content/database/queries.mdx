@@ -1,11 +1,27 @@
 ---
-title: Query Styles
-description: SQL, Document, and Graph query patterns
+title: queries
+description: SQL, Document, and Graph query styles
 ---
 
-# Query Styles
-
 ai-database unifies three query paradigms in a single API.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', published: 'boolean' },
+})
+```
+
+## Query Styles
+
+| Style | Best For | Example |
+|-------|----------|---------|
+| SQL | Relational data, comparisons | `price: { $gt: 100 }` |
+| Document | Nested data, arrays | `'profile.city': 'SF'` |
+| Graph | Relationships, traversal | `$rel: { type: 'follows' }` |
 
 ## Basic Queries
 
@@ -13,152 +29,63 @@ ai-database unifies three query paradigms in a single API.
 // List all
 const posts = await db.Post.list()
 
-// With pagination
-const posts = await db.Post.list({
-  limit: 10,
-  offset: 20,
+// Find by criteria
+const published = await db.Post.find({
+  status: 'published',
+})
+
+// With options
+const recent = await db.Post.list({
+  where: { published: true },
   orderBy: 'createdAt',
   order: 'desc',
-})
-
-// Find by criteria
-const admins = await db.User.find({ role: 'admin' })
-```
-
-## SQL-Style (Relational)
-
-Use comparison and logical operators:
-
-```typescript
-// Comparison operators
-await db.Product.find({
-  where: {
-    price: { $gt: 100, $lt: 500 },
-    stock: { $gte: 1 },
-    category: { $in: ['electronics', 'gadgets'] },
-  },
-})
-
-// Logical operators
-await db.User.find({
-  where: {
-    $or: [
-      { role: 'admin' },
-      { role: 'moderator' },
-    ],
-    $and: [
-      { active: true },
-      { verified: true },
-    ],
-  },
-})
-
-// Sorting and pagination
-await db.Post.find({
-  where: { published: true },
-  orderBy: ['createdAt', 'title'],
-  order: 'desc',
-  limit: 20,
-  offset: 40,
+  limit: 10,
 })
 ```
 
-## Document-Style (MongoDB-like)
+## Operators
 
-Query nested fields and arrays:
+| Category | Operators |
+|----------|-----------|
+| Comparison | `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte` |
+| Set | `$in`, `$nin` |
+| Array | `$contains`, `$containsAll`, `$size` |
+| String | `$startsWith`, `$endsWith`, `$regex` |
+| Existence | `$exists`, `$type` |
+| Logical | `$and`, `$or`, `$not` |
+| Graph | `$rel`, `$relCount` |
+
+## SQL-Style
 
 ```typescript
-// Nested field queries
-await db.User.find({
-  where: {
-    'profile.location.city': 'San Francisco',
-    'settings.notifications.email': true,
-  },
-})
-
-// Array queries
-await db.Post.find({
-  where: {
-    tags: { $contains: 'typescript' },
-    categories: { $containsAll: ['tech', 'tutorial'] },
-    authors: { $size: { $gt: 1 } },
-  },
-})
-
-// Existence and type checks
-await db.Product.find({
-  where: {
-    discount: { $exists: true },
-    metadata: { $type: 'object' },
-  },
-})
-
-// Text matching
-await db.Article.find({
-  where: {
-    title: { $startsWith: 'How to' },
-    content: { $contains: 'TypeScript' },
-    slug: { $regex: '^[a-z0-9-]+$' },
-  },
+const posts = await db.Post.find({
+  publishedAt: { $gte: lastWeek },
+  views: { $gt: 100 },
+  status: { $in: ['published', 'featured'] },
 })
 ```
 
-## Graph-Style (Relationship Traversal)
-
-Query by relationships:
+## Document-Style
 
 ```typescript
-// Find by relationship
-await db.Post.find({
-  where: {
-    $rel: {
-      type: 'authored',
-      from: { type: 'User', where: { role: 'expert' } },
-    },
-  },
+const posts = await db.Post.find({
+  'metadata.wordCount': { $gte: 1000 },
+  tags: { $containsAll: ['ai', 'tutorial'] },
 })
+```
 
-// Multi-hop traversal
-await db.Post.find({
-  where: {
-    $rel: {
-      type: 'authored',
-      from: {
-        type: 'User',
-        where: {
-          $rel: {
-            type: 'follows',
-            to: currentUser.url,
-          },
-        },
-      },
-    },
-  },
-})
-// "Posts by users I follow"
+## Graph-Style
 
-// Relationship with properties
-await db.User.find({
-  where: {
-    $rel: {
-      type: 'member',
-      to: { type: 'Team', where: { name: 'Engineering' } },
-      props: { role: 'lead' },
+```typescript
+const posts = await db.Post.find({
+  $rel: {
+    type: 'authored',
+    from: {
+      type: 'User',
+      where: { verified: true },
     },
   },
 })
-
-// Count relationships
-await db.Post.find({
-  where: {
-    $relCount: {
-      type: 'likes',
-      to: '$self',
-      $gte: 100,
-    },
-  },
-})
-// "Posts with 100+ likes"
 ```
 
 ## Combining Styles
@@ -166,77 +93,46 @@ await db.Post.find({
 Mix all three in a single query:
 
 ```typescript
-await db.Post.find({
-  where: {
-    // Document-style: nested fields
-    'metadata.wordCount': { $gte: 1000 },
-    tags: { $containsAll: ['ai', 'tutorial'] },
+const posts = await db.Post.find({
+  // SQL-style: comparisons
+  publishedAt: { $gte: lastWeek },
 
-    // SQL-style: comparisons
-    publishedAt: { $gte: lastWeek },
+  // Document-style: nested fields
+  'metadata.wordCount': { $gte: 1000 },
+  tags: { $containsAll: ['ai', 'tutorial'] },
 
-    // Graph-style: relationships
-    $rel: {
-      type: 'authored',
-      from: {
-        type: 'User',
-        where: {
-          verified: true,
-          $rel: { type: 'follows', to: currentUser.url },
-        },
-      },
+  // Graph-style: relationships
+  $rel: {
+    type: 'authored',
+    from: {
+      type: 'User',
+      where: { verified: true },
     },
-
-    // Engagement threshold
-    $relCount: { type: 'likes', to: '$self', $gte: 50 },
   },
-  orderBy: 'publishedAt',
-  order: 'desc',
-  limit: 10,
 })
 ```
 
-## Operators Reference
+## Search vs Query
 
-| Operator | Description | Example |
-|----------|-------------|---------|
-| `$eq` | Equal (default) | `{ status: 'active' }` |
-| `$ne` | Not equal | `{ status: { $ne: 'deleted' } }` |
-| `$gt` / `$gte` | Greater than | `{ price: { $gt: 100 } }` |
-| `$lt` / `$lte` | Less than | `{ stock: { $lte: 10 } }` |
-| `$in` / `$nin` | In array | `{ role: { $in: ['admin', 'mod'] } }` |
-| `$contains` | Array contains | `{ tags: { $contains: 'ai' } }` |
-| `$containsAll` | Contains all | `{ tags: { $containsAll: ['a', 'b'] } }` |
-| `$startsWith` | String prefix | `{ name: { $startsWith: 'Dr.' } }` |
-| `$endsWith` | String suffix | `{ email: { $endsWith: '@corp.com' } }` |
-| `$regex` | Regex match | `{ slug: { $regex: '^[a-z]+$' } }` |
-| `$exists` | Field exists | `{ avatar: { $exists: true } }` |
-| `$type` | Type check | `{ data: { $type: 'object' } }` |
-| `$and` / `$or` | Logical | `{ $or: [{ a: 1 }, { b: 2 }] }` |
-| `$not` | Negation | `{ $not: { deleted: true } }` |
-| `$rel` | Relationship | `{ $rel: { type: 'follows', ... } }` |
-| `$relCount` | Count relations | `{ $relCount: { type: 'likes', $gte: 10 } }` |
-
-## Search
-
-Hybrid search combines vector similarity and full-text:
+**Queries** filter by exact criteria:
 
 ```typescript
-// Natural language query
-const results = await db.search('machine learning tutorials for beginners')
-
-// With filters
-const results = await db.search({
-  query: 'productivity software',
-  type: 'Product',
-  limit: 10,
+const drafts = await db.Post.find({
+  status: 'draft',
 })
+```
 
-// Search modes
-const results = await db.search({
-  query: 'error handling patterns',
-  mode: 'hybrid',    // default: vector + full-text
-  // mode: 'vector', // pure semantic similarity
-  // mode: 'text',   // pure BM25 full-text
+**Search** finds by semantic similarity:
+
+```typescript
+const results = await db.Post.search('AI tutorials for beginners')
+```
+
+Combine both:
+
+```typescript
+const results = await db.Post.search({
+  query: 'AI tutorials',
+  where: { published: true },
 })
 ```

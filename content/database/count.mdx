@@ -1,0 +1,84 @@
+---
+title: count
+description: Count entities matching criteria
+---
+
+Count entities of a type, optionally with filters.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', published: 'boolean' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.count()
+db.Type.count(where)
+```
+
+## Examples
+
+```typescript
+// Count all
+const total = await db.Post.count()
+// 42
+
+// Count with filter
+const published = await db.Post.count({
+  published: true,
+})
+// 28
+```
+
+## With Operators
+
+```typescript
+// Count recent posts
+const recent = await db.Post.count({
+  createdAt: { $gte: lastWeek },
+})
+
+// Count by author
+const byAuthor = await db.Post.count({
+  author: authorId,
+})
+```
+
+## Use Cases
+
+```typescript
+// Pagination
+const total = await db.Post.count({ published: true })
+const pages = Math.ceil(total / 10)
+
+// Analytics
+const stats = {
+  total: await db.Post.count(),
+  published: await db.Post.count({ published: true }),
+  draft: await db.Post.count({ published: false }),
+}
+
+// Progress tracking
+const total = await db.Post.count()
+let processed = 0
+
+await db.forEach({ type: 'Post' }, async (post) => {
+  await process(post)
+  processed++
+  console.log(`${processed}/${total}`)
+})
+```
+
+## Return Type
+
+Returns a number:
+
+```typescript
+const count: number = await db.Post.count()
+```

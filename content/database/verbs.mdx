@@ -1,0 +1,111 @@
+---
+title: verbs
+description: Action definitions and conjugation
+---
+
+Verbs describe actions with all their grammatical forms and semantic relationships.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db, verbs } = DB({
+  Post: { title: 'string' },
+})
+```
+
+## What is a Verb?
+
+A Verb maps an action to its conjugations:
+
+```typescript
+import { defineVerb } from 'ai-database'
+
+const publish = defineVerb({
+  action: 'publish',       // base form
+  actor: 'publisher',      // who does it
+  act: 'publishes',        // present tense
+  activity: 'publishing',  // gerund
+  result: 'publication',   // result noun
+  reverse: {
+    at: 'publishedAt',
+    by: 'publishedBy',
+  },
+  inverse: 'unpublish',    // opposite
+})
+```
+
+## Operations
+
+### get
+
+Get a verb definition:
+
+```typescript
+const publishVerb = verbs.get('publish')
+publishVerb.actor     // 'publisher'
+publishVerb.activity  // 'publishing'
+```
+
+### list
+
+List all verbs:
+
+```typescript
+const allVerbs = verbs.list()
+```
+
+### define
+
+Define a custom verb:
+
+```typescript
+verbs.define({
+  action: 'approve',
+  actor: 'approver',
+  act: 'approves',
+  activity: 'approving',
+  result: 'approval',
+})
+```
+
+## Pre-defined Verbs
+
+```typescript
+import { Verbs } from 'ai-database'
+
+Verbs.create   // create, creator, creates, creating, creation
+Verbs.update   // update, updater, updates, updating, update
+Verbs.delete   // delete, deleter, deletes, deleting, deletion
+Verbs.publish  // publish, publisher, publishes, publishing, publication
+Verbs.archive  // archive, archiver, archives, archiving, archive
+```
+
+## Why Verbs?
+
+| Form | Use |
+|------|-----|
+| `action` | Command names, button labels |
+| `actor` | Relationship names (creator, author) |
+| `act` | Present tense descriptions |
+| `activity` | Progress indicators (publishing...) |
+| `result` | Result nouns (creation, publication) |
+| `reverse` | Timestamp/actor fields |
+| `inverse` | Undo operations |
+
+## Auto-Conjugation
+
+```typescript
+import { conjugate } from 'ai-database'
+
+conjugate('publish')
+// => {
+//   action: 'publish',
+//   actor: 'publisher',
+//   act: 'publishes',
+//   activity: 'publishing',
+//   result: 'publication',
+//   reverse: { at: 'publishedAt', by: 'publishedBy' }
+// }
+```

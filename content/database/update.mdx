@@ -1,0 +1,108 @@
+---
+title: update
+description: Update existing entities
+---
+
+Modify existing entities by ID.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', content: 'markdown', published: 'boolean' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.update(id, data)
+db.Type.update(id, data, options)
+```
+
+## Examples
+
+```typescript
+// Update fields
+await db.Post.update('hello-world', {
+  content: 'Updated content...',
+})
+
+// Update multiple fields
+await db.Post.update('hello-world', {
+  title: 'New Title',
+  content: 'New content',
+  published: true,
+})
+```
+
+## Return Value
+
+Returns the updated entity:
+
+```typescript
+const post = await db.Post.update('hello-world', {
+  published: true,
+})
+
+console.log(post.published)   // true
+console.log(post.updatedAt)   // new Date
+```
+
+## Partial Updates
+
+Only specified fields are updated:
+
+```typescript
+// Only updates 'published', leaves other fields unchanged
+await db.Post.update('hello-world', {
+  published: true,
+})
+```
+
+## Events
+
+Update emits a `{Type}.updated` event:
+
+```typescript
+await db.Post.update('hello', { published: true })
+// Emits: Post.updated { url, data, changes, timestamp }
+```
+
+## Artifacts
+
+When content changes, embeddings regenerate:
+
+```typescript
+await db.Post.update('hello', {
+  content: 'New content...',
+})
+// Embedding artifact is regenerated automatically
+```
+
+## Validation
+
+```typescript
+// Wrong type
+await db.Post.update('hello', { title: 123 })
+// Error: Expected string for 'title', got number
+
+// Non-existent entity
+await db.Post.update('missing', { title: 'Test' })
+// Error: Entity not found
+```
+
+## Optimistic Updates
+
+```typescript
+const post = await db.Post.get('hello')
+
+// Check version before update
+await db.Post.update('hello', {
+  content: 'New content',
+}, {
+  ifVersion: post.version,  // fails if changed since read
+})
+```

@@ -1317,6 +1317,21 @@ export type TypedDB<TSchema extends DatabaseSchema> = {
   /** Search across all entities */
   search(query: string, options?: SearchOptions): Promise<unknown[]>
 
+  /** Count entities of a type */
+  count(type: string, where?: Record<string, unknown>): Promise<number>
+
+  /** Iterate over entities with a callback */
+  forEach(
+    options: { type: string; where?: Record<string, unknown>; concurrency?: number },
+    callback: (entity: unknown) => void | Promise<void>
+  ): Promise<void>
+
+  /** Set entity data by ID (creates or replaces) */
+  set(type: string, id: string, data: Record<string, unknown>): Promise<unknown>
+
+  /** Generate entities using AI */
+  generate(options: GenerateOptions): Promise<unknown | { id: string }>
+
   /**
    * Natural language query across all types
    *
@@ -1328,6 +1343,211 @@ export type TypedDB<TSchema extends DatabaseSchema> = {
    * ```
    */
   ask: NLQueryFn
+}
+
+/**
+ * Options for AI-powered entity generation
+ */
+export interface GenerateOptions {
+  type: string
+  count?: number
+  data?: Record<string, unknown>
+  mode?: 'sync' | 'background'
+}
+
+// =============================================================================
+// Events API
+// =============================================================================
+
+/**
+ * Event data structure
+ */
+export interface DBEvent {
+  id: string
+  type: string
+  url?: string
+  data: unknown
+  timestamp: Date
+}
+
+/**
+ * Events API for subscribing to and emitting events
+ */
+export interface EventsAPI {
+  /** Subscribe to events matching a pattern */
+  on(pattern: string, handler: (event: DBEvent) => void | Promise<void>): () => void
+
+  /** Emit a custom event */
+  emit(type: string, data: unknown): Promise<void>
+
+  /** List events with optional filters */
+  list(options?: {
+    type?: string
+    since?: Date
+    until?: Date
+    limit?: number
+  }): Promise<DBEvent[]>
+
+  /** Replay events through a handler */
+  replay(options: {
+    type?: string
+    since?: Date
+    handler: (event: DBEvent) => void | Promise<void>
+  }): Promise<void>
+}
+
+// =============================================================================
+// Actions API
+// =============================================================================
+
+/**
+ * Action data structure for durable execution
+ */
+export interface DBAction {
+  id: string
+  type: string
+  status: 'pending' | 'active' | 'completed' | 'failed'
+  progress?: number
+  total?: number
+  data: unknown
+  result?: unknown
+  error?: string
+  createdAt: Date
+  startedAt?: Date
+  completedAt?: Date
+}
+
+/**
+ * Actions API for durable execution tracking
+ */
+export interface ActionsAPI {
+  /** Create a new action */
+  create(data: { type: string; data: unknown; total?: number }): Promise<DBAction>
+
+  /** Get an action by ID */
+  get(id: string): Promise<DBAction | null>
+
+  /** Update action progress/status */
+  update(
+    id: string,
+    updates: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>>
+  ): Promise<DBAction>
+
+  /** List actions with optional filters */
+  list(options?: {
+    status?: DBAction['status']
+    type?: string
+    limit?: number
+  }): Promise<DBAction[]>
+
+  /** Retry a failed action */
+  retry(id: string): Promise<DBAction>
+
+  /** Cancel a pending/active action */
+  cancel(id: string): Promise<void>
+}
+
+// =============================================================================
+// Artifacts API
+// =============================================================================
+
+/**
+ * Artifact data structure for cached content
+ */
+export interface DBArtifact {
+  url: string
+  type: string
+  sourceHash: string
+  content: unknown
+  metadata?: Record<string, unknown>
+  createdAt: Date
+}
+
+/**
+ * Artifacts API for cached embeddings and computed content
+ */
+export interface ArtifactsAPI {
+  /** Get an artifact by URL and type */
+  get(url: string, type: string): Promise<DBArtifact | null>
+
+  /** Set an artifact */
+  set(
+    url: string,
+    type: string,
+    data: { content: unknown; sourceHash: string; metadata?: Record<string, unknown> }
+  ): Promise<void>
+
+  /** Delete an artifact */
+  delete(url: string, type?: string): Promise<void>
+
+  /** List artifacts for a URL */
+  list(url: string): Promise<DBArtifact[]>
+}
+
+// =============================================================================
+// Nouns API
+// =============================================================================
+
+/**
+ * Nouns API for type introspection
+ */
+export interface NounsAPI {
+  /** Get a noun definition by type name */
+  get(name: string): Promise<Noun | null>
+
+  /** List all noun definitions */
+  list(): Promise<Noun[]>
+
+  /** Define a new noun */
+  define(noun: Noun): Promise<void>
+}
+
+// =============================================================================
+// Verbs API
+// =============================================================================
+
+/**
+ * Verbs API for action introspection
+ */
+export interface VerbsAPI {
+  /** Get a verb definition by action name */
+  get(action: string): Verb | null
+
+  /** List all verb definitions */
+  list(): Verb[]
+
+  /** Define a new verb */
+  define(verb: Verb): void
+
+  /** Conjugate a verb from base form */
+  conjugate(action: string): Verb
+}
+
+// =============================================================================
+// DB Result Type
+// =============================================================================
+
+/**
+ * Result of calling DB() - destructured exports
+ */
+export interface DBResult<TSchema extends DatabaseSchema> {
+  /** Database instance for CRUD operations */
+  db: TypedDB<TSchema>
+
+  /** Event subscription and emission */
+  events: EventsAPI
+
+  /** Durable action execution */
+  actions: ActionsAPI
+
+  /** Cached embeddings and computed content */
+  artifacts: ArtifactsAPI
+
+  /** Type introspection */
+  nouns: NounsAPI
+
+  /** Action introspection */
+  verbs: VerbsAPI
 }
 
 // =============================================================================

@@ -1,0 +1,121 @@
+---
+title: Goal
+description: Desired outcomes and objectives
+icon: Target
+---
+
+# Goal
+
+Goals represent desired outcomes - the "why" behind work. Goals break down into [Plans](/plan), which become [Projects](/project), which contain [Tasks](/task).
+
+## Overview
+
+A **Goal** is a high-level objective with measurable success criteria. Goals provide direction and context for all downstream work.
+
+```typescript
+import { Goal } from 'business-as-code'
+
+const goal = Goal('Increase customer retention', {
+  metric: 'retention_rate',
+  target: 0.95,        // 95% retention
+  baseline: 0.82,      // Current 82%
+  deadline: '2024-Q4',
+})
+
+// Track progress
+goal.progress  // 0.65 (65% of the way to target)
+goal.onTrack   // true/false based on trajectory
+```
+
+## Defining Goals
+
+```typescript
+import { Goal } from 'business-as-code'
+
+const goal = Goal('Launch mobile app', {
+  description: 'Ship iOS and Android apps to production',
+
+  // Success criteria
+  criteria: [
+    'App approved in App Store',
+    'App approved in Play Store',
+    '1000+ downloads in first week',
+    'Rating above 4.0 stars',
+  ],
+
+  // Timeline
+  deadline: '2024-06-01',
+
+  // Owner
+  owner: 'mobile-team',
+})
+```
+
+## Goal Hierarchies
+
+Goals can have sub-goals:
+
+```typescript
+const companyGoal = Goal('Become market leader', {
+  subgoals: [
+    Goal('Double revenue', { target: 2_000_000 }),
+    Goal('Expand to 3 new markets'),
+    Goal('Achieve 50 NPS'),
+  ],
+})
+
+// Progress rolls up
+companyGoal.progress  // Average of subgoal progress
+```
+
+## Goals to Plans
+
+Goals break down into actionable plans:
+
+```typescript
+import { Plan } from 'business-as-code'
+
+const goal = Goal('Reduce churn by 20%')
+
+const plan = Plan.for(goal, {
+  strategies: [
+    'Improve onboarding experience',
+    'Add proactive customer success',
+    'Build self-service help center',
+  ],
+})
+```
+
+## Tracking Progress
+
+```typescript
+// Quantitative goals
+goal.current = 0.88  // Current metric value
+goal.progress        // (0.88 - 0.82) / (0.95 - 0.82) = 0.46
+
+// Criteria-based goals
+await goal.complete('App approved in App Store')
+goal.progress  // 0.25 (1 of 4 criteria met)
+
+// Time-based tracking
+goal.daysRemaining   // 45
+goal.velocity        // Progress per day
+goal.projectedDate   // When goal will be met at current velocity
+```
+
+## Goal States
+
+```typescript
+goal.status  // 'not_started' | 'in_progress' | 'at_risk' | 'achieved' | 'missed'
+
+// Automatic status based on progress and timeline
+goal.isAtRisk    // Behind trajectory
+goal.isAchieved  // Met or exceeded target
+```
+
+## See Also
+
+- [Plan](/plan) - Strategies to achieve goals
+- [Project](/project) - Concrete initiatives
+- [Task](/task) - Individual work items
+- [Business](/business) - Business primitives

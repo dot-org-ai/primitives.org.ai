@@ -1,0 +1,129 @@
+---
+title: forEach
+description: Iterate over entities with a callback
+---
+
+Process each entity of a type with an async callback.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string' },
+  Persona: { name: 'string' },
+})
+```
+
+## Syntax
+
+```typescript
+db.forEach(options, callback)
+db.forEach({ type: 'Type' }, callback)
+db.forEach({ type: 'Type', where: {} }, callback)
+```
+
+## Examples
+
+```typescript
+// Process all posts
+await db.forEach({ type: 'Post' }, async (post) => {
+  console.log(post.title)
+})
+
+// With filtering
+await db.forEach(
+  { type: 'Post', where: { published: true } },
+  async (post) => {
+    await notifySubscribers(post)
+  }
+)
+```
+
+## Use Cases
+
+### Generate Content for Each Entity
+
+```typescript
+// Generate posts for each persona
+await db.forEach({ type: 'Persona' }, async (persona) => {
+  await db.generate({
+    type: 'Post',
+    count: 10,
+    data: { persona: persona.$id },
+  })
+})
+```
+
+### Batch Processing
+
+```typescript
+// Update all posts
+await db.forEach({ type: 'Post' }, async (post) => {
+  await db.Post.update(post.$id, {
+    slug: slugify(post.title),
+  })
+})
+```
+
+### Data Migration
+
+```typescript
+// Migrate old format to new
+await db.forEach({ type: 'User' }, async (user) => {
+  await db.User.update(user.$id, {
+    displayName: user.name,  // rename field
+    name: undefined,         // remove old field
+  })
+})
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `type` | string | Entity type to iterate |
+| `where` | object | Filter criteria |
+| `orderBy` | string | Sort field |
+| `order` | `'asc'` \| `'desc'` | Sort direction |
+| `limit` | number | Max entities to process |
+| `concurrency` | number | Parallel callbacks (default: 1) |
+
+## Concurrency
+
+```typescript
+// Process 5 at a time
+await db.forEach(
+  { type: 'Post', concurrency: 5 },
+  async (post) => {
+    await processPost(post)
+  }
+)
+```
+
+## Progress Tracking
+
+```typescript
+let processed = 0
+const total = await db.Post.count()
+
+await db.forEach({ type: 'Post' }, async (post) => {
+  await processPost(post)
+  processed++
+  console.log(`${processed}/${total}`)
+})
+```
+
+## Error Handling
+
+```typescript
+await db.forEach({ type: 'Post' }, async (post) => {
+  try {
+    await processPost(post)
+  } catch (error) {
+    console.error(`Failed: ${post.$id}`, error)
+    // continues to next entity
+  }
+})
+```

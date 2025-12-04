@@ -1,5 +1,0 @@
-{
-  "title": "Events",
-  "description": "Immutable event log for reactivity",
-  "pages": ["index", "emitting", "subscribing", "replaying"]
-}

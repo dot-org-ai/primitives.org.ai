@@ -1,0 +1,123 @@
+---
+title: artifacts
+description: Cached embeddings and computed content
+---
+
+Artifacts store computed content with automatic cache invalidation.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db, artifacts } = DB({
+  Post: { title: 'string', content: 'markdown' },
+})
+```
+
+## What Are Artifacts?
+
+Artifacts are cached outputs associated with entities:
+
+| Use | Example |
+|-----|---------|
+| Embeddings | Vector representations for search |
+| Rendered HTML | Markdown to HTML conversion |
+| Bundles | Compiled JavaScript/CSS |
+| AST | Parsed code/content |
+
+## Automatic Embeddings
+
+When you create entities, embeddings are auto-generated:
+
+```typescript
+const post = await db.Post.create({
+  title: 'Hello',
+  content: 'This is my post...',
+})
+
+// Embedding artifact auto-created
+const embedding = await artifacts.get(post.$id, 'embedding')
+// { vectors: Float32Array, model: '...', dimensions: 3072 }
+```
+
+## Operations
+
+### get
+
+Get an artifact:
+
+```typescript
+const embedding = await artifacts.get(entityId, 'embedding')
+const html = await artifacts.get(entityId, 'html')
+```
+
+### set
+
+Store an artifact:
+
+```typescript
+await artifacts.set(entityId, 'html', {
+  content: renderedHtml,
+  sourceHash: hash(content),
+})
+```
+
+### delete
+
+Delete artifacts:
+
+```typescript
+await artifacts.delete(entityId, 'html')  // specific type
+await artifacts.delete(entityId)          // all for entity
+```
+
+### list
+
+List artifacts for an entity:
+
+```typescript
+const all = await artifacts.list(entityId)
+// ['embedding', 'html', 'ast']
+```
+
+## Cache Invalidation
+
+When source content changes, artifacts invalidate:
+
+```typescript
+await db.Post.update(post.$id, {
+  content: 'New content...',
+})
+
+// Embedding is regenerated automatically
+// Custom artifacts return null until rebuilt
+```
+
+## Artifact Types
+
+| Type | Description |
+|------|-------------|
+| `embedding` | Vector embeddings (auto-generated) |
+| `chunks` | Chunked content for search |
+| `ast` | Parsed abstract syntax tree |
+| `html` | Rendered HTML |
+| `bundle` | Bundled JavaScript/CSS |
+| Custom | Any string type you define |
+
+## Custom Artifacts
+
+```typescript
+// Compute and store
+const html = await renderMarkdown(post.content)
+await artifacts.set(post.$id, 'html', {
+  content: html,
+  sourceHash: hash(post.content),
+})
+
+// Retrieve later
+const cached = await artifacts.get(post.$id, 'html')
+if (cached && cached.sourceHash === hash(post.content)) {
+  return cached.content  // Cache hit
+}
+```

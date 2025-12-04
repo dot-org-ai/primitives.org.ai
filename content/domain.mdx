@@ -1,0 +1,153 @@
+---
+title: Domain
+description: URL-based namespaces for everything
+icon: Globe
+---
+
+# Domain
+
+A Domain is the foundational namespace for all primitives. In this architecture, everything is URL-addressable - agents don't know file systems, they only know URLs.
+
+## Overview
+
+Every [Noun](/noun), [Verb](/verb), [Thing](/thing), [Function](/function), and [Agent](/agent) lives within a domain. Domains provide identity, discovery, and access control.
+
+```typescript
+import { Domain } from 'ai-functions'
+
+// Define your domain
+const domain = Domain('acme.do')
+
+// Everything is URL-addressable
+domain.nouns      // https://acme.do/nouns
+domain.functions  // https://acme.do/functions
+domain.agents     // https://acme.do/agents
+domain.things     // https://acme.do/things
+```
+
+## URL-First Architecture
+
+Agents interact with the world through URLs:
+
+```typescript
+// Agents discover capabilities via URLs
+const customer = await fetch('https://acme.do/things/customer/cust_123')
+const approve = await fetch('https://acme.do/verbs/approve')
+const summarize = await fetch('https://acme.do/functions/summarize')
+
+// Execute functions via HTTP
+const result = await fetch('https://acme.do/functions/summarize', {
+  method: 'POST',
+  body: JSON.stringify({ text: document }),
+})
+```
+
+## Domain Configuration
+
+```typescript
+import { Domain } from 'ai-functions'
+
+const domain = Domain('mycompany.do', {
+  // Display name
+  name: 'My Company',
+
+  // Domain description for discovery
+  description: 'AI-powered business automation',
+
+  // Authentication
+  auth: {
+    provider: 'oauth.do',
+    methods: ['api-key', 'oauth2'],
+  },
+
+  // Access control
+  access: {
+    public: ['functions/summarize', 'nouns/*'],
+    authenticated: ['things/*', 'actions/*'],
+    admin: ['agents/*', 'config/*'],
+  },
+})
+```
+
+## Resource URLs
+
+Every resource has a canonical URL:
+
+```typescript
+// Nouns (type definitions)
+https://acme.do/nouns/Customer
+https://acme.do/nouns/Invoice
+
+// Things (instances)
+https://acme.do/things/customer/cust_123
+https://acme.do/things/invoice/inv_456
+
+// Verbs (operations)
+https://acme.do/verbs/approve
+https://acme.do/verbs/ship
+
+// Functions (AI capabilities)
+https://acme.do/functions/summarize
+https://acme.do/functions/translate
+
+// Agents
+https://acme.do/agents/sales-assistant
+https://acme.do/agents/support-bot
+
+// Workflows
+https://acme.do/workflows/onboarding
+https://acme.do/workflows/order-fulfillment
+```
+
+## Discovery
+
+Domains expose their capabilities for AI discovery:
+
+```typescript
+// Well-known discovery endpoint
+const capabilities = await fetch('https://acme.do/.well-known/ai')
+
+// Returns structured capability manifest
+{
+  domain: 'acme.do',
+  nouns: ['Customer', 'Invoice', 'Order'],
+  verbs: ['create', 'approve', 'ship', 'refund'],
+  functions: ['summarize', 'classify', 'extract'],
+  agents: ['sales-assistant', 'support-bot'],
+}
+```
+
+## Cross-Domain References
+
+Things can reference resources in other domains:
+
+```typescript
+const order = Thing(Order, {
+  customer: 'https://crm.do/things/customer/cust_123',
+  payment: 'https://payments.do/things/charge/ch_789',
+  shipping: 'https://logistics.do/things/shipment/ship_456',
+})
+```
+
+## Domain Federation
+
+Domains can federate and trust each other:
+
+```typescript
+const domain = Domain('acme.do', {
+  federation: {
+    trusted: ['partners.do', 'suppliers.do'],
+    permissions: {
+      'partners.do': ['read:things', 'execute:functions'],
+      'suppliers.do': ['read:nouns'],
+    },
+  },
+})
+```
+
+## See Also
+
+- [Noun](/noun) - Types within a domain
+- [Thing](/thing) - Instances within a domain
+- [Function](/function) - Capabilities exposed by a domain
+- [Agent](/agent) - Actors operating within domains

@@ -1,0 +1,114 @@
+---
+title: Thing
+description: Instances and entities in your system
+icon: Box
+---
+
+# Thing
+
+Things are the concrete instances of [Nouns](/noun) - the actual entities that exist in your system.
+
+## Overview
+
+While a **Noun** defines a type or schema, a **Thing** is an actual instance with real data. Things have identity, state, and can be acted upon by [Verbs](/verb).
+
+```typescript
+import { Noun, Thing } from 'ai-database'
+
+// Define the noun (type)
+const Customer = Noun('Customer', {
+  name: 'string',
+  email: 'string',
+  tier: ['free', 'pro', 'enterprise'],
+})
+
+// Create a thing (instance)
+const acme = Thing(Customer, {
+  id: 'cust_acme',
+  name: 'Acme Corp',
+  email: 'hello@acme.com',
+  tier: 'pro',
+})
+```
+
+## Creating Things
+
+Things can be created in several ways:
+
+```typescript
+// From a noun's create method
+const customer = await Customer.create({
+  name: 'Acme Corp',
+  email: 'hello@acme.com',
+})
+
+// Using the Thing constructor
+const customer = Thing(Customer, {
+  name: 'Acme Corp',
+  email: 'hello@acme.com',
+})
+
+// From natural language
+const customer = await Thing.from(`
+  Create a new enterprise customer called Acme Corp
+  with email hello@acme.com
+`)
+```
+
+## Thing Identity
+
+Every thing has a unique identity:
+
+```typescript
+const customer = await Customer.create({ name: 'Acme' })
+
+customer.id        // "cust_abc123" - unique identifier
+customer.$type     // "Customer" - the noun type
+customer.$uri      // "customers/cust_abc123" - resource URI
+```
+
+## Reading Things
+
+```typescript
+// By ID
+const customer = await Customer.get('cust_abc123')
+
+// By query
+const customers = await Customer.find({ tier: 'enterprise' })
+
+// By natural language
+const customers = await Customer.find('all enterprise customers from California')
+```
+
+## Updating Things
+
+```typescript
+// Direct update
+await customer.update({ tier: 'enterprise' })
+
+// Via verb
+await Upgrade(customer, { tier: 'enterprise' })
+
+// Returns updated thing
+const updated = await Customer.update('cust_abc123', { tier: 'enterprise' })
+```
+
+## Deleting Things
+
+```typescript
+// Direct delete
+await customer.delete()
+
+// By ID
+await Customer.delete('cust_abc123')
+
+// Soft delete (if configured)
+await customer.archive()
+```
+
+## See Also
+
+- [Noun](/noun) - Type definitions for things
+- [Verb](/verb) - Operations on things
+- [Action](/action) - Bound operations on specific things
+- [Database](/database) - Persistence and querying

@@ -1,5 +1,0 @@
-{
-  "title": "API Reference",
-  "description": "Complete API documentation",
-  "pages": ["index", "db", "get", "list", "find", "create", "update", "delete", "search", "configuration"]
-}

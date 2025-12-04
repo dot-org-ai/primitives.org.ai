@@ -1,0 +1,118 @@
+---
+title: Action
+description: Bound operations ready for execution
+icon: Zap
+---
+
+# Action
+
+An Action is a [Verb](/verb) bound to specific [Things](/thing), ready to be executed.
+
+## Overview
+
+While a **Verb** defines an operation abstractly, an **Action** is that operation bound to specific arguments. Actions can be queued, scheduled, approved, or executed immediately.
+
+```typescript
+import { Verb, Action } from 'ai-database'
+
+// Define a verb
+const Approve = Verb('approve')
+
+// Create an action (bound verb)
+const approveInvoice = Action(Approve, {
+  subject: currentUser,
+  object: invoice,
+})
+
+// Execute the action
+await approveInvoice.execute()
+```
+
+## Creating Actions
+
+Actions are created by binding verbs to things:
+
+```typescript
+// From a verb
+const action = Approve.bind(user, document)
+
+// Using Action constructor
+const action = Action(Approve, { subject: user, object: document })
+
+// From natural language
+const action = await Action.from('Approve invoice #1234 as admin')
+```
+
+## Action States
+
+Actions have a lifecycle:
+
+```typescript
+action.status  // 'pending' | 'approved' | 'executing' | 'completed' | 'failed'
+
+// Check state
+action.isPending    // true if not yet executed
+action.isCompleted  // true if successfully executed
+action.isFailed     // true if execution failed
+```
+
+## Queuing Actions
+
+Actions can be queued for later execution:
+
+```typescript
+import { Queue } from 'digital-tasks'
+
+// Add to queue
+await Queue.push(action)
+
+// With delay
+await Queue.push(action, { delay: '1 hour' })
+
+// With priority
+await Queue.push(action, { priority: 'high' })
+```
+
+## Approval Workflows
+
+Actions can require approval before execution:
+
+```typescript
+import { requireApproval } from 'human-in-the-loop'
+
+const action = Action(TransferFunds, {
+  from: account1,
+  to: account2,
+  amount: 50000,
+})
+
+// Require human approval for large transfers
+if (action.args.amount > 10000) {
+  await requireApproval(action, {
+    approvers: ['finance-team'],
+    reason: 'Large transfer requires approval',
+  })
+}
+
+await action.execute()
+```
+
+## Action Results
+
+Executing an action returns a result and emits an [Event](/event):
+
+```typescript
+const result = await action.execute()
+
+result.success    // boolean
+result.output     // the result data
+result.event      // the emitted event
+result.duration   // execution time
+```
+
+## See Also
+
+- [Verb](/verb) - Abstract operation definitions
+- [Thing](/thing) - Entities that actions operate on
+- [Event](/event) - Records of action execution
+- [Task](/task) - Higher-level work units

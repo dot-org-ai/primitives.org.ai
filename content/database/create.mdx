@@ -1,0 +1,104 @@
+---
+title: create
+description: Create new entities
+---
+
+Create new entities with typed schemas.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', content: 'markdown' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.create(data)
+db.Type.create(id, data)
+```
+
+## Examples
+
+```typescript
+// Auto-generated ID
+const post = await db.Post.create({
+  title: 'Hello World',
+  content: 'My first post...',
+})
+// post.$id = 'abc123' (auto-generated)
+
+// Custom ID
+const post = await db.Post.create('hello-world', {
+  title: 'Hello World',
+  content: 'My first post...',
+})
+// post.$id = 'hello-world'
+```
+
+## Return Value
+
+Returns the full entity with generated fields:
+
+```typescript
+const user = await db.User.create({
+  name: 'Alice',
+  email: 'alice@example.com',
+})
+
+// Returns:
+{
+  $id: 'usr_abc123',
+  $type: 'User',
+  name: 'Alice',
+  email: 'alice@example.com',
+  createdAt: Date,
+  updatedAt: Date,
+}
+```
+
+## With Relationships
+
+```typescript
+const author = await db.Author.create({ name: 'Alice' })
+
+const post = await db.Post.create({
+  title: 'Hello',
+  author: author.$id,  // relationship by ID
+})
+```
+
+## Batch Creation
+
+```typescript
+const posts = await Promise.all([
+  db.Post.create({ title: 'Post 1' }),
+  db.Post.create({ title: 'Post 2' }),
+  db.Post.create({ title: 'Post 3' }),
+])
+```
+
+## Events
+
+Create emits a `{Type}.created` event:
+
+```typescript
+await db.Post.create({ title: 'Hello' })
+// Emits: Post.created { url, data, timestamp }
+```
+
+## Validation
+
+```typescript
+// Missing required field
+await db.Post.create({ content: '...' })
+// Error: Missing required field 'title'
+
+// Wrong type
+await db.Post.create({ title: 123 })
+// Error: Expected string for 'title', got number
+```

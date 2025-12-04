@@ -1,0 +1,106 @@
+---
+title: set
+description: Set entity data by ID
+---
+
+Set entity data directly by ID. Creates if doesn't exist, replaces if it does.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Config: { key: 'string', value: 'json' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.set(id, data)
+```
+
+## Examples
+
+```typescript
+// Set data directly
+await db.Config.set('theme', {
+  key: 'theme',
+  value: { mode: 'dark', accent: 'blue' },
+})
+
+// Replaces entire entity if exists
+await db.Config.set('theme', {
+  key: 'theme',
+  value: { mode: 'light' },  // previous value replaced
+})
+```
+
+## vs create/update/upsert
+
+| Method | Behavior |
+|--------|----------|
+| `create` | Fails if exists |
+| `update` | Fails if doesn't exist |
+| `upsert` | Merges on conflict |
+| `set` | Always replaces entirely |
+
+```typescript
+// set replaces the entire entity
+await db.Post.set('hello', { title: 'Hello' })
+// All other fields cleared
+
+// upsert merges with existing
+await db.Post.upsert('hello', { title: 'Hello' })
+// Other fields preserved
+```
+
+## Use Cases
+
+```typescript
+// Configuration
+await db.Config.set('app', {
+  key: 'app',
+  value: config,
+})
+
+// Cache entries
+await db.Cache.set(`user:${id}`, {
+  key: `user:${id}`,
+  value: userData,
+  expiresAt: new Date(Date.now() + 3600000),
+})
+
+// Singleton patterns
+await db.State.set('current', {
+  key: 'current',
+  value: appState,
+})
+```
+
+## Return Value
+
+Returns the set entity:
+
+```typescript
+const config = await db.Config.set('theme', {
+  key: 'theme',
+  value: { mode: 'dark' },
+})
+
+console.log(config.$id)    // 'theme'
+console.log(config.value)  // { mode: 'dark' }
+```
+
+## Events
+
+Emits `{Type}.created` or `{Type}.updated`:
+
+```typescript
+await db.Config.set('new-key', data)
+// Emits: Config.created (if new)
+
+await db.Config.set('existing-key', data)
+// Emits: Config.updated (if exists)
+```

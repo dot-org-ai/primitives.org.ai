@@ -1,5 +1,0 @@
-{
-  "title": "Queries",
-  "description": "SQL, Document, and Graph query styles",
-  "pages": ["index", "sql", "document", "graph", "operators"]
-}

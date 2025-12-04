@@ -1,0 +1,105 @@
+---
+title: delete
+description: Delete entities
+---
+
+Remove entities by ID.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.delete(id)
+db.Type.delete(id, options)
+```
+
+## Examples
+
+```typescript
+// Delete by ID
+await db.Post.delete('hello-world')
+
+// Delete returns the deleted entity
+const deleted = await db.Post.delete('hello-world')
+console.log(deleted.title)  // 'Hello World'
+```
+
+## Batch Delete
+
+```typescript
+// Delete multiple
+await Promise.all([
+  db.Post.delete('post-1'),
+  db.Post.delete('post-2'),
+  db.Post.delete('post-3'),
+])
+
+// Delete by criteria
+const drafts = await db.Post.find({ status: 'draft' })
+await Promise.all(drafts.map(d => db.Post.delete(d.$id)))
+```
+
+## Events
+
+Delete emits a `{Type}.deleted` event:
+
+```typescript
+await db.Post.delete('hello')
+// Emits: Post.deleted { url, timestamp }
+```
+
+## Cascade Behavior
+
+By default, relationships are nullified:
+
+```typescript
+// Post has author relationship
+await db.Author.delete('alice')
+// Posts by alice now have author: null
+```
+
+Configure cascade:
+
+```typescript
+await db.Author.delete('alice', {
+  cascade: true,  // also delete related posts
+})
+```
+
+## Soft Delete
+
+For recoverable deletions:
+
+```typescript
+// Mark as deleted instead of removing
+await db.Post.update('hello', {
+  deletedAt: new Date(),
+})
+
+// Query excludes soft-deleted by default
+const posts = await db.Post.list()
+// doesn't include soft-deleted
+
+// Include soft-deleted
+const all = await db.Post.list({
+  where: { deletedAt: { $exists: true } },
+})
+```
+
+## Artifacts
+
+When entity is deleted, artifacts are also removed:
+
+```typescript
+await db.Post.delete('hello')
+// Removes: entity, embedding, all artifacts
+```

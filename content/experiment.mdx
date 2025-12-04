@@ -1,0 +1,130 @@
+---
+title: Experiment
+description: Controlled testing and iteration
+icon: FlaskConical
+---
+
+# Experiment
+
+Experiments enable controlled testing, A/B testing, and systematic iteration on AI functions and workflows.
+
+## Overview
+
+An **Experiment** lets you test variations of prompts, models, parameters, or entire workflows against each other. Track metrics, compare results, and gradually roll out winning variants.
+
+```typescript
+import { Experiment } from 'ai-experiments'
+
+const experiment = Experiment('summarization-v2', {
+  variants: {
+    control: { model: 'gpt-4', prompt: existingPrompt },
+    treatment: { model: 'claude-3', prompt: newPrompt },
+  },
+  metrics: ['quality', 'latency', 'cost'],
+  allocation: { control: 50, treatment: 50 },
+})
+
+// Run with experiment
+const result = await experiment.run(input)
+```
+
+## Defining Experiments
+
+```typescript
+import { Experiment } from 'ai-experiments'
+
+const experiment = Experiment('checkout-flow', {
+  // Define variants to test
+  variants: {
+    baseline: {
+      steps: ['cart', 'shipping', 'payment', 'confirm'],
+    },
+    streamlined: {
+      steps: ['cart', 'payment'], // Combined shipping + confirm
+    },
+  },
+
+  // Metrics to track
+  metrics: ['conversion', 'time_to_complete', 'abandonment'],
+
+  // Traffic allocation (percentages)
+  allocation: { baseline: 80, streamlined: 20 },
+
+  // Experiment duration
+  duration: '2 weeks',
+})
+```
+
+## A/B Testing AI Functions
+
+```typescript
+import { AI } from 'ai-functions'
+import { Experiment } from 'ai-experiments'
+
+// Test different prompt strategies
+const experiment = Experiment('email-generation', {
+  variants: {
+    concise: AI('Write a brief, professional email', { maxTokens: 200 }),
+    detailed: AI('Write a comprehensive, friendly email', { maxTokens: 500 }),
+  },
+  metrics: ['user_satisfaction', 'response_rate'],
+})
+
+// Use in production
+export const generateEmail = experiment.wrap(async (context) => {
+  return await experiment.run(context)
+})
+```
+
+## Tracking Metrics
+
+```typescript
+// Record outcomes
+await experiment.record(variantId, {
+  quality: 0.92,
+  latency: 450,
+  userSatisfaction: 4.5,
+})
+
+// Get current results
+const results = await experiment.results()
+// {
+//   control: { quality: 0.88, latency: 520, n: 1000 },
+//   treatment: { quality: 0.92, latency: 450, n: 1000 },
+//   winner: 'treatment',
+//   confidence: 0.95
+// }
+```
+
+## Gradual Rollout
+
+```typescript
+// Start with small allocation
+await experiment.setAllocation({ control: 95, treatment: 5 })
+
+// If metrics look good, increase
+await experiment.setAllocation({ control: 50, treatment: 50 })
+
+// Promote winner to 100%
+await experiment.promote('treatment')
+```
+
+## Experiment Lifecycle
+
+```typescript
+experiment.status  // 'draft' | 'running' | 'paused' | 'completed'
+
+await experiment.start()
+await experiment.pause()
+await experiment.resume()
+await experiment.complete()
+
+// Archive with results
+await experiment.archive()
+```
+
+## See Also
+
+- [Function](/function) - AI functions to experiment on
+- [Workflow](/workflow) - Workflow variations
+- [Database](/database) - Storing experiment data

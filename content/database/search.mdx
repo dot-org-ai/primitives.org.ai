@@ -1,0 +1,124 @@
+---
+title: search
+description: Hybrid vector + full-text search
+---
+
+Semantic search across all entities using embeddings and full-text indexing.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', content: 'markdown' },
+})
+```
+
+## Basic Search
+
+```typescript
+const results = await db.Post.search('AI tutorials for beginners')
+```
+
+## With Filters
+
+```typescript
+const results = await db.Post.search({
+  query: 'machine learning basics',
+  where: { published: true },
+  limit: 10,
+})
+```
+
+## Global Search
+
+Search across all types:
+
+```typescript
+const results = await db.search('TypeScript best practices')
+// Returns matches from Post, Author, Comment, etc.
+```
+
+## Search Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `query` | string | Search query |
+| `where` | object | Filter criteria |
+| `limit` | number | Max results |
+| `offset` | number | Skip results |
+| `types` | string[] | Types to search |
+| `threshold` | number | Similarity threshold (0-1) |
+
+## Search Results
+
+```typescript
+interface SearchResult {
+  $id: string
+  $type: string
+  score: number     // relevance score
+  highlights: {     // matched snippets
+    field: string
+    snippet: string
+  }[]
+  data: unknown     // full entity data
+}
+```
+
+## Hybrid Search
+
+Combines vector similarity and full-text matching:
+
+```typescript
+const results = await db.Post.search({
+  query: 'getting started with AI',
+  mode: 'hybrid',  // 'semantic' | 'fulltext' | 'hybrid'
+})
+```
+
+## Embedding Configuration
+
+```typescript
+const { db } = DB(schema, {
+  embeddings: {
+    model: 'text-embedding-3-large',
+    dimensions: 3072,
+  },
+})
+```
+
+## Re-embedding
+
+When content changes, embeddings regenerate automatically:
+
+```typescript
+await db.Post.update(id, { content: 'New content...' })
+// Embedding recalculated in background
+```
+
+## Similarity Search
+
+Find similar entities:
+
+```typescript
+const similar = await db.Post.similar(post.$id, { limit: 5 })
+```
+
+## Use Cases
+
+```typescript
+// Content discovery
+const related = await db.Post.search({
+  query: currentPost.title,
+  where: { $id: { $ne: currentPost.$id } },
+  limit: 5,
+})
+
+// Recommendations
+const forUser = await db.Post.search({
+  query: user.interests.join(' '),
+  where: { published: true },
+  limit: 10,
+})
+```

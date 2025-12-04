@@ -1,0 +1,123 @@
+---
+title: Event
+description: Records of what happened in your system
+icon: Radio
+---
+
+# Event
+
+Events are immutable records of things that happened in your system.
+
+## Overview
+
+An **Event** captures the fact that something occurred - a [Verb](/verb) was executed, a [Thing](/thing) changed, or an external trigger fired. Events are the foundation for audit logs, event sourcing, and reactive systems.
+
+```typescript
+import { Event } from 'ai-database'
+
+// Events are emitted automatically when verbs execute
+await Approve(user, document)
+// Emits: { type: 'Document.approved', actor: user, target: document, ... }
+
+// Subscribe to events
+Event.on('Document.approved', async (event) => {
+  await notify(event.target.author, 'Your document was approved!')
+})
+```
+
+## Event Structure
+
+Every event has a consistent structure:
+
+```typescript
+interface Event {
+  id: string           // Unique event ID
+  type: string         // Event type (e.g., 'Order.shipped')
+  timestamp: Date      // When it occurred
+
+  actor?: Thing        // Who/what caused it
+  target?: Thing       // What it affected
+
+  data: object         // Event-specific data
+  metadata: object     // Additional context
+}
+```
+
+## Subscribing to Events
+
+```typescript
+import { Event } from 'ai-database'
+
+// Subscribe to specific event type
+Event.on('Order.created', async (event) => {
+  await sendConfirmation(event.target)
+})
+
+// Subscribe to all events for a noun
+Event.on('Order.*', async (event) => {
+  await updateAnalytics(event)
+})
+
+// Subscribe to all events
+Event.on('*', async (event) => {
+  await auditLog.append(event)
+})
+```
+
+## Emitting Events
+
+```typescript
+// Events are usually emitted by verbs, but can be manual
+import { emit } from 'ai-database'
+
+await emit({
+  type: 'User.signedIn',
+  actor: user,
+  data: { method: 'oauth', provider: 'google' },
+})
+```
+
+## Event Sourcing
+
+Events can be the source of truth:
+
+```typescript
+import { EventStore } from 'ai-database'
+
+// Replay events to rebuild state
+const account = await EventStore.replay('Account', accountId)
+
+// Get event history
+const history = await EventStore.history('Order', orderId)
+
+// Time travel
+const orderAtTime = await EventStore.at('Order', orderId, pastDate)
+```
+
+## Event Patterns
+
+Common event-driven patterns:
+
+```typescript
+// Saga / Process Manager
+Event.on('Order.paid', async (event) => {
+  await Action(Ship, event.target).execute()
+})
+
+// Event notification
+Event.on('*.created', async (event) => {
+  await webhooks.notify(event)
+})
+
+// Materialized view
+Event.on('Order.*', async (event) => {
+  await views.orders.update(event)
+})
+```
+
+## See Also
+
+- [Verb](/verb) - Operations that emit events
+- [Action](/action) - Bound operations
+- [Workflow](/workflow) - Event-driven orchestration
+- [Database Events](/database/events) - Detailed event handling

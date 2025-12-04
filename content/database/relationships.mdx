@@ -1,0 +1,136 @@
+---
+title: relationships
+description: Bi-directional edges between entities
+---
+
+ai-database automatically creates bi-directional relationships from schema definitions.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', author: 'Author.posts' },
+  Author: { name: 'string' },
+})
+```
+
+## Defining Relationships
+
+```typescript
+const { db } = DB({
+  Post: {
+    title: 'string',
+    author: 'Author.posts',  // one-to-many
+    tags: ['Tag.posts'],     // many-to-many
+  },
+  Author: {
+    name: 'string',
+    // posts: Post[] auto-created
+  },
+  Tag: {
+    name: 'string',
+    // posts: Post[] auto-created
+  },
+})
+```
+
+## Relationship Syntax
+
+| Syntax | Cardinality | Example |
+|--------|-------------|---------|
+| `'Type.backref'` | Many-to-one | `author: 'Author.posts'` |
+| `['Type.backref']` | Many-to-many | `tags: ['Tag.posts']` |
+| `'Type'` | One-way reference | `createdBy: 'User'` |
+
+## Automatic Backrefs
+
+When you define `author: 'Author.posts'`, the database creates:
+
+- `Post.author` → single Author
+- `Author.posts` → array of Posts
+
+```typescript
+// Forward
+const post = await db.Post.get('hello')
+const author = await post.author  // Author
+
+// Backward
+const author = await db.Author.get('alice')
+const posts = await author.posts  // Post[]
+```
+
+## Cardinality
+
+### One-to-Many
+
+```typescript
+// Post has one author, Author has many posts
+Post: {
+  author: 'Author.posts',
+}
+```
+
+### Many-to-Many
+
+```typescript
+// Post has many tags, Tag has many posts
+Post: {
+  tags: ['Tag.posts'],
+}
+```
+
+### One-to-One
+
+```typescript
+// User has one profile, Profile has one user
+User: {
+  profile: 'Profile.user',
+}
+```
+
+## Creating with Relationships
+
+```typescript
+// Create author
+const author = await db.Author.create({ name: 'Alice' })
+
+// Create post with relationship
+const post = await db.Post.create({
+  title: 'Hello',
+  content: '...',
+  author: author.$id,  // relationship by ID
+})
+```
+
+## Querying Relationships
+
+```typescript
+// Posts by verified authors
+const posts = await db.Post.find({
+  $rel: {
+    type: 'authored',
+    from: { type: 'Author', where: { verified: true } },
+  },
+})
+```
+
+## Edge Records
+
+Every relationship creates an Edge record:
+
+```typescript
+// Edge: Post.author -> Author
+{
+  from: 'Post',
+  name: 'author',
+  to: 'Author',
+  backref: 'posts',
+  cardinality: 'many-to-one',
+}
+
+// Query edges for introspection
+const edges = await db.Edge.find({ to: 'Author' })
+// What types reference Author?
+```

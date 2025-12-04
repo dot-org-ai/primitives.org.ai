@@ -1,0 +1,80 @@
+---
+title: Noun
+description: Named entities and concepts in your domain
+icon: Tag
+---
+
+# Noun
+
+Nouns represent the named entities and concepts in your domain - the "things" you're working with.
+
+## Overview
+
+In the primitives framework, a **Noun** is a type definition for domain entities. Nouns define the schema for [Things](/thing) - the actual instances that exist in your system.
+
+```typescript
+import { Noun } from 'ai-database'
+
+// Define a noun (type/schema)
+const Customer = Noun('Customer', {
+  name: 'string',
+  email: 'string',
+  tier: ['free', 'pro', 'enterprise'],
+})
+
+// Create a thing (instance)
+const customer = Customer.create({
+  name: 'Acme Corp',
+  email: 'hello@acme.com',
+  tier: 'pro',
+})
+```
+
+## Defining Nouns
+
+Nouns are defined with a name and a schema:
+
+```typescript
+import { Noun } from 'ai-database'
+
+const Invoice = Noun('Invoice', {
+  number: 'string',
+  amount: 'number',
+  status: ['draft', 'sent', 'paid', 'overdue'],
+  dueDate: 'Date',
+})
+```
+
+## AI-Inferred Nouns
+
+Nouns can be inferred from natural language:
+
+```typescript
+import { Noun } from 'ai-database'
+
+// AI infers the schema from the description
+const Product = Noun('Product', `
+  A product in our catalog with a name, description,
+  price, and inventory count. Products belong to categories
+  and can have multiple variants.
+`)
+```
+
+## Relationships
+
+Nouns can define relationships to other nouns:
+
+```typescript
+const Order = Noun('Order', {
+  number: 'string',
+  customer: Customer,        // belongs to Customer
+  items: [OrderItem],        // has many OrderItems
+  status: ['pending', 'processing', 'shipped', 'delivered'],
+})
+```
+
+## See Also
+
+- [Thing](/thing) - Instances of nouns
+- [Verb](/verb) - Actions that operate on nouns
+- [Database](/database) - Storage and querying of nouns and things

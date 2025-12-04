@@ -1,0 +1,101 @@
+---
+title: Verb
+description: Actions and operations in your domain
+icon: Play
+---
+
+# Verb
+
+Verbs represent actions and operations that can be performed on [Things](/thing) in your domain.
+
+## Overview
+
+A **Verb** defines an operation with its parameters, preconditions, and effects. Verbs create [Actions](/action) when applied to specific things, and emit [Events](/event) when executed.
+
+```typescript
+import { Verb } from 'ai-database'
+
+// Define a verb
+const Approve = Verb('approve', {
+  subject: 'User',
+  object: 'Document',
+  preconditions: (user, doc) => doc.status === 'pending',
+  effect: (user, doc) => ({ ...doc, status: 'approved', approvedBy: user.id }),
+})
+
+// Use the verb
+await Approve(currentUser, document)
+```
+
+## Defining Verbs
+
+Verbs capture the semantics of domain operations:
+
+```typescript
+import { Verb } from 'ai-database'
+
+const Ship = Verb('ship', {
+  subject: 'Warehouse',
+  object: 'Order',
+  preconditions: (warehouse, order) =>
+    order.status === 'paid' && warehouse.hasInventory(order.items),
+  effect: (warehouse, order) => ({
+    ...order,
+    status: 'shipped',
+    shippedFrom: warehouse.id,
+    shippedAt: new Date(),
+  }),
+})
+```
+
+## Verb Conjugation
+
+Verbs automatically conjugate for different contexts:
+
+```typescript
+const verb = Verb('create')
+
+verb.infinitive  // "create"
+verb.pastTense   // "created"
+verb.present     // "creates"
+verb.gerund      // "creating"
+```
+
+## Events from Verbs
+
+When a verb executes, it emits an event:
+
+```typescript
+// Executing a verb
+const result = await Ship(warehouse, order)
+
+// Emits event:
+// {
+//   type: 'Order.shipped',
+//   subject: warehouse,
+//   object: order,
+//   timestamp: Date,
+//   result: { ...updatedOrder }
+// }
+```
+
+## Built-in Verbs
+
+Common CRUD verbs are built-in:
+
+```typescript
+import { create, read, update, delete as remove, list } from 'ai-database'
+
+await create(Customer, { name: 'Acme' })
+await read(Customer, 'cust_123')
+await update(Customer, 'cust_123', { tier: 'pro' })
+await remove(Customer, 'cust_123')
+await list(Customer, { tier: 'pro' })
+```
+
+## See Also
+
+- [Noun](/noun) - Types that verbs operate on
+- [Thing](/thing) - Instances that verbs act upon
+- [Action](/action) - Bound verb invocations
+- [Event](/event) - Records of verb execution

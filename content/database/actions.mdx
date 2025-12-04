@@ -1,0 +1,144 @@
+---
+title: actions
+description: Durable execution of long-running tasks
+---
+
+Actions provide durable execution for long-running operations. They survive restarts, track progress, and support retries.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db, actions } = DB({
+  Post: { title: 'string' },
+})
+```
+
+## Why Actions?
+
+| Problem | Solution |
+|---------|----------|
+| Generate 1000 posts | Run in background, track progress |
+| Embed all content | Resume from checkpoint on restart |
+| Process failed jobs | Automatic retries with backoff |
+| Monitor progress | Real-time status updates |
+
+## Operations
+
+### start
+
+Start a new action:
+
+```typescript
+const action = await actions.start('generatePosts', {
+  type: 'Post',
+  count: 100,
+  data: { topic: 'AI trends' },
+})
+// { id: 'action_abc', status: 'pending' }
+```
+
+### get
+
+Check action status:
+
+```typescript
+const status = await actions.get(action.id)
+// { status: 'active', progress: 47, total: 100 }
+```
+
+### list
+
+List actions:
+
+```typescript
+const pending = await actions.list({ status: 'pending' })
+const active = await actions.list({ status: 'active' })
+const failed = await actions.list({ status: 'failed' })
+```
+
+### retry
+
+Retry a failed action:
+
+```typescript
+await actions.retry(action.id)
+```
+
+### cancel
+
+Cancel a running action:
+
+```typescript
+await actions.cancel(action.id)
+```
+
+### result
+
+Wait for completion:
+
+```typescript
+const result = await actions.result(action.id)
+```
+
+## Action Status
+
+```
+pending → active → completed
+                 ↘ failed → (retry) → pending
+```
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Waiting to start |
+| `active` | Currently running |
+| `completed` | Finished successfully |
+| `failed` | Failed (can retry) |
+
+## Background Generation
+
+```typescript
+// Start background generation
+const action = await db.generate({
+  type: 'Post',
+  count: 100,
+  data: { topic: 'AI trends' },
+  mode: 'background',
+})
+
+// Check progress
+const status = await actions.get(action.id)
+console.log(`${status.progress}/${status.total}`)
+
+// Wait for completion
+const posts = await actions.result(action.id)
+```
+
+## Action Features
+
+- **Durability** - Survives process restarts
+- **Progress** - Real-time progress tracking
+- **Retries** - Automatic retry with backoff
+- **Batching** - Group operations for efficiency
+- **Queuing** - Rate limiting and concurrency control
+
+## Custom Actions
+
+```typescript
+await actions.define('processImages', async (input, context) => {
+  const { images } = input
+
+  for (let i = 0; i < images.length; i++) {
+    await processImage(images[i])
+    context.progress(i + 1, images.length)
+  }
+
+  return { processed: images.length }
+})
+
+// Use it
+const action = await actions.start('processImages', {
+  images: ['a.jpg', 'b.jpg', 'c.jpg'],
+})
+```

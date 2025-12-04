@@ -1,0 +1,122 @@
+---
+title: find
+description: Find entities matching criteria
+---
+
+Query entities with SQL, Document, or Graph-style filters.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', tags: 'string[]', views: 'number' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.find(where)
+db.Type.find(options)
+```
+
+## Examples
+
+```typescript
+// Simple equality
+const published = await db.Post.find({
+  status: 'published',
+})
+
+// Multiple conditions
+const featured = await db.Post.find({
+  status: 'published',
+  featured: true,
+})
+```
+
+## Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `$eq` | Equal (default) | `{ status: 'active' }` |
+| `$ne` | Not equal | `{ status: { $ne: 'deleted' } }` |
+| `$gt` | Greater than | `{ views: { $gt: 100 } }` |
+| `$gte` | Greater or equal | `{ views: { $gte: 100 } }` |
+| `$lt` | Less than | `{ price: { $lt: 50 } }` |
+| `$lte` | Less or equal | `{ price: { $lte: 50 } }` |
+| `$in` | In array | `{ status: { $in: ['a', 'b'] } }` |
+| `$nin` | Not in array | `{ status: { $nin: ['deleted'] } }` |
+| `$contains` | Array contains | `{ tags: { $contains: 'ai' } }` |
+| `$containsAll` | Contains all | `{ tags: { $containsAll: ['a', 'b'] } }` |
+| `$startsWith` | String prefix | `{ title: { $startsWith: 'How' } }` |
+| `$endsWith` | String suffix | `{ email: { $endsWith: '@co.com' } }` |
+| `$regex` | Regex match | `{ slug: { $regex: '^[a-z]+$' } }` |
+| `$exists` | Field exists | `{ avatar: { $exists: true } }` |
+
+## SQL-Style
+
+```typescript
+const posts = await db.Post.find({
+  views: { $gt: 100 },
+  status: { $in: ['published', 'featured'] },
+})
+```
+
+## Document-Style
+
+```typescript
+const posts = await db.Post.find({
+  'metadata.wordCount': { $gte: 1000 },
+  tags: { $containsAll: ['ai', 'tutorial'] },
+})
+```
+
+## Graph-Style
+
+```typescript
+const posts = await db.Post.find({
+  $rel: {
+    type: 'authored',
+    from: { type: 'User', where: { verified: true } },
+  },
+})
+```
+
+## Logical Operators
+
+```typescript
+// OR
+const posts = await db.Post.find({
+  $or: [
+    { status: 'published' },
+    { featured: true },
+  ],
+})
+
+// AND
+const posts = await db.Post.find({
+  $and: [
+    { views: { $gt: 100 } },
+    { status: 'published' },
+  ],
+})
+
+// NOT
+const posts = await db.Post.find({
+  $not: { status: 'deleted' },
+})
+```
+
+## With Options
+
+```typescript
+const posts = await db.Post.find({
+  where: { published: true },
+  orderBy: 'createdAt',
+  order: 'desc',
+  limit: 10,
+})
+```

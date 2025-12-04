@@ -1,0 +1,107 @@
+---
+title: DB()
+description: Create a database instance with schema
+---
+
+Create a database instance with typed schemas. Returns `db` and all primitive exports.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+```
+
+## Syntax
+
+```typescript
+const { db, nouns, verbs, events, actions, artifacts } = DB(schema, options?)
+```
+
+## Basic Usage
+
+```typescript
+const { db } = DB({
+  Post: { title: 'string', content: 'markdown', author: 'Author.posts' },
+  Author: { name: 'string' },
+})
+
+await db.Post.create({ title: 'Hello World' })
+await db.Author.create({ name: 'Alice' })
+```
+
+## Full Destructuring
+
+```typescript
+const { db, nouns, verbs, events, actions, artifacts } = DB({
+  Post: { title: 'string', author: 'Author.posts' },
+  Author: { name: 'string' },
+})
+
+// db - CRUD operations
+await db.Post.create({ title: 'Hello' })
+await db.Post.list()
+
+// nouns - type definitions
+const postNoun = await nouns.get('Post')
+
+// verbs - action definitions
+const publishVerb = verbs.get('publish')
+
+// events - event log
+events.on('Post.created', handler)
+
+// actions - durable execution
+const action = await actions.start('generatePosts', { count: 100 })
+
+// artifacts - embeddings and cached content
+const embedding = await artifacts.get(postId, 'embedding')
+```
+
+## Schema Types
+
+| Type | Description |
+|------|-------------|
+| `'string'` | Text field |
+| `'number'` | Numeric field |
+| `'boolean'` | True/false |
+| `'markdown'` | Markdown text |
+| `'json'` | JSON object |
+| `'date'` | Date only |
+| `'datetime'` | Date and time |
+| `'url'` | URL string |
+
+### Modifiers
+
+| Modifier | Example | Description |
+|----------|---------|-------------|
+| `?` | `'string?'` | Optional field |
+| `[]` | `'string[]'` | Array |
+| `.backref` | `'Author.posts'` | Relation with backref |
+| `[.backref]` | `['Tag.posts']` | Many-to-many relation |
+
+## Options
+
+```typescript
+const { db } = DB(schema, {
+  url: 'sqlite://./data.db',  // storage backend
+  embeddings: {
+    model: 'text-embedding-3-large',
+    dimensions: 3072,
+  },
+})
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `url` | string | Database URL |
+| `embeddings` | object | Embedding configuration |
+| `embeddings.model` | string | Embedding model |
+| `embeddings.dimensions` | number | Vector dimensions |
+
+## Environment Variables
+
+```bash
+DATABASE_URL=./content         # filesystem (default)
+DATABASE_URL=sqlite://./data   # SQLite
+DATABASE_URL=:memory:          # in-memory (testing)
+```

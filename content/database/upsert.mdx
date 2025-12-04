@@ -1,0 +1,116 @@
+---
+title: upsert
+description: Create or update entities
+---
+
+Create an entity if it doesn't exist, or update it if it does.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: { title: 'string', content: 'markdown' },
+})
+```
+
+## Syntax
+
+```typescript
+db.Type.upsert(id, data)
+db.Type.upsert(id, data, options)
+```
+
+## Examples
+
+```typescript
+// Creates if doesn't exist
+await db.Post.upsert('hello-world', {
+  title: 'Hello World',
+  content: 'My post content...',
+})
+
+// Updates if it exists
+await db.Post.upsert('hello-world', {
+  title: 'Hello World',
+  content: 'Updated content...',
+})
+```
+
+## Return Value
+
+Returns the created or updated entity:
+
+```typescript
+const post = await db.Post.upsert('hello-world', {
+  title: 'Hello World',
+})
+
+console.log(post.$id)       // 'hello-world'
+console.log(post.title)     // 'Hello World'
+console.log(post.createdAt) // Date
+```
+
+## Partial Upsert
+
+On update, only specified fields change:
+
+```typescript
+// First call - creates with all fields
+await db.Post.upsert('hello', {
+  title: 'Hello',
+  content: 'Initial content',
+  views: 0,
+})
+
+// Second call - only updates title
+await db.Post.upsert('hello', {
+  title: 'Updated Title',
+})
+// content and views unchanged
+```
+
+## Events
+
+Emits appropriate event based on operation:
+
+```typescript
+await db.Post.upsert('new-post', { title: 'New' })
+// Emits: Post.created (if new)
+
+await db.Post.upsert('existing', { title: 'Updated' })
+// Emits: Post.updated (if exists)
+```
+
+## Use Cases
+
+```typescript
+// Sync external data
+for (const item of externalData) {
+  await db.Product.upsert(item.id, {
+    name: item.name,
+    price: item.price,
+  })
+}
+
+// Idempotent operations
+await db.Config.upsert('app-settings', {
+  theme: 'dark',
+  language: 'en',
+})
+```
+
+## With Options
+
+```typescript
+await db.Post.upsert('hello', data, {
+  onConflict: 'replace',  // 'replace' | 'merge' | 'skip'
+})
+```
+
+| Option | Description |
+|--------|-------------|
+| `onConflict: 'replace'` | Replace entire entity (default) |
+| `onConflict: 'merge'` | Deep merge with existing |
+| `onConflict: 'skip'` | Skip if exists |

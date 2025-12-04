@@ -1,0 +1,155 @@
+---
+title: Project
+description: Concrete initiatives with deliverables
+icon: FolderKanban
+---
+
+# Project
+
+Projects are concrete initiatives with defined scope, deliverables, and timelines. Projects contain [Tasks](/task) and roll up to [Plans](/plan).
+
+## Overview
+
+A **Project** is a bounded effort to produce specific deliverables. Unlike ongoing operations, projects have a clear start, end, and success criteria.
+
+```typescript
+import { Project } from 'business-as-code'
+
+const project = Project('Customer Portal Redesign', {
+  plan: retentionPlan,
+
+  deliverables: [
+    'New dashboard UI',
+    'Self-service account management',
+    'Usage analytics page',
+  ],
+
+  timeline: {
+    start: '2024-03-01',
+    end: '2024-05-15',
+  },
+
+  team: ['@alice', '@bob', '@carol'],
+})
+```
+
+## Creating Projects
+
+```typescript
+import { Project } from 'business-as-code'
+
+const project = Project('API v2 Development', {
+  // Optional link to plan
+  plan: apiModernizationPlan,
+
+  // What we're building
+  description: 'Build next-generation REST and GraphQL APIs',
+
+  deliverables: [
+    'REST API with OpenAPI spec',
+    'GraphQL API with schema',
+    'SDK for JavaScript and Python',
+    'API documentation site',
+  ],
+
+  // Timeline
+  timeline: {
+    start: '2024-02-01',
+    end: '2024-04-30',
+    milestones: [
+      { name: 'API Design Complete', date: '2024-02-15' },
+      { name: 'Alpha Release', date: '2024-03-15' },
+      { name: 'Beta Release', date: '2024-04-15' },
+    ],
+  },
+
+  // Resources
+  team: {
+    lead: '@sarah',
+    members: ['@mike', '@lisa', '@john'],
+  },
+  budget: 75000,
+})
+```
+
+## Project Tasks
+
+Projects contain tasks:
+
+```typescript
+import { Task } from 'digital-tasks'
+
+// Add tasks to project
+await project.addTask(Task('Design API schema'))
+await project.addTask(Task('Implement authentication'))
+await project.addTask(Task('Write integration tests'))
+
+// Get all tasks
+const tasks = await project.tasks()
+
+// Task completion drives project progress
+project.progress  // Based on completed tasks
+```
+
+## Project Boards
+
+```typescript
+// Kanban-style board
+const board = await project.board()
+// {
+//   backlog: [task1, task2],
+//   todo: [task3],
+//   inProgress: [task4, task5],
+//   review: [task6],
+//   done: [task7, task8, task9]
+// }
+
+// Move tasks
+await task4.moveTo('review')
+```
+
+## Milestones
+
+```typescript
+// Track milestone progress
+const milestones = project.milestones
+
+for (const milestone of milestones) {
+  console.log(milestone.name, milestone.status, milestone.progress)
+}
+
+// Mark milestone complete
+await project.completeMilestone('Alpha Release')
+```
+
+## Project Health
+
+```typescript
+project.health  // 'healthy' | 'at_risk' | 'critical'
+
+// Health factors
+project.schedule.status    // 'on_track' | 'behind' | 'ahead'
+project.budget.status      // 'on_track' | 'over' | 'under'
+project.scope.status       // 'stable' | 'creeping' | 'reduced'
+
+// Blockers
+const blockers = await project.blockers()
+```
+
+## Project States
+
+```typescript
+project.status  // 'planning' | 'active' | 'paused' | 'completed' | 'cancelled'
+
+await project.start()
+await project.pause('Waiting for dependency')
+await project.resume()
+await project.complete()
+```
+
+## See Also
+
+- [Plan](/plan) - Strategic context for projects
+- [Task](/task) - Work items within projects
+- [Goal](/goal) - What projects contribute to
+- [Workflow](/workflow) - Automated project workflows

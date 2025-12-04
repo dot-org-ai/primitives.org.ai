@@ -1,0 +1,138 @@
+---
+title: generate
+description: AI-powered entity creation
+---
+
+Generate entities using AI based on schema descriptions.
+
+## Import
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Post: {
+    title: 'Engaging blog post title',
+    content: 'Full markdown article (1500-2500 words)',
+    tags: ['3-5 relevant tags'],
+  },
+})
+```
+
+## Basic Generation
+
+```typescript
+const post = await db.generate({
+  type: 'Post',
+  data: { topic: 'TypeScript best practices' },
+})
+```
+
+## Schema as Prompt
+
+Schema descriptions guide AI generation:
+
+```typescript
+const { db } = DB({
+  Post: {
+    title: 'Engaging blog post title',           // AI knows to be engaging
+    content: 'Full markdown (1500-2500 words)',  // AI targets word count
+    tags: ['3-5 relevant tags'],                 // AI generates 3-5 items
+  },
+})
+
+// AI uses schema descriptions for generation
+const post = await db.generate({
+  type: 'Post',
+  data: { topic: 'AI trends' },
+})
+```
+
+## Batch Generation
+
+```typescript
+// Generate multiple at once
+await db.generate({
+  type: 'Post',
+  count: 10,
+  data: { topic: 'AI trends' },
+})
+```
+
+## Background Generation
+
+For large batches, use background mode:
+
+```typescript
+const action = await db.generate({
+  type: 'Post',
+  count: 100,
+  data: { topic: 'AI trends' },
+  mode: 'background',
+})
+
+// Check progress
+const status = await actions.get(action.id)
+console.log(`${status.progress}/${status.total}`)
+
+// Wait for completion
+const posts = await actions.result(action.id)
+```
+
+## With Relationships
+
+```typescript
+// Generate posts for each persona
+const personas = await db.Persona.list()
+
+for (const persona of personas) {
+  await db.generate({
+    type: 'Post',
+    count: 5,
+    data: { persona: persona.$id },
+  })
+}
+```
+
+## forEach Pattern
+
+```typescript
+await db.forEach({ type: 'Persona' }, async (persona) => {
+  await db.generate({
+    type: 'Post',
+    count: 10,
+    data: { persona: persona.$id },
+  })
+})
+```
+
+## Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `type` | string | Entity type to generate |
+| `data` | object | Context for generation |
+| `count` | number | Number to generate |
+| `mode` | string | `'sync'` or `'background'` |
+| `model` | string | AI model to use |
+
+## Seeding Data
+
+```typescript
+// Seed initial data
+for (const name of ['Builder', 'Coder', 'Founder']) {
+  await db.generate({
+    type: 'Persona',
+    data: { name },
+  })
+}
+
+// Generate content for each
+await db.forEach({ type: 'Persona' }, async (persona) => {
+  await db.generate({
+    type: 'Post',
+    count: 10,
+    data: { persona: persona.$id, topics: persona.interests },
+  })
+})
+```

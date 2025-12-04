@@ -1,5 +1,0 @@
-{
-  "title": "Actions",
-  "description": "Durable execution of long-running tasks",
-  "pages": ["index", "creating", "managing", "patterns"]
-}
