@@ -47,6 +47,24 @@ export {
   type ChainablePromise,
 } from './template.js'
 
+// Export AIPromise utilities for promise pipelining
+export {
+  AIPromise,
+  isAIPromise,
+  getRawPromise,
+  createTextPromise,
+  createObjectPromise,
+  createListPromise,
+  createListsPromise,
+  createBooleanPromise,
+  createExtractPromise,
+  createAITemplateFunction,
+  parseTemplateWithDependencies,
+  AI_PROMISE_SYMBOL,
+  RAW_PROMISE_SYMBOL,
+  type AIPromiseOptions,
+} from './ai-promise.js'
+
 // Export AI primitives
 export {
   // Core generate primitive

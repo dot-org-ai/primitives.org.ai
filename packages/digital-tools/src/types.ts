@@ -38,13 +38,17 @@ export type ToolCategory =
 export type CommunicationSubcategory =
   | 'email'
   | 'sms'
-  | 'slack'
-  | 'discord'
-  | 'teams'
-  | 'chat'
+  | 'channel'        // Brand-agnostic team messaging (Slack/Teams/Discord)
+  | 'workspace'      // Team messaging workspace/organization
+  | 'direct-message' // Private/DM conversations
+  | 'chat'           // Generic chat
   | 'notification'
   | 'voice'
   | 'video-call'
+  // Legacy brand-specific (for backward compatibility)
+  | 'slack'
+  | 'discord'
+  | 'teams'
 
 /**
  * Data subcategories

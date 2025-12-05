@@ -5,11 +5,31 @@
  * with full RPC promise pipelining support via rpc.do.
  */
 
-import { RpcTarget, createRPCSession, type RPCSessionOptions } from 'rpc.do'
+import { RPC, http, ws, type RPCProxy, type RPCPromise as RpcPromiseType } from 'rpc.do'
 
 // Use Promise as RpcPromise for type definitions
 // The actual RPC layer handles pipelining transparently
 type RpcPromise<T> = Promise<T>
+
+/**
+ * Base class for RPC service targets
+ * This is a placeholder for services that want to expose methods over RPC
+ */
+export abstract class RpcTarget {
+  // Subclasses implement methods that will be exposed over RPC
+}
+
+/**
+ * Options for RPC session (connection to remote AI service)
+ */
+export interface RPCSessionOptions {
+  /** WebSocket URL for RPC connection */
+  wsUrl?: string
+  /** HTTP URL for RPC fallback */
+  httpUrl?: string
+  /** Authentication token */
+  token?: string
+}
 import { generateObject } from './generate.js'
 import type { SimpleSchema } from './schema.js'
 import type { LanguageModel } from 'ai'
@@ -154,13 +174,23 @@ export function AI<T extends Record<string, SimpleSchema>>(
 ): SchemaFunctions<T> | (AIClient & Record<string, (...args: unknown[]) => RpcPromise<unknown>>) {
   // Check if this is RPC client mode
   if (isAIClientOptions(schemasOrOptions)) {
-    const { model, temperature, maxTokens, functions, ...sessionOptions } = schemasOrOptions
+    const { model, temperature, maxTokens, functions, wsUrl, httpUrl, token } = schemasOrOptions
 
-    // Create RPC session to AI service
-    const client = createRPCSession<AIClient>(sessionOptions)
+    // Create transport based on provided URLs
+    let transport
+    if (wsUrl) {
+      transport = ws(wsUrl, token ? () => token : undefined)
+    } else if (httpUrl) {
+      transport = http(httpUrl, token ? () => token : undefined)
+    } else {
+      throw new Error('AI client requires either wsUrl or httpUrl')
+    }
+
+    // Create RPC client
+    const rpcClient = RPC<AIClient>(transport)
 
     // Create a proxy that handles both defined methods and dynamic function calls
-    return new Proxy(client, {
+    return new Proxy(rpcClient, {
       get(target, prop: string) {
         // Return existing methods
         if (prop in target) {
@@ -169,7 +199,8 @@ export function AI<T extends Record<string, SimpleSchema>>(
 
         // Handle dynamic function calls (ai.functionName())
         return (...args: unknown[]) => {
-          return target.do(prop, args.length === 1 ? args[0] : args)
+          const client = target as unknown as AIClient
+          return client.do(prop, args.length === 1 ? args[0] : args)
         }
       }
     }) as AIClient & Record<string, (...args: unknown[]) => RpcPromise<unknown>>
@@ -564,23 +595,33 @@ async function executeHumanFunction<TArgs, TReturn>(
     : JSON.stringify(args)
 
   // Generate channel-specific UI
-  const uiSchema = {
-    slack: {
-      blocks: ['Slack BlockKit blocks as JSON array'],
-      text: 'Plain text fallback',
+  const uiSchema: Record<string, SimpleSchemaType> = {
+    // New HumanChannel types
+    chat: {
+      message: 'Chat message to send',
+      options: ['Response options if applicable'],
     },
     email: {
       subject: 'Email subject',
       html: 'Email HTML body',
       text: 'Plain text fallback',
     },
-    web: {
-      component: 'React component code for the form',
-      schema: 'JSON schema for the form fields',
+    phone: {
+      script: 'Phone call script',
+      keyPoints: ['Key points to cover'],
     },
     sms: {
       text: 'SMS message text (max 160 chars)',
     },
+    workspace: {
+      blocks: ['Workspace/Slack BlockKit blocks as JSON array'],
+      text: 'Plain text fallback',
+    },
+    web: {
+      component: 'React component code for the form',
+      schema: 'JSON schema for the form fields',
+    },
+    // Legacy fallback
     custom: {
       data: 'Structured data for custom implementation',
       instructions: 'Instructions for the human',
@@ -589,7 +630,7 @@ async function executeHumanFunction<TArgs, TReturn>(
 
   const result = await generateObject({
     model: 'sonnet',
-    schema: uiSchema[channel] || uiSchema.custom,
+    schema: uiSchema[channel] ?? uiSchema.custom,
     system: `Generate ${channel} UI/content for a human-in-the-loop task.`,
     prompt: `Task: ${instructions}
 
@@ -646,7 +687,7 @@ let defaultClient: AIClient | null = null
  * Configure the default AI client
  */
 export function configureAI(options: AIClientOptions): void {
-  defaultClient = AI(options)
+  defaultClient = AI(options) as AIClient
 }
 
 /**
@@ -658,8 +699,10 @@ function getDefaultAIClient(): AIClient {
     const wsUrl = typeof process !== 'undefined' ? process.env?.AI_WS_URL : undefined
     const httpUrl = typeof process !== 'undefined' ? process.env?.AI_HTTP_URL : undefined
 
-    if (wsUrl || httpUrl) {
-      defaultClient = AI({ wsUrl, httpUrl })
+    if (wsUrl) {
+      defaultClient = AI({ wsUrl } as AIClientOptions) as unknown as AIClient
+    } else if (httpUrl) {
+      defaultClient = AI({ httpUrl } as AIClientOptions) as unknown as AIClient
     } else {
       throw new Error(
         'AI client not configured. Call configureAI() first or set AI_WS_URL/AI_HTTP_URL environment variables.'

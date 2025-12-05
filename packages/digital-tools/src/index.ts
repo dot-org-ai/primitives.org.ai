@@ -18,6 +18,48 @@ export type * from './types.js'
 // Re-export AnyTool as a convenience value export
 export type { AnyTool, Tool, ToolCategory, ToolSubcategory, ToolRegistry } from './types.js'
 
+// Export entity type definitions (Nouns for digital tools)
+export {
+  // Email
+  Email,
+  EmailThread,
+
+  // Spreadsheet
+  Spreadsheet,
+  Sheet,
+  Cell,
+
+  // Document
+  Document,
+
+  // Presentation
+  Presentation,
+  Slide,
+
+  // Phone
+  PhoneCall,
+  Voicemail,
+
+  // Team Messaging (Slack/Teams/Discord equivalent)
+  Workspace,
+  Channel,
+  Message,
+  Thread,
+  DirectMessage,
+  Member,
+  Reaction,
+
+  // Supporting
+  Attachment,
+  Contact,
+  Comment,
+  Revision,
+
+  // Collections
+  DigitalToolEntities,
+  DigitalToolCategories,
+} from './entities.js'
+
 // Export registry
 export {
   registry,
