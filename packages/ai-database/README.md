@@ -328,7 +328,7 @@ await actions.update(action.id, { status: 'completed' })
 ## Installation
 
 ```bash
-npm install ai-database
+pnpm add ai-database
 ```
 
 ## Configuration

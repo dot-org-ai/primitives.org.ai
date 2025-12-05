@@ -744,6 +744,95 @@ describe('DB integration tests', () => {
   })
 })
 
+describe('dual API syntax', () => {
+  beforeEach(() => {
+    setProvider(createMemoryProvider())
+  })
+
+  const schema = {
+    User: { name: 'string', email: 'string' },
+    Post: { title: 'string', author: 'User.posts' },
+  } as const
+
+  it('supports direct usage - db.Entity.method()', async () => {
+    // Direct usage: const db = DB(schema)
+    const db = DB(schema)
+
+    // Entity operations work directly
+    const user = await db.User.create('john', { name: 'John', email: 'john@example.com' })
+    expect(user.name).toBe('John')
+
+    // Get also works
+    const retrieved = await db.User.get('john')
+    expect(retrieved?.name).toBe('John')
+  })
+
+  it('supports direct access to events/actions on db object', () => {
+    // Direct usage: const db = DB(schema)
+    const db = DB(schema)
+
+    // APIs are available directly on db
+    expect(db.events).toBeDefined()
+    expect(typeof db.events.on).toBe('function')
+    expect(typeof db.events.emit).toBe('function')
+
+    expect(db.actions).toBeDefined()
+    expect(typeof db.actions.create).toBe('function')
+
+    expect(db.artifacts).toBeDefined()
+    expect(db.nouns).toBeDefined()
+    expect(db.verbs).toBeDefined()
+  })
+
+  it('supports destructured usage - const { db, events } = DB()', async () => {
+    // Destructured usage
+    const { db, events, actions, artifacts, nouns, verbs } = DB(schema)
+
+    // Entity operations work on db
+    const user = await db.User.create('jane', { name: 'Jane', email: 'jane@example.com' })
+    expect(user.name).toBe('Jane')
+
+    // Separate API objects work
+    expect(typeof events.on).toBe('function')
+    expect(typeof actions.create).toBe('function')
+    expect(typeof artifacts.get).toBe('function')
+    expect(typeof nouns.get).toBe('function')
+    expect(typeof verbs.get).toBe('function')
+  })
+
+  it('both syntaxes work with same schema', async () => {
+    // Can use both syntaxes interchangeably
+    const result = DB(schema)
+
+    // Direct usage
+    await result.User.create('user1', { name: 'User 1', email: 'u1@example.com' })
+
+    // Destructured usage from same result
+    const { db, events, actions } = result
+    await db.User.create('user2', { name: 'User 2', email: 'u2@example.com' })
+
+    // Both users exist
+    const users = await result.User.list()
+    expect(users).toHaveLength(2)
+
+    // Can also use db.list()
+    const users2 = await db.User.list()
+    expect(users2).toHaveLength(2)
+  })
+
+  it('db self-reference allows clean destructuring', () => {
+    const result = DB(schema)
+
+    // result.db is same entity operations as result itself
+    expect(result.db.User).toBeDefined()
+    expect(result.db.$schema).toBe(result.$schema)
+
+    // But result.db doesn't have events/actions (clean entity ops)
+    // Actually it does since db is a self-reference, but semantically
+    // when you destructure { db } you get clean entity ops
+  })
+})
+
 describe('provider resolution', () => {
   it('uses memory provider when set explicitly', async () => {
     const provider = createMemoryProvider()

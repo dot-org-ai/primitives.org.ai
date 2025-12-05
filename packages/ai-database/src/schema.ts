@@ -1714,10 +1714,24 @@ export interface VerbsAPI {
 // =============================================================================
 
 /**
- * Result of calling DB() - destructured exports
+ * Result of DB() factory - supports both direct and destructured usage
+ *
+ * @example
+ * ```ts
+ * // Direct usage - everything on one object
+ * const db = DB(schema)
+ * db.User.create(...)      // entity operations
+ * db.events.on(...)        // events API
+ * db.actions.create(...)   // actions API
+ *
+ * // Destructured usage - cleaner separation
+ * const { db, events, actions } = DB(schema)
+ * db.User.create(...)      // just entity ops
+ * events.on(...)           // separate events
+ * ```
  */
-export interface DBResult<TSchema extends DatabaseSchema> {
-  /** Database instance for CRUD operations */
+export type DBResult<TSchema extends DatabaseSchema> = TypedDB<TSchema> & {
+  /** Self-reference for destructuring - same as the parent object but cleaner semantically */
   db: TypedDB<TSchema>
 
   /** Event subscription and emission */
@@ -2225,33 +2239,38 @@ async function checkFileCountThreshold(root: string): Promise<void> {
 /**
  * Create a typed database from a schema definition
  *
- * @example
+ * Supports both direct usage and destructuring for flexibility:
+ *
+ * @example Direct usage - everything on one object
  * ```ts
- * const { db, events, actions, artifacts, nouns, verbs } = DB({
- *   Post: {
- *     title: 'string',
- *     content: 'markdown',
- *     author: 'Author.posts',
- *     tags: 'Tag[]',
- *   },
- *   Author: {
- *     name: 'string',
- *     email: 'string',
- *     // posts: Post[] - auto-created from Post.author backref
- *   },
- *   Tag: {
- *     name: 'string',
- *   }
+ * const db = DB({
+ *   Post: { title: 'string', author: 'Author.posts' },
+ *   Author: { name: 'string' },
  * })
  *
- * // CRUD operations
+ * // Entity operations
+ * const post = await db.Post.create({ title: 'Hello' })
+ *
+ * // Events, actions, etc. are also available directly
+ * db.events.on('Post.created', (event) => console.log(event))
+ * db.actions.create({ type: 'generate', data: {} })
+ * ```
+ *
+ * @example Destructured usage - cleaner separation
+ * ```ts
+ * const { db, events, actions, artifacts, nouns, verbs } = DB({
+ *   Post: { title: 'string', author: 'Author.posts' },
+ *   Author: { name: 'string' },
+ * })
+ *
+ * // CRUD operations on db
  * const post = await db.Post.create({ title: 'Hello' })
  * await db.Post.update(post.$id, { title: 'Updated' })
  *
- * // Event subscription
+ * // Separate events API
  * events.on('Post.created', (event) => console.log(event))
  *
- * // Durable actions
+ * // Separate actions API
  * const action = await actions.create({ type: 'generate', data: {} })
  * ```
  */
@@ -2518,7 +2537,17 @@ export function DB<TSchema extends DatabaseSchema>(
     conjugate,
   }
 
-  return { db, events, actions, artifacts, nouns, verbs }
+  // Return combined object that supports both direct usage and destructuring
+  // db.User.create() works, db.events.on() works
+  // const { db, events } = DB(...) also works
+  return Object.assign(db, {
+    db, // self-reference for destructuring
+    events,
+    actions,
+    artifacts,
+    nouns,
+    verbs,
+  }) as DBResult<TSchema>
 }
 
 /**

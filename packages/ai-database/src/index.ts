@@ -1,7 +1,9 @@
 /**
  * ai-database - Schema-first database with promise pipelining
  *
- * @example
+ * Supports both direct and destructured usage:
+ *
+ * @example Direct usage - everything on one object
  * ```ts
  * const { db } = DB({
  *   Lead: {
@@ -85,6 +87,8 @@ export {
   // Configuration
   setProvider,
   setNLQueryGenerator,
+  // Schema parsing
+  parseSchema,
   // Schema Definition
   defineNoun,
   defineVerb,
