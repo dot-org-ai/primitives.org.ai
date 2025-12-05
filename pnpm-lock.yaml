@@ -60,7 +60,7 @@ importers:
         specifier: ^4.0.0
         version: 4.3.19(react@19.2.0)(zod@3.25.76)
       ai-providers:
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../ai-providers
       language-models:
         specifier: workspace:*
@@ -278,6 +278,8 @@ importers:
       rpc.do:
         specifier: ^0.1.0
         version: 0.1.1
+
+  packages/examples: {}
 
   packages/human-in-the-loop:
     dependencies:
