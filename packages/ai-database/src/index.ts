@@ -141,3 +141,74 @@ export type {
   ForEachProgress,
   ForEachErrorAction,
 } from './ai-promise-db.js'
+
+// Authorization (FGA/RBAC) exports
+export type {
+  // Core primitives
+  Subject,
+  SubjectType,
+  Resource,
+  ResourceRef,
+  ResourceType,
+
+  // Role & Permission
+  Permission,
+  Role,
+  RoleLevel,
+
+  // Assignment
+  Assignment,
+  AssignmentInput,
+
+  // Authorization checks
+  AuthzCheckRequest,
+  AuthzCheckResult,
+  AuthzBatchCheckRequest,
+  AuthzBatchCheckResult,
+
+  // Hierarchy
+  ResourceHierarchy,
+
+  // Schema integration
+  AuthorizedNoun,
+
+  // Business roles
+  BusinessRole,
+
+  // Engine interface
+  AuthorizationEngine,
+} from './authorization.js'
+
+export {
+  // Standard definitions
+  StandardHierarchies,
+  StandardPermissions,
+  CRUDPermissions,
+  createStandardRoles,
+
+  // Verb-scoped permissions
+  verbPermission,
+  nounPermissions,
+  matchesPermission,
+
+  // Helper functions
+  parseSubject,
+  formatSubject,
+  parseResource,
+  formatResource,
+  subjectMatches,
+  resourceMatches,
+
+  // Schema integration
+  authorizeNoun,
+  linkBusinessRole,
+
+  // In-memory engine
+  InMemoryAuthorizationEngine,
+
+  // Nouns
+  RoleNoun,
+  AssignmentNoun,
+  PermissionNoun,
+  AuthorizationNouns,
+} from './authorization.js'

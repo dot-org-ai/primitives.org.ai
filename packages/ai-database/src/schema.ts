@@ -33,364 +33,66 @@ import type { MDXLD } from 'mdxld'
 import { DBPromise, wrapEntityOperations, type ForEachOptions, type ForEachResult } from './ai-promise-db.js'
 
 // =============================================================================
-// Thing Types (mdxld-based entity structure)
+// Re-exports from modular files
 // =============================================================================
 
-/**
- * Flat Thing shape with $-prefixed metadata fields
- * Used for JSON-LD compatible serialization
- *
- * @example
- * ```ts
- * const post: ThingFlat = {
- *   $id: 'post-123',
- *   $type: 'Post',
- *   $context: 'https://schema.org',
- *   title: 'Hello World',
- *   content: '...',
- * }
- * ```
- */
-export interface ThingFlat {
-  /** Unique identifier */
-  $id: string
-  /** Entity type */
-  $type: string
-  /** JSON-LD context (optional) */
-  $context?: string | Record<string, unknown>
-  /** Additional data fields */
-  [key: string]: unknown
-}
+// Re-export types from types.ts
+export type {
+  ThingFlat,
+  ThingExpanded,
+  PrimitiveType,
+  FieldDefinition,
+  EntitySchema,
+  DatabaseSchema,
+  ParsedField,
+  ParsedEntity,
+  ParsedSchema,
+  Verb,
+  Noun,
+  NounProperty,
+  NounRelationship,
+  TypeMeta,
+} from './types.js'
 
-/**
- * Expanded Thing shape with structured data and content
- * Used for full document representation (mdxld format)
- *
- * @example
- * ```ts
- * const post: ThingExpanded = {
- *   id: 'post-123',
- *   type: 'Post',
- *   context: 'https://schema.org',
- *   data: { title: 'Hello World', author: 'john' },
- *   content: '# Hello World\n\nThis is my post...',
- * }
- * ```
- */
-export interface ThingExpanded extends MDXLD {
-  /** Unique identifier */
-  id: string
-  /** Entity type */
-  type: string
-}
+export { toExpanded, toFlat, Verbs } from './types.js'
 
-/**
- * Convert flat thing to expanded format
- */
-export function toExpanded(flat: ThingFlat): ThingExpanded {
-  const { $id, $type, $context, ...rest } = flat
-  return {
-    id: $id,
-    type: $type,
-    context: $context,
-    data: rest,
-    content: typeof rest.content === 'string' ? rest.content : '',
-  }
-}
+// Re-export linguistic utilities from linguistic.ts
+export {
+  conjugate,
+  pluralize,
+  singularize,
+  inferNoun,
+  createTypeMeta,
+  getTypeMeta,
+  Type,
+  getVerbFields,
+} from './linguistic.js'
 
-/**
- * Convert expanded thing to flat format
- */
-export function toFlat(expanded: ThingExpanded): ThingFlat {
-  const { id, type, context, data, content, ...rest } = expanded
-  return {
-    $id: id,
-    $type: type,
-    $context: context,
-    ...data,
-    ...rest,
-    ...(content ? { content } : {}),
-  }
-}
+// Import for internal use
+import type {
+  ThingFlat,
+  ThingExpanded,
+  PrimitiveType,
+  FieldDefinition,
+  EntitySchema,
+  DatabaseSchema,
+  ParsedField,
+  ParsedEntity,
+  ParsedSchema,
+  Verb,
+  Noun,
+  NounProperty,
+  NounRelationship,
+  TypeMeta,
+} from './types.js'
 
-// =============================================================================
-// Schema Definition Types
-// =============================================================================
+import { Verbs } from './types.js'
 
-/**
- * Primitive field types
- */
-export type PrimitiveType =
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'date'
-  | 'datetime'
-  | 'json'
-  | 'markdown'
-  | 'url'
-
-/**
- * A field definition can be:
- * - A primitive type: 'string', 'number', etc.
- * - A relation: 'Author.posts' (Type.backref)
- * - An array of primitives: 'string[]'
- * - An array relation: ['Author.posts'] (many-to-many with backref)
- * - Optional modifier: 'string?'
- */
-export type FieldDefinition = string | [string]
-
-/**
- * Schema for a single entity type
- */
-export type EntitySchema = Record<string, FieldDefinition>
-
-/**
- * Full database schema
- */
-export type DatabaseSchema = Record<string, EntitySchema>
-
-// =============================================================================
-// Parsed Schema Types
-// =============================================================================
-
-/**
- * Parsed field information
- */
-export interface ParsedField {
-  name: string
-  type: string
-  isArray: boolean
-  isOptional: boolean
-  isRelation: boolean
-  relatedType?: string
-  backref?: string
-}
-
-/**
- * Parsed entity with all fields including auto-generated backrefs
- */
-export interface ParsedEntity {
-  name: string
-  fields: Map<string, ParsedField>
-}
-
-/**
- * Fully parsed schema with bi-directional relationships resolved
- */
-export interface ParsedSchema {
-  entities: Map<string, ParsedEntity>
-}
-
-// =============================================================================
-// Noun & Verb - Semantic Types for Self-Documenting Schemas
-// =============================================================================
-
-/**
- * Verb conjugations and related forms
- *
- * Maps an action to its various grammatical forms and semantic relationships.
- *
- * @example
- * ```ts
- * const create: Verb = {
- *   action: 'create',      // Base form (imperative)
- *   actor: 'creator',      // Who does it (noun)
- *   act: 'creates',        // Present tense (3rd person)
- *   activity: 'creating',  // Gerund/continuous
- *   result: 'creation',    // Result noun
- *   reverse: {             // Passive/result properties
- *     at: 'createdAt',
- *     by: 'createdBy',
- *     in: 'createdIn',
- *     for: 'createdFor',
- *   },
- *   inverse: 'delete',     // Opposite action
- * }
- * ```
- */
-export interface Verb {
-  /** Base form / imperative (create, update, delete, publish) */
-  action: string
-
-  /** Agent noun - who performs the action (creator, updater, author, publisher) */
-  actor?: string
-
-  /** Present tense 3rd person singular (creates, updates, deletes, publishes) */
-  act?: string
-
-  /** Present participle / gerund (creating, updating, deleting, publishing) */
-  activity?: string
-
-  /** Result noun - what is produced (creation, update, deletion, publication) */
-  result?: string
-
-  /** Reverse/passive forms - properties resulting from the action */
-  reverse?: {
-    /** Timestamp field (createdAt, updatedAt, deletedAt, publishedAt) */
-    at?: string
-    /** Actor reference (createdBy, updatedBy, deletedBy, publishedBy) */
-    by?: string
-    /** Location/context (createdIn, updatedIn, publishedIn) */
-    in?: string
-    /** Purpose/target (createdFor, publishedFor) */
-    for?: string
-    /** Additional reverse forms */
-    [key: string]: string | undefined
-  }
-
-  /** Inverse action (create ↔ delete, publish ↔ unpublish, activate ↔ deactivate) */
-  inverse?: string
-
-  /** Description of what this action does */
-  description?: string
-}
-
-/**
- * Standard CRUD verbs with pre-defined conjugations
- */
-export const Verbs = {
-  create: {
-    action: 'create',
-    actor: 'creator',
-    act: 'creates',
-    activity: 'creating',
-    result: 'creation',
-    reverse: { at: 'createdAt', by: 'createdBy', in: 'createdIn', for: 'createdFor' },
-    inverse: 'delete',
-  },
-  update: {
-    action: 'update',
-    actor: 'updater',
-    act: 'updates',
-    activity: 'updating',
-    result: 'update',
-    reverse: { at: 'updatedAt', by: 'updatedBy' },
-  },
-  delete: {
-    action: 'delete',
-    actor: 'deleter',
-    act: 'deletes',
-    activity: 'deleting',
-    result: 'deletion',
-    reverse: { at: 'deletedAt', by: 'deletedBy' },
-    inverse: 'create',
-  },
-  publish: {
-    action: 'publish',
-    actor: 'publisher',
-    act: 'publishes',
-    activity: 'publishing',
-    result: 'publication',
-    reverse: { at: 'publishedAt', by: 'publishedBy' },
-    inverse: 'unpublish',
-  },
-  archive: {
-    action: 'archive',
-    actor: 'archiver',
-    act: 'archives',
-    activity: 'archiving',
-    result: 'archive',
-    reverse: { at: 'archivedAt', by: 'archivedBy' },
-    inverse: 'unarchive',
-  },
-} as const satisfies Record<string, Verb>
-
-/**
- * Noun definition - semantic description of an entity type
- *
- * Describes a Thing with its properties, relationships, available actions,
- * and metadata like singular/plural forms for natural language generation.
- *
- * @example
- * ```ts
- * const Post: Noun = {
- *   singular: 'post',
- *   plural: 'posts',
- *   description: 'A blog post or article',
- *
- *   properties: {
- *     title: { type: 'string', description: 'The post title' },
- *     content: { type: 'markdown', description: 'The post body' },
- *     status: { type: 'string', description: 'draft | published | archived' },
- *   },
- *
- *   relationships: {
- *     author: { type: 'Author', backref: 'posts', description: 'Who wrote this' },
- *     tags: { type: 'Tag[]', backref: 'posts', description: 'Categorization' },
- *   },
- *
- *   actions: ['create', 'update', 'delete', 'publish', 'archive'],
- *
- *   events: ['created', 'updated', 'deleted', 'published', 'archived'],
- * }
- * ```
- */
-export interface Noun {
-  /** Singular form (post, user, category) */
-  singular: string
-
-  /** Plural form (posts, users, categories) */
-  plural: string
-
-  /** Human-readable description */
-  description?: string
-
-  /** Property definitions with descriptions */
-  properties?: Record<string, NounProperty>
-
-  /** Relationship definitions with descriptions */
-  relationships?: Record<string, NounRelationship>
-
-  /** Actions that can be performed on this noun (verbs) */
-  actions?: Array<string | Verb>
-
-  /** Events that can occur to this noun */
-  events?: string[]
-
-  /** Additional metadata */
-  metadata?: Record<string, unknown>
-}
-
-/**
- * Property definition within a Noun
- */
-export interface NounProperty {
-  /** Field type */
-  type: PrimitiveType | string
-
-  /** Human-readable description (also used as generation prompt) */
-  description?: string
-
-  /** Whether the field is optional */
-  optional?: boolean
-
-  /** Whether the field is an array */
-  array?: boolean
-
-  /** Default value */
-  default?: unknown
-
-  /** Example values for documentation/generation */
-  examples?: unknown[]
-}
-
-/**
- * Relationship definition within a Noun
- */
-export interface NounRelationship {
-  /** Related entity type (e.g., 'Author', 'Tag[]') */
-  type: string
-
-  /** Backref field name on the related entity */
-  backref?: string
-
-  /** Human-readable description */
-  description?: string
-
-  /** Whether this is a required relationship */
-  required?: boolean
-}
+import {
+  inferNoun,
+  getTypeMeta,
+  conjugate,
+} from './linguistic.js'
 
 /**
  * Create a Noun definition with type inference
@@ -480,339 +182,6 @@ export function nounToSchema(noun: Noun): EntitySchema {
   }
 
   return schema
-}
-
-/**
- * Get reverse property names for a verb action
- *
- * @example
- * ```ts
- * getVerbFields('create')
- * // => { at: 'createdAt', by: 'createdBy', in: 'createdIn', for: 'createdFor' }
- *
- * getVerbFields('publish')
- * // => { at: 'publishedAt', by: 'publishedBy' }
- * ```
- */
-export function getVerbFields(action: keyof typeof Verbs): Record<string, string> {
-  return Verbs[action]?.reverse ?? {}
-}
-
-// =============================================================================
-// AI Auto-Generation - Linguistic Inference
-// =============================================================================
-
-/**
- * Auto-conjugate a verb from just the base form
- *
- * Given just "publish", generates all forms:
- * - actor: publisher
- * - act: publishes
- * - activity: publishing
- * - result: publication
- * - reverse: { at: publishedAt, by: publishedBy, ... }
- *
- * @example
- * ```ts
- * conjugate('publish')
- * // => { action: 'publish', actor: 'publisher', act: 'publishes', activity: 'publishing', ... }
- *
- * conjugate('create')
- * // => { action: 'create', actor: 'creator', act: 'creates', activity: 'creating', ... }
- * ```
- */
-export function conjugate(action: string): Verb {
-  // Check if it's a known verb first
-  if (action in Verbs) {
-    return Verbs[action as keyof typeof Verbs]
-  }
-
-  const base = action.toLowerCase()
-  const pastParticiple = toPastParticiple(base)
-  const capitalized = capitalize(pastParticiple)
-
-  return {
-    action: base,
-    actor: toActor(base),
-    act: toPresent(base),
-    activity: toGerund(base),
-    result: toResult(base),
-    reverse: {
-      at: `${pastParticiple}At`,
-      by: `${pastParticiple}By`,
-      in: `${pastParticiple}In`,
-      for: `${pastParticiple}For`,
-    },
-  }
-}
-
-/**
- * Auto-pluralize a noun
- *
- * @example
- * ```ts
- * pluralize('post')     // => 'posts'
- * pluralize('category') // => 'categories'
- * pluralize('person')   // => 'people'
- * pluralize('child')    // => 'children'
- * ```
- */
-export function pluralize(singular: string): string {
-  const lower = singular.toLowerCase()
-
-  // Irregular plurals
-  const irregulars: Record<string, string> = {
-    person: 'people',
-    child: 'children',
-    man: 'men',
-    woman: 'women',
-    foot: 'feet',
-    tooth: 'teeth',
-    goose: 'geese',
-    mouse: 'mice',
-    ox: 'oxen',
-    leaf: 'leaves',
-    life: 'lives',
-    knife: 'knives',
-    wife: 'wives',
-    half: 'halves',
-    self: 'selves',
-    calf: 'calves',
-    analysis: 'analyses',
-    crisis: 'crises',
-    thesis: 'theses',
-    datum: 'data',
-    medium: 'media',
-    criterion: 'criteria',
-    phenomenon: 'phenomena',
-  }
-
-  if (irregulars[lower]) {
-    return preserveCase(singular, irregulars[lower])
-  }
-
-  // Rules for regular plurals
-  if (lower.endsWith('y') && !isVowel(lower[lower.length - 2])) {
-    return singular.slice(0, -1) + 'ies'
-  }
-  // Words ending in z that double: quiz → quizzes, fez → fezzes
-  if (lower.endsWith('z') && !lower.endsWith('zz')) {
-    return singular + 'zes'
-  }
-  if (lower.endsWith('s') || lower.endsWith('x') || lower.endsWith('zz') ||
-      lower.endsWith('ch') || lower.endsWith('sh')) {
-    return singular + 'es'
-  }
-  if (lower.endsWith('f')) {
-    return singular.slice(0, -1) + 'ves'
-  }
-  if (lower.endsWith('fe')) {
-    return singular.slice(0, -2) + 'ves'
-  }
-
-  return singular + 's'
-}
-
-/**
- * Auto-singularize a noun (reverse of pluralize)
- *
- * @example
- * ```ts
- * singularize('posts')      // => 'post'
- * singularize('categories') // => 'category'
- * singularize('people')     // => 'person'
- * ```
- */
-export function singularize(plural: string): string {
-  const lower = plural.toLowerCase()
-
-  // Irregular singulars
-  const irregulars: Record<string, string> = {
-    people: 'person',
-    children: 'child',
-    men: 'man',
-    women: 'woman',
-    feet: 'foot',
-    teeth: 'tooth',
-    geese: 'goose',
-    mice: 'mouse',
-    oxen: 'ox',
-    leaves: 'leaf',
-    lives: 'life',
-    knives: 'knife',
-    wives: 'wife',
-    halves: 'half',
-    selves: 'self',
-    calves: 'calf',
-    analyses: 'analysis',
-    crises: 'crisis',
-    theses: 'thesis',
-    data: 'datum',
-    media: 'medium',
-    criteria: 'criterion',
-    phenomena: 'phenomenon',
-  }
-
-  if (irregulars[lower]) {
-    return preserveCase(plural, irregulars[lower])
-  }
-
-  // Rules for regular singulars
-  if (lower.endsWith('ies')) {
-    return plural.slice(0, -3) + 'y'
-  }
-  if (lower.endsWith('ves')) {
-    return plural.slice(0, -3) + 'f'
-  }
-  if (lower.endsWith('es') && (
-    lower.endsWith('sses') || lower.endsWith('xes') || lower.endsWith('zes') ||
-    lower.endsWith('ches') || lower.endsWith('shes')
-  )) {
-    return plural.slice(0, -2)
-  }
-  if (lower.endsWith('s') && !lower.endsWith('ss')) {
-    return plural.slice(0, -1)
-  }
-
-  return plural
-}
-
-/**
- * Infer a complete Noun from just a type name
- *
- * @example
- * ```ts
- * inferNoun('BlogPost')
- * // => { singular: 'blog post', plural: 'blog posts', ... }
- *
- * inferNoun('Category')
- * // => { singular: 'category', plural: 'categories', ... }
- * ```
- */
-export function inferNoun(typeName: string): Noun {
-  const words = splitCamelCase(typeName)
-  const singular = words.join(' ').toLowerCase()
-  const plural = words.slice(0, -1).concat(pluralize(words[words.length - 1]!)).join(' ').toLowerCase()
-
-  return {
-    singular,
-    plural,
-    actions: ['create', 'update', 'delete'],
-    events: ['created', 'updated', 'deleted'],
-  }
-}
-
-/**
- * Type metadata - automatically inferred from type name
- *
- * Available on every entity via `entity.$type` or `db.Post.$meta`
- */
-export interface TypeMeta {
-  /** Type name as defined in schema (e.g., 'Post', 'BlogPost') */
-  name: string
-  /** Singular form (e.g., 'post', 'blog post') */
-  singular: string
-  /** Plural form (e.g., 'posts', 'blog posts') */
-  plural: string
-  /** URL-safe slug (e.g., 'post', 'blog-post') */
-  slug: string
-  /** Plural slug (e.g., 'posts', 'blog-posts') */
-  slugPlural: string
-
-  // Verb-derived accessors
-  /** Creator relationship name */
-  creator: string
-  /** Created timestamp field */
-  createdAt: string
-  /** Created by field */
-  createdBy: string
-  /** Updated timestamp field */
-  updatedAt: string
-  /** Updated by field */
-  updatedBy: string
-
-  // Event types
-  /** Event type for creation (e.g., 'Post.created') */
-  created: string
-  /** Event type for update (e.g., 'Post.updated') */
-  updated: string
-  /** Event type for deletion (e.g., 'Post.deleted') */
-  deleted: string
-}
-
-/**
- * Create TypeMeta from a type name - all linguistic forms auto-inferred
- *
- * @example
- * ```ts
- * const meta = createTypeMeta('BlogPost')
- * meta.singular  // 'blog post'
- * meta.plural    // 'blog posts'
- * meta.slug      // 'blog-post'
- * meta.created   // 'BlogPost.created'
- * meta.createdAt // 'createdAt'
- * meta.creator   // 'creator'
- * ```
- */
-export function createTypeMeta(typeName: string): TypeMeta {
-  const noun = inferNoun(typeName)
-  const slug = noun.singular.replace(/\s+/g, '-')
-  const slugPlural = noun.plural.replace(/\s+/g, '-')
-
-  return {
-    name: typeName,
-    singular: noun.singular,
-    plural: noun.plural,
-    slug,
-    slugPlural,
-
-    // From Verbs.create
-    creator: 'creator',
-    createdAt: 'createdAt',
-    createdBy: 'createdBy',
-    updatedAt: 'updatedAt',
-    updatedBy: 'updatedBy',
-
-    // Event types
-    created: `${typeName}.created`,
-    updated: `${typeName}.updated`,
-    deleted: `${typeName}.deleted`,
-  }
-}
-
-/** Cache of TypeMeta by type name */
-const typeMetaCache = new Map<string, TypeMeta>()
-
-/**
- * Get or create TypeMeta for a type name (cached)
- */
-export function getTypeMeta(typeName: string): TypeMeta {
-  let meta = typeMetaCache.get(typeName)
-  if (!meta) {
-    meta = createTypeMeta(typeName)
-    typeMetaCache.set(typeName, meta)
-  }
-  return meta
-}
-
-/**
- * Type proxy - provides dynamic access to type metadata
- *
- * @example
- * ```ts
- * const Post = Type('Post')
- * Post.singular  // 'post'
- * Post.plural    // 'posts'
- * Post.created   // 'Post.created'
- *
- * // In event handlers:
- * on.create(thing => {
- *   console.log(thing.$type.plural)  // 'posts'
- * })
- * ```
- */
-export function Type(name: string): TypeMeta {
-  return getTypeMeta(name)
 }
 
 // =============================================================================
@@ -1028,106 +397,6 @@ function schemaToProperties(schema: EntitySchema): Record<string, NounProperty> 
   }
 
   return properties
-}
-
-// =============================================================================
-// Linguistic Helpers (internal)
-// =============================================================================
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
-
-function preserveCase(original: string, replacement: string): string {
-  if (original[0] === original[0]?.toUpperCase()) {
-    return capitalize(replacement)
-  }
-  return replacement
-}
-
-function isVowel(char: string | undefined): boolean {
-  return char ? 'aeiou'.includes(char.toLowerCase()) : false
-}
-
-function splitCamelCase(s: string): string[] {
-  return s.replace(/([a-z])([A-Z])/g, '$1 $2').split(' ')
-}
-
-/** Check if we should double the final consonant (CVC pattern) */
-function shouldDoubleConsonant(verb: string): boolean {
-  if (verb.length < 2) return false
-  const last = verb[verb.length - 1]!
-  const secondLast = verb[verb.length - 2]!
-  // Don't double w, x, y
-  if ('wxy'.includes(last)) return false
-  // Must end in consonant preceded by vowel
-  if (isVowel(last) || !isVowel(secondLast)) return false
-  // Common verbs that double the final consonant
-  const doublingVerbs = ['submit', 'commit', 'permit', 'omit', 'admit', 'emit', 'transmit', 'refer', 'prefer', 'defer', 'occur', 'recur', 'begin', 'stop', 'drop', 'shop', 'plan', 'scan', 'ban', 'run', 'gun', 'stun', 'cut', 'shut', 'hit', 'sit', 'fit', 'spit', 'quit', 'knit', 'get', 'set', 'pet', 'wet', 'bet', 'let', 'put', 'drag', 'brag', 'flag', 'tag', 'bag', 'nag', 'wag', 'hug', 'bug', 'mug', 'tug', 'rub', 'scrub', 'grab', 'stab', 'rob', 'sob', 'throb', 'nod', 'prod', 'plod', 'plot', 'rot', 'blot', 'spot', 'knot', 'trot', 'chat', 'pat', 'bat', 'mat', 'rat', 'slap', 'clap', 'flap', 'tap', 'wrap', 'snap', 'trap', 'cap', 'map', 'nap', 'zap', 'tip', 'sip', 'dip', 'rip', 'zip', 'slip', 'trip', 'drip', 'chip', 'clip', 'flip', 'grip', 'ship', 'skip', 'whip', 'strip', 'equip', 'hop', 'pop', 'mop', 'cop', 'chop', 'crop', 'prop', 'flop', 'swim', 'trim', 'slim', 'skim', 'dim', 'rim', 'brim', 'grim', 'hem', 'stem', 'jam', 'cram', 'ram', 'slam', 'dam', 'ham', 'scam', 'spam', 'tram', 'hum', 'drum', 'strum', 'sum', 'gum', 'chum', 'plum']
-  // Short words (3 letters) almost always double
-  if (verb.length <= 3) return true
-  // Check if verb matches any known doubling pattern
-  return doublingVerbs.some(v => verb === v || verb.endsWith(v))
-}
-
-/** Convert verb to past participle (create → created, publish → published) */
-function toPastParticiple(verb: string): string {
-  if (verb.endsWith('e')) return verb + 'd'
-  if (verb.endsWith('y') && !isVowel(verb[verb.length - 2])) {
-    return verb.slice(0, -1) + 'ied'
-  }
-  if (shouldDoubleConsonant(verb)) {
-    return verb + verb[verb.length - 1] + 'ed'
-  }
-  return verb + 'ed'
-}
-
-/** Convert verb to actor noun (create → creator, publish → publisher) */
-function toActor(verb: string): string {
-  if (verb.endsWith('e')) return verb + 'r'
-  if (verb.endsWith('y') && !isVowel(verb[verb.length - 2])) {
-    return verb.slice(0, -1) + 'ier'
-  }
-  if (shouldDoubleConsonant(verb)) {
-    return verb + verb[verb.length - 1] + 'er'
-  }
-  return verb + 'er'
-}
-
-/** Convert verb to present 3rd person (create → creates, publish → publishes) */
-function toPresent(verb: string): string {
-  if (verb.endsWith('y') && !isVowel(verb[verb.length - 2])) {
-    return verb.slice(0, -1) + 'ies'
-  }
-  if (verb.endsWith('s') || verb.endsWith('x') || verb.endsWith('z') ||
-      verb.endsWith('ch') || verb.endsWith('sh')) {
-    return verb + 'es'
-  }
-  return verb + 's'
-}
-
-/** Convert verb to gerund (create → creating, publish → publishing) */
-function toGerund(verb: string): string {
-  if (verb.endsWith('ie')) return verb.slice(0, -2) + 'ying'
-  if (verb.endsWith('e') && !verb.endsWith('ee')) return verb.slice(0, -1) + 'ing'
-  if (shouldDoubleConsonant(verb)) {
-    return verb + verb[verb.length - 1] + 'ing'
-  }
-  return verb + 'ing'
-}
-
-/** Convert verb to result noun (create → creation, publish → publication) */
-function toResult(verb: string): string {
-  // Common -ate → -ation
-  if (verb.endsWith('ate')) return verb.slice(0, -1) + 'ion'
-  // Common -ify → -ification
-  if (verb.endsWith('ify')) return verb.slice(0, -1) + 'ication'
-  // Common -ize → -ization
-  if (verb.endsWith('ize')) return verb.slice(0, -1) + 'ation'
-  // Common -e → -ion (but not always correct)
-  if (verb.endsWith('e')) return verb.slice(0, -1) + 'ion'
-  // Default: just add -ion
-  return verb + 'ion'
 }
 
 // =============================================================================
@@ -2507,10 +1776,10 @@ export function DB<TSchema extends DatabaseSchema>(
 
   // Create Actions API early so it can be injected into entity operations
   const actionsAPI = {
-    async create(data: { type: string; data: unknown; total?: number }) {
+    async create(options: CreateActionOptions | { type: string; data: unknown; total?: number }) {
       const provider = await resolveProvider()
       if ('createAction' in provider) {
-        return (provider as any).createAction(data)
+        return (provider as any).createAction(options)
       }
       throw new Error('Provider does not support actions')
     },
