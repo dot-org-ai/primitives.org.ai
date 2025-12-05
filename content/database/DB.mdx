@@ -5,6 +5,23 @@ description: Create a database instance with schema
 
 Create a database instance with typed schemas. Returns `db` and all primitive exports.
 
+## Namespace IS Context
+
+Every database is scoped by a [Domain](/domain) namespace - and that namespace IS the `$context`. The database doesn't just store data; it stores data WITH meaning:
+
+```typescript
+// The namespace provides context for everything in this database
+const { db } = DB({
+  Customer: { name: 'string', tier: 'free | pro | enterprise' },
+  Order: { customer: 'Customer', total: 'number' },
+}, { namespace: 'acme.do' })
+
+// AI understands these aren't just tables -
+// they're YOUR Customer, YOUR Order, in YOUR context
+```
+
+This is why AI can reason about your data: the namespace provides both semantic context (JSON-LD `$context`) and cognitive context (how AI should think about your domain).
+
 ## Import
 
 ```typescript

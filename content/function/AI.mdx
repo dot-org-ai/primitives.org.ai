@@ -5,6 +5,27 @@ description: Create typed AI instances with predefined schemas
 
 Create a typed AI instance with predefined schemas.
 
+## AI Needs Context
+
+AI is only as good as its context. When you create an `AI()` instance, you're defining schemas that exist within your [Domain](/domain) namespace - and that namespace IS the `$context`:
+
+```typescript
+// These schemas exist in YOUR domain context
+const ai = AI({
+  customer: {
+    name: 'Customer name',
+    tier: 'free | pro | enterprise',
+    needs: ['List of customer needs'],
+  },
+})
+
+// AI generates within YOUR context
+const profile = await ai.customer('Acme Corp, enterprise SaaS')
+// AI knows what "customer" means in YOUR business
+```
+
+The namespace provides the cognitive context that makes AI understand your business vocabulary, your entities, your relationships.
+
 ## Import
 
 ```typescript

@@ -8,6 +8,26 @@ icon: Play
 
 Verbs represent actions and operations that can be performed on [Things](/thing) in your domain.
 
+## Context Defines Meaning
+
+Every Verb exists within a [Domain](/domain) namespace - and that namespace IS the `$context`. The verb "approve" means something different at a bank vs. a publishing company:
+
+```typescript
+// In bank.do namespace/context
+const Approve = Verb('approve', {
+  object: 'LoanApplication',
+  effect: (app) => ({ ...app, status: 'funded' }),
+})
+
+// In publisher.do namespace/context
+const Approve = Verb('approve', {
+  object: 'Manuscript',
+  effect: (doc) => ({ ...doc, status: 'ready-for-print' }),
+})
+```
+
+The namespace provides context for AI to understand not just WHAT action to take, but HOW it should behave in YOUR domain.
+
 ## Overview
 
 A **Verb** defines an operation with its parameters, preconditions, and effects. Verbs create [Actions](/action) when applied to specific things, and emit [Events](/event) when executed.
@@ -95,6 +115,7 @@ await list(Customer, { tier: 'pro' })
 
 ## See Also
 
+- [Domain](/domain) - The namespace that IS the context
 - [Noun](/noun) - Types that verbs operate on
 - [Thing](/thing) - Instances that verbs act upon
 - [Action](/action) - Bound verb invocations

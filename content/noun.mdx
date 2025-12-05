@@ -8,6 +8,24 @@ icon: Tag
 
 Nouns represent the named entities and concepts in your domain - the "things" you're working with.
 
+## Context is Everything
+
+Every Noun exists within a [Domain](/domain) namespace - and that namespace IS the `$context`. When you define a Noun, you're not just creating a schema - you're teaching AI what this concept means in YOUR domain:
+
+```typescript
+// In the acme.do namespace/context
+const Customer = Noun('Customer', {
+  name: 'string',
+  tier: ['free', 'pro', 'enterprise'],
+})
+
+// AI now understands what "Customer" means at acme.do
+// - semantically (JSON-LD @context)
+// - cognitively (how to reason about customers)
+```
+
+The same word "Customer" means different things in different domains. The namespace provides the context that disambiguates meaning for both machines and AI.
+
 ## Overview
 
 In the primitives framework, a **Noun** is a type definition for domain entities. Nouns define the schema for [Things](/thing) - the actual instances that exist in your system.
@@ -75,6 +93,7 @@ const Order = Noun('Order', {
 
 ## See Also
 
+- [Domain](/domain) - The namespace that IS the context
 - [Thing](/thing) - Instances of nouns
 - [Verb](/verb) - Actions that operate on nouns
 - [Database](/database) - Storage and querying of nouns and things
