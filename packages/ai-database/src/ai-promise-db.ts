@@ -72,6 +72,128 @@ interface RelationRecording {
 }
 
 // =============================================================================
+// ForEach Types - For large-scale, slow operations
+// =============================================================================
+
+/**
+ * Progress info for forEach operations
+ */
+export interface ForEachProgress {
+  /** Current item index (0-based) */
+  index: number
+  /** Total items (if known) */
+  total?: number
+  /** Number of items completed */
+  completed: number
+  /** Number of items failed */
+  failed: number
+  /** Number of items skipped */
+  skipped: number
+  /** Current item being processed */
+  current?: unknown
+  /** Elapsed time in ms */
+  elapsed: number
+  /** Estimated time remaining in ms (if total known) */
+  remaining?: number
+  /** Items per second */
+  rate: number
+}
+
+/**
+ * Error handling result
+ */
+export type ForEachErrorAction = 'continue' | 'retry' | 'skip' | 'stop'
+
+/**
+ * Options for forEach operations
+ *
+ * @example
+ * ```ts
+ * await db.Lead.list().forEach(async lead => {
+ *   const analysis = await ai`analyze ${lead}`
+ *   await db.Lead.update(lead.$id, { analysis })
+ * }, {
+ *   concurrency: 10,
+ *   onProgress: p => console.log(`${p.completed}/${p.total}`),
+ *   onError: (err, item) => err.retryable ? 'retry' : 'continue',
+ * })
+ * ```
+ */
+export interface ForEachOptions<T = unknown> {
+  /**
+   * Maximum concurrent operations (default: 1)
+   * Set higher for I/O-bound operations, lower for CPU-bound
+   */
+  concurrency?: number
+
+  /**
+   * Batch size for fetching items (default: 100)
+   * Helps with memory efficiency for large datasets
+   */
+  batchSize?: number
+
+  /**
+   * Maximum retries per item (default: 0)
+   */
+  maxRetries?: number
+
+  /**
+   * Delay between retries in ms (default: 1000)
+   * Can be a number or function for exponential backoff
+   */
+  retryDelay?: number | ((attempt: number) => number)
+
+  /**
+   * Progress callback - called after each item completes
+   */
+  onProgress?: (progress: ForEachProgress) => void
+
+  /**
+   * Error handler - determines what to do on failure
+   * - 'continue': Skip item and continue (default)
+   * - 'retry': Retry the item (up to maxRetries)
+   * - 'skip': Mark as skipped and continue
+   * - 'stop': Stop processing immediately
+   */
+  onError?: ForEachErrorAction | ((error: Error, item: T, attempt: number) => ForEachErrorAction | Promise<ForEachErrorAction>)
+
+  /**
+   * Called when an item completes successfully
+   */
+  onComplete?: (item: T, result: unknown, index: number) => void | Promise<void>
+
+  /**
+   * AbortController signal for cancellation
+   */
+  signal?: AbortSignal
+
+  /**
+   * Timeout per item in ms (default: none)
+   */
+  timeout?: number
+}
+
+/**
+ * Result of forEach operation
+ */
+export interface ForEachResult {
+  /** Total items processed */
+  total: number
+  /** Items completed successfully */
+  completed: number
+  /** Items that failed */
+  failed: number
+  /** Items skipped */
+  skipped: number
+  /** Total elapsed time in ms */
+  elapsed: number
+  /** Errors encountered (if any) */
+  errors: Array<{ item: unknown; error: Error; index: number }>
+  /** Was the operation cancelled? */
+  cancelled: boolean
+}
+
+// =============================================================================
 // DBPromise Implementation
 // =============================================================================
 
@@ -282,6 +404,225 @@ export class DBPromise<T> implements PromiseLike<T> {
   }
 
   /**
+   * Process each item with concurrency control, progress tracking, and error handling
+   *
+   * Designed for large-scale operations like AI generations or workflows.
+   *
+   * @example
+   * ```ts
+   * // Simple - process sequentially
+   * await db.Lead.list().forEach(async lead => {
+   *   await processLead(lead)
+   * })
+   *
+   * // With concurrency and progress
+   * await db.Lead.list().forEach(async lead => {
+   *   const analysis = await ai`analyze ${lead}`
+   *   await db.Lead.update(lead.$id, { analysis })
+   * }, {
+   *   concurrency: 10,
+   *   onProgress: p => console.log(`${p.completed}/${p.total} (${p.rate}/s)`),
+   * })
+   *
+   * // With error handling and retries
+   * const result = await db.Order.list().forEach(async order => {
+   *   await sendInvoice(order)
+   * }, {
+   *   concurrency: 5,
+   *   maxRetries: 3,
+   *   retryDelay: attempt => 1000 * Math.pow(2, attempt),
+   *   onError: (err, order) => err.code === 'RATE_LIMIT' ? 'retry' : 'continue',
+   * })
+   *
+   * console.log(`Sent ${result.completed}, failed ${result.failed}`)
+   * ```
+   */
+  async forEach<U>(
+    callback: (item: T extends (infer I)[] ? I : T, index: number) => U | Promise<U>,
+    options: ForEachOptions<T extends (infer I)[] ? I : T> = {}
+  ): Promise<ForEachResult> {
+    const {
+      concurrency = 1,
+      batchSize = 100,
+      maxRetries = 0,
+      retryDelay = 1000,
+      onProgress,
+      onError = 'continue',
+      onComplete,
+      signal,
+      timeout,
+    } = options
+
+    const startTime = Date.now()
+    const errors: ForEachResult['errors'] = []
+    let completed = 0
+    let failed = 0
+    let skipped = 0
+    let cancelled = false
+
+    // Resolve the items
+    const items = await this.resolve()
+    if (!Array.isArray(items)) {
+      throw new Error('forEach can only be called on array results')
+    }
+
+    const total = items.length
+
+    // Helper to calculate progress
+    const getProgress = (index: number, current?: unknown): ForEachProgress => {
+      const elapsed = Date.now() - startTime
+      const processed = completed + failed + skipped
+      const rate = processed > 0 ? (processed / elapsed) * 1000 : 0
+      const remaining = rate > 0 && total ? ((total - processed) / rate) * 1000 : undefined
+
+      return {
+        index,
+        total,
+        completed,
+        failed,
+        skipped,
+        current,
+        elapsed,
+        remaining,
+        rate,
+      }
+    }
+
+    // Helper to get retry delay
+    const getRetryDelay = (attempt: number): number => {
+      return typeof retryDelay === 'function' ? retryDelay(attempt) : retryDelay
+    }
+
+    // Helper to handle error
+    const handleError = async (
+      error: Error,
+      item: unknown,
+      attempt: number
+    ): Promise<ForEachErrorAction> => {
+      if (typeof onError === 'function') {
+        return onError(error, item as any, attempt)
+      }
+      return onError
+    }
+
+    // Process a single item with retries
+    const processItem = async (item: unknown, index: number): Promise<void> => {
+      if (cancelled || signal?.aborted) {
+        cancelled = true
+        return
+      }
+
+      let attempt = 0
+      while (true) {
+        try {
+          // Create timeout wrapper if needed
+          let result: U
+          if (timeout) {
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error(`Timeout after ${timeout}ms`)), timeout)
+            })
+            result = await Promise.race([
+              Promise.resolve(callback(item as any, index)),
+              timeoutPromise,
+            ])
+          } else {
+            result = await callback(item as any, index)
+          }
+
+          // Success
+          completed++
+          await onComplete?.(item as any, result, index)
+          onProgress?.(getProgress(index, item))
+          return
+
+        } catch (error) {
+          attempt++
+          const action = await handleError(error as Error, item, attempt)
+
+          switch (action) {
+            case 'retry':
+              if (attempt <= maxRetries) {
+                await sleep(getRetryDelay(attempt))
+                continue // Retry
+              }
+              // Fall through to continue if max retries exceeded
+              failed++
+              errors.push({ item, error: error as Error, index })
+              onProgress?.(getProgress(index, item))
+              return
+
+            case 'skip':
+              skipped++
+              onProgress?.(getProgress(index, item))
+              return
+
+            case 'stop':
+              failed++
+              errors.push({ item, error: error as Error, index })
+              cancelled = true
+              return
+
+            case 'continue':
+            default:
+              failed++
+              errors.push({ item, error: error as Error, index })
+              onProgress?.(getProgress(index, item))
+              return
+          }
+        }
+      }
+    }
+
+    // Process items with concurrency
+    if (concurrency === 1) {
+      // Sequential processing
+      for (let i = 0; i < items.length; i++) {
+        if (cancelled || signal?.aborted) {
+          cancelled = true
+          break
+        }
+        await processItem(items[i], i)
+      }
+    } else {
+      // Concurrent processing with semaphore
+      const semaphore = new Semaphore(concurrency)
+      const promises: Promise<void>[] = []
+
+      for (let i = 0; i < items.length; i++) {
+        if (cancelled || signal?.aborted) {
+          cancelled = true
+          break
+        }
+
+        const itemIndex = i
+        const item = items[i]
+
+        promises.push(
+          semaphore.acquire().then(async (release) => {
+            try {
+              await processItem(item, itemIndex)
+            } finally {
+              release()
+            }
+          })
+        )
+      }
+
+      await Promise.all(promises)
+    }
+
+    return {
+      total,
+      completed,
+      failed,
+      skipped,
+      elapsed: Date.now() - startTime,
+      errors,
+      cancelled,
+    }
+  }
+
+  /**
    * Async iteration
    */
   async *[Symbol.asyncIterator](): AsyncIterator<T extends (infer I)[] ? I : T> {
@@ -364,7 +705,7 @@ const DB_PROXY_HANDLERS: ProxyHandler<DBPromise<unknown>> = {
     }
 
     // Handle DBPromise methods
-    if (['map', 'filter', 'sort', 'limit', 'first', 'resolve'].includes(prop)) {
+    if (['map', 'filter', 'sort', 'limit', 'first', 'forEach', 'resolve'].includes(prop)) {
       return (target as any)[prop].bind(target)
     }
 
@@ -400,6 +741,47 @@ const DB_PROXY_HANDLERS: ProxyHandler<DBPromise<unknown>> = {
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+/**
+ * Sleep helper
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * Simple semaphore for concurrency control
+ */
+class Semaphore {
+  private permits: number
+  private queue: Array<() => void> = []
+
+  constructor(permits: number) {
+    this.permits = permits
+  }
+
+  async acquire(): Promise<() => void> {
+    if (this.permits > 0) {
+      this.permits--
+      return () => this.release()
+    }
+
+    return new Promise((resolve) => {
+      this.queue.push(() => {
+        this.permits--
+        resolve(() => this.release())
+      })
+    })
+  }
+
+  private release(): void {
+    this.permits++
+    const next = this.queue.shift()
+    if (next) {
+      next()
+    }
+  }
+}
 
 /**
  * Get nested value from object
@@ -619,7 +1001,7 @@ export function wrapEntityOperations<T>(
   update: (id: string, data: any) => Promise<T>
   upsert: (id: string, data: any) => Promise<T>
   delete: (id: string) => Promise<boolean>
-  forEach: (...args: any[]) => Promise<void>
+  forEach: <U>(callback: (item: T, index: number) => U | Promise<U>, options?: ForEachOptions<T>) => Promise<ForEachResult>
   first: () => DBPromise<T | null>
 } {
   return {
@@ -661,11 +1043,37 @@ export function wrapEntityOperations<T>(
       })
     },
 
+    /**
+     * Process all entities with concurrency control, progress tracking, and error handling
+     *
+     * @example
+     * ```ts
+     * // Simple iteration
+     * await db.Lead.forEach(lead => console.log(lead.name))
+     *
+     * // With AI and concurrency
+     * const result = await db.Lead.forEach(async lead => {
+     *   const analysis = await ai`analyze ${lead}`
+     *   await db.Lead.update(lead.$id, { analysis })
+     * }, { concurrency: 10, onProgress: p => console.log(p) })
+     * ```
+     */
+    async forEach<U>(
+      callback: (item: T, index: number) => U | Promise<U>,
+      options: ForEachOptions<T> = {}
+    ): Promise<ForEachResult> {
+      // Create a DBPromise for list and use its forEach
+      const listPromise = new DBPromise<T[]>({
+        type: typeName,
+        executor: () => operations.list(),
+      })
+      return listPromise.forEach(callback as any, options as any)
+    },
+
     // These don't need wrapping - they're mutations
     create: operations.create,
     update: operations.update,
     upsert: operations.upsert,
     delete: operations.delete,
-    forEach: operations.forEach,
   }
 }

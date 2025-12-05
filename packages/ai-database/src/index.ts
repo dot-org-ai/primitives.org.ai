@@ -124,4 +124,10 @@ export {
   RAW_DB_PROMISE_SYMBOL,
 } from './ai-promise-db.js'
 
-export type { DBPromiseOptions } from './ai-promise-db.js'
+export type {
+  DBPromiseOptions,
+  ForEachOptions,
+  ForEachResult,
+  ForEachProgress,
+  ForEachErrorAction,
+} from './ai-promise-db.js'

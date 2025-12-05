@@ -84,6 +84,7 @@ const pending = await db.Order`what's stuck in processing?`
 | `.sort()` | Sort results |
 | `.limit()` | Limit count |
 | `.map()` | Transform with batch loading |
+| `.forEach()` | Process with concurrency |
 
 ### Schema
 
@@ -141,6 +142,22 @@ const { db } = DB({
 const atRisk = await db.Customer.list()
   .filter(c => c.healthScore < 50)
   .map(c => ({ customer: c, csm: c.csm }))
+```
+
+### Large-Scale Processing
+
+```typescript
+// Process with AI - 10 at a time
+const result = await db.Lead.forEach(async lead => {
+  const analysis = await ai`analyze ${lead}`
+  await db.Lead.update(lead.$id, { analysis })
+}, {
+  concurrency: 10,
+  onProgress: p => console.log(`${p.completed}/${p.total}`),
+  onError: 'continue',
+})
+
+console.log(`Done: ${result.completed}, Failed: ${result.failed}`)
 ```
 
 ---

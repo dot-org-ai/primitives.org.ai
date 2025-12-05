@@ -231,6 +231,52 @@ events.on('*.updated', event => {
 })
 ```
 
+## forEach - Large-Scale Processing
+
+Process thousands of items with concurrency, progress tracking, and error handling:
+
+```typescript
+// Simple iteration
+await db.Lead.forEach(lead => {
+  console.log(lead.name)
+})
+
+// With AI and concurrency
+const result = await db.Lead.forEach(async lead => {
+  const analysis = await ai`analyze ${lead}`
+  await db.Lead.update(lead.$id, { analysis })
+}, {
+  concurrency: 10,
+  onProgress: p => console.log(`${p.completed}/${p.total} (${p.rate.toFixed(1)}/s)`),
+})
+
+// With error handling and retries
+await db.Order.forEach(async order => {
+  await sendInvoice(order)
+}, {
+  concurrency: 5,
+  maxRetries: 3,
+  retryDelay: attempt => 1000 * Math.pow(2, attempt),  // Exponential backoff
+  onError: (err, order) => err.code === 'RATE_LIMIT' ? 'retry' : 'continue',
+})
+
+console.log(`Completed: ${result.completed}, Failed: ${result.failed}`)
+```
+
+### forEach Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `concurrency` | `number` | Max parallel operations (default: 1) |
+| `maxRetries` | `number` | Retries per item (default: 0) |
+| `retryDelay` | `number \| (attempt) => number` | Delay between retries |
+| `onProgress` | `(progress) => void` | Progress callback |
+| `onError` | `'continue' \| 'retry' \| 'skip' \| 'stop' \| fn` | Error handling |
+| `timeout` | `number` | Timeout per item in ms |
+| `signal` | `AbortSignal` | Cancellation signal |
+
+---
+
 ## Actions
 
 Track long-running operations:

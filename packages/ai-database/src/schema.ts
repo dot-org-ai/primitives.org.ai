@@ -30,7 +30,7 @@
  */
 
 import type { MDXLD } from 'mdxld'
-import { DBPromise, wrapEntityOperations } from './ai-promise-db.js'
+import { DBPromise, wrapEntityOperations, type ForEachOptions, type ForEachResult } from './ai-promise-db.js'
 
 // =============================================================================
 // Thing Types (mdxld-based entity structure)
@@ -1385,12 +1385,38 @@ export interface PipelineEntityOperations<T> {
   /** Delete an entity */
   delete(id: string): Promise<boolean>
 
-  /** Iterate over entities */
-  forEach(callback: (entity: T) => void | Promise<void>): Promise<void>
-  forEach(
-    options: ListOptions,
-    callback: (entity: T) => void | Promise<void>
-  ): Promise<void>
+  /**
+   * Process each entity with concurrency control, progress tracking, and error handling
+   *
+   * Designed for large-scale operations like AI generations or workflows.
+   *
+   * @example
+   * ```ts
+   * // Simple iteration
+   * await db.Lead.forEach(lead => console.log(lead.name))
+   *
+   * // With AI and concurrency
+   * const result = await db.Lead.forEach(async lead => {
+   *   const analysis = await ai`analyze ${lead}`
+   *   await db.Lead.update(lead.$id, { analysis })
+   * }, {
+   *   concurrency: 10,
+   *   onProgress: p => console.log(`${p.completed}/${p.total}`),
+   * })
+   *
+   * // With error handling
+   * await db.Order.forEach(async order => {
+   *   await sendInvoice(order)
+   * }, {
+   *   maxRetries: 3,
+   *   onError: (err, order) => err.code === 'RATE_LIMIT' ? 'retry' : 'continue',
+   * })
+   * ```
+   */
+  forEach<U>(
+    callback: (entity: T, index: number) => U | Promise<U>,
+    options?: ForEachOptions<T>
+  ): Promise<ForEachResult>
 }
 
 export interface ListOptions {
