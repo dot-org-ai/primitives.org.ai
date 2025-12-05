@@ -254,6 +254,9 @@ importers:
 
   packages/digital-tools:
     dependencies:
+      ai-database:
+        specifier: workspace:*
+        version: link:../ai-database
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions

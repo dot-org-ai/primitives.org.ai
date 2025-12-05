@@ -78,3 +78,36 @@ export { kpis, okrs } from './kpis.js'
 
 // Export verb definitions
 export { WorkerVerbs } from './types.js'
+
+// Export transport bridge (connects to digital-tools)
+export type {
+  Transport,
+  TransportConfig,
+  MessagePayload,
+  MessageAction,
+  DeliveryResult,
+  Address,
+  TransportHandler,
+} from './transports.js'
+
+export {
+  channelToTransport,
+  getWorkerTransports,
+  getTeamTransports,
+  resolveAddress,
+  resolveWorkerAddresses,
+  getPrimaryAddress,
+  registerTransport,
+  getTransportHandler,
+  hasTransport,
+  listTransports,
+  sendViaTransport,
+  sendToMultipleTransports,
+  buildNotifyPayload,
+  buildAskPayload,
+  buildApprovePayload,
+  toDigitalToolsMessage,
+  fromDigitalToolsMessage,
+  MessageTypeMapping,
+  CallTypeMapping,
+} from './transports.js'

@@ -1,0 +1,1718 @@
+/**
+ * Marketing Entity Types (Nouns)
+ *
+ * Semantic type definitions for marketing digital tools that can be used by
+ * both remote human workers AND AI agents. Each entity defines:
+ * - Properties: The data fields
+ * - Actions: Operations that can be performed (Verbs)
+ * - Events: State changes that occur
+ *
+ * @packageDocumentation
+ */
+
+import type { Noun, NounProperty, NounRelationship, Verb } from 'ai-database'
+
+// =============================================================================
+// Campaign
+// =============================================================================
+
+/**
+ * Marketing campaign entity
+ *
+ * Represents a marketing campaign with goals, budget, and tracking
+ */
+export const Campaign: Noun = {
+  singular: 'campaign',
+  plural: 'campaigns',
+  description: 'A marketing campaign with goals, budget, and performance tracking',
+
+  properties: {
+    // Identity
+    name: {
+      type: 'string',
+      description: 'Campaign name',
+    },
+    description: {
+      type: 'string',
+      optional: true,
+      description: 'Campaign description and goals',
+    },
+
+    // Type & Classification
+    type: {
+      type: 'string',
+      description: 'Campaign type: email, social, paid-ads, content, event, webinar, seo',
+      examples: ['email', 'social', 'paid-ads', 'content', 'event', 'webinar', 'seo'],
+    },
+    category: {
+      type: 'string',
+      optional: true,
+      description: 'Campaign category for organization',
+    },
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Tags for categorization and filtering',
+    },
+
+    // Status & Timing
+    status: {
+      type: 'string',
+      description: 'Campaign status: draft, scheduled, active, paused, completed, archived',
+      examples: ['draft', 'scheduled', 'active', 'paused', 'completed', 'archived'],
+    },
+    startDate: {
+      type: 'datetime',
+      optional: true,
+      description: 'Campaign start date',
+    },
+    endDate: {
+      type: 'datetime',
+      optional: true,
+      description: 'Campaign end date',
+    },
+
+    // Budget & Finance
+    budget: {
+      type: 'number',
+      optional: true,
+      description: 'Total campaign budget',
+    },
+    spent: {
+      type: 'number',
+      optional: true,
+      description: 'Amount spent so far',
+    },
+    currency: {
+      type: 'string',
+      optional: true,
+      description: 'Currency code (USD, EUR, etc.)',
+      examples: ['USD', 'EUR', 'GBP'],
+    },
+
+    // Goals & KPIs
+    goal: {
+      type: 'string',
+      optional: true,
+      description: 'Campaign goal: awareness, leads, sales, engagement, traffic',
+      examples: ['awareness', 'leads', 'sales', 'engagement', 'traffic'],
+    },
+    targetImpressions: {
+      type: 'number',
+      optional: true,
+      description: 'Target number of impressions',
+    },
+    targetClicks: {
+      type: 'number',
+      optional: true,
+      description: 'Target number of clicks',
+    },
+    targetConversions: {
+      type: 'number',
+      optional: true,
+      description: 'Target number of conversions',
+    },
+    targetRevenue: {
+      type: 'number',
+      optional: true,
+      description: 'Target revenue amount',
+    },
+
+    // Performance Metrics
+    impressions: {
+      type: 'number',
+      optional: true,
+      description: 'Total impressions delivered',
+    },
+    clicks: {
+      type: 'number',
+      optional: true,
+      description: 'Total clicks received',
+    },
+    conversions: {
+      type: 'number',
+      optional: true,
+      description: 'Total conversions',
+    },
+    revenue: {
+      type: 'number',
+      optional: true,
+      description: 'Total revenue generated',
+    },
+    ctr: {
+      type: 'number',
+      optional: true,
+      description: 'Click-through rate (percentage)',
+    },
+    conversionRate: {
+      type: 'number',
+      optional: true,
+      description: 'Conversion rate (percentage)',
+    },
+    roi: {
+      type: 'number',
+      optional: true,
+      description: 'Return on investment (percentage)',
+    },
+  },
+
+  relationships: {
+    audience: {
+      type: 'Audience',
+      required: false,
+      description: 'Target audience for this campaign',
+    },
+    emailTemplates: {
+      type: 'EmailTemplate[]',
+      description: 'Email templates used in this campaign',
+    },
+    landingPages: {
+      type: 'LandingPage[]',
+      description: 'Landing pages associated with this campaign',
+    },
+    socialPosts: {
+      type: 'SocialPost[]',
+      description: 'Social media posts in this campaign',
+    },
+    adCreatives: {
+      type: 'AdCreative[]',
+      description: 'Ad creatives used in this campaign',
+    },
+    utmLinks: {
+      type: 'UTMLink[]',
+      description: 'Tracked URLs for this campaign',
+    },
+    formSubmissions: {
+      type: 'FormSubmission[]',
+      description: 'Form submissions generated by this campaign',
+    },
+    owner: {
+      type: 'Contact',
+      description: 'Campaign owner/manager',
+    },
+    team: {
+      type: 'Contact[]',
+      description: 'Team members working on this campaign',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'schedule',
+    'launch',
+    'pause',
+    'resume',
+    'complete',
+    'archive',
+    'duplicate',
+    'export',
+    'analyze',
+    'optimize',
+  ],
+
+  events: [
+    'created',
+    'updated',
+    'deleted',
+    'scheduled',
+    'launched',
+    'paused',
+    'resumed',
+    'completed',
+    'archived',
+    'duplicated',
+    'goalReached',
+    'budgetExceeded',
+  ],
+}
+
+// =============================================================================
+// Audience
+// =============================================================================
+
+/**
+ * Target audience or segment entity
+ *
+ * Represents a group of people targeted by marketing efforts
+ */
+export const Audience: Noun = {
+  singular: 'audience',
+  plural: 'audiences',
+  description: 'A target audience or customer segment for marketing',
+
+  properties: {
+    // Identity
+    name: {
+      type: 'string',
+      description: 'Audience name',
+    },
+    description: {
+      type: 'string',
+      optional: true,
+      description: 'Audience description',
+    },
+
+    // Size & Stats
+    size: {
+      type: 'number',
+      optional: true,
+      description: 'Estimated or actual audience size',
+    },
+    activeCount: {
+      type: 'number',
+      optional: true,
+      description: 'Number of active/engaged members',
+    },
+
+    // Segmentation Criteria
+    criteria: {
+      type: 'json',
+      optional: true,
+      description: 'Segmentation criteria (demographics, behavior, etc.)',
+    },
+    demographics: {
+      type: 'json',
+      optional: true,
+      description: 'Demographic filters (age, gender, location, etc.)',
+    },
+    interests: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Interest categories',
+    },
+    behaviors: {
+      type: 'json',
+      optional: true,
+      description: 'Behavioral targeting criteria',
+    },
+
+    // Geographic
+    countries: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Target countries',
+    },
+    regions: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Target regions/states',
+    },
+    cities: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Target cities',
+    },
+    languages: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Target languages',
+    },
+
+    // Status
+    status: {
+      type: 'string',
+      description: 'Audience status: active, archived, building',
+      examples: ['active', 'archived', 'building'],
+    },
+
+    // Source & Type
+    source: {
+      type: 'string',
+      optional: true,
+      description: 'How the audience was created: manual, imported, dynamic, lookalike',
+      examples: ['manual', 'imported', 'dynamic', 'lookalike'],
+    },
+    type: {
+      type: 'string',
+      optional: true,
+      description: 'Audience type: email-list, custom, retargeting, lookalike',
+      examples: ['email-list', 'custom', 'retargeting', 'lookalike'],
+    },
+
+    // Metadata
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Tags for organization',
+    },
+    lastUpdated: {
+      type: 'datetime',
+      optional: true,
+      description: 'When the audience was last updated',
+    },
+  },
+
+  relationships: {
+    campaigns: {
+      type: 'Campaign[]',
+      description: 'Campaigns targeting this audience',
+    },
+    contacts: {
+      type: 'Contact[]',
+      description: 'Contacts in this audience',
+    },
+    parentAudience: {
+      type: 'Audience',
+      required: false,
+      description: 'Parent audience if this is a sub-segment',
+    },
+    subAudiences: {
+      type: 'Audience[]',
+      description: 'Sub-segments of this audience',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'segment',
+    'export',
+    'import',
+    'refresh',
+    'merge',
+    'duplicate',
+    'archive',
+    'analyze',
+  ],
+
+  events: [
+    'created',
+    'updated',
+    'deleted',
+    'segmented',
+    'exported',
+    'imported',
+    'refreshed',
+    'merged',
+    'archived',
+    'sizeChanged',
+  ],
+}
+
+// =============================================================================
+// EmailTemplate
+// =============================================================================
+
+/**
+ * Email template entity
+ *
+ * Represents an email template with subject, body, and variables
+ */
+export const EmailTemplate: Noun = {
+  singular: 'email template',
+  plural: 'email templates',
+  description: 'A reusable email template for marketing campaigns',
+
+  properties: {
+    // Identity
+    name: {
+      type: 'string',
+      description: 'Template name',
+    },
+    description: {
+      type: 'string',
+      optional: true,
+      description: 'Template description',
+    },
+
+    // Email Content
+    subject: {
+      type: 'string',
+      description: 'Email subject line (may contain variables)',
+    },
+    preheader: {
+      type: 'string',
+      optional: true,
+      description: 'Email preheader/preview text',
+    },
+    body: {
+      type: 'string',
+      description: 'Plain text email body',
+    },
+    html: {
+      type: 'string',
+      optional: true,
+      description: 'HTML email body',
+    },
+
+    // Sender Info
+    fromName: {
+      type: 'string',
+      optional: true,
+      description: 'Sender name',
+    },
+    fromEmail: {
+      type: 'string',
+      optional: true,
+      description: 'Sender email address',
+    },
+    replyTo: {
+      type: 'string',
+      optional: true,
+      description: 'Reply-to email address',
+    },
+
+    // Variables & Personalization
+    variables: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Variable placeholders (e.g., {{firstName}}, {{company}})',
+    },
+    personalizationTags: {
+      type: 'json',
+      optional: true,
+      description: 'Available personalization tags and their descriptions',
+    },
+
+    // Design & Layout
+    category: {
+      type: 'string',
+      optional: true,
+      description: 'Template category: newsletter, promotional, transactional, welcome, abandoned-cart',
+      examples: ['newsletter', 'promotional', 'transactional', 'welcome', 'abandoned-cart'],
+    },
+    designFormat: {
+      type: 'string',
+      optional: true,
+      description: 'Design format: html, drag-drop, rich-text, plain-text',
+      examples: ['html', 'drag-drop', 'rich-text', 'plain-text'],
+    },
+    thumbnailUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Preview thumbnail URL',
+    },
+
+    // Status & Version
+    status: {
+      type: 'string',
+      description: 'Template status: draft, active, archived',
+      examples: ['draft', 'active', 'archived'],
+    },
+    version: {
+      type: 'number',
+      optional: true,
+      description: 'Template version number',
+    },
+
+    // Performance
+    timesSent: {
+      type: 'number',
+      optional: true,
+      description: 'Number of times this template has been sent',
+    },
+    avgOpenRate: {
+      type: 'number',
+      optional: true,
+      description: 'Average open rate (percentage)',
+    },
+    avgClickRate: {
+      type: 'number',
+      optional: true,
+      description: 'Average click rate (percentage)',
+    },
+
+    // Metadata
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Tags for organization',
+    },
+  },
+
+  relationships: {
+    campaign: {
+      type: 'Campaign',
+      required: false,
+      description: 'Campaign this template belongs to',
+    },
+    author: {
+      type: 'Contact',
+      description: 'Template creator',
+    },
+    utmLinks: {
+      type: 'UTMLink[]',
+      description: 'Tracked links in this template',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'duplicate',
+    'preview',
+    'test',
+    'send',
+    'schedule',
+    'archive',
+    'restore',
+    'export',
+    'import',
+  ],
+
+  events: [
+    'created',
+    'updated',
+    'deleted',
+    'duplicated',
+    'previewed',
+    'tested',
+    'sent',
+    'scheduled',
+    'archived',
+    'restored',
+  ],
+}
+
+// =============================================================================
+// LandingPage
+// =============================================================================
+
+/**
+ * Landing page entity
+ *
+ * Represents a marketing landing page with form and conversion tracking
+ */
+export const LandingPage: Noun = {
+  singular: 'landing page',
+  plural: 'landing pages',
+  description: 'A marketing landing page designed for conversion',
+
+  properties: {
+    // Identity
+    name: {
+      type: 'string',
+      description: 'Landing page name',
+    },
+    title: {
+      type: 'string',
+      description: 'Page title (HTML title tag)',
+    },
+    description: {
+      type: 'string',
+      optional: true,
+      description: 'Page description (meta description)',
+    },
+
+    // URL & Slug
+    url: {
+      type: 'url',
+      description: 'Full landing page URL',
+    },
+    slug: {
+      type: 'string',
+      optional: true,
+      description: 'URL slug',
+    },
+    domain: {
+      type: 'string',
+      optional: true,
+      description: 'Custom domain if applicable',
+    },
+
+    // Content
+    headline: {
+      type: 'string',
+      optional: true,
+      description: 'Main headline',
+    },
+    subheadline: {
+      type: 'string',
+      optional: true,
+      description: 'Subheadline',
+    },
+    body: {
+      type: 'markdown',
+      optional: true,
+      description: 'Page body content',
+    },
+
+    // Design
+    template: {
+      type: 'string',
+      optional: true,
+      description: 'Template used for this page',
+    },
+    theme: {
+      type: 'string',
+      optional: true,
+      description: 'Color theme or style',
+    },
+    thumbnailUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Page screenshot/thumbnail URL',
+    },
+
+    // Form & CTA
+    hasForm: {
+      type: 'boolean',
+      optional: true,
+      description: 'Whether page includes a form',
+    },
+    formFields: {
+      type: 'json',
+      optional: true,
+      description: 'Form field definitions',
+    },
+    ctaText: {
+      type: 'string',
+      optional: true,
+      description: 'Call-to-action button text',
+    },
+    ctaUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Call-to-action destination URL',
+    },
+
+    // Conversion Tracking
+    conversionGoal: {
+      type: 'string',
+      optional: true,
+      description: 'Conversion goal: form-submission, click, purchase, signup',
+      examples: ['form-submission', 'click', 'purchase', 'signup'],
+    },
+    trackingPixels: {
+      type: 'json',
+      optional: true,
+      description: 'Tracking pixels/scripts (GA, Facebook Pixel, etc.)',
+    },
+
+    // Status
+    status: {
+      type: 'string',
+      description: 'Page status: draft, published, archived, testing',
+      examples: ['draft', 'published', 'archived', 'testing'],
+    },
+    publishedAt: {
+      type: 'datetime',
+      optional: true,
+      description: 'When the page was published',
+    },
+
+    // SEO
+    metaTitle: {
+      type: 'string',
+      optional: true,
+      description: 'SEO meta title',
+    },
+    metaDescription: {
+      type: 'string',
+      optional: true,
+      description: 'SEO meta description',
+    },
+    keywords: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'SEO keywords',
+    },
+
+    // Performance Metrics
+    visits: {
+      type: 'number',
+      optional: true,
+      description: 'Total page visits',
+    },
+    uniqueVisits: {
+      type: 'number',
+      optional: true,
+      description: 'Unique visitors',
+    },
+    conversions: {
+      type: 'number',
+      optional: true,
+      description: 'Total conversions',
+    },
+    conversionRate: {
+      type: 'number',
+      optional: true,
+      description: 'Conversion rate (percentage)',
+    },
+    bounceRate: {
+      type: 'number',
+      optional: true,
+      description: 'Bounce rate (percentage)',
+    },
+    avgTimeOnPage: {
+      type: 'number',
+      optional: true,
+      description: 'Average time on page in seconds',
+    },
+
+    // Metadata
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Tags for organization',
+    },
+  },
+
+  relationships: {
+    campaign: {
+      type: 'Campaign',
+      required: false,
+      description: 'Campaign this landing page belongs to',
+    },
+    formSubmissions: {
+      type: 'FormSubmission[]',
+      backref: 'landingPage',
+      description: 'Form submissions from this page',
+    },
+    utmLinks: {
+      type: 'UTMLink[]',
+      description: 'Tracked links on this page',
+    },
+    owner: {
+      type: 'Contact',
+      description: 'Page owner/creator',
+    },
+    variants: {
+      type: 'LandingPage[]',
+      description: 'A/B test variants of this page',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'publish',
+    'unpublish',
+    'duplicate',
+    'preview',
+    'test',
+    'archive',
+    'restore',
+    'optimize',
+    'export',
+  ],
+
+  events: [
+    'created',
+    'updated',
+    'deleted',
+    'published',
+    'unpublished',
+    'duplicated',
+    'previewed',
+    'visited',
+    'converted',
+    'archived',
+  ],
+}
+
+// =============================================================================
+// FormSubmission
+// =============================================================================
+
+/**
+ * Form submission entity
+ *
+ * Represents a lead capture or form submission from a landing page
+ */
+export const FormSubmission: Noun = {
+  singular: 'form submission',
+  plural: 'form submissions',
+  description: 'A form submission or lead capture from a marketing form',
+
+  properties: {
+    // Form Data
+    formData: {
+      type: 'json',
+      description: 'Submitted form field data (key-value pairs)',
+    },
+
+    // Common Fields (duplicated for easier access)
+    email: {
+      type: 'string',
+      optional: true,
+      description: 'Submitted email address',
+    },
+    name: {
+      type: 'string',
+      optional: true,
+      description: 'Submitted name',
+    },
+    phone: {
+      type: 'string',
+      optional: true,
+      description: 'Submitted phone number',
+    },
+    company: {
+      type: 'string',
+      optional: true,
+      description: 'Submitted company name',
+    },
+    message: {
+      type: 'string',
+      optional: true,
+      description: 'Submitted message or comments',
+    },
+
+    // Source & Attribution
+    source: {
+      type: 'string',
+      optional: true,
+      description: 'Traffic source',
+    },
+    medium: {
+      type: 'string',
+      optional: true,
+      description: 'Traffic medium',
+    },
+    referrer: {
+      type: 'url',
+      optional: true,
+      description: 'Referring URL',
+    },
+
+    // User Agent & Device
+    userAgent: {
+      type: 'string',
+      optional: true,
+      description: 'Browser user agent string',
+    },
+    device: {
+      type: 'string',
+      optional: true,
+      description: 'Device type: desktop, mobile, tablet',
+      examples: ['desktop', 'mobile', 'tablet'],
+    },
+    browser: {
+      type: 'string',
+      optional: true,
+      description: 'Browser name',
+    },
+    os: {
+      type: 'string',
+      optional: true,
+      description: 'Operating system',
+    },
+
+    // Location
+    ipAddress: {
+      type: 'string',
+      optional: true,
+      description: 'Submitter IP address',
+    },
+    country: {
+      type: 'string',
+      optional: true,
+      description: 'Country from IP geolocation',
+    },
+    region: {
+      type: 'string',
+      optional: true,
+      description: 'Region/state from IP geolocation',
+    },
+    city: {
+      type: 'string',
+      optional: true,
+      description: 'City from IP geolocation',
+    },
+
+    // Status & Processing
+    status: {
+      type: 'string',
+      description: 'Submission status: new, contacted, qualified, converted, spam, deleted',
+      examples: ['new', 'contacted', 'qualified', 'converted', 'spam', 'deleted'],
+    },
+    qualityScore: {
+      type: 'number',
+      optional: true,
+      description: 'Lead quality score (0-100)',
+    },
+    spam: {
+      type: 'boolean',
+      optional: true,
+      description: 'Whether flagged as spam',
+    },
+
+    // Notes & Follow-up
+    notes: {
+      type: 'string',
+      optional: true,
+      description: 'Internal notes about this submission',
+    },
+    assignedTo: {
+      type: 'string',
+      optional: true,
+      description: 'User ID this submission is assigned to',
+    },
+
+    // Metadata
+    submittedAt: {
+      type: 'datetime',
+      description: 'Submission timestamp',
+    },
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Tags for organization',
+    },
+  },
+
+  relationships: {
+    landingPage: {
+      type: 'LandingPage',
+      backref: 'formSubmissions',
+      required: false,
+      description: 'Landing page where form was submitted',
+    },
+    campaign: {
+      type: 'Campaign',
+      required: false,
+      description: 'Campaign this submission is attributed to',
+    },
+    contact: {
+      type: 'Contact',
+      required: false,
+      description: 'Created or matched contact record',
+    },
+    utmLink: {
+      type: 'UTMLink',
+      required: false,
+      description: 'UTM link that drove this submission',
+    },
+    assignee: {
+      type: 'Contact',
+      required: false,
+      description: 'Person assigned to follow up',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'qualify',
+    'contact',
+    'convert',
+    'assign',
+    'markSpam',
+    'markNotSpam',
+    'export',
+    'merge',
+  ],
+
+  events: [
+    'submitted',
+    'updated',
+    'deleted',
+    'qualified',
+    'contacted',
+    'converted',
+    'assigned',
+    'markedSpam',
+    'exported',
+  ],
+}
+
+// =============================================================================
+// SocialPost
+// =============================================================================
+
+/**
+ * Social media post entity
+ *
+ * Represents a social media post scheduled or published across platforms
+ */
+export const SocialPost: Noun = {
+  singular: 'social post',
+  plural: 'social posts',
+  description: 'A social media post for one or more platforms',
+
+  properties: {
+    // Content
+    message: {
+      type: 'string',
+      description: 'Post text content',
+    },
+    mediaUrls: {
+      type: 'url',
+      array: true,
+      optional: true,
+      description: 'Attached media URLs (images, videos)',
+    },
+    mediaType: {
+      type: 'string',
+      optional: true,
+      description: 'Media type: image, video, gif, carousel',
+      examples: ['image', 'video', 'gif', 'carousel'],
+    },
+    link: {
+      type: 'url',
+      optional: true,
+      description: 'Shared link URL',
+    },
+    linkPreview: {
+      type: 'json',
+      optional: true,
+      description: 'Link preview card data',
+    },
+
+    // Platform & Targeting
+    platform: {
+      type: 'string',
+      description: 'Social platform: facebook, instagram, twitter, linkedin, tiktok, youtube',
+      examples: ['facebook', 'instagram', 'twitter', 'linkedin', 'tiktok', 'youtube'],
+    },
+    accountId: {
+      type: 'string',
+      optional: true,
+      description: 'Platform account/page identifier',
+    },
+    accountName: {
+      type: 'string',
+      optional: true,
+      description: 'Platform account/page name',
+    },
+
+    // Scheduling
+    status: {
+      type: 'string',
+      description: 'Post status: draft, scheduled, published, failed, deleted',
+      examples: ['draft', 'scheduled', 'published', 'failed', 'deleted'],
+    },
+    scheduledAt: {
+      type: 'datetime',
+      optional: true,
+      description: 'Scheduled publish time',
+    },
+    publishedAt: {
+      type: 'datetime',
+      optional: true,
+      description: 'Actual publish time',
+    },
+
+    // Platform-specific
+    platformPostId: {
+      type: 'string',
+      optional: true,
+      description: 'Post ID on the platform',
+    },
+    platformUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Direct URL to the post on the platform',
+    },
+
+    // Hashtags & Mentions
+    hashtags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Hashtags used in the post',
+    },
+    mentions: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'User handles mentioned',
+    },
+
+    // Engagement Metrics
+    likes: {
+      type: 'number',
+      optional: true,
+      description: 'Number of likes/reactions',
+    },
+    comments: {
+      type: 'number',
+      optional: true,
+      description: 'Number of comments',
+    },
+    shares: {
+      type: 'number',
+      optional: true,
+      description: 'Number of shares/retweets',
+    },
+    clicks: {
+      type: 'number',
+      optional: true,
+      description: 'Number of link clicks',
+    },
+    impressions: {
+      type: 'number',
+      optional: true,
+      description: 'Total impressions',
+    },
+    reach: {
+      type: 'number',
+      optional: true,
+      description: 'Unique reach',
+    },
+    engagementRate: {
+      type: 'number',
+      optional: true,
+      description: 'Engagement rate (percentage)',
+    },
+
+    // Metadata
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Internal tags for organization',
+    },
+    notes: {
+      type: 'string',
+      optional: true,
+      description: 'Internal notes',
+    },
+  },
+
+  relationships: {
+    campaign: {
+      type: 'Campaign',
+      required: false,
+      description: 'Campaign this post belongs to',
+    },
+    utmLink: {
+      type: 'UTMLink',
+      required: false,
+      description: 'Tracked URL included in post',
+    },
+    author: {
+      type: 'Contact',
+      description: 'Post creator',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'schedule',
+    'publish',
+    'cancel',
+    'reschedule',
+    'boost',
+    'preview',
+    'analyze',
+    'export',
+  ],
+
+  events: [
+    'created',
+    'updated',
+    'deleted',
+    'scheduled',
+    'published',
+    'failed',
+    'canceled',
+    'rescheduled',
+    'boosted',
+    'liked',
+    'commented',
+    'shared',
+  ],
+}
+
+// =============================================================================
+// AdCreative
+// =============================================================================
+
+/**
+ * Ad creative entity
+ *
+ * Represents an advertisement creative with copy, images, and CTA
+ */
+export const AdCreative: Noun = {
+  singular: 'ad creative',
+  plural: 'ad creatives',
+  description: 'An advertisement creative for paid campaigns',
+
+  properties: {
+    // Identity
+    name: {
+      type: 'string',
+      description: 'Creative name (internal)',
+    },
+    description: {
+      type: 'string',
+      optional: true,
+      description: 'Internal description',
+    },
+
+    // Format & Type
+    format: {
+      type: 'string',
+      description: 'Ad format: image, video, carousel, collection, story, banner',
+      examples: ['image', 'video', 'carousel', 'collection', 'story', 'banner'],
+    },
+    adType: {
+      type: 'string',
+      optional: true,
+      description: 'Ad type: display, search, social, video, native',
+      examples: ['display', 'search', 'social', 'video', 'native'],
+    },
+
+    // Creative Assets
+    headline: {
+      type: 'string',
+      optional: true,
+      description: 'Primary headline',
+    },
+    body: {
+      type: 'string',
+      optional: true,
+      description: 'Ad body copy',
+    },
+    adDescription: {
+      type: 'string',
+      optional: true,
+      description: 'Ad description text',
+    },
+    imageUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Primary image URL',
+    },
+    videoUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Video URL',
+    },
+    thumbnailUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Video thumbnail or creative preview',
+    },
+    mediaUrls: {
+      type: 'url',
+      array: true,
+      optional: true,
+      description: 'Multiple media assets (for carousel, etc.)',
+    },
+
+    // Call to Action
+    ctaText: {
+      type: 'string',
+      optional: true,
+      description: 'Call-to-action button text',
+    },
+    ctaType: {
+      type: 'string',
+      optional: true,
+      description: 'CTA type: learn-more, shop-now, sign-up, download, contact',
+      examples: ['learn-more', 'shop-now', 'sign-up', 'download', 'contact'],
+    },
+    destinationUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Landing page URL',
+    },
+
+    // Dimensions & Specs
+    dimensions: {
+      type: 'json',
+      optional: true,
+      description: 'Creative dimensions (width x height)',
+    },
+    aspectRatio: {
+      type: 'string',
+      optional: true,
+      description: 'Aspect ratio (16:9, 1:1, 9:16, etc.)',
+      examples: ['16:9', '1:1', '9:16', '4:5'],
+    },
+    fileSize: {
+      type: 'number',
+      optional: true,
+      description: 'File size in bytes',
+    },
+    duration: {
+      type: 'number',
+      optional: true,
+      description: 'Video duration in seconds',
+    },
+
+    // Platform & Placement
+    platform: {
+      type: 'string',
+      optional: true,
+      description: 'Target platform: facebook, instagram, google, linkedin, twitter',
+      examples: ['facebook', 'instagram', 'google', 'linkedin', 'twitter'],
+    },
+    placement: {
+      type: 'string',
+      optional: true,
+      description: 'Ad placement: feed, story, search, display, video',
+      examples: ['feed', 'story', 'search', 'display', 'video'],
+    },
+
+    // Status
+    status: {
+      type: 'string',
+      description: 'Creative status: draft, active, paused, archived, rejected',
+      examples: ['draft', 'active', 'paused', 'archived', 'rejected'],
+    },
+    approvalStatus: {
+      type: 'string',
+      optional: true,
+      description: 'Platform approval status: pending, approved, rejected',
+      examples: ['pending', 'approved', 'rejected'],
+    },
+    rejectionReason: {
+      type: 'string',
+      optional: true,
+      description: 'Reason for rejection if applicable',
+    },
+
+    // Performance Metrics
+    impressions: {
+      type: 'number',
+      optional: true,
+      description: 'Total impressions',
+    },
+    clicks: {
+      type: 'number',
+      optional: true,
+      description: 'Total clicks',
+    },
+    conversions: {
+      type: 'number',
+      optional: true,
+      description: 'Total conversions',
+    },
+    ctr: {
+      type: 'number',
+      optional: true,
+      description: 'Click-through rate (percentage)',
+    },
+    conversionRate: {
+      type: 'number',
+      optional: true,
+      description: 'Conversion rate (percentage)',
+    },
+    spend: {
+      type: 'number',
+      optional: true,
+      description: 'Total spend on this creative',
+    },
+    cpc: {
+      type: 'number',
+      optional: true,
+      description: 'Cost per click',
+    },
+    cpm: {
+      type: 'number',
+      optional: true,
+      description: 'Cost per thousand impressions',
+    },
+    cpa: {
+      type: 'number',
+      optional: true,
+      description: 'Cost per acquisition',
+    },
+
+    // Metadata
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Tags for organization',
+    },
+  },
+
+  relationships: {
+    campaign: {
+      type: 'Campaign',
+      required: false,
+      description: 'Campaign this creative belongs to',
+    },
+    utmLink: {
+      type: 'UTMLink',
+      required: false,
+      description: 'Tracked URL for this creative',
+    },
+    audience: {
+      type: 'Audience',
+      required: false,
+      description: 'Target audience',
+    },
+    creator: {
+      type: 'Contact',
+      description: 'Creative designer/creator',
+    },
+    variants: {
+      type: 'AdCreative[]',
+      description: 'A/B test variants',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'preview',
+    'submit',
+    'approve',
+    'reject',
+    'activate',
+    'pause',
+    'duplicate',
+    'archive',
+    'test',
+    'export',
+  ],
+
+  events: [
+    'created',
+    'updated',
+    'deleted',
+    'submitted',
+    'approved',
+    'rejected',
+    'activated',
+    'paused',
+    'duplicated',
+    'archived',
+  ],
+}
+
+// =============================================================================
+// UTMLink
+// =============================================================================
+
+/**
+ * UTM tracked link entity
+ *
+ * Represents a URL with UTM parameters for tracking campaign performance
+ */
+export const UTMLink: Noun = {
+  singular: 'utm link',
+  plural: 'utm links',
+  description: 'A tracked URL with UTM parameters for campaign attribution',
+
+  properties: {
+    // Identity
+    name: {
+      type: 'string',
+      optional: true,
+      description: 'Link name (internal)',
+    },
+    description: {
+      type: 'string',
+      optional: true,
+      description: 'Link description',
+    },
+
+    // URLs
+    destinationUrl: {
+      type: 'url',
+      description: 'Original destination URL (without UTM parameters)',
+    },
+    fullUrl: {
+      type: 'url',
+      description: 'Complete URL with UTM parameters',
+    },
+    shortUrl: {
+      type: 'url',
+      optional: true,
+      description: 'Shortened URL (bit.ly, etc.)',
+    },
+
+    // UTM Parameters
+    utmSource: {
+      type: 'string',
+      description: 'Traffic source (utm_source): google, facebook, newsletter',
+    },
+    utmMedium: {
+      type: 'string',
+      description: 'Marketing medium (utm_medium): email, cpc, social, organic',
+    },
+    utmCampaign: {
+      type: 'string',
+      description: 'Campaign name (utm_campaign)',
+    },
+    utmTerm: {
+      type: 'string',
+      optional: true,
+      description: 'Paid keyword (utm_term)',
+    },
+    utmContent: {
+      type: 'string',
+      optional: true,
+      description: 'Content variant (utm_content) for A/B testing',
+    },
+
+    // Additional Tracking
+    customParameters: {
+      type: 'json',
+      optional: true,
+      description: 'Additional custom tracking parameters',
+    },
+    trackingId: {
+      type: 'string',
+      optional: true,
+      description: 'Internal tracking identifier',
+    },
+
+    // Context
+    platform: {
+      type: 'string',
+      optional: true,
+      description: 'Platform where link is used: email, social, ad, website',
+      examples: ['email', 'social', 'ad', 'website'],
+    },
+    placement: {
+      type: 'string',
+      optional: true,
+      description: 'Specific placement location',
+    },
+
+    // Performance Metrics
+    clicks: {
+      type: 'number',
+      optional: true,
+      description: 'Total clicks',
+    },
+    uniqueClicks: {
+      type: 'number',
+      optional: true,
+      description: 'Unique clicks',
+    },
+    conversions: {
+      type: 'number',
+      optional: true,
+      description: 'Total conversions attributed',
+    },
+    revenue: {
+      type: 'number',
+      optional: true,
+      description: 'Revenue attributed to this link',
+    },
+
+    // Status
+    status: {
+      type: 'string',
+      description: 'Link status: active, expired, archived',
+      examples: ['active', 'expired', 'archived'],
+    },
+    expiresAt: {
+      type: 'datetime',
+      optional: true,
+      description: 'Link expiration date',
+    },
+
+    // Metadata
+    tags: {
+      type: 'string',
+      array: true,
+      optional: true,
+      description: 'Tags for organization',
+    },
+    notes: {
+      type: 'string',
+      optional: true,
+      description: 'Internal notes',
+    },
+  },
+
+  relationships: {
+    campaign: {
+      type: 'Campaign',
+      required: false,
+      description: 'Campaign this link belongs to',
+    },
+    emailTemplate: {
+      type: 'EmailTemplate',
+      required: false,
+      description: 'Email template using this link',
+    },
+    landingPage: {
+      type: 'LandingPage',
+      required: false,
+      description: 'Landing page where this link appears',
+    },
+    socialPost: {
+      type: 'SocialPost',
+      required: false,
+      description: 'Social post using this link',
+    },
+    adCreative: {
+      type: 'AdCreative',
+      required: false,
+      description: 'Ad creative using this link',
+    },
+    formSubmissions: {
+      type: 'FormSubmission[]',
+      description: 'Form submissions attributed to this link',
+    },
+    creator: {
+      type: 'Contact',
+      description: 'Link creator',
+    },
+  },
+
+  actions: [
+    'create',
+    'update',
+    'delete',
+    'shorten',
+    'copy',
+    'share',
+    'test',
+    'archive',
+    'expire',
+    'renew',
+    'export',
+  ],
+
+  events: [
+    'created',
+    'updated',
+    'deleted',
+    'shortened',
+    'clicked',
+    'converted',
+    'archived',
+    'expired',
+    'renewed',
+  ],
+}
+
+// =============================================================================
+// Export all entities as a schema
+// =============================================================================
+
+/**
+ * All marketing entity types
+ */
+export const MarketingEntities = {
+  Campaign,
+  Audience,
+  EmailTemplate,
+  LandingPage,
+  FormSubmission,
+  SocialPost,
+  AdCreative,
+  UTMLink,
+}
+
+/**
+ * Entity categories for organization
+ */
+export const MarketingCategories = {
+  core: ['Campaign', 'Audience'],
+  content: ['EmailTemplate', 'LandingPage', 'SocialPost', 'AdCreative'],
+  tracking: ['UTMLink', 'FormSubmission'],
+} as const

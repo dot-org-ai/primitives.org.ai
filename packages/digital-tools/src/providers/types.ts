@@ -65,6 +65,20 @@ export type ProviderCategory =
   | 'presentation'
   | 'phone'
   | 'storage'
+  | 'calendar'
+  | 'tasks'
+  | 'project-management'
+  | 'crm'
+  | 'development'
+  | 'finance'
+  | 'support'
+  | 'media'
+  | 'marketing'
+  | 'knowledge'
+  | 'ecommerce'
+  | 'analytics'
+  | 'video-conferencing'
+  | 'forms'
 
 /**
  * Provider configuration
@@ -923,6 +937,1142 @@ export interface VoicemailData {
 export interface VoicemailListOptions extends PaginationOptions {
   read?: boolean
   since?: Date
+}
+
+// =============================================================================
+// Calendar Provider (Google Calendar, Outlook, Calendly)
+// =============================================================================
+
+export interface CalendarProvider extends BaseProvider {
+  listCalendars?(options?: PaginationOptions): Promise<PaginatedResult<CalendarData>>
+  getCalendar?(calendarId: string): Promise<CalendarData | null>
+  createEvent(calendarId: string, event: CreateEventOptions): Promise<EventData>
+  getEvent(calendarId: string, eventId: string): Promise<EventData | null>
+  updateEvent(calendarId: string, eventId: string, updates: Partial<CreateEventOptions>): Promise<EventData>
+  deleteEvent(calendarId: string, eventId: string): Promise<boolean>
+  listEvents(calendarId: string, options?: EventListOptions): Promise<PaginatedResult<EventData>>
+  findAvailability?(calendarIds: string[], timeMin: Date, timeMax: Date): Promise<AvailabilityData[]>
+}
+
+export interface CalendarData {
+  id: string
+  name: string
+  description?: string
+  timeZone: string
+  primary: boolean
+  accessRole: 'owner' | 'writer' | 'reader'
+}
+
+export interface CreateEventOptions {
+  summary: string
+  description?: string
+  location?: string
+  start: Date
+  end: Date
+  attendees?: string[]
+  reminders?: Array<{ method: 'email' | 'popup'; minutes: number }>
+  recurrence?: string[]
+  conferenceData?: { type: 'hangoutsMeet' | 'zoom' | 'teams' }
+}
+
+export interface EventData {
+  id: string
+  calendarId: string
+  summary: string
+  description?: string
+  location?: string
+  start: Date
+  end: Date
+  attendees?: Array<{ email: string; responseStatus: string }>
+  status: 'confirmed' | 'tentative' | 'cancelled'
+  recurringEventId?: string
+  htmlLink?: string
+}
+
+export interface EventListOptions extends PaginationOptions {
+  timeMin?: Date
+  timeMax?: Date
+  singleEvents?: boolean
+  orderBy?: 'startTime' | 'updated'
+}
+
+export interface AvailabilityData {
+  calendarId: string
+  busy: Array<{ start: Date; end: Date }>
+}
+
+// =============================================================================
+// Task Provider (Todoist, Asana, Things)
+// =============================================================================
+
+export interface TaskProvider extends BaseProvider {
+  listProjects?(): Promise<ProjectData[]>
+  createTask(task: CreateTaskOptions): Promise<TaskData>
+  getTask(taskId: string): Promise<TaskData | null>
+  updateTask(taskId: string, updates: Partial<CreateTaskOptions>): Promise<TaskData>
+  deleteTask(taskId: string): Promise<boolean>
+  completeTask(taskId: string): Promise<boolean>
+  reopenTask?(taskId: string): Promise<boolean>
+  listTasks(options?: TaskListOptions): Promise<PaginatedResult<TaskData>>
+  addComment?(taskId: string, content: string): Promise<CommentData>
+}
+
+export interface ProjectData {
+  id: string
+  name: string
+  color?: string
+  parentId?: string
+}
+
+export interface CreateTaskOptions {
+  content: string
+  description?: string
+  projectId?: string
+  parentId?: string
+  priority?: 1 | 2 | 3 | 4
+  dueDate?: Date
+  dueString?: string
+  labels?: string[]
+  assigneeId?: string
+}
+
+export interface TaskData {
+  id: string
+  content: string
+  description?: string
+  projectId?: string
+  parentId?: string
+  priority: number
+  dueDate?: Date
+  completed: boolean
+  labels: string[]
+  createdAt: Date
+  completedAt?: Date
+}
+
+export interface TaskListOptions extends PaginationOptions {
+  projectId?: string
+  filter?: string
+  completed?: boolean
+}
+
+export interface CommentData {
+  id: string
+  taskId: string
+  content: string
+  authorId: string
+  createdAt: Date
+}
+
+// =============================================================================
+// Project Management Provider (Jira, Linear, Asana, Monday)
+// =============================================================================
+
+export interface ProjectManagementProvider extends BaseProvider {
+  listProjects(options?: PaginationOptions): Promise<PaginatedResult<PMProjectData>>
+  getProject(projectId: string): Promise<PMProjectData | null>
+  createIssue(projectId: string, issue: CreateIssueOptions): Promise<IssueData>
+  getIssue(issueId: string): Promise<IssueData | null>
+  updateIssue(issueId: string, updates: Partial<CreateIssueOptions>): Promise<IssueData>
+  deleteIssue?(issueId: string): Promise<boolean>
+  listIssues(projectId: string, options?: IssueListOptions): Promise<PaginatedResult<IssueData>>
+  searchIssues?(query: string, options?: IssueListOptions): Promise<PaginatedResult<IssueData>>
+  addComment(issueId: string, body: string): Promise<IssueCommentData>
+  transition?(issueId: string, statusId: string): Promise<boolean>
+  assign?(issueId: string, userId: string): Promise<boolean>
+}
+
+export interface PMProjectData {
+  id: string
+  key: string
+  name: string
+  description?: string
+  lead?: string
+  url?: string
+}
+
+export interface CreateIssueOptions {
+  title: string
+  description?: string
+  type: string
+  priority?: string
+  labels?: string[]
+  assigneeId?: string
+  sprintId?: string
+  parentId?: string
+  estimate?: number
+}
+
+export interface IssueData {
+  id: string
+  key: string
+  title: string
+  description?: string
+  type: string
+  status: string
+  priority?: string
+  labels: string[]
+  assigneeId?: string
+  reporterId?: string
+  createdAt: Date
+  updatedAt: Date
+  url?: string
+}
+
+export interface IssueListOptions extends PaginationOptions {
+  status?: string[]
+  type?: string[]
+  assignee?: string
+  labels?: string[]
+  sprintId?: string
+}
+
+export interface IssueCommentData {
+  id: string
+  issueId: string
+  body: string
+  authorId: string
+  createdAt: Date
+}
+
+// =============================================================================
+// CRM Provider (Salesforce, HubSpot, Pipedrive)
+// =============================================================================
+
+export interface CRMProvider extends BaseProvider {
+  // Contacts
+  createContact(contact: CreateContactOptions): Promise<CRMContactData>
+  getContact(contactId: string): Promise<CRMContactData | null>
+  updateContact(contactId: string, updates: Partial<CreateContactOptions>): Promise<CRMContactData>
+  listContacts(options?: ContactListOptions): Promise<PaginatedResult<CRMContactData>>
+  searchContacts?(query: string): Promise<CRMContactData[]>
+  // Deals
+  createDeal(deal: CreateDealOptions): Promise<DealData>
+  getDeal(dealId: string): Promise<DealData | null>
+  updateDeal(dealId: string, updates: Partial<CreateDealOptions>): Promise<DealData>
+  listDeals(options?: DealListOptions): Promise<PaginatedResult<DealData>>
+  // Activities
+  logActivity?(contactId: string, activity: CreateActivityOptions): Promise<CRMActivityData>
+  listActivities?(contactId: string): Promise<CRMActivityData[]>
+}
+
+export interface CreateContactOptions {
+  firstName: string
+  lastName: string
+  email?: string
+  phone?: string
+  company?: string
+  title?: string
+  customFields?: Record<string, unknown>
+}
+
+export interface CRMContactData {
+  id: string
+  firstName: string
+  lastName: string
+  email?: string
+  phone?: string
+  company?: string
+  title?: string
+  ownerId?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ContactListOptions extends PaginationOptions {
+  ownerId?: string
+  company?: string
+}
+
+export interface CreateDealOptions {
+  name: string
+  value?: number
+  currency?: string
+  stage: string
+  contactId?: string
+  companyId?: string
+  closeDate?: Date
+  probability?: number
+}
+
+export interface DealData {
+  id: string
+  name: string
+  value?: number
+  currency?: string
+  stage: string
+  probability?: number
+  contactId?: string
+  companyId?: string
+  ownerId?: string
+  closeDate?: Date
+  createdAt: Date
+  updatedAt: Date
+  wonAt?: Date
+  lostAt?: Date
+}
+
+export interface DealListOptions extends PaginationOptions {
+  stage?: string
+  ownerId?: string
+  minValue?: number
+  maxValue?: number
+}
+
+export interface CreateActivityOptions {
+  type: 'call' | 'email' | 'meeting' | 'task' | 'note'
+  subject: string
+  body?: string
+  dueDate?: Date
+  duration?: number
+}
+
+export interface CRMActivityData {
+  id: string
+  type: string
+  subject: string
+  body?: string
+  contactId: string
+  ownerId: string
+  dueDate?: Date
+  completedAt?: Date
+  createdAt: Date
+}
+
+// =============================================================================
+// Development Provider (GitHub, GitLab, Bitbucket)
+// =============================================================================
+
+export interface DevelopmentProvider extends BaseProvider {
+  // Repositories
+  listRepos(options?: RepoListOptions): Promise<PaginatedResult<RepoData>>
+  getRepo(owner: string, repo: string): Promise<RepoData | null>
+  // Issues
+  createIssue(owner: string, repo: string, issue: CreateDevIssueOptions): Promise<DevIssueData>
+  getIssue(owner: string, repo: string, issueNumber: number): Promise<DevIssueData | null>
+  updateIssue(owner: string, repo: string, issueNumber: number, updates: Partial<CreateDevIssueOptions>): Promise<DevIssueData>
+  listIssues(owner: string, repo: string, options?: DevIssueListOptions): Promise<PaginatedResult<DevIssueData>>
+  // Pull Requests
+  createPullRequest(owner: string, repo: string, pr: CreatePROptions): Promise<PRData>
+  getPullRequest(owner: string, repo: string, prNumber: number): Promise<PRData | null>
+  listPullRequests(owner: string, repo: string, options?: PRListOptions): Promise<PaginatedResult<PRData>>
+  mergePullRequest?(owner: string, repo: string, prNumber: number): Promise<boolean>
+  // Comments
+  addComment(owner: string, repo: string, issueNumber: number, body: string): Promise<DevCommentData>
+}
+
+export interface RepoListOptions extends PaginationOptions {
+  visibility?: 'public' | 'private' | 'all'
+  sort?: 'created' | 'updated' | 'pushed'
+}
+
+export interface RepoData {
+  id: string
+  owner: string
+  name: string
+  fullName: string
+  description?: string
+  private: boolean
+  defaultBranch: string
+  url: string
+  cloneUrl: string
+  stars: number
+  forks: number
+  openIssues: number
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface CreateDevIssueOptions {
+  title: string
+  body?: string
+  labels?: string[]
+  assignees?: string[]
+  milestone?: number
+}
+
+export interface DevIssueData {
+  id: string
+  number: number
+  title: string
+  body?: string
+  state: 'open' | 'closed'
+  labels: string[]
+  assignees: string[]
+  authorId: string
+  url: string
+  createdAt: Date
+  updatedAt: Date
+  closedAt?: Date
+}
+
+export interface DevIssueListOptions extends PaginationOptions {
+  state?: 'open' | 'closed' | 'all'
+  labels?: string[]
+  assignee?: string
+  sort?: 'created' | 'updated' | 'comments'
+}
+
+export interface CreatePROptions {
+  title: string
+  body?: string
+  head: string
+  base: string
+  draft?: boolean
+}
+
+export interface PRData {
+  id: string
+  number: number
+  title: string
+  body?: string
+  state: 'open' | 'closed' | 'merged'
+  head: string
+  base: string
+  authorId: string
+  draft: boolean
+  mergeable?: boolean
+  url: string
+  createdAt: Date
+  updatedAt: Date
+  mergedAt?: Date
+  closedAt?: Date
+}
+
+export interface PRListOptions extends PaginationOptions {
+  state?: 'open' | 'closed' | 'all'
+  sort?: 'created' | 'updated' | 'popularity'
+  direction?: 'asc' | 'desc'
+}
+
+export interface DevCommentData {
+  id: string
+  body: string
+  authorId: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+// =============================================================================
+// Finance Provider (Stripe, QuickBooks, Xero)
+// =============================================================================
+
+export interface FinanceProvider extends BaseProvider {
+  // Invoices
+  createInvoice(invoice: CreateInvoiceOptions): Promise<InvoiceData>
+  getInvoice(invoiceId: string): Promise<InvoiceData | null>
+  updateInvoice?(invoiceId: string, updates: Partial<CreateInvoiceOptions>): Promise<InvoiceData>
+  listInvoices(options?: InvoiceListOptions): Promise<PaginatedResult<InvoiceData>>
+  sendInvoice?(invoiceId: string): Promise<boolean>
+  voidInvoice?(invoiceId: string): Promise<boolean>
+  // Payments
+  createPayment(payment: CreatePaymentOptions): Promise<PaymentData>
+  getPayment(paymentId: string): Promise<PaymentData | null>
+  listPayments(options?: PaymentListOptions): Promise<PaginatedResult<PaymentData>>
+  refundPayment?(paymentId: string, amount?: number): Promise<RefundData>
+  // Customers
+  createCustomer?(customer: CreateFinanceCustomerOptions): Promise<FinanceCustomerData>
+  getCustomer?(customerId: string): Promise<FinanceCustomerData | null>
+  listCustomers?(options?: PaginationOptions): Promise<PaginatedResult<FinanceCustomerData>>
+}
+
+export interface CreateInvoiceOptions {
+  customerId: string
+  lineItems: Array<{ description: string; quantity: number; unitPrice: number }>
+  currency?: string
+  dueDate?: Date
+  memo?: string
+}
+
+export interface InvoiceData {
+  id: string
+  number: string
+  customerId: string
+  status: 'draft' | 'open' | 'paid' | 'void' | 'uncollectible'
+  currency: string
+  subtotal: number
+  tax?: number
+  total: number
+  amountDue: number
+  amountPaid: number
+  dueDate?: Date
+  paidAt?: Date
+  url?: string
+  createdAt: Date
+}
+
+export interface InvoiceListOptions extends PaginationOptions {
+  customerId?: string
+  status?: string
+  since?: Date
+  until?: Date
+}
+
+export interface CreatePaymentOptions {
+  amount: number
+  currency: string
+  customerId?: string
+  invoiceId?: string
+  paymentMethod: string
+  description?: string
+}
+
+export interface PaymentData {
+  id: string
+  amount: number
+  currency: string
+  status: 'pending' | 'succeeded' | 'failed' | 'refunded'
+  customerId?: string
+  invoiceId?: string
+  paymentMethod: string
+  description?: string
+  createdAt: Date
+  refundedAt?: Date
+}
+
+export interface PaymentListOptions extends PaginationOptions {
+  customerId?: string
+  status?: string
+  since?: Date
+  until?: Date
+}
+
+export interface RefundData {
+  id: string
+  paymentId: string
+  amount: number
+  status: string
+  createdAt: Date
+}
+
+export interface CreateFinanceCustomerOptions {
+  name: string
+  email?: string
+  phone?: string
+  address?: {
+    line1: string
+    line2?: string
+    city: string
+    state?: string
+    postalCode: string
+    country: string
+  }
+}
+
+export interface FinanceCustomerData {
+  id: string
+  name: string
+  email?: string
+  phone?: string
+  balance?: number
+  createdAt: Date
+}
+
+// =============================================================================
+// Support Provider (Zendesk, Intercom, Freshdesk)
+// =============================================================================
+
+export interface SupportProvider extends BaseProvider {
+  // Tickets
+  createTicket(ticket: CreateTicketOptions): Promise<TicketData>
+  getTicket(ticketId: string): Promise<TicketData | null>
+  updateTicket(ticketId: string, updates: Partial<CreateTicketOptions>): Promise<TicketData>
+  listTickets(options?: TicketListOptions): Promise<PaginatedResult<TicketData>>
+  closeTicket?(ticketId: string): Promise<boolean>
+  // Comments
+  addTicketComment(ticketId: string, body: string, isPublic?: boolean): Promise<TicketCommentData>
+  listTicketComments(ticketId: string): Promise<TicketCommentData[]>
+  // Users
+  getUser?(userId: string): Promise<SupportUserData | null>
+  searchUsers?(query: string): Promise<SupportUserData[]>
+}
+
+export interface CreateTicketOptions {
+  subject: string
+  description: string
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  type?: 'question' | 'incident' | 'problem' | 'task'
+  requesterId?: string
+  assigneeId?: string
+  tags?: string[]
+  customFields?: Record<string, unknown>
+}
+
+export interface TicketData {
+  id: string
+  subject: string
+  description: string
+  status: 'new' | 'open' | 'pending' | 'hold' | 'solved' | 'closed'
+  priority: string
+  type?: string
+  requesterId?: string
+  assigneeId?: string
+  tags: string[]
+  createdAt: Date
+  updatedAt: Date
+  solvedAt?: Date
+}
+
+export interface TicketListOptions extends PaginationOptions {
+  status?: string
+  priority?: string
+  assigneeId?: string
+  requesterId?: string
+}
+
+export interface TicketCommentData {
+  id: string
+  ticketId: string
+  body: string
+  authorId: string
+  isPublic: boolean
+  createdAt: Date
+}
+
+export interface SupportUserData {
+  id: string
+  name: string
+  email: string
+  role: string
+  createdAt: Date
+}
+
+// =============================================================================
+// Media Provider (Cloudinary, ImageKit, Mux)
+// =============================================================================
+
+export interface MediaProvider extends BaseProvider {
+  upload(file: Buffer | string, options?: UploadOptions): Promise<MediaAssetData>
+  get(assetId: string): Promise<MediaAssetData | null>
+  delete(assetId: string): Promise<boolean>
+  list(options?: MediaListOptions): Promise<PaginatedResult<MediaAssetData>>
+  transform?(assetId: string, transformations: TransformOptions): Promise<string>
+  getUrl(assetId: string, options?: UrlOptions): Promise<string>
+}
+
+export interface UploadOptions {
+  folder?: string
+  publicId?: string
+  resourceType?: 'image' | 'video' | 'raw' | 'auto'
+  tags?: string[]
+  metadata?: Record<string, string>
+}
+
+export interface MediaAssetData {
+  id: string
+  publicId: string
+  url: string
+  secureUrl: string
+  resourceType: 'image' | 'video' | 'raw'
+  format: string
+  bytes: number
+  width?: number
+  height?: number
+  duration?: number
+  createdAt: Date
+}
+
+export interface MediaListOptions extends PaginationOptions {
+  resourceType?: string
+  folder?: string
+  tags?: string[]
+}
+
+export interface TransformOptions {
+  width?: number
+  height?: number
+  crop?: string
+  quality?: number | 'auto'
+  format?: string
+}
+
+export interface UrlOptions {
+  transformation?: TransformOptions
+  signed?: boolean
+  expiration?: Date
+}
+
+// =============================================================================
+// Marketing Provider (Mailchimp, HubSpot Marketing, Klaviyo)
+// =============================================================================
+
+export interface MarketingProvider extends BaseProvider {
+  // Audiences/Lists
+  listAudiences(): Promise<AudienceData[]>
+  getAudience(audienceId: string): Promise<AudienceData | null>
+  // Subscribers
+  addSubscriber(audienceId: string, subscriber: AddSubscriberOptions): Promise<SubscriberData>
+  updateSubscriber(audienceId: string, email: string, updates: Partial<AddSubscriberOptions>): Promise<SubscriberData>
+  removeSubscriber?(audienceId: string, email: string): Promise<boolean>
+  listSubscribers(audienceId: string, options?: SubscriberListOptions): Promise<PaginatedResult<SubscriberData>>
+  // Campaigns
+  createCampaign(campaign: CreateCampaignOptions): Promise<CampaignData>
+  getCampaign(campaignId: string): Promise<CampaignData | null>
+  updateCampaign?(campaignId: string, updates: Partial<CreateCampaignOptions>): Promise<CampaignData>
+  listCampaigns(options?: CampaignListOptions): Promise<PaginatedResult<CampaignData>>
+  sendCampaign?(campaignId: string): Promise<boolean>
+  scheduleCampaign?(campaignId: string, sendAt: Date): Promise<boolean>
+  getCampaignReport?(campaignId: string): Promise<CampaignReportData>
+}
+
+export interface AudienceData {
+  id: string
+  name: string
+  memberCount: number
+  createdAt: Date
+}
+
+export interface AddSubscriberOptions {
+  email: string
+  firstName?: string
+  lastName?: string
+  tags?: string[]
+  mergeFields?: Record<string, unknown>
+  status?: 'subscribed' | 'pending' | 'unsubscribed'
+}
+
+export interface SubscriberData {
+  id: string
+  email: string
+  firstName?: string
+  lastName?: string
+  status: string
+  tags: string[]
+  subscribedAt?: Date
+  unsubscribedAt?: Date
+}
+
+export interface SubscriberListOptions extends PaginationOptions {
+  status?: string
+  sinceSubscribed?: Date
+}
+
+export interface CreateCampaignOptions {
+  name: string
+  audienceId: string
+  subject: string
+  fromName: string
+  fromEmail: string
+  content?: { html?: string; text?: string }
+  templateId?: string
+}
+
+export interface CampaignData {
+  id: string
+  name: string
+  status: 'draft' | 'scheduled' | 'sending' | 'sent'
+  audienceId: string
+  subject: string
+  fromName: string
+  fromEmail: string
+  sentAt?: Date
+  scheduledAt?: Date
+  createdAt: Date
+}
+
+export interface CampaignListOptions extends PaginationOptions {
+  status?: string
+  since?: Date
+}
+
+export interface CampaignReportData {
+  campaignId: string
+  sent: number
+  delivered: number
+  opens: number
+  uniqueOpens: number
+  clicks: number
+  uniqueClicks: number
+  bounces: number
+  unsubscribes: number
+  openRate: number
+  clickRate: number
+}
+
+// =============================================================================
+// Knowledge Provider (Notion, Confluence, GitBook)
+// =============================================================================
+
+export interface KnowledgeProvider extends BaseProvider {
+  // Pages
+  createPage(page: CreatePageOptions): Promise<PageData>
+  getPage(pageId: string): Promise<PageData | null>
+  updatePage(pageId: string, updates: Partial<CreatePageOptions>): Promise<PageData>
+  deletePage?(pageId: string): Promise<boolean>
+  listPages(options?: PageListOptions): Promise<PaginatedResult<PageData>>
+  searchPages(query: string, options?: PaginationOptions): Promise<PaginatedResult<PageData>>
+  // Databases/Spaces
+  listSpaces?(): Promise<SpaceData[]>
+  getSpace?(spaceId: string): Promise<SpaceData | null>
+}
+
+export interface CreatePageOptions {
+  title: string
+  content?: string
+  parentId?: string
+  spaceId?: string
+  icon?: string
+  cover?: string
+}
+
+export interface PageData {
+  id: string
+  title: string
+  content?: string
+  parentId?: string
+  spaceId?: string
+  url: string
+  icon?: string
+  cover?: string
+  createdAt: Date
+  updatedAt: Date
+  createdBy?: string
+  updatedBy?: string
+}
+
+export interface PageListOptions extends PaginationOptions {
+  parentId?: string
+  spaceId?: string
+}
+
+export interface SpaceData {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  url?: string
+}
+
+// =============================================================================
+// E-commerce Provider (Shopify, WooCommerce, Stripe Commerce)
+// =============================================================================
+
+export interface EcommerceProvider extends BaseProvider {
+  // Products
+  createProduct(product: CreateProductOptions): Promise<EcommerceProductData>
+  getProduct(productId: string): Promise<EcommerceProductData | null>
+  updateProduct(productId: string, updates: Partial<CreateProductOptions>): Promise<EcommerceProductData>
+  deleteProduct?(productId: string): Promise<boolean>
+  listProducts(options?: ProductListOptions): Promise<PaginatedResult<EcommerceProductData>>
+  // Orders
+  getOrder(orderId: string): Promise<OrderData | null>
+  listOrders(options?: OrderListOptions): Promise<PaginatedResult<OrderData>>
+  updateOrderStatus?(orderId: string, status: string): Promise<OrderData>
+  // Customers
+  getEcommerceCustomer?(customerId: string): Promise<EcommerceCustomerData | null>
+  listEcommerceCustomers?(options?: PaginationOptions): Promise<PaginatedResult<EcommerceCustomerData>>
+  // Inventory
+  updateInventory?(productId: string, variantId: string, quantity: number): Promise<boolean>
+}
+
+export interface CreateProductOptions {
+  title: string
+  description?: string
+  price: number
+  compareAtPrice?: number
+  sku?: string
+  inventory?: number
+  images?: string[]
+  variants?: Array<{ title: string; price: number; sku?: string; inventory?: number }>
+  tags?: string[]
+  status?: 'active' | 'draft' | 'archived'
+}
+
+export interface EcommerceProductData {
+  id: string
+  title: string
+  description?: string
+  price: number
+  compareAtPrice?: number
+  sku?: string
+  inventory?: number
+  images: string[]
+  variants?: Array<{ id: string; title: string; price: number; sku?: string; inventory?: number }>
+  tags: string[]
+  status: string
+  url?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ProductListOptions extends PaginationOptions {
+  status?: string
+  collection?: string
+  vendor?: string
+}
+
+export interface OrderData {
+  id: string
+  orderNumber: string
+  status: string
+  financialStatus: string
+  fulfillmentStatus: string
+  customerId?: string
+  email: string
+  lineItems: Array<{ productId: string; variantId?: string; title: string; quantity: number; price: number }>
+  subtotal: number
+  tax: number
+  shipping: number
+  total: number
+  currency: string
+  shippingAddress?: AddressData
+  billingAddress?: AddressData
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface OrderListOptions extends PaginationOptions {
+  status?: string
+  financialStatus?: string
+  fulfillmentStatus?: string
+  customerId?: string
+  since?: Date
+  until?: Date
+}
+
+export interface AddressData {
+  firstName: string
+  lastName: string
+  address1: string
+  address2?: string
+  city: string
+  province?: string
+  postalCode: string
+  country: string
+  phone?: string
+}
+
+export interface EcommerceCustomerData {
+  id: string
+  email: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+  ordersCount: number
+  totalSpent: number
+  createdAt: Date
+}
+
+// =============================================================================
+// Analytics Provider (Google Analytics, Mixpanel, Amplitude)
+// =============================================================================
+
+export interface AnalyticsProvider extends BaseProvider {
+  track(event: TrackEventOptions): Promise<boolean>
+  identify?(userId: string, traits?: Record<string, unknown>): Promise<boolean>
+  page?(name: string, properties?: Record<string, unknown>): Promise<boolean>
+  alias?(userId: string, previousId: string): Promise<boolean>
+  getReport?(reportId: string): Promise<AnalyticsReportData | null>
+  runQuery?(query: AnalyticsQueryOptions): Promise<AnalyticsQueryResult>
+}
+
+export interface TrackEventOptions {
+  event: string
+  userId?: string
+  anonymousId?: string
+  properties?: Record<string, unknown>
+  timestamp?: Date
+}
+
+export interface AnalyticsQueryOptions {
+  metrics: string[]
+  dimensions?: string[]
+  dateRange: { start: Date; end: Date }
+  filters?: Array<{ dimension: string; operator: string; value: string }>
+  orderBy?: Array<{ field: string; order: 'asc' | 'desc' }>
+  limit?: number
+}
+
+export interface AnalyticsQueryResult {
+  rows: Array<Record<string, unknown>>
+  totals?: Record<string, number>
+  rowCount: number
+}
+
+export interface AnalyticsReportData {
+  id: string
+  name: string
+  description?: string
+  query: AnalyticsQueryOptions
+  result?: AnalyticsQueryResult
+  createdAt: Date
+  updatedAt: Date
+}
+
+// =============================================================================
+// Storage Provider (AWS S3, Google Cloud Storage, Dropbox)
+// =============================================================================
+
+export interface StorageProvider extends BaseProvider {
+  upload(path: string, content: Buffer | string, options?: StorageUploadOptions): Promise<StorageFileData>
+  download(path: string): Promise<Buffer>
+  delete(path: string): Promise<boolean>
+  list(prefix?: string, options?: StorageListOptions): Promise<PaginatedResult<StorageFileData>>
+  getMetadata(path: string): Promise<StorageFileData | null>
+  copy?(source: string, destination: string): Promise<StorageFileData>
+  move?(source: string, destination: string): Promise<StorageFileData>
+  getSignedUrl?(path: string, expiresIn?: number): Promise<string>
+  createFolder?(path: string): Promise<boolean>
+}
+
+export interface StorageUploadOptions {
+  contentType?: string
+  metadata?: Record<string, string>
+  acl?: 'private' | 'public-read'
+}
+
+export interface StorageFileData {
+  path: string
+  name: string
+  size: number
+  contentType?: string
+  etag?: string
+  lastModified: Date
+  isFolder: boolean
+  url?: string
+}
+
+export interface StorageListOptions extends PaginationOptions {
+  delimiter?: string
+  recursive?: boolean
+}
+
+// =============================================================================
+// Video Conferencing Provider (Zoom, Google Meet, Microsoft Teams)
+// =============================================================================
+
+export interface VideoConferencingProvider extends BaseProvider {
+  createMeeting(meeting: CreateMeetingOptions): Promise<MeetingData>
+  getMeeting(meetingId: string): Promise<MeetingData | null>
+  updateMeeting?(meetingId: string, updates: Partial<CreateMeetingOptions>): Promise<MeetingData>
+  deleteMeeting?(meetingId: string): Promise<boolean>
+  listMeetings(options?: MeetingListOptions): Promise<PaginatedResult<MeetingData>>
+  endMeeting?(meetingId: string): Promise<boolean>
+  getParticipants?(meetingId: string): Promise<ParticipantData[]>
+  getRecordings?(meetingId: string): Promise<MeetingRecordingData[]>
+}
+
+export interface CreateMeetingOptions {
+  topic: string
+  startTime?: Date
+  duration?: number
+  timezone?: string
+  agenda?: string
+  password?: string
+  settings?: {
+    hostVideo?: boolean
+    participantVideo?: boolean
+    joinBeforeHost?: boolean
+    muteUponEntry?: boolean
+    waitingRoom?: boolean
+    autoRecording?: 'none' | 'local' | 'cloud'
+  }
+}
+
+export interface MeetingData {
+  id: string
+  topic: string
+  startTime?: Date
+  duration?: number
+  timezone?: string
+  agenda?: string
+  joinUrl: string
+  hostId: string
+  status: 'waiting' | 'started' | 'finished'
+  password?: string
+  createdAt: Date
+}
+
+export interface MeetingListOptions extends PaginationOptions {
+  type?: 'scheduled' | 'live' | 'upcoming' | 'previous'
+}
+
+export interface ParticipantData {
+  id: string
+  name: string
+  email?: string
+  joinTime: Date
+  leaveTime?: Date
+  duration?: number
+}
+
+export interface MeetingRecordingData {
+  id: string
+  meetingId: string
+  type: 'video' | 'audio' | 'transcript'
+  url: string
+  size?: number
+  duration?: number
+  createdAt: Date
+}
+
+// =============================================================================
+// Forms Provider (Typeform, Google Forms, JotForm)
+// =============================================================================
+
+export interface FormsProvider extends BaseProvider {
+  createForm(form: CreateFormOptions): Promise<FormData>
+  getForm(formId: string): Promise<FormData | null>
+  updateForm?(formId: string, updates: Partial<CreateFormOptions>): Promise<FormData>
+  deleteForm?(formId: string): Promise<boolean>
+  listForms(options?: PaginationOptions): Promise<PaginatedResult<FormData>>
+  getResponses(formId: string, options?: ResponseListOptions): Promise<PaginatedResult<FormResponseData>>
+  getResponse?(formId: string, responseId: string): Promise<FormResponseData | null>
+}
+
+export interface CreateFormOptions {
+  title: string
+  description?: string
+  fields: FormFieldOption[]
+  settings?: {
+    isPublic?: boolean
+    submitOnce?: boolean
+    showProgressBar?: boolean
+    confirmationMessage?: string
+    redirectUrl?: string
+  }
+}
+
+export interface FormFieldOption {
+  type: 'text' | 'email' | 'number' | 'date' | 'dropdown' | 'checkbox' | 'radio' | 'textarea' | 'file'
+  title: string
+  description?: string
+  required?: boolean
+  choices?: string[]
+  validation?: {
+    min?: number
+    max?: number
+    pattern?: string
+  }
+}
+
+export interface FormData {
+  id: string
+  title: string
+  description?: string
+  fields: FormFieldOption[]
+  responseCount: number
+  url: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface ResponseListOptions extends PaginationOptions {
+  since?: Date
+  until?: Date
+  completed?: boolean
+}
+
+export interface FormResponseData {
+  id: string
+  formId: string
+  answers: Array<{ fieldId: string; value: unknown }>
+  submittedAt: Date
+  metadata?: {
+    ip?: string
+    userAgent?: string
+    referer?: string
+  }
 }
 
 // =============================================================================

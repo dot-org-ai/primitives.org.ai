@@ -103,6 +103,56 @@ export {
   communicationTools,
 } from './tools/index.js'
 
+// Export providers (concrete implementations using third-party APIs)
+export {
+  // Provider types and registry
+  type EmailProvider,
+  type MessagingProvider,
+  type SmsProvider,
+  type SpreadsheetProvider,
+  type DocumentProvider,
+  type PresentationProvider,
+  type PhoneProvider,
+  type ProviderConfig,
+  type ProviderInfo,
+  type ProviderCategory,
+  type BaseProvider,
+
+  // Provider registry
+  providerRegistry,
+  createProviderRegistry,
+  registerProvider,
+  getProvider,
+  createProvider,
+  listProviders,
+  defineProvider,
+
+  // Email providers
+  sendgridProvider,
+  resendProvider,
+  createSendGridProvider,
+  createResendProvider,
+
+  // Messaging providers
+  slackProvider,
+  twilioSmsProvider,
+  createSlackProvider,
+  createTwilioSmsProvider,
+
+  // Spreadsheet providers
+  xlsxProvider,
+  googleSheetsProvider,
+  createXlsxProvider,
+  createGoogleSheetsProvider,
+
+  // Registration helpers
+  registerAllProviders,
+  registerEmailProviders,
+  registerMessagingProviders,
+  registerSpreadsheetProviders,
+  allProviders,
+} from './providers/index.js'
+
 // Convenience function to register all built-in tools
 import { registry } from './registry.js'
 import { webTools } from './tools/web.js'

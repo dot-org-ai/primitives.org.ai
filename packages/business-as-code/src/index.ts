@@ -279,3 +279,132 @@ export {
   getContext,
   resetContext,
 } from './dollar.js'
+
+// Export SaaS metrics
+export type {
+  // Time types
+  DateRange,
+  MetricPeriod,
+  DataPoint,
+  TimeSeries,
+
+  // Revenue metrics
+  MRR,
+  ARR,
+  NRR,
+  GRR,
+  ARPU,
+  RevenueSegment,
+
+  // Customer metrics
+  CAC,
+  LTV,
+  LTVtoCAC,
+  Churn,
+  RetentionCohort,
+
+  // Growth metrics
+  GrowthRate,
+  QuickRatio,
+
+  // Efficiency metrics
+  MagicNumber,
+  BurnMultiple,
+  RuleOf40,
+  EfficiencyScore,
+
+  // Pipeline & Sales
+  Pipeline,
+  PipelineStage,
+  SalesVelocity,
+
+  // Operational
+  NPS,
+  CustomerHealth,
+  HealthFactor,
+
+  // Comprehensive
+  SaaSMetrics,
+} from './metrics.js'
+
+export {
+  // SaaS Metric Calculation functions (produce structured SaaS metric objects)
+  calculateMRR as calculateMRRMetric,
+  calculateARRFromMRR as calculateARRMetric,
+  calculateNRR as calculateNRRMetric,
+  calculateGRR as calculateGRRMetric,
+  calculateCACMetric,
+  calculateLTVMetric,
+  calculateLTVtoCACRatio,
+  calculateQuickRatioMetric,
+  calculateMagicNumberMetric,
+  calculateBurnMultipleMetric,
+  calculateRuleOf40Metric,
+  calculateGrowthRates,
+  calculateChurnMetrics,
+
+  // Time-series aggregation
+  aggregateTimeSeries,
+  createMetricPeriod,
+} from './metrics.js'
+
+// Export live queries & views (ai-database / ClickHouse integration)
+export type {
+  // Core types
+  Granularity,
+  AggregateFunction,
+  Operator,
+  SortDirection,
+
+  // OLAP primitives
+  Dimension,
+  Measure,
+  CalculatedMeasure,
+
+  // Query building
+  Filter,
+  Sort,
+  TimeRange,
+  Query,
+  ResolvedQuery,
+
+  // Views & Dashboards
+  View,
+  Dashboard,
+  DashboardLayout,
+  DashboardItem,
+  Visualization,
+
+  // Execution
+  QueryRow,
+  QueryResult,
+  QueryExecutor,
+  StreamingQueryResult,
+  StreamingQueryExecutor,
+} from './queries.js'
+
+export {
+  // Standard definitions
+  StandardDimensions,
+  StandardMeasures,
+  CalculatedMetrics,
+
+  // Builders
+  query,
+  QueryBuilder,
+  view,
+  ViewBuilder,
+  dashboard,
+  DashboardBuilder,
+
+  // Pre-built queries
+  MrrOverview,
+  ArrBySegment,
+  CohortRetention,
+  UnitEconomics,
+  RevenueByChannel,
+  GrowthMetrics,
+
+  // Pre-built dashboards
+  ExecutiveDashboard,
+} from './queries.js'
