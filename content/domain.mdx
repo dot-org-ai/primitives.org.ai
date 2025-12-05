@@ -1,12 +1,47 @@
 ---
 title: Domain
-description: URL-based namespaces for everything
+description: URL-based namespaces that define context for AI and data
 icon: Globe
 ---
 
 # Domain
 
 A Domain is the foundational namespace for all primitives. In this architecture, everything is URL-addressable - agents don't know file systems, they only know URLs.
+
+## The Namespace IS the Context
+
+Here's the key insight: **your domain namespace IS the `$context`** - and this works on two levels simultaneously:
+
+### Semantic Context (JSON-LD)
+
+In [mdxld](https://mdxld.org), every domain defines a JSON-LD `@context` that gives semantic meaning to your data:
+
+```yaml
+$context: https://acme.do/
+$type: Customer
+name: Acme Corp
+```
+
+The namespace `https://acme.do/` becomes the context that defines what "Customer", "name", and every other term means within your domain.
+
+### AI Context (LLM)
+
+But here's the beautiful double-entendre: in AI systems, **context is everything**. The context window is what the LLM uses to understand, reason, and respond. When you define a domain:
+
+- You're giving the AI the **semantic context** to understand your business vocabulary
+- You're providing the **cognitive context** for the AI to reason about your domain
+- Every Noun, Verb, and Function you define enriches this context
+
+```typescript
+// Your domain IS the context
+const acme = Domain('acme.do')
+
+// When an AI agent operates in this domain,
+// it understands what "Customer", "Invoice", "approve" mean
+// because the domain provides both semantic AND cognitive context
+```
+
+**The namespace doesn't just organize your data - it teaches AI how to think about your business.**
 
 ## Overview
 
@@ -145,9 +180,29 @@ const domain = Domain('acme.do', {
 })
 ```
 
+## Context Propagation
+
+When you execute a function or deploy an agent, the domain context flows through:
+
+```typescript
+// The domain context enriches every operation
+const result = await domain.functions.summarize({
+  text: customerFeedback,
+  // The AI knows "customer" means YOUR definition of customer
+  // It knows your business vocabulary, your entities, your relationships
+})
+
+// Agents inherit domain context
+const agent = domain.agents.supportBot
+// This agent thinks in terms of YOUR Nouns, YOUR Verbs, YOUR business rules
+```
+
+This is why domains are so powerful: they're not just organizational units or URL prefixes. They're the **shared understanding** between your data, your code, and your AI.
+
 ## See Also
 
 - [Noun](/noun) - Types within a domain
 - [Thing](/thing) - Instances within a domain
 - [Function](/function) - Capabilities exposed by a domain
 - [Agent](/agent) - Actors operating within domains
+- [mdxld](https://mdxld.org) - MDX with Linked Data and `$context`
