@@ -408,3 +408,55 @@ export {
   // Pre-built dashboards
   ExecutiveDashboard,
 } from './queries.js'
+
+// Export roles (bridges digital-workers and ai-database authorization)
+export type {
+  BusinessRoleType,
+  BusinessRole,
+  TaskStatus,
+  TaskPriority,
+  TaskAssignment,
+  AssigneeRef,
+  TaskRoutingRule,
+  WorkflowRole,
+} from './roles.js'
+
+export {
+  StandardBusinessRoles,
+  createBusinessRole,
+  hasPermission,
+  canHandleTask,
+  canApproveRequest,
+  canDelegateTask,
+  findRoleForTask,
+  createTaskAssignment,
+  transitionTaskStatus,
+} from './roles.js'
+
+// Export organization (full hierarchy to FGA/RBAC)
+export type {
+  Organization,
+  OrganizationSettings,
+  Address,
+  Department as OrgDepartment,
+  Team as OrgTeam,
+  TeamResources,
+  TeamChannels,
+  Position,
+  PositionRef,
+  Compensation,
+  Budget,
+  ResourceHierarchy,
+  ResourceHierarchyNode,
+  ApprovalChain,
+  ApprovalLevel,
+  ApproverSpec,
+  EscalationRule,
+  ResolvedPermissions,
+} from './organization.js'
+
+export {
+  resolvePermissions,
+  getApprovalChainForRequest,
+  findManager,
+} from './organization.js'
