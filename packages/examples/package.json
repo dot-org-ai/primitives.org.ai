@@ -1,0 +1,50 @@
+{
+  "name": "@primitives/examples",
+  "version": "0.0.1",
+  "description": "Real-world examples of digital businesses using primitives.org.ai",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./saas": {
+      "import": "./dist/saas/index.js",
+      "types": "./dist/saas/index.d.ts"
+    },
+    "./api-business": {
+      "import": "./dist/api-business/index.js",
+      "types": "./dist/api-business/index.d.ts"
+    },
+    "./directory": {
+      "import": "./dist/directory/index.js",
+      "types": "./dist/directory/index.d.ts"
+    },
+    "./marketplace": {
+      "import": "./dist/marketplace/index.js",
+      "types": "./dist/marketplace/index.d.ts"
+    },
+    "./startup-studio": {
+      "import": "./dist/startup-studio/index.js",
+      "types": "./dist/startup-studio/index.d.ts"
+    },
+    "./vc-firm": {
+      "import": "./dist/vc-firm/index.js",
+      "types": "./dist/vc-firm/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "keywords": ["examples", "saas", "api", "marketplace", "directory", "startup", "vc"],
+  "license": "MIT"
+}
