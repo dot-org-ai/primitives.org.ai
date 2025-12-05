@@ -15,27 +15,27 @@ import { evaluate } from 'ai-sandbox'
 
 // Run a simple script
 const result = await evaluate({
-  script: 'return 1 + 1'
+  script: '1 + 1'
 })
 // { success: true, value: 2, logs: [], duration: 5 }
 
 // With a module and tests
 const result = await evaluate({
   module: `
-    exports.add = (a, b) => a + b;
-    exports.multiply = (a, b) => a * b;
+    export const add = (a, b) => a + b
+    export const multiply = (a, b) => a * b
   `,
   tests: `
     describe('math', () => {
       it('adds numbers', () => {
         expect(add(2, 3)).toBe(5);
-      });
+      })
       it('multiplies numbers', () => {
         expect(multiply(2, 3)).toBe(6);
-      });
-    });
+      })
+    })
   `,
-  script: 'return add(10, 20)'
+  script: 'add(10, 20)'
 })
 ```
 
