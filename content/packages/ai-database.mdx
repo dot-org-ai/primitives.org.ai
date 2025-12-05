@@ -1,37 +1,64 @@
 ---
 title: ai-database
-description: Schema-first database with vector embeddings
+description: Your data, flowing like conversation
 ---
 
 ```bash
 npm install ai-database
 ```
 
-AI-native database with natural language queries and semantic search.
+Chain operations. Batch relationships. Ask questions.
 
 ```typescript
 import { DB } from 'ai-database'
 
-const db = new DB({ namespace: 'my-app' })
+const { db } = DB({
+  Lead: { name: 'string', company: 'Company.leads' },
+  Company: { name: 'string' }
+})
 
-// Create with AI
-await db.User.create`a developer named Alice`
+// Chain without await
+const leads = db.Lead.list()
+const qualified = await leads.filter(l => l.score > 80)
 
-// Query naturally
-const users = await db.User.find`active in the last week`
-
-// Semantic search
-const similar = await db.Article.search`machine learning tutorials`
+// Batch relationship loading
+const enriched = await leads.map(lead => ({
+  name: lead.name,
+  company: lead.company,  // Batch loaded!
+}))
 ```
 
-## Features
+## Promise Pipelining
 
-- Schema inference from natural language
-- Vector embeddings for semantic search
-- Graph relationships between entities
-- Multiple storage providers (Cloudflare D1, Turso, etc.)
+Chain without `await`:
+
+```typescript
+const leads = db.Lead.list()
+const topLeads = leads.filter(l => l.score > 80)
+const names = topLeads.map(l => l.name)
+
+// Only await when you need it
+const result = await names
+```
+
+## Batch Loading
+
+Eliminate N+1 queries:
+
+```typescript
+const enriched = await db.Lead.list().map(lead => ({
+  lead,
+  company: lead.company,  // ONE query for all
+}))
+```
+
+## Natural Language
+
+```typescript
+const results = await db.Lead`who closed deals this month?`
+```
 
 ## Related
 
-- [Database Primitive](/database) — Full documentation
-- [ai-providers](/packages/ai-providers) — Embedding providers
+- [Database](/database) — Full documentation
+- [ai-functions](/packages/ai-functions) — AI-powered functions

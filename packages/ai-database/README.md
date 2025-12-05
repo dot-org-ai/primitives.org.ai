@@ -1,243 +1,260 @@
 # ai-database
 
-Schema-first database with AI-native primitives. Create, generate, and search by meaning.
+Your data, flowing like conversation.
 
 ```typescript
 import { DB } from 'ai-database'
 
-const { db, events, actions } = DB({
-  Post: { title: 'string', author: 'Author.posts' },
-  Author: { name: 'string' }
+const { db } = DB({
+  Lead: { name: 'string', company: 'Company.leads' },
+  Company: { name: 'string' }
 })
 
-await db.Post.create({ title: 'Hello World', author: 'john' })
-await db.search('beginner tutorials')  // semantic search
+// Chain without await
+const leads = db.Lead.list()
+const qualified = await leads.filter(l => l.score > 80)
+
+// Batch relationship loading
+const enriched = await leads.map(lead => ({
+  name: lead.name,
+  company: lead.company,  // Batch loaded!
+}))
 ```
 
-## Features
+## Promise Pipelining
 
-- **Schema-first** - Define once, get typed operations everywhere
-- **Bi-directional relationships** - `author: 'Author.posts'` creates both directions
-- **Semantic search** - Hybrid vector + full-text search
-- **Natural language queries** - `db\`what orders are pending?\``
-- **Self-describing** - Every type stored as a Noun for introspection
-- **AI generation** - Auto-generate content from schema prompts
-
-## Installation
-
-```bash
-pnpm add ai-database
-```
-
-## Quick Start
+Chain database operations without `await`:
 
 ```typescript
-import { DB } from 'ai-database'
+const leads = db.Lead.list()
+const topLeads = leads.filter(l => l.score > 80)
+const names = topLeads.map(l => l.name)
 
-// Schema defines types AND generation prompts
-const { db, events, actions, artifacts, nouns, verbs } = DB({
+// Only await when you need the result
+const result = await names
+```
+
+## Batch Relationship Loading
+
+Eliminate N+1 queries automatically:
+
+```typescript
+// Old way - N+1 queries
+const leads = await db.Lead.list()
+for (const lead of leads) {
+  const company = await db.Company.get(lead.companyId)  // N queries!
+}
+
+// New way - batch loaded
+const enriched = await db.Lead.list().map(lead => ({
+  lead,
+  company: lead.company,  // All companies loaded in ONE query
+}))
+```
+
+## Natural Language Queries
+
+Ask your database questions:
+
+```typescript
+const results = await db.Lead`who closed deals this month?`
+const pending = await db.Order`what's stuck in processing?`
+```
+
+---
+
+## Real-World Examples
+
+### Sales Pipeline
+
+```typescript
+const { db } = DB({
+  Lead: {
+    name: 'string',
+    email: 'string',
+    score: 'number',
+    company: 'Company.leads',
+  },
+  Company: {
+    name: 'string',
+    industry: 'string',
+  }
+})
+
+// Find high-value leads with their companies
+const qualified = await db.Lead.list()
+  .filter(lead => lead.score > 80)
+  .map(lead => ({
+    lead,
+    company: lead.company,
+  }))
+
+// Ask questions naturally
+const results = await db.Lead`who hasn't responded in 2 weeks?`
+```
+
+### Customer Success
+
+```typescript
+const { db } = DB({
+  Customer: {
+    name: 'string',
+    healthScore: 'number',
+    mrr: 'number',
+    csm: 'User.customers',
+  },
+  User: { name: 'string' }
+})
+
+// At-risk customers with their CSMs
+const atRisk = await db.Customer.list()
+  .filter(c => c.healthScore < 50)
+  .map(c => ({
+    customer: c,
+    csm: c.csm,
+    mrr: c.mrr,
+  }))
+```
+
+### Order Management
+
+```typescript
+const { db } = DB({
+  Order: {
+    status: 'string',
+    total: 'number',
+    customer: 'Customer.orders',
+    items: ['OrderItem.order'],
+  },
+  OrderItem: { product: 'string', quantity: 'number' },
+  Customer: { name: 'string' }
+})
+
+// Pending orders with all details
+const pending = await db.Order
+  .find({ status: 'pending' })
+  .map(order => ({
+    order,
+    customer: order.customer,
+    items: order.items,
+  }))
+```
+
+---
+
+## Schema Definition
+
+Define once, get typed operations everywhere:
+
+```typescript
+const { db, events, actions, nouns, verbs } = DB({
   Post: {
-    title: 'Engaging post title',
+    title: 'string',
     content: 'markdown',
-    author: 'Author.posts',  // bi-directional relation
+    author: 'Author.posts',  // Creates both directions
   },
   Author: {
     name: 'string',
-    // posts: Post[] auto-created
+    // posts: Post[] auto-created from backref
   }
 })
-
-// CRUD
-const post = await db.Post.create({ title: 'Hello', content: '...' })
-const posts = await db.Post.list()
-await db.Post.update(post.$id, { title: 'Updated' })
-
-// Search
-const results = await db.search('AI tutorials')
-
-// Natural language
-const pending = await db`what posts are drafts?`
 ```
 
-## Destructured Exports
+### Field Types
 
-The `DB()` function returns all database primitives as destructured exports:
+| Type | Description |
+|------|-------------|
+| `string` | Text |
+| `number` | Numeric |
+| `boolean` | True/false |
+| `date` | Date only |
+| `datetime` | Date and time |
+| `markdown` | Rich text |
+| `json` | Structured data |
+| `url` | URL string |
+
+### Relationships
 
 ```typescript
-const { db, events, actions, artifacts, nouns, verbs } = DB(schema)
+// One-to-many: Post has one Author, Author has many Posts
+Post: { author: 'Author.posts' }
+
+// Many-to-many: Post has many Tags, Tag has many Posts
+Post: { tags: ['Tag.posts'] }
 ```
 
-| Export | Description |
-|--------|-------------|
-| `db` | CRUD operations for each entity type |
-| `events` | Event subscription and emission |
-| `actions` | Durable execution with progress tracking |
-| `artifacts` | Cached embeddings and computed content |
-| `nouns` | Type introspection |
-| `verbs` | Action introspection |
+---
 
 ## CRUD Operations
 
+All operations return `DBPromise` for chaining:
+
 ```typescript
-// Create
-const post = await db.Post.create({ title: 'Hello' })
-const post = await db.Post.create('custom-id', { title: 'Hello' })
-
 // Read
-const post = await db.Post.get('post-id')
-const posts = await db.Post.list()
-const posts = await db.Post.list({ where: { published: true }, limit: 10 })
-const posts = await db.Post.find({ author: 'john' })
+const lead = await db.Lead.get('lead-123')
+const leads = await db.Lead.list()
+const first = await db.Lead.first()
+const found = await db.Lead.find({ status: 'active' })
 
-// Update
-await db.Post.update('post-id', { title: 'Updated' })
+// Search
+const results = await db.Lead.search('enterprise SaaS')
 
-// Upsert
-await db.Post.upsert('post-id', { title: 'Create or Update' })
-
-// Delete
-await db.Post.delete('post-id')
-
-// Count
-const total = await db.Post.count()
-const published = await db.Post.count({ published: true })
-
-// Iterate
-await db.Post.forEach(async (post) => {
-  console.log(post.title)
-})
+// Write (returns regular Promise)
+const lead = await db.Lead.create({ name: 'Acme Corp' })
+await db.Lead.update(lead.$id, { score: 90 })
+await db.Lead.delete(lead.$id)
 ```
+
+### Chainable Methods
+
+```typescript
+db.Lead.list()
+  .filter(l => l.score > 50)
+  .sort((a, b) => b.score - a.score)
+  .limit(10)
+  .map(l => ({ name: l.name, score: l.score }))
+```
+
+---
 
 ## Events
 
+React to changes in real-time:
+
 ```typescript
-// Subscribe to events
-events.on('Post.created', (event) => {
-  console.log(`New post: ${event.data.title}`)
+events.on('Lead.created', event => {
+  notifySlack(`New lead: ${event.data.name}`)
 })
 
-events.on('*.updated', (event) => {
-  console.log(`Updated: ${event.type}`)
-})
-
-// Emit custom events
-await events.emit('custom.event', { data: 'value' })
-
-// List events
-const recent = await events.list({ limit: 100 })
-
-// Replay events
-await events.replay({
-  since: yesterday,
-  handler: async (event) => {
-    await processEvent(event)
-  }
+events.on('*.updated', event => {
+  logChange(event)
 })
 ```
 
 ## Actions
 
+Track long-running operations:
+
 ```typescript
-// Create a durable action
 const action = await actions.create({
-  type: 'generate-posts',
-  data: { count: 100 },
-  total: 100,
+  type: 'import-leads',
+  data: { file: 'leads.csv' },
+  total: 1000,
 })
 
-// Update progress
-await actions.update(action.id, { progress: 50 })
-
-// Complete or fail
-await actions.update(action.id, { status: 'completed', result: { created: 100 } })
-await actions.update(action.id, { status: 'failed', error: 'Rate limited' })
-
-// List and retry
-const failed = await actions.list({ status: 'failed' })
-await actions.retry(failed[0].id)
+await actions.update(action.id, { progress: 500 })
+await actions.update(action.id, { status: 'completed' })
 ```
 
-## Artifacts
+---
 
-```typescript
-// Cache embeddings
-await artifacts.set('Post/hello', 'embedding', {
-  content: [0.1, 0.2, ...],
-  sourceHash: 'abc123',
-})
+## Installation
 
-// Get cached artifact
-const embedding = await artifacts.get('Post/hello', 'embedding')
-
-// List all artifacts for a URL
-const all = await artifacts.list('Post/hello')
-```
-
-## Thing Types (mdxld)
-
-Entities follow the [mdxld](https://mdx.org.ai) convention with two representations:
-
-### Flat Format
-
-Used for JSON-LD compatible storage with `$`-prefixed metadata:
-
-```typescript
-import type { ThingFlat } from 'ai-database'
-
-const post: ThingFlat = {
-  $id: 'post-123',
-  $type: 'Post',
-  $context: 'https://schema.org',
-  title: 'Hello World',
-  content: 'This is my post...',
-}
-```
-
-### Expanded Format
-
-Used for full document representation with structured data:
-
-```typescript
-import type { ThingExpanded } from 'ai-database'
-
-const post: ThingExpanded = {
-  id: 'post-123',
-  type: 'Post',
-  context: 'https://schema.org',
-  data: { title: 'Hello World', author: 'john' },
-  content: '# Hello World\n\nThis is my post...',
-}
-```
-
-### Conversion Utilities
-
-```typescript
-import { toExpanded, toFlat } from 'ai-database'
-
-// Convert flat to expanded
-const expanded = toExpanded(flatPost)
-
-// Convert expanded to flat
-const flat = toFlat(expandedPost)
-```
-
-## Semantic Types
-
-Auto-generate linguistic forms for any noun or verb:
-
-```typescript
-import { pluralize, conjugate, Type } from 'ai-database'
-
-pluralize('category')  // 'categories'
-conjugate('publish')   // { actor: 'publisher', activity: 'publishing', ... }
-Type('BlogPost').slug  // 'blog-post'
+```bash
+npm install ai-database
 ```
 
 ## Configuration
-
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Connection URL |
 
 ```bash
 DATABASE_URL=./content         # filesystem (default)
@@ -247,16 +264,12 @@ DATABASE_URL=:memory:          # in-memory
 
 ## Documentation
 
-Full documentation at [primitives.org.ai/database](https://primitives.org.ai/database):
+- [Full Documentation](https://primitives.org.ai/database)
+- [CRUD Operations](https://primitives.org.ai/database/create)
+- [Schema Types](https://primitives.org.ai/database/schema)
+- [Events](https://primitives.org.ai/database/events)
 
-- [CRUD Operations](https://primitives.org.ai/database/create) - create, get, list, update, delete
-- [Query Styles](https://primitives.org.ai/database/queries) - SQL, Document, Graph
-- [Events](https://primitives.org.ai/database/events) - Event subscription
-- [Actions](https://primitives.org.ai/database/actions) - Durable execution
-- [Schema Types](https://primitives.org.ai/database/schema) - Noun & Verb definitions
+## Related
 
-## Related Packages
-
-- [`ai-functions`](../ai-functions) - AI-powered function primitives
-- [`ai-workflows`](../ai-workflows) - Event-driven orchestration
-- [`ai-providers`](../ai-providers) - Model provider abstraction
+- [ai-functions](../ai-functions) - AI-powered functions
+- [ai-workflows](../ai-workflows) - Event-driven workflows

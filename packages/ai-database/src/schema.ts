@@ -30,6 +30,7 @@
  */
 
 import type { MDXLD } from 'mdxld'
+import { DBPromise, wrapEntityOperations } from './ai-promise-db.js'
 
 // =============================================================================
 // Thing Types (mdxld-based entity structure)
@@ -1332,6 +1333,66 @@ export interface EntityOperations<T> {
   ): Promise<void>
 }
 
+/**
+ * Operations with promise pipelining support
+ *
+ * Query methods return DBPromise for chainable operations:
+ * - `.map()` with batch optimization
+ * - `.filter()`, `.sort()`, `.limit()`
+ * - Property access tracking for projections
+ *
+ * @example
+ * ```ts
+ * // Chain without await
+ * const leads = db.Lead.list()
+ * const qualified = await leads
+ *   .filter(l => l.score > 80)
+ *   .map(l => ({ name: l.name, company: l.company }))
+ *
+ * // Batch relationship loading
+ * const orders = await db.Order.list().map(o => ({
+ *   order: o,
+ *   customer: o.customer,  // Batch loaded!
+ * }))
+ * ```
+ */
+export interface PipelineEntityOperations<T> {
+  /** Get an entity by ID */
+  get(id: string): DBPromise<T | null>
+
+  /** List all entities */
+  list(options?: ListOptions): DBPromise<T[]>
+
+  /** Find entities matching criteria */
+  find(where: Partial<T>): DBPromise<T[]>
+
+  /** Search entities */
+  search(query: string, options?: SearchOptions): DBPromise<T[]>
+
+  /** Get first matching entity */
+  first(): DBPromise<T | null>
+
+  /** Create a new entity */
+  create(data: Omit<T, '$id' | '$type'>): Promise<T>
+  create(id: string, data: Omit<T, '$id' | '$type'>): Promise<T>
+
+  /** Update an entity */
+  update(id: string, data: Partial<Omit<T, '$id' | '$type'>>): Promise<T>
+
+  /** Upsert an entity */
+  upsert(id: string, data: Omit<T, '$id' | '$type'>): Promise<T>
+
+  /** Delete an entity */
+  delete(id: string): Promise<boolean>
+
+  /** Iterate over entities */
+  forEach(callback: (entity: T) => void | Promise<void>): Promise<void>
+  forEach(
+    options: ListOptions,
+    callback: (entity: T) => void | Promise<void>
+  ): Promise<void>
+}
+
 export interface ListOptions {
   where?: Record<string, unknown>
   orderBy?: string
@@ -1388,9 +1449,24 @@ export type NLQueryFn<T = unknown> = (
 
 /**
  * Typed database client based on schema
+ *
+ * Entity operations return DBPromise for chainable queries:
+ * ```ts
+ * const { db } = DB({ Lead: { name: 'string', company: 'Company.leads' } })
+ *
+ * // Chain without await
+ * const leads = db.Lead.list()
+ * const qualified = await leads.filter(l => l.score > 80)
+ *
+ * // Batch relationship loading
+ * const withCompanies = await leads.map(l => ({
+ *   lead: l,
+ *   company: l.company,  // Batch loaded!
+ * }))
+ * ```
  */
 export type TypedDB<TSchema extends DatabaseSchema> = {
-  [K in keyof TSchema]: EntityOperations<InferEntity<TSchema, K>> & NLQueryFn<InferEntity<TSchema, K>>
+  [K in keyof TSchema]: PipelineEntityOperations<InferEntity<TSchema, K>> & NLQueryFn<InferEntity<TSchema, K>>
 } & {
   /** The parsed schema */
   readonly $schema: ParsedSchema
@@ -2158,15 +2234,13 @@ export function DB<TSchema extends DatabaseSchema>(
 ): DBResult<TSchema> {
   const parsedSchema = parseSchema(schema)
 
-  // Create entity operations for each type
-  const entityOperations: Record<string, EntityOperations<unknown>> = {}
+  // Create entity operations for each type with promise pipelining
+  const entityOperations: Record<string, PipelineEntityOperations<unknown>> = {}
 
   for (const [entityName, entity] of parsedSchema.entities) {
-    entityOperations[entityName] = createEntityOperations(
-      entityName,
-      entity,
-      parsedSchema
-    )
+    const baseOps = createEntityOperations(entityName, entity, parsedSchema)
+    // Wrap with DBPromise for chainable queries
+    entityOperations[entityName] = wrapEntityOperations(entityName, baseOps)
   }
 
   // Noun definitions cache

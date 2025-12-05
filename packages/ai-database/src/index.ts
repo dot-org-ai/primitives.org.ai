@@ -1,28 +1,30 @@
 /**
- * ai-database - Schema-first database with automatic bi-directional relationships
+ * ai-database - Schema-first database with promise pipelining
  *
  * @example
  * ```ts
- * const { db, events, actions, artifacts, nouns, verbs } = DB({
- *   Post: {
- *     title: 'string',
- *     author: 'Author.posts',  // Creates Post.author -> Author AND Author.posts -> Post[]
- *   },
- *   Author: {
+ * const { db } = DB({
+ *   Lead: {
  *     name: 'string',
- *     // posts: Post[] is auto-created from the backref
+ *     company: 'Company.leads',
+ *   },
+ *   Company: {
+ *     name: 'string',
  *   }
  * })
  *
- * // CRUD operations
- * const post = await db.Post.create({ title: 'Hello' })
- * await db.Post.update(post.$id, { title: 'Updated' })
+ * // Chain without await
+ * const leads = db.Lead.list()
+ * const qualified = await leads.filter(l => l.score > 80)
  *
- * // Event subscription
- * events.on('Post.created', (event) => console.log(event))
+ * // Batch relationship loading
+ * const withCompanies = await leads.map(l => ({
+ *   name: l.name,
+ *   company: l.company,  // Batch loaded!
+ * }))
  *
- * // Durable actions
- * const action = await actions.create({ type: 'generate', data: {} })
+ * // Natural language queries
+ * const results = await db.Lead`who closed deals this month?`
  * ```
  *
  * Provider is resolved transparently from environment (DATABASE_URL).
@@ -45,6 +47,7 @@ export type {
   ParsedField,
   TypedDB,
   EntityOperations,
+  PipelineEntityOperations,
   DBProvider,
   ListOptions,
   SearchOptions,
@@ -107,3 +110,18 @@ export type {
   Artifact,
   MemoryProviderOptions,
 } from './memory-provider.js'
+
+// Promise pipelining exports
+export {
+  DBPromise,
+  isDBPromise,
+  getRawDBPromise,
+  createListPromise,
+  createEntityPromise,
+  createSearchPromise,
+  wrapEntityOperations,
+  DB_PROMISE_SYMBOL,
+  RAW_DB_PROMISE_SYMBOL,
+} from './ai-promise-db.js'
+
+export type { DBPromiseOptions } from './ai-promise-db.js'
