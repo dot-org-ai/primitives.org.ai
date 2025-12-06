@@ -72,10 +72,10 @@ export type {
   // Event types
   DBEvent,
   ActorData,
-  CreateEventOptions,
+  CreateEventOptions as DBCreateEventOptions,
   // Action types
   DBAction,
-  CreateActionOptions,
+  CreateActionOptions as DBCreateActionOptions,
   // Artifact types
   DBArtifact,
   // Natural Language Query types
@@ -84,7 +84,33 @@ export type {
   NLQueryGenerator,
   NLQueryContext,
   NLQueryPlan,
+  // Graph Database Types (for @mdxdb adapters)
+  EntityId,
+  Thing,
+  Relationship,
+  // Query Types
+  QueryOptions,
+  ThingSearchOptions,
+  CreateOptions,
+  UpdateOptions,
+  RelateOptions,
+  // Event/Action/Artifact Option Types
+  StoreArtifactOptions,
+  EventQueryOptions,
+  ActionQueryOptions,
+  ActionStatus,
+  ArtifactType,
+  // Client Interfaces
+  DBClient,
+  DBClientExtended,
 } from './schema.js'
+
+// Export CreateEventOptions and CreateActionOptions from types.ts
+// (the schema.js versions are for EventsAPI/ActionsAPI, these are for DBClientExtended)
+export type {
+  CreateEventOptions,
+  CreateActionOptions,
+} from './types.js'
 
 export {
   // Thing conversion utilities
@@ -106,6 +132,10 @@ export {
   singularize,
   inferNoun,
   Type,
+  // URL utilities
+  resolveUrl,
+  resolveShortUrl,
+  parseUrl,
 } from './schema.js'
 
 export {
@@ -115,11 +145,16 @@ export {
 } from './memory-provider.js'
 
 export type {
-  Event,
-  Action,
-  Artifact,
+  // Note: Event, Action, Artifact now exported from schema.js (types.ts)
+  // memory-provider has different Event/Action/Artifact types (ActivityStreams style)
+  Event as MemoryEvent,
+  Action as MemoryAction,
+  Artifact as MemoryArtifact,
   MemoryProviderOptions,
 } from './memory-provider.js'
+
+// Event/Action/Artifact types for @mdxdb adapters (simple event sourcing style)
+export type { Event, Action, Artifact } from './schema.js'
 
 // Promise pipelining exports
 export {

@@ -52,9 +52,35 @@ export type {
   NounProperty,
   NounRelationship,
   TypeMeta,
+  // Graph Database Types
+  EntityId,
+  Thing,
+  Relationship,
+  // Query Types
+  QueryOptions,
+  ThingSearchOptions,
+  CreateOptions,
+  UpdateOptions,
+  RelateOptions,
+  // Event/Action/Artifact Types
+  Event,
+  ActionStatus,
+  Action,
+  ArtifactType,
+  Artifact,
+  // Options Types (Note: CreateEventOptions, CreateActionOptions defined locally below)
+  StoreArtifactOptions,
+  EventQueryOptions,
+  ActionQueryOptions,
+  // Client Interfaces
+  DBClient,
+  DBClientExtended,
+  // Import with aliases to avoid conflict with local definitions
+  CreateEventOptions as GraphCreateEventOptions,
+  CreateActionOptions as GraphCreateActionOptions,
 } from './types.js'
 
-export { toExpanded, toFlat, Verbs } from './types.js'
+export { toExpanded, toFlat, Verbs, resolveUrl, resolveShortUrl, parseUrl } from './types.js'
 
 // Re-export linguistic utilities from linguistic.ts
 export {
