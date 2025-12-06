@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./tests": {
+      "import": "./dist/tests.js",
+      "types": "./dist/tests.d.ts"
     }
   },
   "scripts": {
@@ -23,6 +27,14 @@
     "ai-functions": "workspace:*",
     "mdxld": "^1.0.1",
     "rpc.do": "^0.1.0"
+  },
+  "peerDependencies": {
+    "vitest": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
   },
   "keywords": [
     "ai",
