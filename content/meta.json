@@ -19,6 +19,7 @@
     "plan",
     "project",
     "task",
+    "tool",
     "---Actors---",
     "agent",
     "human",
