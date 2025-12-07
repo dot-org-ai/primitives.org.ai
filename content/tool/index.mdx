@@ -1,0 +1,222 @@
+---
+title: Tool
+description: Tool primitives for AI agents - defining capabilities that enable agents to interact with systems, APIs, and the real world
+---
+
+Tools are the hands of AI agents. They define capabilities that agents can invoke to take action beyond text generation.
+
+## What is a Tool?
+
+A Tool is a defined capability that an AI agent can call:
+
+- **Name**: Unique identifier the agent references
+- **Description**: What the tool does (helps the agent decide when to use it)
+- **Parameters**: Input schema the agent must provide
+- **Execute**: The function that runs when invoked
+
+```typescript
+import { defineTool } from 'digital-tools'
+
+const searchTool = defineTool({
+  name: 'search',
+  description: 'Search the web for information',
+  parameters: {
+    query: { type: 'string', description: 'Search query' },
+    limit: { type: 'number', description: 'Max results', default: 10 },
+  },
+  execute: async ({ query, limit }) => {
+    const results = await searchAPI(query, limit)
+    return results
+  },
+})
+```
+
+## Tool Categories
+
+| Category | Purpose | Examples |
+|----------|---------|----------|
+| **Information** | Retrieve data | search, read_file, query_database |
+| **Action** | Modify state | write_file, send_email, create_record |
+| **Computation** | Process data | calculate, transform, validate |
+| **Communication** | Interact with humans | ask_user, notify, request_approval |
+
+## Defining Tools
+
+### Simple Tool
+
+```typescript
+const calculator = defineTool({
+  name: 'calculate',
+  description: 'Perform mathematical calculations',
+  parameters: {
+    expression: { type: 'string', description: 'Math expression to evaluate' },
+  },
+  execute: async ({ expression }) => {
+    return eval(expression) // Use a safe math parser in production
+  },
+})
+```
+
+### Tool with Validation
+
+```typescript
+import { z } from 'zod'
+
+const createUser = defineTool({
+  name: 'create_user',
+  description: 'Create a new user account',
+  parameters: z.object({
+    email: z.string().email(),
+    name: z.string().min(1),
+    role: z.enum(['admin', 'user', 'guest']),
+  }),
+  execute: async ({ email, name, role }) => {
+    const user = await db.users.create({ email, name, role })
+    return { id: user.id, created: true }
+  },
+})
+```
+
+### Async Tools
+
+```typescript
+const fetchData = defineTool({
+  name: 'fetch_url',
+  description: 'Fetch content from a URL',
+  parameters: {
+    url: { type: 'string', description: 'URL to fetch' },
+  },
+  execute: async ({ url }) => {
+    const response = await fetch(url)
+    return await response.text()
+  },
+})
+```
+
+## Tool Composition
+
+Combine tools into toolkits:
+
+```typescript
+import { createToolkit } from 'digital-tools'
+
+const fileToolkit = createToolkit({
+  name: 'file_operations',
+  tools: [
+    readFileTool,
+    writeFileTool,
+    listFilesTool,
+    deleteFileTool,
+  ],
+})
+
+// Use with an agent
+const agent = createAgent({
+  tools: [fileToolkit, searchTool, calculator],
+})
+```
+
+## MCP Integration
+
+Tools can be exposed via Model Context Protocol:
+
+```typescript
+import { createMCPServer } from 'digital-tools/mcp'
+
+const server = createMCPServer({
+  name: 'my-tools',
+  tools: [searchTool, calculator, fetchData],
+})
+
+server.listen()
+```
+
+## Tool Permissions
+
+Control what tools can do:
+
+```typescript
+const restrictedTool = defineTool({
+  name: 'delete_record',
+  description: 'Delete a database record',
+  parameters: {
+    table: { type: 'string' },
+    id: { type: 'string' },
+  },
+  permissions: {
+    requiresApproval: true,
+    allowedRoles: ['admin'],
+    rateLimit: { requests: 10, window: '1h' },
+  },
+  execute: async ({ table, id }, context) => {
+    if (!context.user.roles.includes('admin')) {
+      throw new Error('Admin role required')
+    }
+    return await db[table].delete(id)
+  },
+})
+```
+
+## Tool Results
+
+Tools return structured results:
+
+```typescript
+const tool = defineTool({
+  name: 'analyze',
+  // ...
+  execute: async (params) => {
+    // Return any JSON-serializable value
+    return {
+      status: 'success',
+      data: { /* ... */ },
+      metadata: {
+        duration: 150,
+        cached: false,
+      },
+    }
+  },
+})
+```
+
+## Error Handling
+
+```typescript
+const safeTool = defineTool({
+  name: 'risky_operation',
+  // ...
+  execute: async (params) => {
+    try {
+      return await riskyOperation(params)
+    } catch (error) {
+      return {
+        error: true,
+        message: error.message,
+        recoverable: error.code !== 'FATAL',
+      }
+    }
+  },
+})
+```
+
+## Types
+
+```typescript
+import type {
+  Tool,
+  ToolDefinition,
+  ToolParameters,
+  ToolResult,
+  Toolkit,
+  ToolContext,
+} from 'digital-tools'
+
+// Tool definition
+interface ToolDefinition<TParams, TResult> {
+  name: string
+  description: string
+  parameters: TParams
+  execute: (params: TParams, context: ToolContext) => Promise<TResult>
+  permissions?: ToolPermissions
+}
+```

@@ -1,0 +1,9 @@
+{
+  "title": "Tool",
+  "description": "Capabilities for AI agents to interact with the world",
+  "root": true,
+  "icon": "Wrench",
+  "pages": [
+    "index"
+  ]
+}
