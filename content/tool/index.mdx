@@ -199,6 +199,58 @@ const safeTool = defineTool({
 })
 ```
 
+## Entity-Driven Tools
+
+Tools can be generated from [digital-tools](/packages/digital-tools) entity definitions. Each entity's `actions` become tools that operate on that entity type:
+
+```typescript
+import { createEntityTools } from 'digital-tools'
+import { Message, Meeting, Invoice } from 'digital-tools'
+
+// Generate tools from entities
+const messageTools = createEntityTools(Message, {
+  provider: 'slack',
+  credentials: { token: process.env.SLACK_TOKEN },
+})
+// Creates: send_message, reply_message, forward_message, archive_message, etc.
+
+const meetingTools = createEntityTools(Meeting, {
+  provider: 'zoom',
+  credentials: { apiKey: process.env.ZOOM_API_KEY },
+})
+// Creates: schedule_meeting, start_meeting, end_meeting, join_meeting, etc.
+
+const invoiceTools = createEntityTools(Invoice, {
+  provider: 'stripe',
+  credentials: { apiKey: process.env.STRIPE_API_KEY },
+})
+// Creates: create_invoice, send_invoice, pay_invoice, void_invoice, etc.
+```
+
+### Entity Actions as Tools
+
+Each entity defines actions that become tools:
+
+| Entity | Actions | Generated Tools |
+|--------|---------|-----------------|
+| `Message` | send, reply, forward, archive | `send_message`, `reply_message`, ... |
+| `Meeting` | schedule, start, end, join | `schedule_meeting`, `start_meeting`, ... |
+| `Invoice` | create, send, pay, void | `create_invoice`, `send_invoice`, ... |
+| `Agent` | create, invoke, pause, archive | `create_agent`, `invoke_agent`, ... |
+
+### 32 Entity Categories
+
+The [digital-tools](/packages/digital-tools) package provides entity definitions across 32 categories:
+
+| Category | Description | Example Entities |
+|----------|-------------|------------------|
+| `message` | Communication | Message, Thread, Call, Channel |
+| `finance` | Payments | Invoice, Subscription, PaymentIntent |
+| `meeting` | Video conferencing | Meeting, Webinar, Resource |
+| `hr` | Human resources | Employee, Team, TimeOff |
+| `ai` | AI/ML | Model, Prompt, Agent, Embedding |
+| ... | ... | [See all categories](/packages/digital-tools) |
+
 ## Types
 
 ```typescript
@@ -220,3 +272,9 @@ interface ToolDefinition<TParams, TResult> {
   permissions?: ToolPermissions
 }
 ```
+
+## Related
+
+- [digital-tools](/packages/digital-tools) — Entity definitions for 32 tool categories
+- [autonomous-agents](/packages/autonomous-agents) — Use tools in AI agents
+- [Agentic Functions](/function/agentic) — Tool-using functions

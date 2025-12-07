@@ -689,7 +689,7 @@ export const Channel: Noun = {
   actions: [
     'create',
     'rename',
-    'topic',
+    'setTopic',
     'archive',
     'unarchive',
     'delete',
@@ -928,7 +928,7 @@ export const Member: Noun = {
     'demote',
     'activate',
     'deactivate',
-    'status',
+    'setStatus',
   ],
 
   events: [

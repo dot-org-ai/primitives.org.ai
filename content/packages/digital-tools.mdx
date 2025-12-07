@@ -1,40 +1,104 @@
 ---
 title: digital-tools
-description: Tools and integrations for agents
+description: Entity types and providers for digital tools usable by humans and AI agents
 ---
 
 ```bash
 npm install digital-tools
 ```
 
-Pre-built tools for web search, code execution, file operations, and more.
+Comprehensive entity definitions (Nouns) for all digital tools that can be used by both remote human workers AND AI agents. Each entity follows the semantic pattern with `singular`, `plural`, `description`, `properties`, `relationships`, `actions`, and `events`.
 
 ```typescript
-import { webSearch, codeExec, fileSystem, http } from 'digital-tools'
+import { AllEntities, EntityCategories, Message, Meeting, Agent } from 'digital-tools'
 
-const search = webSearch({ provider: 'google', maxResults: 10 })
-const exec = codeExec({ runtime: 'node', timeout: 30000 })
-const fs = fileSystem({ root: '/workspace' })
-const api = http({ baseUrl: 'https://api.example.com' })
+// Access all entities by category
+const messageEntities = AllEntities.message
+const financeEntities = AllEntities.finance
+const aiEntities = AllEntities.ai
 
-// Use in agents
-const agent = agent({
-  tools: [search, exec, fs, api],
+// Use individual entities
+console.log(Message.actions) // ['send', 'reply', 'forward', ...]
+console.log(Meeting.events)  // ['scheduled', 'started', 'ended', ...]
+console.log(Agent.properties) // { name, systemPrompt, tools, ... }
+
+// List all 32 categories
+console.log(EntityCategories)
+```
+
+## Categories
+
+All categories use **single-word identifiers** for use as JS/TS variables, components, and functions.
+
+| Category | Description | Entities |
+|----------|-------------|----------|
+| `site` | Deployed web presence | Site |
+| `message` | Email, text, chat, voice | Message, Thread, Call, Channel, Workspace, Member, Contact |
+| `productivity` | Calendar, tasks, notes | Calendar, Event, Availability, Task, Note, Reminder |
+| `project` | Projects, issues, sprints | Project, Issue, Sprint, Milestone, Board, Epic, Label |
+| `code` | Repositories, PRs, commits | Repository, Branch, Commit, PullRequest, CodeReview, Release |
+| `sales` | Leads, deals, accounts | Lead, Deal, Account, Pipeline, Stage, Activity, Quote |
+| `finance` | Payments, billing, treasury | Customer, Product, Price, PaymentIntent, Invoice, Subscription |
+| `support` | Tickets, conversations | SupportTicket, Conversation, HelpArticle, FAQ |
+| `media` | Images, videos, audio | Image, Video, Audio, Album, Transcript |
+| `marketing` | Campaigns, audiences | Campaign, Audience, EmailTemplate, LandingPage, SocialPost |
+| `knowledge` | Wiki, articles, glossary | WikiPage, Article, KnowledgeBase, Glossary, Tag |
+| `commerce` | Products, orders, carts | Product, Order, Cart, Customer, Inventory, Discount |
+| `analytics` | Reports, dashboards | Report, Dashboard, Widget, Metric, Goal, Alert |
+| `storage` | Files, folders, drives | File, Folder, Drive, SharedLink, FileVersion, Backup |
+| `meeting` | Video conferencing | Meeting, MeetingParticipant, Webinar, Resource, Reservation |
+| `form` | Forms, surveys, quizzes | Form, FormField, FormResponse, Survey, Quiz |
+| `signature` | E-signatures | SignatureDocument, SignatureRequest, Signer, AuditTrail |
+| `document` | Word processing | Document, DocumentVersion, DocumentComment |
+| `spreadsheet` | Data tables | Spreadsheet, Sheet, Cell, Range, Chart, PivotTable |
+| `presentation` | Slides, decks | Presentation, Slide, SlideElement, Animation |
+| `infrastructure` | Cloud infrastructure | Config, Database, Hosting, Function, Bucket |
+| `experiment` | A/B testing, flags | Session, FeatureFlag, Experiment, Funnel, Cohort |
+| `advertising` | Digital ads | Ad, AdGroup, AdCampaign, Keyword, Conversion |
+| `video` | YouTube, Twitch | VideoChannel, StreamingVideo, Playlist, LiveStream |
+| `identity` | SSO, directory | Vault, SSOConnection, Directory, Organization |
+| `notification` | Push, SMS, in-app | Notification, SMS, PushNotification, Device |
+| `hr` | Employees, teams | Employee, Team, TimeOff, PerformanceReview, Payroll |
+| `recruiting` | Jobs, candidates | Job, Candidate, Application, Interview, Offer |
+| `design` | Figma, Sketch | DesignFile, Component, DesignSystem, Style, Prototype |
+| `shipping` | Logistics | Shipment, Package, TrackingEvent, Carrier, Rate |
+| `automation` | Workflows | AutomationWorkflow, Trigger, Action, AutomationRun |
+| `ai` | Models, agents | Model, Prompt, Completion, Agent, Embedding, FineTune |
+
+## Entity Structure
+
+Each entity follows the [Noun](/database/noun) pattern from `ai-database`:
+
+```typescript
+interface Noun {
+  singular: string      // 'message'
+  plural: string        // 'messages'
+  description: string   // 'Async communication'
+  properties: Record<string, Property>
+  relationships: Record<string, Relationship>
+  actions: string[]     // ['send', 'reply', 'forward', ...]
+  events: string[]      // ['sent', 'delivered', 'read', ...]
+}
+```
+
+## Providers
+
+```typescript
+import { createProvider } from 'digital-tools'
+
+// Create a Stripe provider for finance entities
+const stripe = await createProvider('finance.stripe', {
+  apiKey: process.env.STRIPE_API_KEY
+})
+
+// Create a Slack provider for message entities
+const slack = await createProvider('message.slack', {
+  token: process.env.SLACK_TOKEN
 })
 ```
 
-## Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `webSearch` | Search the web |
-| `codeExec` | Execute code |
-| `fileSystem` | Read/write files |
-| `http` | Make HTTP requests |
-| `browser` | Browser automation |
-| `database` | Database queries |
-
 ## Related
 
-- [autonomous-agents](/packages/autonomous-agents) — Use tools in agents
-- [Agentic Functions](/function/agentic) — Tool-using functions
+- [autonomous-agents](/packages/autonomous-agents) — Use digital tools in agents
+- [ai-database](/packages/ai-database) — Noun/Verb entity definitions
+- [Tool Definition](/tool) — How tools work

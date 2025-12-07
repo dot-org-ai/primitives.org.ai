@@ -276,7 +276,7 @@ export const Event: Noun = {
     'respond',
     'accept',
     'decline',
-    'tentative',
+    'markTentative',
     'addAttendee',
     'removeAttendee',
     'addReminder',

@@ -843,7 +843,7 @@ export const Board: Noun = {
     'reorderColumns',
     'addMember',
     'removeMember',
-    'setSwimlines',
+    'setSwimlanes',
   ],
 
   events: [
