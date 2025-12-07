@@ -1,78 +1,128 @@
 ---
-title: code
-description: Generate code in any language
+title: Code Function
+description: Functions that generate executable code
 ---
 
-Generate code in any language.
-
-## Import
-
-```typescript
-import { code } from 'ai-functions'
-```
-
-## Syntax
-
-```typescript
-code`description`
-code`description`(options)
-code(description: string, options?: CodeOptions)
-```
+When `ai.doSomething()` needs to produce executable code, it becomes a Code Function.
 
 ## Examples
 
 ```typescript
-// Tagged template - concise
-const validator = await code`email validation function`
-const query = await code`SQL: top 10 customers by revenue`
-
-// With complex requirements
-const website = await code`marketing website${{
-  requirements: {
-    pages: ['home', 'about', 'pricing'],
-    features: ['dark mode', 'animations'],
-    stack: 'Next.js + Tailwind',
-  },
-}}`
-
-// With explicit options
-const component = await code('data table component', {
-  language: 'tsx',
-  framework: 'React',
-  features: ['sorting', 'filtering', 'pagination'],
+// Generate authentication middleware
+const middleware = await ai.generateAuthMiddleware({
+  provider: 'jwt',
+  roles: ['admin', 'user', 'guest'],
 })
+// Returns:
+// export function authMiddleware(req, res, next) {
+//   const token = req.headers.authorization?.split(' ')[1]
+//   if (!token) return res.status(401).json({ error: 'No token' })
+//   try {
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET)
+//     req.user = decoded
+//     next()
+//   } catch (err) {
+//     return res.status(403).json({ error: 'Invalid token' })
+//   }
+// }
+
+// Generate a React component
+const component = await ai.createDataTable({
+  features: ['sorting', 'filtering', 'pagination'],
+  framework: 'react',
+})
+// Returns:
+// export function DataTable({ data, columns }) {
+//   const [sortKey, setSortKey] = useState(null)
+//   const [filter, setFilter] = useState('')
+//   const [page, setPage] = useState(0)
+//   ...
+// }
+
+// Generate a database migration
+const migration = await ai.createMigration({
+  action: 'add users table',
+  columns: ['id', 'email', 'name', 'created_at'],
+})
+// Returns:
+// CREATE TABLE users (
+//   id SERIAL PRIMARY KEY,
+//   email VARCHAR(255) UNIQUE NOT NULL,
+//   name VARCHAR(255),
+//   created_at TIMESTAMP DEFAULT NOW()
+// );
+
+// Generate a CLI tool
+const cli = await ai.buildCLI({
+  name: 'deploy',
+  commands: ['start', 'stop', 'status', 'logs'],
+})
+// Returns:
+// #!/usr/bin/env node
+// import { Command } from 'commander'
+// const program = new Command()
+// program.name('deploy').description('Deployment CLI')
+// ...
+
+// Generate API route handlers
+const routes = await ai.generateCRUDRoutes({
+  resource: 'products',
+  database: 'prisma',
+})
+// Returns:
+// export async function GET(req) { ... }
+// export async function POST(req) { ... }
+// export async function PUT(req) { ... }
+// export async function DELETE(req) { ... }
 ```
+
+## Behind the Scenes
+
+When you call `ai.generateAuthMiddleware(requirements)`, here's what happens:
+
+```typescript
+// 1. define() is called with inferred schema
+const generateAuthMiddleware = define('generateAuthMiddleware', {
+  args: {
+    provider: 'Auth provider (jwt | oauth | session)',
+    roles: ['List of role names'],
+  },
+  returns: 'code',  // Code Function indicator
+  language: 'typescript',
+})
+
+// 2. The function is classified as a Code Function because:
+//    - Name contains "generate" + technical term
+//    - Returns type is 'code'
+//    - Output is meant to be executed
+
+// 3. Code-specific generation runs:
+//    - Syntax validation
+//    - Import detection
+//    - Type inference
+//    - Formatting
+```
+
+## Classification Signals
+
+A function becomes a Code Function when:
+
+| Signal | Examples |
+|--------|----------|
+| Name patterns | `generate*`, `create*`, `build*` + technical terms |
+| Return type | `'code'`, `'typescript'`, `'sql'`, etc. |
+| Context | Framework, language, or tool mentioned |
+| Structure | Expects executable output |
 
 ## Options
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `language` | string | Target language |
-| `framework` | string | Framework/library |
-| `features` | string[] | Required features |
-| `style` | string | Code style preferences |
-
-## Languages
+Code Functions accept additional options:
 
 ```typescript
-// Web
-await code`React component for ${feature}`
-await code`Vue composable for ${functionality}`
-await code`CSS for ${design}`
-
-// Backend
-await code`Express route for ${endpoint}`
-await code`Prisma schema for ${dataModel}`
-await code`SQL migration for ${change}`
-
-// Scripts
-await code`bash script to ${task}`
-await code`Python script for ${analysis}`
-```
-
-## With Context
-
-```typescript
-const brand = await ai.storyBrand({ hero: 'developers', guide: 'ai-functions' })
-const landingPage = await code`marketing site for ${{ brand }}`
+const result = await ai.generateComponent(spec, {
+  language: 'typescript',    // Target language
+  framework: 'react',        // Framework context
+  style: 'functional',       // Code style preference
+  includeTests: true,        // Generate tests too
+})
 ```

@@ -1,0 +1,157 @@
+---
+title: Agentic Function
+description: Functions that take autonomous action
+---
+
+When `ai.doSomething()` needs to take action in the world—browsing, researching, executing multi-step tasks—it becomes an Agentic Function.
+
+## Examples
+
+```typescript
+// Research a topic across the web
+const research = await ai.researchCompetitor({
+  company: 'Acme Corp',
+  aspects: ['pricing', 'features', 'reviews', 'funding'],
+})
+// Returns:
+// {
+//   sources: ['acme.com', 'crunchbase.com', 'g2.com', ...],
+//   pricing: { starter: 29, pro: 99, enterprise: 'custom' },
+//   features: ['Real-time sync', 'API access', ...],
+//   reviews: { g2: 4.5, capterra: 4.3, sentiment: 'positive' },
+//   funding: { total: '45M', lastRound: 'Series B', investors: [...] },
+//   lastUpdated: '2024-01-15'
+// }
+
+// Book a meeting through calendar integration
+const booking = await ai.scheduleDemo({
+  prospect: { email: 'jane@acme.com', timezone: 'PST' },
+  duration: 30,
+  participants: ['sales@company.com'],
+})
+// Returns:
+// {
+//   scheduled: true,
+//   datetime: '2024-01-20T14:00:00-08:00',
+//   meetingLink: 'https://meet.google.com/abc-xyz',
+//   calendarEvent: { id: 'evt_123', ... },
+//   confirmationSent: true
+// }
+
+// Deploy code to production
+const deployment = await ai.deployToProduction({
+  service: 'api-gateway',
+  version: 'v2.3.1',
+  environment: 'production',
+})
+// Returns:
+// {
+//   status: 'success',
+//   deploymentId: 'dep_abc123',
+//   url: 'https://api.company.com',
+//   healthCheck: 'passing',
+//   rollbackAvailable: true,
+//   logs: 'https://logs.company.com/dep_abc123'
+// }
+
+// Process and file documents
+const filing = await ai.processInvoice({
+  document: invoicePdf,
+  actions: ['extract', 'validate', 'file', 'notify'],
+})
+// Returns:
+// {
+//   extracted: { vendor: 'Acme', amount: 1500, due: '2024-02-01' },
+//   validated: true,
+//   filed: { location: 'invoices/2024/01/', id: 'inv_456' },
+//   notifications: [{ to: 'accounting@company.com', sent: true }]
+// }
+
+// Execute a multi-step workflow
+const onboarding = await ai.onboardNewCustomer({
+  customer: { name: 'Jane Smith', email: 'jane@acme.com' },
+  plan: 'pro',
+})
+// Returns:
+// {
+//   steps: [
+//     { action: 'createAccount', status: 'completed' },
+//     { action: 'provisionResources', status: 'completed' },
+//     { action: 'sendWelcomeEmail', status: 'completed' },
+//     { action: 'scheduleOnboarding', status: 'completed' },
+//   ],
+//   accountId: 'acc_789',
+//   nextSteps: ['complete profile', 'invite team'],
+//   assignedCSM: 'alex@company.com'
+// }
+```
+
+## Behind the Scenes
+
+When you call `ai.researchCompetitor(params)`, here's what happens:
+
+```typescript
+// 1. define() is called with inferred schema
+const researchCompetitor = define('researchCompetitor', {
+  args: {
+    company: 'Company name to research',
+    aspects: ['Aspects to investigate'],
+  },
+  returns: {
+    sources: ['URLs visited'],
+    pricing: 'Pricing information',
+    features: ['Product features'],
+    reviews: 'Review aggregation',
+    funding: 'Funding information',
+  },
+  type: 'agentic',  // Agentic Function indicator
+})
+
+// 2. The function is classified as Agentic because:
+//    - Name contains "research" (action pattern)
+//    - Requires external data fetching
+//    - Has side effects (network requests)
+
+// 3. Agentic execution runs:
+//    - Tool selection (browse, read, search)
+//    - Multi-step planning
+//    - Result aggregation
+//    - Source tracking
+```
+
+## Classification Signals
+
+A function becomes an Agentic Function when:
+
+| Signal | Examples |
+|--------|----------|
+| Name patterns | `research*`, `schedule*`, `deploy*`, `process*`, `execute*` |
+| Action verbs | Implies doing, not just generating |
+| External access | Needs web, APIs, or systems |
+| Side effects | Changes state in the world |
+
+## Options
+
+Agentic Functions accept additional options:
+
+```typescript
+const result = await ai.researchTopic(query, {
+  maxSteps: 10,              // Limit iterations
+  tools: ['browse', 'read'], // Available tools
+  timeout: '5m',             // Execution timeout
+  confirmActions: true,      // Require confirmation
+})
+```
+
+## Safety
+
+Agentic Functions can be configured with guardrails:
+
+```typescript
+const result = await ai.processPayment(order, {
+  requireApproval: order.amount > 1000,
+  allowedActions: ['charge', 'refund'],
+  blockedActions: ['delete', 'transfer'],
+  auditLog: true,
+})
+```

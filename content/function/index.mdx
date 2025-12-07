@@ -1,28 +1,75 @@
 ---
-title: Function
-description: Call AI like you'd talk to a colleague
+title: ai
+description: Call AI like a function
 icon: Sparkles
 ---
 
-Just say what you need.
+Everything starts with `ai`.
 
 ```typescript
-import { ai, list, is } from 'ai-functions'
-
-const qualified = is`${lead} a good fit for enterprise?`
-const ideas = list`content topics for ${persona}`
-const { summary, nextSteps } = ai`analyze ${salesCall}`
+import { ai } from 'ai-functions'
 ```
+
+## Three Ways to Call AI
+
+### Template Literal
+
+The simplest form—just a string, get a string back:
+
+```typescript
+const explanation = await ai`Explain ${topic} to a 5 year old`
+// "Imagine your toys could talk to each other..."
+```
+
+### Function Call
+
+Same thing, with options:
+
+```typescript
+const result = await ai('Analyze this data', {
+  model: 'claude-opus-4-5',
+  temperature: 0.7,
+})
+```
+
+### Dynamic Functions
+
+The magic happens here. Call any method on `ai` and it figures out what you need:
+
+```typescript
+// ai.doSomething() → calls define() → determines function type
+const code = await ai.generateAuthMiddleware(requirements)
+const analysis = await ai.analyzeMarketTrends(data)
+const approved = await ai.getManagerApproval(proposal)
+```
+
+When you call `ai.doSomething()`, the system:
+
+1. Calls `define('doSomething', ...)` with inferred schema
+2. Classifies the function type based on what it needs to do
+3. Returns the appropriate result
+
+## Function Types
+
+Every `ai.doSomething()` becomes one of four function types:
+
+| Type | What It Does | Returns |
+|------|--------------|---------|
+| [Code Function](/function/code) | Generates executable code | Code string |
+| [Generative Function](/function/generative) | Creates content/data | Structured data |
+| [Agentic Function](/function/agentic) | Takes autonomous action | Action results |
+| [Human Function](/function/human) | Requires human input | Human response |
+
+The classification happens automatically based on the function name and context.
 
 ## Promise Pipelining
 
-Chain operations without `await`:
+Chain operations without `await`—dependencies resolve automatically:
 
 ```typescript
-// Destructure for exactly what you need
 const { score, qualified, reason } = ai`qualify ${lead}`
 
-// Chain naturally—dependencies resolve automatically
+// Chain naturally
 const email = ai`follow-up email based on: ${reason}`
 const subject = ai`subject line for: ${email}`
 
@@ -32,7 +79,22 @@ if (await qualified) {
 }
 ```
 
-## Batch with `.map()`
+## Destructuring
+
+Get exactly what you need:
+
+```typescript
+// Single values
+const summary = await ai`summarize ${article}`
+
+// Multiple values
+const { title, tags, excerpt } = ai`metadata for: ${blogPost}`
+
+// Named lists
+const { pros, cons, risks } = ai`evaluate ${proposal}`
+```
+
+## Batch Processing
 
 Process arrays in a single call:
 
@@ -42,93 +104,31 @@ const leads = list`leads from ${campaign}`
 const qualified = await leads.map(lead => ({
   lead,
   score: ai`score 1-100: ${lead}`,
-  fit: is`${lead} matches ${icp}?`,
+  fit: ai`${lead} matches ${icp}?`,
 }))
 ```
 
-## All Functions
+## How It Works
 
-### Core
-
-| Function | Description |
-|----------|-------------|
-| [`ai`](/function/ai) | Flexible generation with dynamic schema |
-| [`generate`](/function/generate) | Core primitive with explicit schema |
-| [`define`](/function/define) | Create reusable functions |
-| [`AI()`](/function/AI) | Typed AI instance with schemas |
-
-### Generation
-
-| Function | Description |
-|----------|-------------|
-| [`write`](/function/write) | Long-form content |
-| [`summarize`](/function/summarize) | Condense to key points |
-| [`list`](/function/list) | Generate arrays |
-| [`lists`](/function/lists) | Named lists via destructuring |
-| [`extract`](/function/extract) | Structured extraction |
-
-### Classification
-
-| Function | Description |
-|----------|-------------|
-| [`is`](/function/is) | Boolean questions |
-| [`decide`](/function/decide) | Pick the best option |
-
-### Code & Visuals
-
-| Function | Description |
-|----------|-------------|
-| [`code`](/function/code) | Code generation |
-| [`diagram`](/function/diagram) | Mermaid diagrams |
-| [`slides`](/function/slides) | Presentations |
-| [`image`](/function/image) | Image generation |
-| [`video`](/function/video) | Video generation |
-
-### Agentic
-
-| Function | Description |
-|----------|-------------|
-| [`do`](/function/do) | Single-pass task |
-| [`research`](/function/research) | Web research |
-| [`browse`](/function/browse) | Browser automation |
-| [`read`](/function/read) | URL to markdown |
-
-### Human-in-the-Loop
-
-| Function | Description |
-|----------|-------------|
-| [`ask`](/function/ask) | Free-form input |
-| [`approve`](/function/approve) | Yes/no approval |
-| [`review`](/function/review) | Detailed feedback |
-
-## Examples
-
-### Lead Qualification
+Under the hood, `ai.doSomething()` is syntactic sugar for `define`:
 
 ```typescript
-const { score, qualified } = ai`qualify ${lead} for ${product}`
+// When you write:
+const result = await ai.qualifyLead(lead)
 
-if (await qualified) {
-  await assignToSales(lead)
-}
+// It's equivalent to:
+const qualifyLead = define('qualifyLead', { /* inferred schema */ })
+const result = await qualifyLead(lead)
 ```
 
-### Competitive Analysis
+The difference is that `ai.doSomething()` infers everything from the function name and arguments, while `define` lets you be explicit.
 
-```typescript
-const { strengths, weaknesses, opportunities, threats } = lists`
-  SWOT analysis: ${company} in ${market}
-`
+## Package
+
+The Function primitive is implemented in the [`ai-functions`](/packages/ai-functions) package:
+
+```bash
+npm install ai-functions
 ```
 
-### Content Pipeline
-
-```typescript
-const topics = list`blog ideas for ${audience}`
-
-const evaluated = await topics.map(topic => ({
-  topic,
-  potential: is`${topic} would drive signups?`,
-  outline: ai`outline for: ${topic}`,
-}))
-```
+See the [package documentation](/packages/ai-functions) for full API reference and additional examples.

@@ -1,0 +1,141 @@
+---
+title: Generative Function
+description: Functions that create content and structured data
+---
+
+When `ai.doSomething()` needs to produce content, analysis, or structured data, it becomes a Generative Function.
+
+## Examples
+
+```typescript
+// Analyze market trends
+const analysis = await ai.analyzeMarketTrends({
+  industry: 'fintech',
+  region: 'north-america',
+  timeframe: '2024',
+})
+// Returns:
+// {
+//   trends: ['embedded finance', 'AI-powered lending', 'real-time payments'],
+//   growth: 23.5,
+//   keyPlayers: ['Stripe', 'Plaid', 'Square'],
+//   opportunities: ['SMB underserved', 'cross-border gaps'],
+//   risks: ['regulation', 'rate environment']
+// }
+
+// Generate a blog post outline
+const outline = await ai.createBlogOutline({
+  topic: 'serverless architecture',
+  audience: 'senior developers',
+  tone: 'technical but accessible',
+})
+// Returns:
+// {
+//   title: 'Serverless in 2024: Beyond the Hype',
+//   sections: [
+//     { heading: 'The Evolution of Serverless', points: [...] },
+//     { heading: 'When Serverless Makes Sense', points: [...] },
+//     { heading: 'Common Pitfalls', points: [...] },
+//   ],
+//   estimatedReadTime: '8 min'
+// }
+
+// Extract insights from customer feedback
+const insights = await ai.extractFeedbackInsights(reviews)
+// Returns:
+// {
+//   sentiment: 'mostly positive',
+//   topPraises: ['ease of use', 'fast support', 'fair pricing'],
+//   topComplaints: ['mobile app', 'export options'],
+//   featureRequests: ['dark mode', 'API access', 'team sharing'],
+//   churnRisk: 0.12
+// }
+
+// Qualify a sales lead
+const qualification = await ai.qualifyLead({
+  company: 'Acme Corp',
+  size: 500,
+  industry: 'manufacturing',
+  inquiry: 'Looking for inventory management',
+})
+// Returns:
+// {
+//   score: 85,
+//   qualified: true,
+//   tier: 'enterprise',
+//   reasons: ['size match', 'budget signals', 'clear need'],
+//   nextSteps: ['schedule demo', 'send case study'],
+//   assignTo: 'enterprise-team'
+// }
+
+// Generate product descriptions
+const descriptions = await ai.writeProductCopy({
+  product: { name: 'CloudSync Pro', features: [...] },
+  style: 'benefit-focused',
+  length: 'medium',
+})
+// Returns:
+// {
+//   headline: 'Sync Everything. Miss Nothing.',
+//   subheadline: 'Real-time backup that just works',
+//   body: 'CloudSync Pro keeps your files safe across...',
+//   bulletPoints: ['Instant sync', '256-bit encryption', ...],
+//   cta: 'Start Free Trial'
+// }
+```
+
+## Behind the Scenes
+
+When you call `ai.analyzeMarketTrends(data)`, here's what happens:
+
+```typescript
+// 1. define() is called with inferred schema
+const analyzeMarketTrends = define('analyzeMarketTrends', {
+  args: {
+    industry: 'Industry to analyze',
+    region: 'Geographic region',
+    timeframe: 'Time period',
+  },
+  returns: {
+    trends: ['Emerging trends'],
+    growth: 'Growth rate percentage (number)',
+    keyPlayers: ['Major companies'],
+    opportunities: ['Market opportunities'],
+    risks: ['Risk factors'],
+  },
+})
+
+// 2. The function is classified as a Generative Function because:
+//    - Name contains "analyze" (content generation pattern)
+//    - Returns structured data (not code, not action)
+//    - Output is information, not side effects
+
+// 3. Generation runs with:
+//    - Schema validation
+//    - Type coercion
+//    - Structured output formatting
+```
+
+## Classification Signals
+
+A function becomes a Generative Function when:
+
+| Signal | Examples |
+|--------|----------|
+| Name patterns | `analyze*`, `extract*`, `create*`, `write*`, `generate*` |
+| Return type | Objects, arrays, structured data |
+| Purpose | Content creation, data transformation, analysis |
+| No side effects | Produces data without taking action |
+
+## Options
+
+Generative Functions accept additional options:
+
+```typescript
+const result = await ai.analyzeCompetitors(data, {
+  depth: 'comprehensive',     // Analysis depth
+  format: 'structured',       // Output format
+  temperature: 0.3,           // Lower = more focused
+  model: 'claude-opus-4-5',   // Model selection
+})
+```

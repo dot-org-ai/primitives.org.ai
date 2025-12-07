@@ -1,0 +1,175 @@
+---
+title: Human Function
+description: Functions that require human input
+---
+
+When `ai.doSomething()` needs human judgment, approval, or input, it becomes a Human Function. Execution pauses until a human responds.
+
+## Examples
+
+```typescript
+// Get manager approval for a discount
+const approval = await ai.getManagerApproval({
+  deal: { customer: 'Acme Corp', value: 50000 },
+  discount: 25,
+  reason: 'Competitive pressure from Competitor X',
+})
+// Returns:
+// {
+//   approved: true,
+//   approver: 'sarah@company.com',
+//   approvedAt: '2024-01-15T10:30:00Z',
+//   notes: 'Approved - strategic account',
+//   conditions: ['Q1 commitment required']
+// }
+
+// Request expert review of a document
+const review = await ai.requestLegalReview({
+  document: contractDraft,
+  urgency: 'high',
+  areas: ['liability', 'IP', 'termination'],
+})
+// Returns:
+// {
+//   reviewer: 'legal@company.com',
+//   status: 'reviewed',
+//   issues: [
+//     { section: '4.2', severity: 'high', note: 'Unlimited liability clause' },
+//     { section: '7.1', severity: 'medium', note: 'IP assignment unclear' },
+//   ],
+//   approved: false,
+//   requiredChanges: ['Cap liability at contract value', 'Clarify IP ownership']
+// }
+
+// Collect customer feedback
+const feedback = await ai.collectCustomerFeedback({
+  customer: 'jane@acme.com',
+  context: 'Post-onboarding check-in',
+  questions: ['satisfaction', 'challenges', 'feature requests'],
+})
+// Returns:
+// {
+//   respondent: 'jane@acme.com',
+//   respondedAt: '2024-01-16T14:00:00Z',
+//   satisfaction: 8,
+//   challenges: 'Initial learning curve with API',
+//   featureRequests: ['Better error messages', 'Webhook retry UI'],
+//   followUpRequested: true
+// }
+
+// Get human decision on edge case
+const decision = await ai.escalateEdgeCase({
+  case: { type: 'refund', amount: 2500, reason: 'Service disruption' },
+  context: 'Customer affected by 2-hour outage',
+  options: ['full refund', 'partial refund', 'credit', 'deny'],
+})
+// Returns:
+// {
+//   decision: 'full refund',
+//   decidedBy: 'support-lead@company.com',
+//   decidedAt: '2024-01-15T16:45:00Z',
+//   rationale: 'SLA breach - full refund per policy',
+//   notifyCustomer: true
+// }
+
+// Request creative input
+const direction = await ai.getCreativeDirection({
+  project: 'Q1 campaign',
+  options: [
+    { name: 'Bold', description: 'Aggressive positioning', mockup: url1 },
+    { name: 'Subtle', description: 'Understated elegance', mockup: url2 },
+  ],
+})
+// Returns:
+// {
+//   selected: 'Bold',
+//   selectedBy: 'marketing-director@company.com',
+//   feedback: 'Love the energy. Can we soften the CTA color?',
+//   nextSteps: ['Revise CTA', 'Prepare A/B variants']
+// }
+```
+
+## Behind the Scenes
+
+When you call `ai.getManagerApproval(request)`, here's what happens:
+
+```typescript
+// 1. define() is called with inferred schema
+const getManagerApproval = define('getManagerApproval', {
+  args: {
+    deal: 'Deal details',
+    discount: 'Requested discount percentage (number)',
+    reason: 'Justification for discount',
+  },
+  returns: {
+    approved: 'Whether approved (boolean)',
+    approver: 'Email of approver',
+    approvedAt: 'Timestamp',
+    notes: 'Approver notes',
+    conditions: ['Any conditions attached'],
+  },
+  type: 'human',  // Human Function indicator
+})
+
+// 2. The function is classified as Human because:
+//    - Name contains "get*Approval" (human pattern)
+//    - Requires judgment that AI shouldn't make alone
+//    - Has routing to specific humans
+
+// 3. Human workflow executes:
+//    - Route to appropriate person/queue
+//    - Send notification (Slack, email, UI)
+//    - Pause execution
+//    - Resume on response
+```
+
+## Classification Signals
+
+A function becomes a Human Function when:
+
+| Signal | Examples |
+|--------|----------|
+| Name patterns | `get*Approval`, `request*Review`, `collect*`, `escalate*` |
+| Judgment required | Decisions AI shouldn't make alone |
+| Accountability | Needs human sign-off |
+| Subjective input | Creative, strategic, or ethical decisions |
+
+## Options
+
+Human Functions accept routing and notification options:
+
+```typescript
+const result = await ai.getApproval(request, {
+  assignTo: 'manager@company.com',     // Specific person
+  assignToRole: 'sales-manager',       // Or by role
+  channel: 'slack',                    // Notification channel
+  timeout: '24h',                      // Response deadline
+  escalateTo: 'director@company.com',  // If no response
+  reminder: '4h',                      // Reminder interval
+})
+```
+
+## Routing
+
+Human Functions support sophisticated routing:
+
+```typescript
+// Route by amount
+const approval = await ai.approveExpense(expense, {
+  routing: {
+    rules: [
+      { condition: 'amount < 100', assignTo: 'auto-approve' },
+      { condition: 'amount < 1000', assignTo: 'team-lead' },
+      { condition: 'amount >= 1000', assignTo: 'finance' },
+    ],
+  },
+})
+
+// Route by expertise
+const review = await ai.requestReview(document, {
+  routing: {
+    type: 'expertise',
+    match: ['legal', 'compliance'],
+  },
+})
+```
