@@ -664,6 +664,212 @@ import type {
 } from 'business-as-code'
 ```
 
+---
+
+## Entity Abstractions
+
+Each entity defines **Properties** (data fields), **Actions** (imperative verbs), and **Events** (past tense state changes). This follows the same Noun pattern used in `digital-tools` and `ai-database`.
+
+### Business
+
+Core business entities.
+
+#### Properties
+
+| Entity | Key Properties |
+|--------|----------------|
+| **Business** | `name`, `legalName`, `type` (startup, smb, enterprise, agency), `stage` (idea, pre-seed, seed, series-a...), `industry`, `mission`, `vision`, `values`, `targetMarket`, `teamSize`, `status` |
+| **Vision** | `statement`, `timeframe`, `targetDate`, `successIndicators`, `progress`, `status` |
+| **Value** | `name`, `description`, `behaviors`, `antiPatterns`, `priority`, `status` |
+
+#### Actions & Events
+
+| Entity | Actions | Events |
+|--------|---------|--------|
+| **Business** | create, update, launch, pivot, scale, acquire, merge, close, archive | created, updated, launched, pivoted, scaled, acquired, merged, closed, archived |
+| **Vision** | create, update, activate, revise, achieve, abandon, archive | created, updated, activated, revised, achieved, abandoned, archived |
+| **Value** | create, update, prioritize, deprecate, archive | created, updated, prioritized, deprecated, archived |
+
+---
+
+### Organization
+
+Organizational hierarchy entities.
+
+#### Properties
+
+| Entity | Key Properties |
+|--------|----------------|
+| **Organization** | `name`, `type` (functional, divisional, matrix, flat), `fiscalYearStart`, `defaultCurrency`, `departmentCount`, `teamCount`, `positionCount`, `status` |
+| **Department** | `name`, `code`, `type` (engineering, product, design, marketing...), `budget`, `budgetCurrency`, `headcount`, `level`, `status` |
+| **Team** | `name`, `code`, `type` (product, platform, growth...), `methodology` (scrum, kanban...), `capacity`, `headcount`, `slackChannel`, `status` |
+| **Position** | `title`, `code`, `level` (intern, junior, mid, senior, staff...), `track` (ic, management, executive), `employmentType`, `workLocation`, `salaryMin`, `salaryMax`, `fte`, `skills`, `status` |
+| **Role** | `name`, `code`, `type` (executive, manager, lead, contributor...), `permissions`, `capabilities`, `approvalLevel`, `approvalLimit`, `status` |
+| **Worker** | `name`, `email`, `type` (human, agent), `firstName`, `lastName`, `agentId`, `modelId`, `availability`, `capacity`, `status` |
+
+#### Actions & Events
+
+| Entity | Actions | Events |
+|--------|---------|--------|
+| **Organization** | create, update, restructure, merge, split, archive | created, updated, restructured, merged, split, archived |
+| **Department** | create, update, rename, setBudget, addTeam, removeTeam, setHead, merge, split, dissolve, archive | created, updated, renamed, budgetSet, teamAdded, teamRemoved, headChanged, merged, split, dissolved, archived |
+| **Team** | create, update, rename, setLead, addMember, removeMember, setCapacity, assignProject, unassignProject, archive | created, updated, renamed, leadChanged, memberAdded, memberRemoved, capacityChanged, projectAssigned, projectUnassigned, archived |
+| **Position** | create, update, open, fill, freeze, eliminate, transfer, promote, setCompensation, archive | created, updated, opened, filled, frozen, eliminated, transferred, promoted, compensationChanged, archived |
+| **Role** | create, update, grantPermission, revokePermission, setApprovalLimit, deprecate, archive | created, updated, permissionGranted, permissionRevoked, approvalLimitChanged, deprecated, archived |
+| **Worker** | create, update, onboard, assign, reassign, setAvailability, promote, transfer, offboard, archive | created, updated, onboarded, assigned, reassigned, availabilityChanged, promoted, transferred, offboarded, archived |
+
+---
+
+### Goals
+
+Goal tracking entities.
+
+#### Properties
+
+| Entity | Key Properties |
+|--------|----------------|
+| **Goal** | `name`, `type` (strategic, operational, tactical), `category` (growth, revenue, customer...), `priority`, `startDate`, `targetDate`, `progress`, `confidence`, `successMetrics`, `targetValue`, `currentValue`, `status` |
+| **OKR** | `objective`, `type` (company, department, team, individual), `period`, `progress`, `confidence`, `grade`, `keyResultCount`, `status` |
+| **KeyResult** | `description`, `metric`, `unit`, `startValue`, `targetValue`, `currentValue`, `progress`, `confidence`, `direction` (increase, decrease, maintain), `status` |
+| **KPI** | `name`, `code`, `category` (financial, customer, operations...), `type` (leading, lagging), `unit`, `format`, `targetValue`, `currentValue`, `warningThreshold`, `criticalThreshold`, `direction`, `frequency`, `formula`, `status` |
+| **Metric** | `name`, `category`, `value`, `unit`, `timestamp`, `period`, `source` |
+| **Initiative** | `name`, `type` (project, program, experiment), `priority`, `startDate`, `endDate`, `progress`, `budget`, `spent`, `status` |
+
+#### Actions & Events
+
+| Entity | Actions | Events |
+|--------|---------|--------|
+| **Goal** | create, update, activate, updateProgress, markAtRisk, complete, cancel, extend, archive | created, updated, activated, progressUpdated, markedAtRisk, completed, cancelled, extended, overdue, archived |
+| **OKR** | create, update, activate, addKeyResult, removeKeyResult, updateProgress, updateConfidence, grade, complete, cancel, archive | created, updated, activated, keyResultAdded, keyResultRemoved, progressUpdated, confidenceUpdated, graded, completed, cancelled, archived |
+| **KeyResult** | create, update, updateValue, updateConfidence, complete, delete | created, updated, valueUpdated, confidenceUpdated, completed, deleted |
+| **KPI** | create, update, measure, setTarget, setThresholds, alert, archive | created, updated, measured, targetSet, thresholdBreached, targetMet, alerted, archived |
+| **Metric** | record, update, delete | recorded, updated, deleted |
+| **Initiative** | create, update, approve, start, pause, resume, complete, cancel, archive | created, updated, approved, started, paused, resumed, completed, cancelled, archived |
+
+---
+
+### Offerings
+
+Product and service entities.
+
+#### Properties
+
+| Entity | Key Properties |
+|--------|----------------|
+| **Product** | `name`, `slug`, `type` (saas, app, platform, api...), `category`, `targetSegment`, `valueProposition`, `pricingModel` (free, freemium, subscription, one-time, usage-based, tiered), `price`, `currency`, `cogs`, `grossMargin`, `stage` (concept, development, alpha, beta, ga...), `status`, `visibility` |
+| **Service** | `name`, `type` (consulting, implementation, support, training...), `pricingModel` (hourly, daily, fixed, retainer, value-based), `hourlyRate`, `deliveryTime`, `deliveryModel`, `slaUptime`, `slaResponseTime`, `inclusions`, `exclusions`, `deliverables`, `status` |
+| **Feature** | `name`, `category`, `type` (core, premium, add-on, beta), `benefit`, `availability`, `enabledByDefault`, `status` |
+| **PricingPlan** | `name`, `tier` (free, starter, pro, business, enterprise), `price`, `currency`, `billingPeriod`, `annualDiscount`, `includedUnits`, `unitPrice`, `usageLimits`, `trialDays`, `highlighted`, `status` |
+| **RoadmapItem** | `name`, `type` (feature, improvement, bug-fix...), `quarter`, `targetDate`, `priority`, `effort`, `impact`, `progress`, `status`, `visibility` |
+
+#### Actions & Events
+
+| Entity | Actions | Events |
+|--------|---------|--------|
+| **Product** | create, update, launch, pause, resume, updatePricing, addFeature, removeFeature, sunset, archive | created, updated, launched, paused, resumed, pricingUpdated, featureAdded, featureRemoved, sunset, archived |
+| **Service** | create, update, publish, pause, resume, updatePricing, updateSLA, discontinue, archive | created, updated, published, paused, resumed, pricingUpdated, slaUpdated, discontinued, archived |
+| **Feature** | create, update, enable, disable, deprecate, remove | created, updated, enabled, disabled, deprecated, removed |
+| **PricingPlan** | create, update, publish, hide, updatePrice, addFeature, removeFeature, discontinue, archive | created, updated, published, hidden, priceUpdated, featureAdded, featureRemoved, discontinued, archived |
+| **RoadmapItem** | create, update, schedule, start, complete, defer, cancel, archive | created, updated, scheduled, started, completed, deferred, cancelled, archived |
+
+---
+
+### Operations
+
+Process and workflow entities.
+
+#### Properties
+
+| Entity | Key Properties |
+|--------|----------------|
+| **Process** | `name`, `type` (core, support, management), `category`, `triggerType`, `inputs`, `outputs`, `averageDuration`, `sla`, `automationLevel` (manual, semi-automated, automated, autonomous), `automationPercentage`, `version`, `status` |
+| **ProcessStep** | `name`, `order`, `type` (task, decision, approval, notification, wait...), `automationLevel`, `responsible`, `accountable`, `estimatedDuration`, `sla`, `inputs`, `outputs`, `instructions`, `condition` |
+| **Workflow** | `name`, `triggerType` (event, schedule, webhook, manual, api), `triggerEvent`, `triggerSchedule`, `timeout`, `retryPolicy`, `concurrency`, `runCount`, `successCount`, `failureCount`, `lastRunAt`, `status`, `enabled` |
+| **WorkflowAction** | `name`, `order`, `type` (http, email, slack, database, transform, condition, loop, delay, approval, ai), `operation`, `config`, `inputs`, `condition`, `continueOnError`, `retryOnFailure` |
+| **WorkflowRun** | `status` (pending, running, completed, failed, cancelled, waiting), `startedAt`, `completedAt`, `duration`, `currentStep`, `totalSteps`, `triggerData`, `output`, `error`, `attempt` |
+| **Policy** | `name`, `code`, `type` (compliance, operational, security, hr, financial, data), `content`, `rules`, `enforcementLevel`, `effectiveDate`, `reviewDate`, `version`, `status` |
+
+#### Actions & Events
+
+| Entity | Actions | Events |
+|--------|---------|--------|
+| **Process** | create, update, publish, addStep, removeStep, reorderSteps, automate, deprecate, archive | created, updated, published, stepAdded, stepRemoved, stepsReordered, automated, deprecated, archived |
+| **ProcessStep** | create, update, move, duplicate, delete | created, updated, moved, duplicated, deleted |
+| **Workflow** | create, update, enable, disable, trigger, test, addAction, removeAction, archive | created, updated, enabled, disabled, triggered, completed, failed, archived |
+| **WorkflowAction** | create, update, move, duplicate, delete, test | created, updated, moved, duplicated, deleted, executed, failed |
+| **WorkflowRun** | start, pause, resume, cancel, retry | started, paused, resumed, completed, failed, cancelled, retried |
+| **Policy** | create, update, submit, approve, publish, supersede, archive | created, updated, submitted, approved, published, superseded, archived |
+
+---
+
+### Financials
+
+Financial entities.
+
+#### Properties
+
+| Entity | Key Properties |
+|--------|----------------|
+| **Budget** | `name`, `type` (operating, capital, project, marketing, hiring, r&d), `period`, `startDate`, `endDate`, `amount`, `currency`, `spent`, `committed`, `available`, `utilization`, `status` |
+| **Revenue** | `type` (subscription, one-time, usage, professional-services...), `category`, `source`, `amount`, `currency`, `period`, `date`, `isRecurring`, `recognized`, `recognizedAt`, `deferredAmount`, `segment`, `region` |
+| **Expense** | `description`, `type` (payroll, cogs, marketing, sales, r&d, g&a...), `category`, `amount`, `currency`, `date`, `isRecurring`, `isCapex`, `isDeductible`, `vendor`, `invoiceNumber`, `status` |
+| **Investment** | `name`, `type` (pre-seed, seed, series-a...), `instrumentType` (equity, safe, convertible-note, debt), `amount`, `currency`, `preMoneyValuation`, `postMoneyValuation`, `equityPercentage`, `leadInvestor`, `investors`, `status` |
+| **FinancialPeriod** | `name`, `type` (month, quarter, half-year, year), `startDate`, `endDate`, `revenue`, `cogs`, `grossProfit`, `grossMargin`, `operatingExpenses`, `operatingIncome`, `operatingMargin`, `netIncome`, `ebitda`, `mrr`, `arr`, `nrr`, `grr`, `cac`, `ltv`, `ltvCacRatio`, `churnRate`, `burnRate`, `runway`, `status` |
+| **Forecast** | `name`, `type` (revenue, expense, cash, headcount, arr), `scenario` (base, optimistic, pessimistic, stretch), `startDate`, `endDate`, `granularity`, `values`, `total`, `assumptions`, `growthRate`, `confidenceLevel`, `version`, `status` |
+
+#### Actions & Events
+
+| Entity | Actions | Events |
+|--------|---------|--------|
+| **Budget** | create, update, submit, approve, allocate, reallocate, freeze, unfreeze, close, archive | created, updated, submitted, approved, allocated, reallocated, frozen, unfrozen, thresholdWarning, overBudget, closed, archived |
+| **Revenue** | record, update, recognize, defer, void | recorded, updated, recognized, deferred, voided |
+| **Expense** | create, update, submit, approve, reject, pay, void | created, updated, submitted, approved, rejected, paid, voided |
+| **Investment** | create, update, negotiate, signTermSheet, close, announce, cancel | created, updated, negotiated, termSheetSigned, closed, announced, cancelled |
+| **FinancialPeriod** | create, update, close, reopen, audit | created, updated, closed, reopened, audited |
+| **Forecast** | create, update, submit, approve, supersede, archive | created, updated, submitted, approved, superseded, archived |
+
+---
+
+## Usage
+
+```typescript
+import {
+  // Entity definitions (Noun pattern)
+  BusinessEntity,
+  OrganizationEntity,
+  GoalEntity,
+  OKREntity,
+  KPIEntity,
+  ProductEntity,
+  ServiceEntity,
+  ProcessEntity,
+  WorkflowEntity,
+  BudgetEntity,
+
+  // All entities by category
+  AllBusinessEntities,
+  BusinessEntityCategories,
+
+  // Flat entity access
+  Entities,
+} from 'business-as-code'
+
+// Access entity definitions
+console.log(BusinessEntity.properties)  // Property definitions
+console.log(BusinessEntity.actions)     // Available actions
+console.log(BusinessEntity.events)      // Possible events
+
+// All entities
+console.log(AllBusinessEntities.business)      // Business, Vision, Value
+console.log(AllBusinessEntities.organization)  // Organization, Department, Team, Position, Role, Worker
+console.log(AllBusinessEntities.goals)         // Goal, OKR, KeyResult, KPI, Metric, Initiative
+console.log(AllBusinessEntities.offerings)     // Product, Service, Feature, PricingPlan, RoadmapItem
+console.log(AllBusinessEntities.operations)    // Process, ProcessStep, Workflow, WorkflowAction, WorkflowRun, Policy
+console.log(AllBusinessEntities.financials)    // Budget, Revenue, Expense, Investment, FinancialPeriod, Forecast
+```
+
+---
+
 ## Use Cases
 
 ### Startup Planning
@@ -680,6 +886,9 @@ Document business processes with automation levels and metrics.
 
 ### Dashboard Building
 Power business dashboards with structured data.
+
+### AI Agent Integration
+Entity definitions power AI agents with structured business context.
 
 ## License
 

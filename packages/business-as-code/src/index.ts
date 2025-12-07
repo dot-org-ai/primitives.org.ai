@@ -460,3 +460,71 @@ export {
   getApprovalChainForRequest,
   findManager,
 } from './organization.js'
+
+// =============================================================================
+// Entity Definitions (Noun pattern with Properties, Actions, Events)
+// =============================================================================
+
+export {
+  // Business
+  Business as BusinessEntity,
+  Vision as VisionEntity,
+  Value as ValueEntity,
+  BusinessEntities,
+  BusinessCategories,
+
+  // Organization
+  Organization as OrganizationEntity,
+  Department as DepartmentEntity,
+  Team as TeamEntity,
+  Position as PositionEntity,
+  Role as RoleEntity,
+  Worker as WorkerEntity,
+  OrganizationEntities,
+  OrganizationCategories,
+
+  // Goals
+  Goal as GoalEntity,
+  OKR as OKREntity,
+  KeyResult as KeyResultEntity,
+  KPI as KPIEntity,
+  Metric as MetricEntity,
+  Initiative as InitiativeEntity,
+  GoalEntities,
+  GoalCategories,
+
+  // Offerings
+  Product as ProductEntity,
+  Service as ServiceEntity,
+  Feature as FeatureEntity,
+  PricingPlan as PricingPlanEntity,
+  RoadmapItem as RoadmapItemEntity,
+  OfferingEntities,
+  OfferingCategories,
+
+  // Operations
+  Process as ProcessEntity,
+  ProcessStep as ProcessStepEntity,
+  Workflow as WorkflowEntity,
+  WorkflowAction as WorkflowActionEntity,
+  WorkflowRun as WorkflowRunEntity,
+  Policy as PolicyEntity,
+  OperationsEntities,
+  OperationsCategories,
+
+  // Financials
+  Budget as BudgetEntity,
+  Revenue as RevenueEntity,
+  Expense as ExpenseEntity,
+  Investment as InvestmentEntity,
+  FinancialPeriod as FinancialPeriodEntity,
+  Forecast as ForecastEntity,
+  FinancialEntities,
+  FinancialCategories,
+
+  // All
+  AllBusinessEntities,
+  BusinessEntityCategories,
+  Entities,
+  type BusinessEntityCategory,
+} from './entities/index.js'
