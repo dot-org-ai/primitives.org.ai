@@ -1,0 +1,67 @@
+---
+$type: Type
+singular: workflow
+plural: workflows
+icon: GitBranch
+---
+
+> Orchestrated sequence of functions and actions
+
+## Type
+
+```typescript
+type Workflow = {
+  name: string                                       // Workflow name
+  description?: string                               // What it does
+  status: 'draft' | 'active' | 'paused' | 'archived' // Current state
+  steps: Record<string, unknown>[]                   // Step definitions
+  triggers?: Record<string, unknown>[]               // Activation conditions
+  domain?: Domain                                    // Parent namespace
+  functions?: Function[]                             // Used functions
+  agents?: Agent[]                                   // Executing agents
+  events?: Event[]                                   // Emitted events
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | Workflow name |
+| description | string? | What it does |
+| status | draft \| active \| paused \| archived | Current state |
+| steps | json | Step definitions |
+| triggers | json[]? | Activation conditions |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| domain | Domain | Parent namespace |
+| functions | Function[] | Used functions |
+| agents | Agent[] | Executing agents |
+| events | Event[] | Emitted events |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Define workflow |
+| update | Modify steps |
+| activate | Enable workflow |
+| pause | Temporarily disable |
+| trigger | Start execution |
+| run | Execute workflow |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Workflow was defined |
+| updated | Workflow was modified |
+| activated | Workflow was enabled |
+| paused | Workflow was paused |
+| triggered | Execution was triggered |
+| started | Execution began |
+| completed | Execution finished |
+| failed | Execution failed |

@@ -1,0 +1,63 @@
+---
+$type: Type
+singular: dashboard
+plural: dashboards
+icon: LayoutDashboard
+---
+
+> Visual interface for monitoring and control
+
+## Type
+
+```typescript
+type Dashboard = {
+  name: string                                          // Dashboard name
+  description?: string                                  // What it shows
+  type: 'analytics' | 'operations' | 'admin' | 'custom' // Dashboard purpose
+  status: 'draft' | 'active' | 'archived'               // Current state
+  widgets?: Record<string, unknown>[]                   // Widget configs
+  filters?: Record<string, unknown>                     // Filter settings
+  app?: App                                             // Parent app
+  database?: Database                                   // Data source
+  workflows?: Workflow[]                                // Monitored workflows
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | Dashboard name |
+| description | string? | What it shows |
+| type | analytics \| operations \| admin \| custom | Dashboard purpose |
+| status | draft \| active \| archived | Current state |
+| widgets | json[]? | Widget configs |
+| filters | json? | Filter settings |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| app | App | Parent app |
+| database | Database | Data source |
+| workflows | Workflow[] | Monitored workflows |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Create dashboard |
+| update | Modify layout |
+| share | Grant access |
+| customize | Configure widgets |
+| archive | Remove from view |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Dashboard was created |
+| updated | Layout was modified |
+| shared | Access was granted |
+| customized | Widgets were configured |
+| archived | Dashboard was removed |

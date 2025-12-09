@@ -1,0 +1,69 @@
+---
+$type: Type
+singular: saas
+plural: saas
+icon: CloudCog
+---
+
+> Software delivered as a subscription service
+
+## Type
+
+```typescript
+type SaaS = {
+  name: string                                           // SaaS name
+  description?: string                                   // What it does
+  status: 'development' | 'beta' | 'live' | 'deprecated' // Current state
+  pricing?: Record<string, unknown>                      // Pricing model
+  tiers?: Record<string, unknown>[]                      // Subscription tiers
+  features?: string[]                                    // Key features
+  product?: Product                                      // Parent product
+  app?: App                                              // Web application
+  api?: API                                              // Backend API
+  business?: Business                                    // Owner business
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | SaaS name |
+| description | string? | What it does |
+| status | development \| beta \| live \| deprecated | Current state |
+| pricing | json? | Pricing model |
+| tiers | json[]? | Subscription tiers |
+| features | string[]? | Key features |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| product | Product | Parent product |
+| app | App | Web application |
+| api | API | Backend API |
+| business | Business | Owner business |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Create SaaS |
+| update | Modify offering |
+| launch | Go live |
+| subscribe | Add subscriber |
+| upgrade | Change tier up |
+| downgrade | Change tier down |
+| cancel | End subscription |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | SaaS was created |
+| updated | Offering was modified |
+| launched | SaaS went live |
+| subscribed | User subscribed |
+| upgraded | Tier was upgraded |
+| downgraded | Tier was downgraded |
+| cancelled | Subscription ended |

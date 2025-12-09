@@ -1,0 +1,63 @@
+---
+$type: Type
+singular: product
+plural: products
+icon: Package
+---
+
+> Offering that delivers value to customers
+
+## Type
+
+```typescript
+type Product = {
+  name: string                                                  // Product name
+  description?: string                                          // What it does
+  type: 'physical' | 'digital' | 'hybrid'                       // Product category
+  status: 'concept' | 'development' | 'launched' | 'deprecated' // Current state
+  price?: number                                                // Base price
+  features?: string[]                                           // Key features
+  business?: Business                                           // Owner business
+  services?: Service[]                                          // Related services
+  customers?: Thing[]                                           // Customer instances
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | Product name |
+| description | string? | What it does |
+| type | physical \| digital \| hybrid | Product category |
+| status | concept \| development \| launched \| deprecated | Current state |
+| price | number? | Base price |
+| features | string[]? | Key features |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| business | Business | Owner business |
+| services | Service[] | Related services |
+| customers | Thing[] | Customer instances |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Create product |
+| update | Modify product |
+| launch | Release to market |
+| deprecate | Phase out |
+| price | Set pricing |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Product was created |
+| updated | Product was modified |
+| launched | Product was released |
+| deprecated | Product was phased out |
+| priced | Pricing was set |

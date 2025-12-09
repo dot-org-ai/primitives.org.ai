@@ -1,0 +1,63 @@
+---
+$type: Type
+singular: service
+plural: services
+icon: Briefcase
+---
+
+> Capability delivered to customers
+
+## Type
+
+```typescript
+type Service = {
+  name: string                                          // Service name
+  description?: string                                  // What it provides
+  type: 'consulting' | 'managed' | 'support' | 'custom' // Service category
+  status: 'available' | 'unavailable' | 'deprecated'    // Current state
+  pricing?: Record<string, unknown>                     // Pricing model
+  sla?: Record<string, unknown>                         // Service level agreement
+  business?: Business                                   // Provider business
+  products?: Product[]                                  // Related products
+  customers?: Thing[]                                   // Customer instances
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | Service name |
+| description | string? | What it provides |
+| type | consulting \| managed \| support \| custom | Service category |
+| status | available \| unavailable \| deprecated | Current state |
+| pricing | json? | Pricing model |
+| sla | json? | Service level agreement |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| business | Business | Provider business |
+| products | Product[] | Related products |
+| customers | Thing[] | Customer instances |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Create service |
+| update | Modify service |
+| offer | Make available |
+| deliver | Provide service |
+| retire | Discontinue |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Service was created |
+| updated | Service was modified |
+| offered | Service became available |
+| delivered | Service was provided |
+| retired | Service was discontinued |

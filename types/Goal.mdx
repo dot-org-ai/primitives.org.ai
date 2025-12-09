@@ -1,0 +1,65 @@
+---
+$type: Type
+singular: goal
+plural: goals
+icon: Target
+---
+
+> Desired outcome to achieve
+
+## Type
+
+```typescript
+type Goal = {
+  name: string                                          // Goal name
+  description?: string                                  // What to achieve
+  status: 'draft' | 'active' | 'achieved' | 'abandoned' // Current state
+  target?: Record<string, unknown>                      // Success criteria
+  deadline?: Date                                       // Target date
+  progress?: number                                     // Completion percentage
+  plan?: Plan                                           // Parent strategy
+  projects?: Project[]                                  // Related projects
+  tasks?: Task[]                                        // Contributing tasks
+  metrics?: Thing[]                                     // Tracking metrics
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | Goal name |
+| description | string? | What to achieve |
+| status | draft \| active \| achieved \| abandoned | Current state |
+| target | json? | Success criteria |
+| deadline | date? | Target date |
+| progress | number? | Completion percentage |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| plan | Plan | Parent strategy |
+| projects | Project[] | Related projects |
+| tasks | Task[] | Contributing tasks |
+| metrics | Thing[] | Tracking metrics |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Define a goal |
+| update | Modify the goal |
+| track | Update progress |
+| achieve | Mark as achieved |
+| abandon | Mark as abandoned |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Goal was defined |
+| updated | Goal was modified |
+| tracked | Progress was updated |
+| achieved | Goal was reached |
+| abandoned | Goal was dropped |

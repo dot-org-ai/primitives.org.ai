@@ -1,0 +1,63 @@
+---
+$type: Type
+singular: cli
+plural: clis
+icon: Terminal
+---
+
+> Command-line interface for developers
+
+## Type
+
+```typescript
+type CLI = {
+  name: string                                             // CLI name
+  description?: string                                     // What it does
+  status: 'development' | 'beta' | 'stable' | 'deprecated' // Current state
+  version?: string                                         // Current version
+  commands?: Record<string, unknown>[]                     // Available commands
+  repository?: string                                      // Source repo
+  api?: API                                                // Backend API
+  sdk?: SDK                                                // Related SDK
+  product?: Product                                        // Parent product
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | CLI name |
+| description | string? | What it does |
+| status | development \| beta \| stable \| deprecated | Current state |
+| version | string? | Current version |
+| commands | json[]? | Available commands |
+| repository | url? | Source repo |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| api | API | Backend API |
+| sdk | SDK | Related SDK |
+| product | Product | Parent product |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Create CLI |
+| update | Modify CLI |
+| release | Publish version |
+| deprecate | Phase out |
+| install | Install locally |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | CLI was created |
+| updated | CLI was modified |
+| released | Version was published |
+| deprecated | CLI was phased out |
+| installed | CLI was installed |

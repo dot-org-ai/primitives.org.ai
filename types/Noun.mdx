@@ -1,0 +1,63 @@
+---
+$type: Type
+singular: noun
+plural: nouns
+icon: Tag
+---
+
+> Named entity or concept schema within a domain
+
+## Type
+
+```typescript
+type Noun = {
+  singular: string                      // Singular form
+  plural: string                        // Plural form
+  description?: string                  // Human-readable description
+  properties?: Record<string, Property> // Property definitions
+  metadata?: Record<string, unknown>    // Additional metadata
+  domain?: Domain                       // Parent namespace
+  things?: Thing[]                      // Instances of this noun
+  verbs?: Verb[]                        // Operations on this noun
+  events?: Event[]                      // Events for this noun
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| singular | string | Singular form |
+| plural | string | Plural form |
+| description | string? | Human-readable description |
+| properties | json? | Property definitions |
+| metadata | json? | Additional metadata |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| domain | Domain | Parent namespace |
+| things | Thing[] | Instances of this noun |
+| verbs | Verb[] | Operations on this noun |
+| events | Event[] | Events for this noun |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Define a new noun |
+| update | Modify the schema |
+| delete | Remove the noun |
+| extend | Inherit from another noun |
+| validate | Check schema validity |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Noun was defined |
+| updated | Noun was modified |
+| deleted | Noun was removed |
+| extended | Noun was inherited |
+| validated | Noun was validated |

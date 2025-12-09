@@ -1,0 +1,63 @@
+---
+$type: Type
+singular: tool
+plural: tools
+icon: Wrench
+---
+
+> Capability that agents and humans can use
+
+## Type
+
+```typescript
+type Tool = {
+  name: string                                         // Tool name
+  description?: string                                 // What it does
+  type: 'function' | 'api' | 'integration' | 'utility' // Tool category
+  input?: Record<string, unknown>                      // Input schema
+  output?: Record<string, unknown>                     // Output schema
+  config?: Record<string, unknown>                     // Configuration
+  domain?: Domain                                      // Parent namespace
+  functions?: Function[]                               // Underlying functions
+  agents?: Agent[]                                     // Using agents
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | Tool name |
+| description | string? | What it does |
+| type | function \| api \| integration \| utility | Tool category |
+| input | json? | Input schema |
+| output | json? | Output schema |
+| config | json? | Configuration |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| domain | Domain | Parent namespace |
+| functions | Function[] | Underlying functions |
+| agents | Agent[] | Using agents |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Define a tool |
+| update | Modify the tool |
+| delete | Remove the tool |
+| invoke | Use the tool |
+| configure | Update settings |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Tool was defined |
+| updated | Tool was modified |
+| deleted | Tool was removed |
+| invoked | Tool was used |
+| configured | Settings updated |

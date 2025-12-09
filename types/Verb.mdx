@@ -1,0 +1,67 @@
+---
+$type: Type
+singular: verb
+plural: verbs
+icon: Play
+---
+
+> Action or operation that can be performed on things
+
+## Type
+
+```typescript
+type Verb = {
+  action: string                        // Infinitive form
+  actor?: string                        // Role performing the action
+  activity?: string                     // Gerund form (-ing)
+  result?: string                       // Noun form of result
+  inverse?: string                      // Opposite action
+  preconditions?: Record<string, unknown> // Required conditions
+  effect?: Record<string, unknown>      // State changes
+  domain?: Domain                       // Parent namespace
+  subject?: Noun                        // Actor type
+  object?: Noun                         // Target type
+  events?: Event[]                      // Emitted events
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| action | string | Infinitive form |
+| actor | string? | Role performing the action |
+| activity | string? | Gerund form (-ing) |
+| result | string? | Noun form of result |
+| inverse | string? | Opposite action |
+| preconditions | json? | Required conditions |
+| effect | json? | State changes |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| domain | Domain | Parent namespace |
+| subject | Noun | Actor type |
+| object | Noun | Target type |
+| events | Event[] | Emitted events |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Define a new verb |
+| update | Modify the verb |
+| delete | Remove the verb |
+| execute | Perform the action |
+| conjugate | Get verb forms |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Verb was defined |
+| updated | Verb was modified |
+| deleted | Verb was removed |
+| executed | Verb was performed |
+| conjugated | Verb forms retrieved |

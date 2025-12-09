@@ -1,0 +1,65 @@
+---
+$type: Type
+singular: app
+plural: apps
+icon: Smartphone
+---
+
+> Application that users interact with
+
+## Type
+
+```typescript
+type App = {
+  name: string                                           // App name
+  description?: string                                   // What it does
+  type: 'web' | 'mobile' | 'desktop' | 'native'          // Platform type
+  status: 'development' | 'beta' | 'live' | 'deprecated' // Current state
+  url?: string                                           // App URL
+  version?: string                                       // Current version
+  product?: Product                                      // Parent product
+  api?: API                                              // Backend API
+  functions?: Function[]                                 // Used functions
+  agents?: Agent[]                                       // Integrated agents
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| name | string | App name |
+| description | string? | What it does |
+| type | web \| mobile \| desktop \| native | Platform type |
+| status | development \| beta \| live \| deprecated | Current state |
+| url | url? | App URL |
+| version | string? | Current version |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| product | Product | Parent product |
+| api | API | Backend API |
+| functions | Function[] | Used functions |
+| agents | Agent[] | Integrated agents |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Create an app |
+| update | Modify the app |
+| deploy | Release version |
+| launch | Go live |
+| deprecate | Phase out |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | App was created |
+| updated | App was modified |
+| deployed | Version was released |
+| launched | App went live |
+| deprecated | App was phased out |

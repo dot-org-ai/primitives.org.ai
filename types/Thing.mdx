@@ -1,0 +1,65 @@
+---
+$type: Type
+singular: thing
+plural: things
+icon: Box
+---
+
+> Instance of a noun with identity and state
+
+## Type
+
+```typescript
+type Thing = {
+  id: string                    // Unique identifier
+  $type: string                 // Noun type name
+  $uri?: string                 // Canonical resource URI
+  data: Record<string, unknown> // Instance data
+  createdAt: Date               // Creation timestamp
+  updatedAt: Date               // Last update timestamp
+  noun?: Noun                   // Type definition
+  domain?: Domain               // Parent namespace
+  relationships?: Thing[]       // Linked things
+}
+```
+
+## Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| id | string | Unique identifier |
+| $type | string | Noun type name |
+| $uri | url? | Canonical resource URI |
+| data | json | Instance data |
+| createdAt | datetime | Creation timestamp |
+| updatedAt | datetime | Last update timestamp |
+
+## Relationships
+
+| Relationship | Type | Description |
+|--------------|------|-------------|
+| noun | Noun | Type definition |
+| domain | Domain | Parent namespace |
+| relationships | Thing[] | Linked things |
+
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| create | Create a new instance |
+| read | Retrieve the thing |
+| update | Modify the thing |
+| delete | Remove the thing |
+| archive | Soft delete |
+| restore | Unarchive |
+
+## Events
+
+| Event | Description |
+|-------|-------------|
+| created | Thing was created |
+| read | Thing was accessed |
+| updated | Thing was modified |
+| deleted | Thing was removed |
+| archived | Thing was archived |
+| restored | Thing was restored |
