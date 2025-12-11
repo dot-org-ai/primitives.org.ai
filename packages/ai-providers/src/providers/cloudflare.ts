@@ -40,10 +40,10 @@ function getCloudflareConfig(): CloudflareConfig {
 }
 
 /**
- * Cloudflare embedding model implementation
+ * Cloudflare embedding model implementation (AI SDK v5 compatible)
  */
-class CloudflareEmbeddingModel implements EmbeddingModel<string> {
-  readonly specificationVersion = 'v1' as const
+class CloudflareEmbeddingModel {
+  readonly specificationVersion = 'v2' as const
   readonly modelId: string
   readonly provider = 'cloudflare'
   readonly maxEmbeddingsPerCall = 100
@@ -69,7 +69,7 @@ class CloudflareEmbeddingModel implements EmbeddingModel<string> {
   }): Promise<{
     embeddings: number[][]
     usage?: { tokens: number }
-    rawResponse?: { headers?: Record<string, string> }
+    response?: { headers?: Record<string, string>; body?: unknown }
   }> {
     const { values, abortSignal, headers } = options
 
@@ -109,7 +109,7 @@ class CloudflareEmbeddingModel implements EmbeddingModel<string> {
   ): Promise<{
     embeddings: number[][]
     usage?: { tokens: number }
-    rawResponse?: { headers?: Record<string, string> }
+    response?: { headers?: Record<string, string>; body?: unknown }
   }> {
     const { accountId, apiToken, gateway, baseUrl } = this.config
 
@@ -181,7 +181,7 @@ export function cloudflareEmbedding(
   config: CloudflareConfig = {},
   ai?: Ai
 ): EmbeddingModel<string> {
-  return new CloudflareEmbeddingModel(modelId, config, ai)
+  return new CloudflareEmbeddingModel(modelId, config, ai) as unknown as EmbeddingModel<string>
 }
 
 /**

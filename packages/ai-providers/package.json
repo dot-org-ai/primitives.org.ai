@@ -24,19 +24,30 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai": "^4.0.0",
+    "ai": "^5.0.0",
     "language-models": "workspace:*",
     "rpc.do": "^0.1.0"
   },
   "optionalDependencies": {
-    "@ai-sdk/anthropic": "^1.0.0",
-    "@ai-sdk/google": "^1.0.0",
-    "@ai-sdk/openai": "^1.0.0"
+    "@ai-sdk/amazon-bedrock": "^3.0.0",
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/google": "^2.0.0",
+    "@ai-sdk/openai": "^2.0.0"
   },
   "devDependencies": {
-    "vitest": "^2.0.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "vitest": "^2.0.0"
   },
-  "keywords": ["ai", "providers", "llm", "openai", "anthropic", "google", "cloudflare", "gateway", "primitives"],
+  "keywords": [
+    "ai",
+    "providers",
+    "llm",
+    "openai",
+    "anthropic",
+    "google",
+    "cloudflare",
+    "gateway",
+    "primitives"
+  ],
   "license": "MIT"
 }

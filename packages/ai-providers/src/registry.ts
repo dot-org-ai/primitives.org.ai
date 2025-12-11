@@ -14,12 +14,12 @@
  * @packageDocumentation
  */
 
-import { createProviderRegistry, type Provider, type ProviderRegistryProvider } from 'ai'
+import { createProviderRegistry, type Provider, type ProviderRegistryProvider, type LanguageModel, type EmbeddingModel } from 'ai'
 
 /**
  * Available provider IDs
  */
-export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'cloudflare'
+export type ProviderId = 'openai' | 'anthropic' | 'google' | 'openrouter' | 'cloudflare' | 'bedrock'
 
 /**
  * Providers that get direct SDK access (not via openrouter)
@@ -67,7 +67,8 @@ const GATEWAY_PROVIDER_PATHS: Record<ProviderId, string> = {
   anthropic: 'anthropic',
   google: 'google-ai-studio',
   openrouter: 'openrouter',
-  cloudflare: 'workers-ai'
+  cloudflare: 'workers-ai',
+  bedrock: 'aws-bedrock'
 }
 
 /**
@@ -223,6 +224,34 @@ async function createOpenRouterProvider(config: ProviderConfig): Promise<unknown
 }
 
 /**
+ * Create Amazon Bedrock provider
+ * Supports two authentication modes:
+ * 1. Bearer token (AWS_BEARER_TOKEN_BEDROCK) - simpler, recommended, bypasses gateway
+ * 2. SigV4 signing (AWS_ACCESS_KEY_ID/SECRET) - standard AWS auth, can use gateway
+ */
+async function createBedrockProvider(config: ProviderConfig): Promise<unknown> {
+  const { createAmazonBedrock } = await import('@ai-sdk/amazon-bedrock')
+
+  const bearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK
+
+  // When using bearer token, go directly to AWS (skip gateway)
+  // Gateway doesn't support bearer token auth for Bedrock
+  if (bearerToken) {
+    return createAmazonBedrock({
+      region: process.env.AWS_REGION || 'us-east-1',
+      apiKey: bearerToken,
+    })
+  }
+
+  // For SigV4 auth, can optionally route through gateway
+  const baseURL = getBaseUrl('bedrock', config)
+  return createAmazonBedrock({
+    ...(baseURL && { baseURL }),
+    region: process.env.AWS_REGION || 'us-east-1',
+  })
+}
+
+/**
  * Create Cloudflare Workers AI provider
  */
 async function createCloudflareProvider(config: ProviderConfig): Promise<unknown> {
@@ -250,7 +279,8 @@ const providerFactories: Record<ProviderId, (config: ProviderConfig) => Promise<
   anthropic: createAnthropicProvider,
   google: createGoogleProvider,
   openrouter: createOpenRouterProvider,
-  cloudflare: createCloudflareProvider
+  cloudflare: createCloudflareProvider,
+  bedrock: createBedrockProvider
 }
 
 /**
@@ -288,7 +318,7 @@ export async function createRegistry(
   options: { providers?: ProviderId[] } = {}
 ): Promise<ProviderRegistryProvider> {
   const mergedConfig = { ...getEnvConfig(), ...config }
-  const providerIds = options.providers || (['openai', 'anthropic', 'google', 'openrouter', 'cloudflare'] as ProviderId[])
+  const providerIds = options.providers || (['openai', 'anthropic', 'google', 'openrouter', 'cloudflare', 'bedrock'] as ProviderId[])
 
   const providers: Record<string, unknown> = {}
 
@@ -383,8 +413,19 @@ function parseModelId(id: string): { provider: string; model: string } {
  * const mistral = await model('mistralai/mistral-large-2411')
  * ```
  */
-export async function model(id: string) {
+export async function model(id: string): Promise<LanguageModel> {
   const registry = await getRegistry()
+
+  // Check for direct provider:model format (e.g., bedrock:us.anthropic.claude-*)
+  // This bypasses language-models resolution and routes directly to the provider
+  const colonIndex = id.indexOf(':')
+  if (colonIndex > 0) {
+    const provider = id.substring(0, colonIndex)
+    // Known providers that support direct routing
+    if (['bedrock', 'openai', 'anthropic', 'google', 'openrouter'].includes(provider)) {
+      return registry.languageModel(id as `${string}:${string}`)
+    }
+  }
 
   // Try to resolve with provider routing info
   try {
@@ -433,7 +474,7 @@ export async function model(id: string) {
  * const cfEmbed = await embeddingModel('cloudflare:@cf/baai/bge-m3')
  * ```
  */
-export async function embeddingModel(id: string) {
+export async function embeddingModel(id: string): Promise<EmbeddingModel<string>> {
   const registry = await getRegistry()
   return registry.textEmbeddingModel(id as `${string}:${string}`)
 }
