@@ -1,0 +1,147 @@
+{
+  "name": "primitives.org.ai",
+  "version": "0.1.0",
+  "description": "TypeScript type definitions for the primitives.org.ai ecosystem",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./org": {
+      "types": "./dist/org/index.d.ts",
+      "import": "./dist/org/index.js"
+    },
+    "./app": {
+      "types": "./dist/app/index.d.ts",
+      "import": "./dist/app/index.js"
+    },
+    "./business": {
+      "types": "./dist/business/index.d.ts",
+      "import": "./dist/business/index.js"
+    },
+    "./product": {
+      "types": "./dist/product/index.d.ts",
+      "import": "./dist/product/index.js"
+    },
+    "./service": {
+      "types": "./dist/service/index.d.ts",
+      "import": "./dist/service/index.js"
+    },
+    "./site": {
+      "types": "./dist/site/index.d.ts",
+      "import": "./dist/site/index.js"
+    },
+    "./tool": {
+      "types": "./dist/tool/index.d.ts",
+      "import": "./dist/tool/index.js"
+    },
+    "./tool/crm": {
+      "types": "./dist/tool/crm.d.ts",
+      "import": "./dist/tool/crm.js"
+    },
+    "./tool/payments": {
+      "types": "./dist/tool/payments.d.ts",
+      "import": "./dist/tool/payments.js"
+    },
+    "./finance": {
+      "types": "./dist/finance/index.d.ts",
+      "import": "./dist/finance/index.js"
+    },
+    "./hr": {
+      "types": "./dist/hr/index.d.ts",
+      "import": "./dist/hr/index.js"
+    },
+    "./sales": {
+      "types": "./dist/sales/index.d.ts",
+      "import": "./dist/sales/index.js"
+    },
+    "./ops": {
+      "types": "./dist/ops/index.d.ts",
+      "import": "./dist/ops/index.js"
+    },
+    "./legal": {
+      "types": "./dist/legal/index.d.ts",
+      "import": "./dist/legal/index.js"
+    },
+    "./marketing": {
+      "types": "./dist/marketing/index.d.ts",
+      "import": "./dist/marketing/index.js"
+    },
+    "./support": {
+      "types": "./dist/support/index.d.ts",
+      "import": "./dist/support/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js"
+    },
+    "./collab": {
+      "types": "./dist/collab/index.d.ts",
+      "import": "./dist/collab/index.js"
+    },
+    "./analytics": {
+      "types": "./dist/analytics/index.d.ts",
+      "import": "./dist/analytics/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "*.ts",
+    "core",
+    "org",
+    "app",
+    "business",
+    "product",
+    "service",
+    "site",
+    "tool",
+    "finance",
+    "hr",
+    "sales",
+    "ops",
+    "legal",
+    "marketing",
+    "support",
+    "auth",
+    "collab",
+    "analytics"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "types",
+    "typescript",
+    "primitives",
+    "ai",
+    "rpc",
+    "domain-driven",
+    "crm",
+    "payments"
+  ],
+  "author": "Primitives",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/primitives/types.git"
+  },
+  "homepage": "https://primitives.org.ai",
+  "bugs": {
+    "url": "https://github.com/primitives/types/issues"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
