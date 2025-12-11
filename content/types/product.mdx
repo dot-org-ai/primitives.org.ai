@@ -1,0 +1,106 @@
+---
+title: Product
+description: Types for products, marketplaces, roadmaps, features, and agile artifacts
+---
+
+The `product` module provides types for product management.
+
+```typescript
+import type {
+  Product, Marketplace, Listing,
+  Roadmap, Feature, Epic, Story, Bug, Backlog
+} from '@primitives/types/product'
+```
+
+## Types
+
+### Products
+| Type | Description |
+|------|-------------|
+| `Product` | Product with pricing, status |
+| `Marketplace` | Product marketplace |
+| `Listing` | Marketplace listing |
+| `ProductRevenue` | Revenue metrics |
+
+### Marketplace
+| Type | Description |
+|------|-------------|
+| `MarketplaceCategory` | Marketplace category |
+| `MarketplaceSeller` | Seller profile |
+| `MarketplaceAnalytics` | Marketplace analytics |
+| `ListingReview` | Listing review |
+
+### Roadmap
+| Type | Description |
+|------|-------------|
+| `Roadmap` | Product roadmap |
+| `Feature` | Feature with RICE scoring |
+| `Epic` | Large initiative/epic |
+
+### Agile Artifacts
+| Type | Description |
+|------|-------------|
+| `Story` | User story (as a... I want... so that...) |
+| `Bug` | Bug report with severity |
+| `Backlog` | Product backlog |
+| `BacklogItem` | Backlog item |
+
+## Usage
+
+```typescript
+import type { Feature, Story, Bug } from '@primitives/types/product'
+
+const feature: Feature = {
+  id: 'feat_001',
+  name: 'SSO Integration',
+  description: 'Add SAML/OIDC single sign-on',
+  roadmapId: 'roadmap_2024',
+  status: 'in_progress',
+  priority: 'high',
+  rice: {
+    reach: 1000,
+    impact: 3,
+    confidence: 80,
+    effort: 8,
+    score: 30
+  },
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const story: Story = {
+  id: 'story_001',
+  epicId: 'epic_auth',
+  title: 'User can log in with Google',
+  userStory: {
+    asA: 'user',
+    iWant: 'to log in with my Google account',
+    soThat: 'I don\'t need to remember another password'
+  },
+  status: 'ready',
+  points: 5,
+  acceptanceCriteria: [
+    'Google OAuth button on login page',
+    'Account linked if email matches',
+    'New account created if no match'
+  ],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const bug: Bug = {
+  id: 'bug_001',
+  title: 'Login fails with special characters in password',
+  severity: 'high',
+  status: 'open',
+  stepsToReproduce: [
+    'Enter email',
+    'Enter password with & character',
+    'Click login'
+  ],
+  expectedBehavior: 'User logs in successfully',
+  actualBehavior: 'Error 500 returned',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

@@ -1,0 +1,95 @@
+---
+title: Finance
+description: Types for accounting, transactions, invoicing, payroll, and treasury
+---
+
+The `finance` module provides comprehensive types for financial operations.
+
+```typescript
+import type {
+  Account, Transaction, Invoice, Payment, Budget,
+  Payroll, Asset, BankAccount, FinancialReport
+} from '@primitives/types/finance'
+```
+
+## Types
+
+### Accounting
+| Type | Description |
+|------|-------------|
+| `Account` | Chart of accounts entry (asset, liability, equity, etc.) |
+| `Transaction` | Financial transaction with lines |
+| `TransactionLine` | Debit/credit line item |
+| `JournalEntry` | Double-entry journal entry |
+| `JournalEntryLine` | Journal entry line item |
+
+### Billing
+| Type | Description |
+|------|-------------|
+| `Invoice` | Customer invoice with line items |
+| `InvoiceItem` | Invoice line item |
+| `Bill` | Vendor bill payable |
+| `BillItem` | Bill line item |
+| `Payment` | Payment record |
+| `Receipt` | Payment receipt |
+
+### Budgeting
+| Type | Description |
+|------|-------------|
+| `Budget` | Budget with periods and categories |
+| `BudgetItem` | Budget line item |
+| `Forecast` | Financial forecast |
+| `BudgetVarianceAnalysis` | Actual vs budget analysis |
+
+### Banking
+| Type | Description |
+|------|-------------|
+| `BankAccount` | Bank account with balance |
+| `BankTransaction` | Bank transaction |
+| `Reconciliation` | Bank reconciliation |
+| `Currency` | Currency definition |
+| `ExchangeRate` | Currency exchange rate |
+
+### Payroll & Expenses
+| Type | Description |
+|------|-------------|
+| `Payroll` | Payroll run |
+| `PayrollItem` | Individual payroll item |
+| `ExpenseReport` | Employee expense report |
+| `ExpenseItem` | Expense line item |
+
+### Assets & Tax
+| Type | Description |
+|------|-------------|
+| `Asset` | Fixed asset |
+| `Depreciation` | Asset depreciation schedule |
+| `TaxRate` | Tax rate configuration |
+| `TaxFiling` | Tax filing record |
+
+### Reporting
+| Type | Description |
+|------|-------------|
+| `FinancialReport` | Generated financial report |
+
+## Usage
+
+```typescript
+import type { Invoice, Payment, Account } from '@primitives/types/finance'
+
+const invoice: Invoice = {
+  id: 'inv_001',
+  customerId: 'cust_001',
+  number: 'INV-2024-001',
+  status: 'sent',
+  currency: 'USD',
+  subtotal: 10000,
+  tax: 800,
+  total: 10800,
+  dueDate: new Date('2024-02-15'),
+  items: [
+    { description: 'Consulting services', quantity: 10, unitPrice: 1000, amount: 10000 }
+  ],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

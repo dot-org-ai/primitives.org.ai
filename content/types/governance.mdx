@@ -1,0 +1,71 @@
+---
+title: Governance
+description: Types for board management, advisors, founders, and organizational structure
+---
+
+The `governance` module provides types for corporate governance.
+
+```typescript
+import type {
+  Board, BoardMember, BoardMeeting,
+  Advisor, Founder, Level, Role
+} from '@primitives/types/governance'
+```
+
+## Types
+
+| Type | Description |
+|------|-------------|
+| `Board` | Board of directors composition |
+| `BoardMember` | Board member with role and tenure |
+| `BoardMeeting` | Board meeting with agenda and minutes |
+| `Advisor` | Company advisor with compensation terms |
+| `Founder` | Founder with equity and vesting |
+| `Level` | Organizational level (IC, manager, director, VP, C-level) |
+| `Role` | Job role with level, compensation band |
+
+## Usage
+
+```typescript
+import type { BoardMember, Advisor, Level } from '@primitives/types/governance'
+
+const boardMember: BoardMember = {
+  id: 'bm_001',
+  boardId: 'board_001',
+  personId: 'person_investor',
+  name: 'Sarah Chen',
+  role: 'director',
+  type: 'investor',
+  startDate: new Date('2023-01-15'),
+  committees: ['audit', 'compensation'],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const advisor: Advisor = {
+  id: 'adv_001',
+  personId: 'person_advisor',
+  name: 'John Expert',
+  expertise: ['go-to-market', 'enterprise-sales'],
+  equityGrant: 0.25, // 0.25% equity
+  vestingMonths: 24,
+  hoursPerMonth: 4,
+  status: 'active',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const level: Level = {
+  id: 'level_senior',
+  name: 'Senior Engineer',
+  track: 'individual_contributor',
+  grade: 'L5',
+  compensationBand: {
+    min: 150000,
+    mid: 180000,
+    max: 210000
+  },
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

@@ -1,0 +1,92 @@
+---
+title: Auth
+description: Types for authentication, authorization, users, roles, and security
+---
+
+The `auth` module provides types for identity and access management.
+
+```typescript
+import type {
+  User, Identity, Session, Token, APIKey,
+  Role, Permission, Organization, MFA
+} from '@primitives/types/auth'
+```
+
+## Types
+
+### Users & Identity
+| Type | Description |
+|------|-------------|
+| `User` | User account |
+| `Identity` | Identity provider link |
+| `Credential` | User credential (password, passkey) |
+| `Device` | Registered device |
+
+### Sessions & Tokens
+| Type | Description |
+|------|-------------|
+| `Session` | User session |
+| `Token` | Access/refresh token |
+| `APIKey` | API key |
+| `RecoveryCode` | Account recovery code |
+| `PasswordReset` | Password reset request |
+| `EmailVerification` | Email verification |
+
+### OAuth
+| Type | Description |
+|------|-------------|
+| `OAuth2Client` | OAuth2 client application |
+| `OAuth2Grant` | OAuth2 authorization grant |
+| `OAuth2Token` | OAuth2 token |
+
+### Authorization
+| Type | Description |
+|------|-------------|
+| `Role` | Role definition |
+| `Permission` | Permission definition |
+| `RoleAssignment` | Role assignment to user |
+| `Policy` | Authorization policy |
+| `PolicyBinding` | Policy binding to resource |
+
+### Organizations
+| Type | Description |
+|------|-------------|
+| `Organization` | Organization/tenant |
+| `OrganizationMember` | Organization membership |
+| `Group` | User group |
+| `GroupMembership` | Group membership |
+| `Invitation` | Organization invite |
+
+### Security
+| Type | Description |
+|------|-------------|
+| `MFA` | MFA configuration |
+| `MFAChallenge` | MFA verification challenge |
+| `AuditLog` | Security audit log |
+| `LoginAttempt` | Login attempt record |
+| `IPWhitelist` | IP allowlist entry |
+
+## Usage
+
+```typescript
+import type { User, Role, Session } from '@primitives/types/auth'
+
+const user: User = {
+  id: 'user_001',
+  email: 'user@example.com',
+  emailVerified: true,
+  status: 'active',
+  mfaEnabled: true,
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const role: Role = {
+  id: 'role_admin',
+  name: 'Admin',
+  description: 'Full administrative access',
+  permissions: ['read:*', 'write:*', 'delete:*'],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

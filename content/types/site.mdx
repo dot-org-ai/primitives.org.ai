@@ -1,0 +1,79 @@
+---
+title: Site
+description: Types for websites, blogs, directories, and web content
+---
+
+The `site` module provides types for web presence.
+
+```typescript
+import type {
+  Site, Blog, Post, Directory, DirectoryItem,
+  SiteAnalytics, BlogAuthor
+} from '@primitives/types/site'
+```
+
+## Types
+
+### Sites
+| Type | Description |
+|------|-------------|
+| `Site` | Website with domain, pages |
+| `SiteAnalytics` | Site traffic analytics |
+
+### Blogs
+| Type | Description |
+|------|-------------|
+| `Blog` | Blog configuration |
+| `Post` | Blog post |
+| `BlogAuthor` | Blog author profile |
+| `PostComment` | Post comment |
+| `BlogAnalytics` | Blog analytics |
+
+### Directories
+| Type | Description |
+|------|-------------|
+| `Directory` | Listing directory |
+| `DirectoryCategory` | Directory category |
+| `DirectoryItem` | Directory listing |
+| `DirectoryAnalytics` | Directory analytics |
+
+## Usage
+
+```typescript
+import type { Site, Blog, Post, Directory } from '@primitives/types/site'
+
+const site: Site = {
+  id: 'site_main',
+  name: 'Company Website',
+  domain: 'company.com',
+  status: 'live',
+  framework: 'nextjs',
+  hosting: 'vercel',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const blog: Blog = {
+  id: 'blog_main',
+  name: 'Company Blog',
+  siteId: 'site_main',
+  path: '/blog',
+  status: 'active',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const post: Post = {
+  id: 'post_001',
+  blogId: 'blog_main',
+  title: 'Introducing Our New Feature',
+  slug: 'introducing-new-feature',
+  content: '...',
+  status: 'published',
+  authorId: 'author_001',
+  publishedAt: new Date(),
+  tags: ['product', 'announcement'],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

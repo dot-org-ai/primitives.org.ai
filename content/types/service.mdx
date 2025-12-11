@@ -1,0 +1,78 @@
+---
+title: Service
+description: Types for services, SaaS products, pricing tiers, and engagement tracking
+---
+
+The `service` module provides types for service delivery.
+
+```typescript
+import type {
+  Service, PricingTier, SaaS,
+  ServiceEngagement, ServiceMetrics, SaaSMetrics
+} from '@primitives/types/service'
+```
+
+## Types
+
+| Type | Description |
+|------|-------------|
+| `Service` | Service offering with deliverables |
+| `PricingTier` | Pricing tier (free, pro, enterprise) |
+| `SaaS` | SaaS product configuration |
+| `ServiceEngagement` | Active service engagement |
+| `ServiceMetrics` | Service delivery metrics |
+| `SaaSMetrics` | SaaS business metrics |
+
+## Usage
+
+```typescript
+import type { Service, SaaS, PricingTier } from '@primitives/types/service'
+
+const service: Service = {
+  id: 'svc_consulting',
+  name: 'Implementation Services',
+  type: 'professional_services',
+  description: 'Full implementation and onboarding',
+  deliverables: [
+    'Requirements gathering',
+    'System configuration',
+    'Data migration',
+    'Training'
+  ],
+  pricing: {
+    model: 'fixed',
+    amount: 25000,
+    currency: 'USD'
+  },
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const saas: SaaS = {
+  id: 'saas_platform',
+  name: 'Platform Pro',
+  tiers: [
+    {
+      id: 'tier_free',
+      name: 'Free',
+      price: 0,
+      features: ['5 users', '1GB storage', 'Community support']
+    },
+    {
+      id: 'tier_pro',
+      name: 'Pro',
+      price: 49,
+      interval: 'month',
+      features: ['Unlimited users', '100GB storage', 'Priority support', 'API access']
+    },
+    {
+      id: 'tier_enterprise',
+      name: 'Enterprise',
+      price: null, // Custom pricing
+      features: ['Everything in Pro', 'SSO', 'Dedicated support', 'SLA']
+    }
+  ],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

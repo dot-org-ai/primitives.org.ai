@@ -1,0 +1,82 @@
+---
+title: HR
+description: Types for employees, recruiting, compensation, benefits, and workforce management
+---
+
+The `hr` module provides comprehensive types for human resources operations.
+
+```typescript
+import type {
+  Employee, Candidate, JobPosting, Interview, Offer,
+  Department, Team, Compensation, Benefit, TimeOff
+} from '@primitives/types/hr'
+```
+
+## Types
+
+### Employees
+| Type | Description |
+|------|-------------|
+| `Employee` | Employee with personal info, role, department |
+| `Contractor` | Independent contractor |
+| `Department` | Organizational department |
+| `Team` | Team within department |
+| `Position` | Job position/role definition |
+| `EmployeeDocument` | Employee document (contract, ID, etc.) |
+| `EmergencyContact` | Emergency contact info |
+| `EmploymentHistory` | Employment history record |
+
+### Recruiting
+| Type | Description |
+|------|-------------|
+| `JobPosting` | Job posting with requirements |
+| `Candidate` | Job candidate |
+| `Application` | Job application |
+| `Interview` | Interview scheduled or completed |
+| `Offer` | Job offer |
+| `Onboarding` | Onboarding checklist and progress |
+
+### Compensation & Benefits
+| Type | Description |
+|------|-------------|
+| `Compensation` | Salary, bonus, equity package |
+| `CompensationChange` | Salary adjustment record |
+| `Benefit` | Benefit plan (health, 401k, etc.) |
+| `BenefitEnrollment` | Employee benefit enrollment |
+
+### Performance
+| Type | Description |
+|------|-------------|
+| `PerformanceReview` | Performance review cycle |
+| `Goal` | Employee goal with OKRs |
+| `Feedback` | Peer or manager feedback |
+| `Training` | Training program |
+| `Certification` | Professional certification |
+
+### Time & Attendance
+| Type | Description |
+|------|-------------|
+| `TimeOff` | PTO request and approval |
+| `TimeOffPolicy` | PTO policy definition |
+| `Attendance` | Attendance record |
+
+## Usage
+
+```typescript
+import type { Employee, Compensation, TimeOff } from '@primitives/types/hr'
+
+const employee: Employee = {
+  id: 'emp_001',
+  firstName: 'Jane',
+  lastName: 'Smith',
+  email: 'jane.smith@company.com',
+  departmentId: 'dept_eng',
+  teamId: 'team_platform',
+  positionId: 'pos_senior_eng',
+  managerId: 'emp_002',
+  status: 'active',
+  startDate: new Date('2023-06-15'),
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

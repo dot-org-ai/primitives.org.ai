@@ -1,0 +1,54 @@
+---
+title: Business
+description: Types for businesses, agents, humans, and activity tracking
+---
+
+The `business` module provides types for business entities and actors.
+
+```typescript
+import type {
+  Business, Agent, Human,
+  BusinessAnalytics, AgentTask, AgentMetrics
+} from '@primitives/types/business'
+```
+
+## Types
+
+| Type | Description |
+|------|-------------|
+| `Business` | Business entity with legal info, industry, size |
+| `Agent` | AI agent with capabilities, model config, tools |
+| `Human` | Human actor with roles, skills, availability |
+| `BusinessAnalytics` | KPIs and performance metrics |
+| `AgentTask` | Task assigned to an agent |
+| `AgentMetrics` | Agent performance and usage stats |
+| `AgentChatResponse` | Response from agent interaction |
+| `ActivityLogEntry` | Audit log of actions taken |
+
+## Usage
+
+```typescript
+import type { Business, Agent, Human } from '@primitives/types/business'
+
+const business: Business = {
+  id: 'biz_001',
+  name: 'Acme Corp',
+  legalName: 'Acme Corporation Inc.',
+  type: 'corporation',
+  industry: 'technology',
+  size: 'medium',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const agent: Agent = {
+  id: 'agent_support',
+  name: 'Support Assistant',
+  type: 'assistant',
+  model: 'claude-3-sonnet',
+  capabilities: ['chat', 'email', 'ticket_triage'],
+  status: 'active',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

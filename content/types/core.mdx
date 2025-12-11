@@ -1,0 +1,76 @@
+---
+title: Core
+description: Foundational types for RPC, primitives, and cross-cutting entities
+---
+
+The `core` module provides foundational types used throughout the system.
+
+```typescript
+import type {
+  Thing, Noun, Verb, Event, Action, Domain,
+  Customer, Subscription,
+  Input, Output, BaseEvent, CRUDResource
+} from '@primitives/types/core'
+```
+
+## RPC Types
+
+Foundational types for the action/event RPC pattern:
+
+| Type | Description |
+|------|-------------|
+| `Action<TInput, TOutput>` | Function signature for RPC calls |
+| `BaseEvent<TType, TData>` | Event with type, data, timestamp, metadata |
+| `Input<T>` | Makes `id`, `createdAt`, `updatedAt` optional |
+| `Output<T>` | Full type (alias for T) |
+| `CRUDResource<T, TInput>` | Standard create/get/update/delete/list actions |
+| `ListParams` | Pagination with limit, offset, filters |
+| `PaginatedResult<T>` | Items with total count and pagination info |
+
+## Primitive Types
+
+Abstract types representing the core ontology:
+
+| Type | Description |
+|------|-------------|
+| `Thing` | Base entity with id, name, description |
+| `Noun` | Named entity (person, place, concept) |
+| `Verb` | Action or operation |
+| `Event` | Something that happened |
+| `Action` | Something to be done |
+| `Domain` | Bounded context grouping related primitives |
+
+## Entity Types
+
+Cross-cutting business entities used across modules:
+
+| Type | Description |
+|------|-------------|
+| `Customer` | Customer with status, type, addresses, payment methods |
+| `Subscription` | Recurring subscription with items, billing interval |
+| `Address` | Physical or billing address |
+| `PaymentMethod` | Card, bank account, or other payment source |
+
+## Usage
+
+```typescript
+import type { Customer, Subscription, BaseEvent } from '@primitives/types/core'
+
+// Customer type
+const customer: Customer = {
+  id: 'cust_001',
+  name: 'Acme Corp',
+  email: 'billing@acme.com',
+  status: 'active',
+  type: 'business',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+// Define a custom event
+type OrderPlaced = BaseEvent<'order.placed', {
+  orderId: string
+  customerId: string
+  total: number
+}>
+```

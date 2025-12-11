@@ -1,0 +1,107 @@
+---
+title: Types
+description: TypeScript type definitions for business-as-code primitives
+---
+
+Comprehensive type definitions for representing every aspect of a business as code. Install from npm:
+
+```bash
+npm install @primitives/types
+```
+
+## Overview
+
+| Category | Modules | Types | Description |
+|----------|---------|-------|-------------|
+| **Core** | [core](/types/core), [org](/types/org), [business](/types/business) | 18 | Organizations, teams, business entities |
+| **Finance** | [finance](/types/finance), [equity](/types/equity) | 40 | Accounting, transactions, cap tables |
+| **People** | [hr](/types/hr), [governance](/types/governance) | 34 | Employees, compensation, board, advisors |
+| **Operations** | [ops](/types/ops), [engineering](/types/engineering) | 30 | Facilities, incidents, sprints, deployments |
+| **Legal** | [legal](/types/legal), [auth](/types/auth) | 60 | Contracts, compliance, authentication |
+| **Commercial** | [sales](/types/sales), [marketing](/types/marketing) | 53 | CRM, campaigns, leads, opportunities |
+| **Product** | [product](/types/product), [analytics](/types/analytics) | 56 | Products, experiments, metrics, funnels |
+| **Customer** | [support](/types/support), [service](/types/service) | 35 | Tickets, health scores, SLAs |
+| **Platform** | [app](/types/app), [site](/types/site), [tool](/types/tool) | 20 | Apps, websites, integrations |
+| **Collaboration** | [collab](/types/collab) | 32 | Documents, meetings, channels |
+
+## Quick Start
+
+```typescript
+import type {
+  Employee,
+  Invoice,
+  Contract,
+  Lead
+} from '@primitives/types'
+
+// Type-safe business entities
+const employee: Employee = {
+  id: 'emp-001',
+  firstName: 'Jane',
+  lastName: 'Doe',
+  email: 'jane@company.com',
+  departmentId: 'dept-eng',
+  status: 'active',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```
+
+## Type Pattern
+
+Every domain follows a consistent pattern:
+
+```typescript
+// Core type
+export interface Employee {
+  id: string
+  firstName: string
+  // ... fields
+  createdAt: Date
+  updatedAt: Date
+}
+
+// Input variant (id and timestamps optional)
+export type EmployeeInput = Input<Employee>
+
+// Output variant (full type)
+export type EmployeeOutput = Output<Employee>
+
+// CRUD actions
+export interface EmployeeActions extends CRUDResource<Employee, EmployeeInput> {
+  promote: Action<{ employeeId: string; newTitle: string }, Employee>
+  // ... domain-specific actions
+}
+
+// Domain events
+export interface EmployeeEvents {
+  'employee.created': BaseEvent<'employee.created', Employee>
+  'employee.promoted': BaseEvent<'employee.promoted', { employee: Employee; previousTitle: string }>
+}
+
+// Resource (actions + event subscription)
+export interface EmployeeResource extends EmployeeActions {
+  on<E extends keyof EmployeeEvents>(event: E, handler: (data: EmployeeEvents[E]) => void): void
+}
+```
+
+## Domain Proxies
+
+Each module exports a Proxy interface aggregating all resources:
+
+```typescript
+import type { HRProxy, FinanceProxy, SalesProxy } from '@primitives/types'
+
+// HR operations
+const hr: HRProxy = getHRProxy()
+const employee = await hr.employees.create({ firstName: 'Jane', ... })
+hr.employees.on('employee.hired', (event) => console.log('New hire:', event.data))
+
+// Finance operations
+const finance: FinanceProxy = getFinanceProxy()
+const invoice = await finance.invoices.create({ customerId: 'cust-001', ... })
+
+// Sales operations
+const sales: SalesProxy = getSalesProxy()
+const leads = await sales.leads.list({ status: 'qualified' })
+```

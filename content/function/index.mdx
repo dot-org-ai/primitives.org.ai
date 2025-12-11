@@ -1,66 +1,24 @@
 ---
-title: ai
+title: Function
 description: Call AI like a function
 icon: Sparkles
 ---
 
-Everything starts with `ai`.
+Everything starts with `ai`. Call it, chain it, destructure it.
 
 ```typescript
 import { ai } from 'ai-functions'
-```
 
-## Three Ways to Call AI
-
-### Template Literal
-
-The simplest form—just a string, get a string back:
-
-```typescript
+// Template literal
 const explanation = await ai`Explain ${topic} to a 5 year old`
-// "Imagine your toys could talk to each other..."
-```
 
-### Function Call
-
-Same thing, with options:
-
-```typescript
-const result = await ai('Analyze this data', {
-  model: 'claude-opus-4-5',
-  temperature: 0.7,
-})
-```
-
-### Dynamic Functions
-
-The magic happens here. Call any method on `ai` and it figures out what you need:
-
-```typescript
-// ai.doSomething() → calls define() → determines function type
+// Dynamic functions
 const code = await ai.generateAuthMiddleware(requirements)
 const analysis = await ai.analyzeMarketTrends(data)
-const approved = await ai.getManagerApproval(proposal)
+
+// Destructuring
+const { title, tags, excerpt } = ai`metadata for: ${blogPost}`
 ```
-
-When you call `ai.doSomething()`, the system:
-
-1. Calls `define('doSomething', ...)` with inferred schema
-2. Classifies the function type based on what it needs to do
-3. Returns the appropriate result
-
-## Function Types
-
-Every `ai.doSomething()` becomes one of four function types:
-
-| Type | What It Does | Returns |
-|------|--------------|---------|
-| [Code Function](/function/code) | Generates executable code | Code string |
-| [Generative Function](/function/generative) | Creates content/data | Structured data |
-| [Agentic Function](/function/agentic) | Takes autonomous action | Action results |
-| [Human Function](/function/human) | Requires human input | Human response |
-
-The classification happens automatically based on the function name and context.
 
 ## Promise Pipelining
 
@@ -79,21 +37,6 @@ if (await qualified) {
 }
 ```
 
-## Destructuring
-
-Get exactly what you need:
-
-```typescript
-// Single values
-const summary = await ai`summarize ${article}`
-
-// Multiple values
-const { title, tags, excerpt } = ai`metadata for: ${blogPost}`
-
-// Named lists
-const { pros, cons, risks } = ai`evaluate ${proposal}`
-```
-
 ## Batch Processing
 
 Process arrays in a single call:
@@ -108,27 +51,137 @@ const qualified = await leads.map(lead => ({
 }))
 ```
 
-## How It Works
+---
 
-Under the hood, `ai.doSomething()` is syntactic sugar for `define`:
+## All Functions
+
+### Core
+
+| Export | Description |
+|--------|-------------|
+| [`AI()`](/function/AI) | Create typed AI instances with predefined schemas |
+| [`ai`](/function/ai) | The simplest way to call AI |
+| [`define`](/function/define) | The foundation for creating AI functions |
+| [`generate`](/function/generate) | The core generation primitive with schema support |
+
+### Function Types
+
+Every `ai.doSomething()` becomes one of four function types:
+
+| Type | What It Does | Returns |
+|------|--------------|---------|
+| [Code](/function/code) | Generates executable code | Code string |
+| [Generative](/function/generative) | Creates content/data | Structured data |
+| [Agentic](/function/agentic) | Takes autonomous action | Action results |
+| [Human](/function/human) | Requires human input | Human response |
+
+### Generative
+
+| Function | Description |
+|----------|-------------|
+| [`list`](/function/list) | Generate a list of items |
+| [`lists`](/function/lists) | Generate multiple named lists |
+| [`write`](/function/write) | Generate text content |
+| [`summarize`](/function/summarize) | Summarize content |
+| [`extract`](/function/extract) | Extract structured data |
+| [`diagram`](/function/diagram) | Generate diagrams |
+| [`slides`](/function/slides) | Generate presentations |
+| [`image`](/function/image) | Generate images |
+| [`video`](/function/video) | Generate video |
+
+### Logic
+
+| Function | Description |
+|----------|-------------|
+| [`is`](/function/is) | Boolean classification |
+| [`decide`](/function/decide) | Make decisions from options |
+
+### Action
+
+| Function | Description |
+|----------|-------------|
+| [`do`](/function/do) | Execute actions |
+| [`browse`](/function/browse) | Browse the web |
+| [`read`](/function/read) | Read and parse content |
+| [`research`](/function/research) | Research a topic |
+| [`ask`](/function/ask) | Ask a question (agent or human) |
+| [`approve`](/function/approve) | Request approval (agent or human) |
+| [`review`](/function/review) | Request review (agent or human) |
+
+---
+
+## Examples
+
+### Sales Pipeline
 
 ```typescript
-// When you write:
-const result = await ai.qualifyLead(lead)
+const leads = list`leads from ${campaign}`
 
-// It's equivalent to:
-const qualifyLead = define('qualifyLead', { /* inferred schema */ })
-const result = await qualifyLead(lead)
+const qualified = await leads.map(lead => ({
+  lead,
+  score: ai`score 1-100: ${lead}`,
+  fit: ai`${lead} matches ${icp}?`,
+}))
+
+const approved = qualified.filter(l => l.score > 80)
+const emails = await approved.map(l => write`follow-up for ${l.lead}`)
 ```
 
-The difference is that `ai.doSomething()` infers everything from the function name and arguments, while `define` lets you be explicit.
+### Content Generation
 
-## Package
+```typescript
+const ai = AI({
+  blogPost: {
+    title: 'Post title',
+    summary: 'Brief summary',
+    sections: [{
+      heading: 'Section heading',
+      content: 'Section content',
+    }],
+  },
+})
 
-The Function primitive is implemented in the [`ai-functions`](/packages/ai-functions) package:
+const post = await ai.blogPost('TypeScript tips')
+const summary = await summarize(post)
+const tags = await list`tags for: ${post.title}`
+```
+
+### Code Generation
+
+```typescript
+const middleware = await ai.generateAuthMiddleware({
+  provider: 'jwt',
+  roles: ['admin', 'user', 'guest'],
+})
+
+const migration = await ai.createMigration({
+  action: 'add users table',
+  columns: ['id', 'email', 'name', 'created_at'],
+})
+```
+
+### Human-in-the-Loop
+
+```typescript
+const proposal = await ai.generateProposal(requirements)
+const approved = await approve`${proposal} for ${client}`
+
+if (approved) {
+  const feedback = await review`implementation plan for ${proposal}`
+  const final = await ai.refineProposal(proposal, feedback)
+}
+```
+
+---
+
+## Installation
 
 ```bash
 npm install ai-functions
 ```
+
+## Package
+
+The Function primitive is implemented in the [`ai-functions`](/packages/ai-functions) package.
 
 See the [package documentation](/packages/ai-functions) for full API reference and additional examples.

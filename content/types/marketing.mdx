@@ -1,0 +1,110 @@
+---
+title: Marketing
+description: Types for campaigns, email marketing, content, ads, and attribution
+---
+
+The `marketing` module provides types for marketing operations.
+
+```typescript
+import type {
+  Campaign, Audience, EmailCampaign, LandingPage,
+  Content, Ad, Attribution, Journey, ABTest
+} from '@primitives/types/marketing'
+```
+
+## Types
+
+### Campaigns
+| Type | Description |
+|------|-------------|
+| `Campaign` | Marketing campaign |
+| `CampaignAsset` | Campaign creative asset |
+| `MarketingChannel` | Marketing channel |
+
+### Audiences
+| Type | Description |
+|------|-------------|
+| `Audience` | Target audience segment |
+| `AudienceMember` | Audience membership |
+
+### Email
+| Type | Description |
+|------|-------------|
+| `EmailTemplate` | Email template |
+| `EmailCampaign` | Email campaign |
+| `EmailSend` | Individual email send |
+| `EmailEvent` | Email event (open, click, etc.) |
+
+### Content
+| Type | Description |
+|------|-------------|
+| `LandingPage` | Landing page |
+| `Form` | Lead capture form |
+| `FormSubmission` | Form submission |
+| `Content` | Content piece |
+| `ContentCalendar` | Content calendar |
+
+### Social
+| Type | Description |
+|------|-------------|
+| `SocialPost` | Social media post |
+| `SocialAccount` | Social media account |
+
+### Advertising
+| Type | Description |
+|------|-------------|
+| `Ad` | Advertisement |
+| `AdGroup` | Ad group |
+| `AdCampaign` | Paid ad campaign |
+
+### Attribution & Analytics
+| Type | Description |
+|------|-------------|
+| `Attribution` | Attribution model |
+| `TouchPoint` | Customer touchpoint |
+| `UTM` | UTM tracking parameters |
+| `Referral` | Referral tracking |
+
+### Customer Journey
+| Type | Description |
+|------|-------------|
+| `Journey` | Customer journey |
+| `JourneyStep` | Journey step |
+
+### Testing
+| Type | Description |
+|------|-------------|
+| `ABTest` | A/B test |
+| `ABTestVariant` | Test variant |
+
+## Usage
+
+```typescript
+import type { Campaign, EmailCampaign, ABTest } from '@primitives/types/marketing'
+
+const campaign: Campaign = {
+  id: 'campaign_001',
+  name: 'Q1 Product Launch',
+  type: 'product_launch',
+  status: 'active',
+  budget: 50000,
+  startDate: new Date('2024-01-15'),
+  endDate: new Date('2024-03-15'),
+  channels: ['email', 'social', 'paid_search'],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const abTest: ABTest = {
+  id: 'test_001',
+  name: 'Homepage Hero Test',
+  status: 'running',
+  variants: [
+    { id: 'control', name: 'Control', weight: 50 },
+    { id: 'variant_a', name: 'New CTA', weight: 50 }
+  ],
+  metric: 'conversion_rate',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

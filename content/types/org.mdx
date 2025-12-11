@@ -1,0 +1,56 @@
+---
+title: Organization
+description: Types for organizations, workflows, experiments, and execution
+---
+
+The `org` module provides types for organizational execution primitives.
+
+```typescript
+import type {
+  Database, Function, Goal, Plan, Project, Task, Workflow,
+  Experiment, WorkflowExecution, ExperimentAnalysis
+} from '@primitives/types/org'
+```
+
+## Types
+
+| Type | Description |
+|------|-------------|
+| `Database` | Data storage with schema and connection config |
+| `Function` | Callable unit of work with inputs/outputs |
+| `Goal` | Objective with key results and progress tracking |
+| `Plan` | Structured plan with milestones and resources |
+| `Project` | Project with timeline, team, and deliverables |
+| `Task` | Actionable item with status, assignee, due date |
+| `Workflow` | Multi-step process with triggers and actions |
+| `Experiment` | Hypothesis testing with variants and metrics |
+| `WorkflowExecution` | Instance of a workflow run |
+| `ExperimentAnalysis` | Results and statistical analysis |
+
+## Usage
+
+```typescript
+import type { Workflow, Task, Goal } from '@primitives/types/org'
+
+const workflow: Workflow = {
+  id: 'wf_onboard',
+  name: 'Customer Onboarding',
+  status: 'active',
+  steps: [
+    { id: 'step_1', name: 'Send welcome email', type: 'action' },
+    { id: 'step_2', name: 'Schedule kickoff', type: 'action' }
+  ],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const goal: Goal = {
+  id: 'goal_q1',
+  name: 'Increase MRR by 20%',
+  targetValue: 120000,
+  currentValue: 100000,
+  status: 'in_progress',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

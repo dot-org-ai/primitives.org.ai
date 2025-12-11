@@ -1,0 +1,94 @@
+---
+title: Legal
+description: Types for contracts, compliance, intellectual property, and legal operations
+---
+
+The `legal` module provides comprehensive types for legal operations.
+
+```typescript
+import type {
+  Contract, NDA, Agreement, Compliance, Audit,
+  IntellectualProperty, Patent, LegalEntity
+} from '@primitives/types/legal'
+```
+
+## Types
+
+### Contracts
+| Type | Description |
+|------|-------------|
+| `Contract` | Contract with parties, terms, value |
+| `ContractTemplate` | Reusable contract template |
+| `ContractClause` | Contract clause library |
+| `Amendment` | Contract amendment |
+| `Signature` | E-signature record |
+| `SignatureRequest` | Signature request |
+
+### Agreements
+| Type | Description |
+|------|-------------|
+| `Agreement` | General agreement |
+| `NDA` | Non-disclosure agreement |
+| `TermsOfService` | Terms of service |
+| `PrivacyPolicy` | Privacy policy |
+
+### Compliance
+| Type | Description |
+|------|-------------|
+| `Compliance` | Compliance requirement |
+| `ComplianceFramework` | Compliance framework (SOC2, GDPR, etc.) |
+| `ComplianceControl` | Control within framework |
+| `Audit` | Compliance audit |
+| `AuditFinding` | Audit finding |
+
+### Risk
+| Type | Description |
+|------|-------------|
+| `Risk` | Identified risk |
+| `RiskMitigation` | Risk mitigation plan |
+| `Incident` | Legal/compliance incident |
+
+### Privacy
+| Type | Description |
+|------|-------------|
+| `DataProcessingAgreement` | DPA with processor |
+| `DataSubjectRequest` | GDPR/CCPA data request |
+| `Consent` | User consent record |
+
+### IP
+| Type | Description |
+|------|-------------|
+| `IntellectualProperty` | IP asset |
+| `Patent` | Patent application/grant |
+| `Trademark` | Trademark |
+| `Copyright` | Copyright |
+| `License` | IP license |
+
+### Corporate
+| Type | Description |
+|------|-------------|
+| `LegalEntity` | Legal entity/subsidiary |
+| `LegalCase` | Legal case/litigation |
+| `LegalDocument` | Legal document |
+| `Regulation` | Applicable regulation |
+
+## Usage
+
+```typescript
+import type { Contract, NDA, Compliance } from '@primitives/types/legal'
+
+const contract: Contract = {
+  id: 'contract_001',
+  type: 'saas_agreement',
+  title: 'Enterprise SaaS Agreement',
+  parties: ['company_001', 'customer_001'],
+  status: 'active',
+  value: 120000,
+  currency: 'USD',
+  startDate: new Date('2024-01-01'),
+  endDate: new Date('2025-01-01'),
+  autoRenew: true,
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

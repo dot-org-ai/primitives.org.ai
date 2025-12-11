@@ -1,0 +1,72 @@
+---
+title: App
+description: Types for applications, APIs, CLIs, dashboards, and SDKs
+---
+
+The `app` module provides types for application definitions.
+
+```typescript
+import type {
+  App, API, CLI, Dashboard, SDK,
+  AppAnalytics, APIKey, APIUsage
+} from '@primitives/types/app'
+```
+
+## Types
+
+| Type | Description |
+|------|-------------|
+| `App` | Application with platform, version |
+| `API` | API definition with endpoints |
+| `CLI` | Command-line interface tool |
+| `Dashboard` | Application dashboard |
+| `DashboardWidget` | Dashboard widget component |
+| `SDK` | Software development kit |
+| `AppAnalytics` | Application usage analytics |
+| `APIKey` | API key for authentication |
+| `APIUsage` | API usage metrics |
+
+## Usage
+
+```typescript
+import type { App, API, SDK } from '@primitives/types/app'
+
+const app: App = {
+  id: 'app_mobile',
+  name: 'Mobile App',
+  platform: 'ios',
+  version: '2.1.0',
+  status: 'published',
+  bundleId: 'com.company.app',
+  minOSVersion: '15.0',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const api: API = {
+  id: 'api_v2',
+  name: 'Public API v2',
+  version: '2.0.0',
+  baseUrl: 'https://api.company.com/v2',
+  authMethods: ['api_key', 'oauth2'],
+  rateLimit: {
+    requests: 1000,
+    window: 'hour'
+  },
+  status: 'stable',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const sdk: SDK = {
+  id: 'sdk_node',
+  name: 'Node.js SDK',
+  language: 'typescript',
+  version: '3.0.0',
+  packageName: '@company/sdk',
+  repository: 'https://github.com/company/sdk-node',
+  documentation: 'https://docs.company.com/sdk/node',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

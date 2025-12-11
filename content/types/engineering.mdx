@@ -1,0 +1,71 @@
+---
+title: Engineering
+description: Types for sprints, releases, deployments, feature flags, and incidents
+---
+
+The `engineering` module provides types for software engineering lifecycle.
+
+```typescript
+import type {
+  Sprint, Release, Environment,
+  FeatureFlag, Deployment, Incident
+} from '@primitives/types/engineering'
+```
+
+## Types
+
+| Type | Description |
+|------|-------------|
+| `Sprint` | Agile sprint with capacity and velocity |
+| `Release` | Software release with version and changelog |
+| `Environment` | Deployment environment (dev, staging, prod) |
+| `FeatureFlag` | Feature flag with targeting rules |
+| `Deployment` | Deployment record with status |
+| `Incident` | Production incident with severity and timeline |
+
+## Usage
+
+```typescript
+import type { Sprint, Deployment, Incident } from '@primitives/types/engineering'
+
+const sprint: Sprint = {
+  id: 'sprint_24',
+  name: 'Sprint 24',
+  teamId: 'team_platform',
+  status: 'active',
+  startDate: new Date('2024-01-15'),
+  endDate: new Date('2024-01-29'),
+  capacity: 40,
+  velocity: 38,
+  goals: ['Ship auth v2', 'Reduce p99 latency'],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const deployment: Deployment = {
+  id: 'deploy_001',
+  releaseId: 'rel_v2.1.0',
+  environmentId: 'env_prod',
+  status: 'success',
+  deployedBy: 'emp_001',
+  deployedAt: new Date(),
+  duration: 120, // seconds
+  commit: 'abc123',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const incident: Incident = {
+  id: 'inc_001',
+  title: 'API latency spike',
+  severity: 'sev2',
+  status: 'resolved',
+  impactedServices: ['api', 'web'],
+  startedAt: new Date('2024-01-20T14:30:00Z'),
+  resolvedAt: new Date('2024-01-20T15:45:00Z'),
+  rootCause: 'Database connection pool exhaustion',
+  postmortem: 'https://docs.internal/postmortems/inc_001',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

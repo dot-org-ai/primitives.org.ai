@@ -1,0 +1,120 @@
+---
+title: Collaboration
+description: Types for messaging, calendars, documents, files, and notifications
+---
+
+The `collab` module provides types for team collaboration.
+
+```typescript
+import type {
+  Message, Channel, Email, Calendar, Meeting,
+  Document, File, Notification, Poll
+} from '@primitives/types/collab'
+```
+
+## Types
+
+### Messaging
+| Type | Description |
+|------|-------------|
+| `Message` | Chat message |
+| `MessageAttachment` | Message attachment |
+| `Thread` | Message thread |
+| `Channel` | Chat channel |
+| `ChannelMember` | Channel membership |
+| `DirectMessage` | Direct message |
+| `Conversation` | Conversation container |
+
+### Email
+| Type | Description |
+|------|-------------|
+| `Email` | Email message |
+| `EmailThread` | Email thread |
+
+### Calendar
+| Type | Description |
+|------|-------------|
+| `Calendar` | Calendar |
+| `CalendarEvent` | Calendar event |
+| `CalendarInvite` | Event invitation |
+| `EventAttendee` | Event attendee |
+| `RecurrenceRule` | Event recurrence rule |
+| `Availability` | User availability |
+
+### Meetings
+| Type | Description |
+|------|-------------|
+| `Meeting` | Video/audio meeting |
+| `MeetingRecording` | Meeting recording |
+| `MeetingTranscript` | Meeting transcript |
+| `TranscriptSegment` | Transcript segment |
+
+### Documents
+| Type | Description |
+|------|-------------|
+| `Document` | Collaborative document |
+| `DocumentVersion` | Document version |
+| `Comment` | Document comment |
+| `Mention` | @mention |
+| `Reaction` | Emoji reaction |
+
+### Files
+| Type | Description |
+|------|-------------|
+| `File` | File upload |
+| `Folder` | File folder |
+| `Share` | File/folder share |
+
+### Notifications
+| Type | Description |
+|------|-------------|
+| `Notification` | User notification |
+| `NotificationPreference` | Notification settings |
+| `Announcement` | Team announcement |
+
+### Polls
+| Type | Description |
+|------|-------------|
+| `Poll` | Poll/survey |
+| `PollOption` | Poll option |
+
+## Usage
+
+```typescript
+import type { Message, Meeting, Document } from '@primitives/types/collab'
+
+const message: Message = {
+  id: 'msg_001',
+  channelId: 'channel_general',
+  authorId: 'user_001',
+  content: 'Hey team, quick update on the release...',
+  attachments: [],
+  reactions: [{ emoji: '👍', count: 3 }],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const meeting: Meeting = {
+  id: 'meeting_001',
+  title: 'Weekly Standup',
+  organizer: 'user_001',
+  attendees: ['user_001', 'user_002', 'user_003'],
+  startTime: new Date('2024-01-22T10:00:00Z'),
+  endTime: new Date('2024-01-22T10:30:00Z'),
+  recurrence: { frequency: 'weekly', daysOfWeek: ['monday'] },
+  videoLink: 'https://meet.company.com/standup',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const document: Document = {
+  id: 'doc_001',
+  title: 'Q1 Planning',
+  content: '...',
+  ownerId: 'user_001',
+  collaborators: ['user_002', 'user_003'],
+  status: 'draft',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

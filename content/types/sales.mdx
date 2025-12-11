@@ -1,0 +1,93 @@
+---
+title: Sales
+description: Types for CRM, pipeline management, quotes, orders, and commissions
+---
+
+The `sales` module provides types for sales operations and CRM.
+
+```typescript
+import type {
+  Lead, Opportunity, Pipeline, Quote, Order,
+  Territory, Commission, Forecast, Cadence
+} from '@primitives/types/sales'
+```
+
+## Types
+
+### Leads & Opportunities
+| Type | Description |
+|------|-------------|
+| `Lead` | Sales lead with source, score |
+| `Opportunity` | Sales opportunity with value, stage |
+| `Pipeline` | Sales pipeline |
+| `Stage` | Pipeline stage |
+
+### Quotes & Orders
+| Type | Description |
+|------|-------------|
+| `Quote` | Price quote |
+| `QuoteLineItem` | Quote line item |
+| `Order` | Sales order |
+| `OrderLineItem` | Order line item |
+| `Contract` | Sales contract |
+
+### Territory & Teams
+| Type | Description |
+|------|-------------|
+| `Territory` | Sales territory |
+| `SalesRep` | Sales representative |
+| `Commission` | Commission record |
+| `CommissionPlan` | Commission plan structure |
+
+### Forecasting
+| Type | Description |
+|------|-------------|
+| `Forecast` | Revenue forecast |
+| `Target` | Sales target/quota |
+| `ForecastRollup` | Rolled-up forecast |
+
+### Engagement
+| Type | Description |
+|------|-------------|
+| `Activity` | Sales activity (call, email, meeting) |
+| `Cadence` | Sales engagement cadence |
+| `CadenceStep` | Cadence step |
+| `CadenceEnrollment` | Lead enrollment in cadence |
+
+### Pricing
+| Type | Description |
+|------|-------------|
+| `PriceBook` | Price book |
+| `PriceBookEntry` | Price book entry |
+| `Discount` | Discount definition |
+| `Competitor` | Competitor tracking |
+
+## Usage
+
+```typescript
+import type { Lead, Opportunity, Quote } from '@primitives/types/sales'
+
+const lead: Lead = {
+  id: 'lead_001',
+  email: 'prospect@company.com',
+  company: 'Target Corp',
+  source: 'website',
+  status: 'qualified',
+  score: 85,
+  assignedTo: 'rep_001',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const opportunity: Opportunity = {
+  id: 'opp_001',
+  name: 'Target Corp - Enterprise',
+  accountId: 'acc_001',
+  stageId: 'stage_negotiation',
+  amount: 150000,
+  probability: 60,
+  closeDate: new Date('2024-03-31'),
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

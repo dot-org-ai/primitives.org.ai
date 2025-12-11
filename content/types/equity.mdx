@@ -1,0 +1,65 @@
+---
+title: Equity
+description: Types for cap tables, fundraising, equity compensation, and valuations
+---
+
+The `equity` module provides types for startup equity management.
+
+```typescript
+import type {
+  Investor, Shareholder, ShareClass, Share,
+  VestingSchedule, OptionGrant, FundingRound,
+  CapTable, StartupMetrics, Valuation409A
+} from '@primitives/types/equity'
+```
+
+## Types
+
+| Type | Description |
+|------|-------------|
+| `Investor` | Investor entity (VC, angel, institutional) |
+| `Shareholder` | Individual or entity holding shares |
+| `ShareClass` | Class of shares (common, preferred series) |
+| `Share` | Individual share certificate |
+| `VestingSchedule` | Vesting terms (cliff, duration, acceleration) |
+| `OptionGrant` | Stock option grant with exercise details |
+| `FundingRound` | Fundraising round (seed, Series A, etc.) |
+| `CapTable` | Full capitalization table |
+| `StartupMetrics` | Key startup metrics (MRR, ARR, burn, runway) |
+| `Valuation409A` | 409A valuation for tax purposes |
+
+## Usage
+
+```typescript
+import type { FundingRound, OptionGrant, StartupMetrics } from '@primitives/types/equity'
+
+const seriesA: FundingRound = {
+  id: 'round_001',
+  name: 'Series A',
+  type: 'series_a',
+  status: 'closed',
+  targetAmount: 10000000,
+  raisedAmount: 12000000,
+  preMoneyValuation: 40000000,
+  postMoneyValuation: 52000000,
+  leadInvestorId: 'inv_sequoia',
+  closeDate: new Date('2024-01-15'),
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const metrics: StartupMetrics = {
+  id: 'metrics_jan',
+  date: new Date('2024-01-31'),
+  mrr: 150000,
+  arr: 1800000,
+  burn: 200000,
+  runway: 18,
+  customers: 45,
+  churnRate: 2.5,
+  ltv: 24000,
+  cac: 8000,
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

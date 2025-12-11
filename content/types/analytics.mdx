@@ -1,0 +1,118 @@
+---
+title: Analytics
+description: Types for metrics, dashboards, experiments, funnels, and data pipelines
+---
+
+The `analytics` module provides types for data and analytics.
+
+```typescript
+import type {
+  Metric, Dashboard, Report, Event, Segment,
+  Funnel, Experiment, Goal, Alert, Dataset
+} from '@primitives/types/analytics'
+```
+
+## Types
+
+### Metrics & Dimensions
+| Type | Description |
+|------|-------------|
+| `Metric` | Metric definition |
+| `MetricValue` | Metric data point |
+| `Dimension` | Analysis dimension |
+| `Measure` | Aggregate measure |
+| `MetricComparison` | Period-over-period comparison |
+
+### Visualization
+| Type | Description |
+|------|-------------|
+| `Dashboard` | Analytics dashboard |
+| `DashboardWidget` | Dashboard widget |
+| `Chart` | Chart configuration |
+| `Report` | Generated report |
+| `ReportSchedule` | Scheduled report |
+| `WidgetData` | Widget data payload |
+| `ChartData` | Chart data payload |
+
+### Data
+| Type | Description |
+|------|-------------|
+| `Query` | Analytics query |
+| `QueryResult` | Query result |
+| `QueryExecution` | Query execution record |
+| `Dataset` | Data dataset |
+| `DataSource` | Data source connection |
+| `DatasetStats` | Dataset statistics |
+| `DataLineage` | Data lineage tracking |
+
+### ETL
+| Type | Description |
+|------|-------------|
+| `ETLJob` | ETL pipeline job |
+| `ETLRun` | ETL job execution |
+| `Transformation` | Data transformation |
+| `ETLMetrics` | ETL performance metrics |
+
+### Events & Users
+| Type | Description |
+|------|-------------|
+| `Event` | Analytics event |
+| `EventProperty` | Event property definition |
+| `EventCounts` | Event aggregations |
+| `UserProfile` | User analytics profile |
+| `Segment` | User segment |
+| `ActivityTimeline` | User activity timeline |
+
+### Cohorts & Funnels
+| Type | Description |
+|------|-------------|
+| `Cohort` | User cohort |
+| `CohortRetention` | Cohort retention analysis |
+| `Funnel` | Conversion funnel |
+| `FunnelStep` | Funnel step |
+| `FunnelAnalysis` | Funnel analysis results |
+
+### Experiments
+| Type | Description |
+|------|-------------|
+| `Experiment` | A/B experiment |
+| `ExperimentVariant` | Experiment variant |
+| `ExperimentResult` | Experiment results |
+
+### Goals & Alerts
+| Type | Description |
+|------|-------------|
+| `Goal` | Analytics goal |
+| `Alert` | Metric alert |
+| `AlertHistory` | Alert history |
+| `Anomaly` | Detected anomaly |
+
+## Usage
+
+```typescript
+import type { Metric, Funnel, Experiment } from '@primitives/types/analytics'
+
+const metric: Metric = {
+  id: 'metric_mrr',
+  name: 'Monthly Recurring Revenue',
+  type: 'currency',
+  aggregation: 'sum',
+  formula: 'SUM(subscription_value)',
+  unit: 'USD',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const funnel: Funnel = {
+  id: 'funnel_signup',
+  name: 'Signup Funnel',
+  steps: [
+    { name: 'Visit Homepage', event: 'page_view', filters: { path: '/' } },
+    { name: 'Click Signup', event: 'click', filters: { element: 'signup_cta' } },
+    { name: 'Complete Form', event: 'form_submit', filters: { form: 'signup' } },
+    { name: 'Verify Email', event: 'email_verified' }
+  ],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

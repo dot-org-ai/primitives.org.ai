@@ -1,0 +1,81 @@
+---
+title: Operations
+description: Types for inventory, supply chain, warehousing, fulfillment, and manufacturing
+---
+
+The `ops` module provides types for operations and supply chain management.
+
+```typescript
+import type {
+  Product, Inventory, Warehouse, Supplier,
+  PurchaseOrder, Shipment, Return, Fulfillment
+} from '@primitives/types/ops'
+```
+
+## Types
+
+### Products & Variants
+| Type | Description |
+|------|-------------|
+| `Product` | Product definition with SKU |
+| `ProductVariant` | Product variant (size, color, etc.) |
+
+### Inventory
+| Type | Description |
+|------|-------------|
+| `Inventory` | Inventory level at location |
+| `InventoryLocation` | Storage location |
+| `InventoryMovement` | Stock movement record |
+| `Warehouse` | Warehouse facility |
+| `Bin` | Storage bin within warehouse |
+
+### Supply Chain
+| Type | Description |
+|------|-------------|
+| `Supplier` | Supplier/vendor |
+| `PurchaseOrder` | Purchase order to supplier |
+| `PurchaseOrderItem` | PO line item |
+| `Receiving` | Goods receipt |
+
+### Fulfillment & Shipping
+| Type | Description |
+|------|-------------|
+| `Shipment` | Outbound shipment |
+| `ShipmentItem` | Shipment line item |
+| `Carrier` | Shipping carrier |
+| `ShippingRate` | Shipping rate quote |
+| `TrackingEvent` | Package tracking event |
+| `Fulfillment` | Order fulfillment |
+| `FulfillmentItem` | Fulfillment line item |
+
+### Returns
+| Type | Description |
+|------|-------------|
+| `Return` | Return/RMA |
+| `ReturnItem` | Return line item |
+
+### Manufacturing
+| Type | Description |
+|------|-------------|
+| `WorkOrder` | Manufacturing work order |
+| `BillOfMaterials` | Product BOM |
+| `Assembly` | Assembly record |
+| `QualityCheck` | QC inspection |
+
+## Usage
+
+```typescript
+import type { Inventory, PurchaseOrder, Shipment } from '@primitives/types/ops'
+
+const inventory: Inventory = {
+  id: 'inv_001',
+  productId: 'prod_001',
+  locationId: 'loc_warehouse_1',
+  quantity: 500,
+  reservedQuantity: 50,
+  availableQuantity: 450,
+  reorderPoint: 100,
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

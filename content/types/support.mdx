@@ -1,0 +1,111 @@
+---
+title: Support
+description: Types for tickets, knowledge bases, SLAs, health scores, and customer success
+---
+
+The `support` module provides types for customer support operations.
+
+```typescript
+import type {
+  Ticket, Queue, SLA, KnowledgeBase, Article,
+  HealthScore, CustomerSuccess, NPS, ChatConversation
+} from '@primitives/types/support'
+```
+
+## Types
+
+### Tickets
+| Type | Description |
+|------|-------------|
+| `Ticket` | Support ticket |
+| `TicketComment` | Ticket comment/reply |
+| `TicketTag` | Ticket tag |
+| `Queue` | Ticket queue |
+
+### Agents
+| Type | Description |
+|------|-------------|
+| `Agent` | Support agent |
+| `AgentGroup` | Agent group/team |
+
+### SLAs
+| Type | Description |
+|------|-------------|
+| `SLA` | SLA definition |
+| `SLAPolicy` | SLA policy rules |
+| `Escalation` | Escalation record |
+| `EscalationRule` | Escalation rule |
+
+### Knowledge Base
+| Type | Description |
+|------|-------------|
+| `KnowledgeBase` | Knowledge base |
+| `Article` | KB article |
+| `ArticleCategory` | Article category |
+| `ArticleFeedback` | Article feedback |
+
+### Automation
+| Type | Description |
+|------|-------------|
+| `Macro` | Canned response macro |
+| `Trigger` | Automation trigger |
+| `Automation` | Workflow automation |
+
+### Satisfaction
+| Type | Description |
+|------|-------------|
+| `Satisfaction` | CSAT survey |
+| `SatisfactionResponse` | CSAT response |
+| `NPS` | Net Promoter Score survey |
+| `NPSResponse` | NPS response |
+
+### Customer Success
+| Type | Description |
+|------|-------------|
+| `HealthScore` | Customer health score |
+| `HealthScoreMetric` | Health score component |
+| `CustomerSuccess` | CS account |
+| `SuccessPlan` | Customer success plan |
+| `Milestone` | Success milestone |
+
+### Live Chat
+| Type | Description |
+|------|-------------|
+| `ChatConversation` | Live chat conversation |
+| `ChatMessage` | Chat message |
+
+## Usage
+
+```typescript
+import type { Ticket, HealthScore, NPS } from '@primitives/types/support'
+
+const ticket: Ticket = {
+  id: 'ticket_001',
+  subject: 'Cannot access dashboard',
+  description: 'Getting 403 error when trying to access...',
+  status: 'open',
+  priority: 'high',
+  customerId: 'cust_001',
+  assigneeId: 'agent_001',
+  queueId: 'queue_technical',
+  tags: ['access', 'dashboard'],
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+
+const healthScore: HealthScore = {
+  id: 'hs_001',
+  customerId: 'cust_001',
+  score: 78,
+  trend: 'improving',
+  metrics: {
+    engagement: 85,
+    adoption: 70,
+    support: 90,
+    growth: 65
+  },
+  risk: 'low',
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```

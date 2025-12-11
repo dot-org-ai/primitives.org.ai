@@ -28,6 +28,7 @@
     "service",
     "business",
     "---Reference---",
-    "packages"
+    "packages",
+    "types"
   ]
 }

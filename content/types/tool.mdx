@@ -1,0 +1,38 @@
+---
+title: Tool
+description: Types for integrations and external tools
+---
+
+The `tool` module provides types for tool integrations.
+
+```typescript
+import type { Tool } from '@primitives/types/tool'
+```
+
+## Types
+
+The tool module defines integration primitives for connecting external tools and services. See individual tool type definitions for specific integrations.
+
+## Usage
+
+Tools are typically referenced via `externalIds` in other types:
+
+```typescript
+import type { Sprint } from '@primitives/types/engineering'
+
+const sprint: Sprint = {
+  id: 'sprint_24',
+  name: 'Sprint 24',
+  // Map to external systems
+  externalIds: {
+    jira: 'PROJ-Sprint-24',
+    linear: 'sprint_abc123',
+    asana: '1234567890'
+  },
+  // ... other fields
+  createdAt: new Date(),
+  updatedAt: new Date()
+}
+```
+
+The generic `Record<string, string>` pattern allows mapping to any external system without hard-coding specific vendor integrations into the type definitions.
