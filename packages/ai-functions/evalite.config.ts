@@ -1,4 +1,3 @@
-// @ts-expect-error - evalite package doesn't export types properly for bundler moduleResolution
 import { defineConfig } from 'evalite/config'
 
 export default defineConfig({
@@ -13,9 +12,6 @@ export default defineConfig({
 
   // Fail CI if average score drops below 70%
   scoreThreshold: 70,
-
-  // Enable caching for faster re-runs
-  cache: true,
 
   server: {
     port: 3006,
