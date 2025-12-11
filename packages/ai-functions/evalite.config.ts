@@ -1,3 +1,4 @@
+// @ts-expect-error - evalite package doesn't export types properly for bundler moduleResolution
 import { defineConfig } from 'evalite/config'
 
 export default defineConfig({
