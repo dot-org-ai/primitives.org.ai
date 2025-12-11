@@ -91,6 +91,10 @@ let awsSessionToken: string | undefined
 let s3Bucket: string | undefined
 let roleArn: string | undefined
 
+// AI Gateway configuration (optional - for routing through Cloudflare AI Gateway)
+let gatewayUrl: string | undefined
+let gatewayToken: string | undefined
+
 /**
  * Configure AWS credentials and settings
  */
@@ -101,6 +105,10 @@ export function configureAWSBedrock(options: {
   sessionToken?: string
   s3Bucket?: string
   roleArn?: string
+  /** Optional: Cloudflare AI Gateway URL for routing requests */
+  gatewayUrl?: string
+  /** Optional: Cloudflare AI Gateway token */
+  gatewayToken?: string
 }): void {
   if (options.region) awsRegion = options.region
   if (options.accessKeyId) awsAccessKeyId = options.accessKeyId
@@ -108,6 +116,8 @@ export function configureAWSBedrock(options: {
   if (options.sessionToken) awsSessionToken = options.sessionToken
   if (options.s3Bucket) s3Bucket = options.s3Bucket
   if (options.roleArn) roleArn = options.roleArn
+  if (options.gatewayUrl) gatewayUrl = options.gatewayUrl
+  if (options.gatewayToken) gatewayToken = options.gatewayToken
 }
 
 function getConfig() {
@@ -118,15 +128,33 @@ function getConfig() {
   const bucket = s3Bucket || process.env.BEDROCK_BATCH_S3_BUCKET
   const role = roleArn || process.env.BEDROCK_BATCH_ROLE_ARN
 
+  // Check for AI Gateway configuration
+  const gwUrl = gatewayUrl || process.env.AI_GATEWAY_URL
+  const gwToken = gatewayToken || process.env.AI_GATEWAY_TOKEN
+
+  // If using gateway, we don't need AWS credentials
+  if (gwUrl && gwToken) {
+    return {
+      region,
+      accessKeyId: accessKeyId || '',
+      secretAccessKey: secretAccessKey || '',
+      sessionToken,
+      bucket: bucket || '',
+      role,
+      gatewayUrl: gwUrl,
+      gatewayToken: gwToken,
+    }
+  }
+
   if (!accessKeyId || !secretAccessKey) {
-    throw new Error('AWS credentials not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY')
+    throw new Error('AWS credentials not configured. Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or use AI_GATEWAY_URL and AI_GATEWAY_TOKEN')
   }
 
   if (!bucket) {
     throw new Error('S3 bucket for Bedrock batch not configured. Set BEDROCK_BATCH_S3_BUCKET')
   }
 
-  return { region, accessKeyId, secretAccessKey, sessionToken, bucket, role }
+  return { region, accessKeyId, secretAccessKey, sessionToken, bucket, role, gatewayUrl: undefined, gatewayToken: undefined }
 }
 
 // ============================================================================
@@ -396,6 +424,11 @@ async function processBedrockItem(
   config: ReturnType<typeof getConfig>,
   model: string
 ): Promise<BatchResult> {
+  // Check if using AI Gateway
+  if (config.gatewayUrl && config.gatewayToken) {
+    return processBedrockItemViaGateway(item, config, model)
+  }
+
   const url = `https://bedrock-runtime.${config.region}.amazonaws.com/model/${encodeURIComponent(model)}/invoke`
 
   // Build the request body based on the model type
@@ -501,6 +534,96 @@ async function processBedrockItem(
         completionTokens: data.generation_token_count,
         totalTokens: (data.prompt_token_count || 0) + data.generation_token_count,
       }
+    }
+  }
+
+  let result: unknown = content
+
+  // Try to parse JSON if schema was provided
+  if (item.schema && content) {
+    try {
+      result = JSON.parse(content)
+    } catch {
+      // Keep as string
+    }
+  }
+
+  return {
+    id: item.id,
+    customId: item.id,
+    status: 'completed',
+    result,
+    usage,
+  }
+}
+
+/**
+ * Process a Bedrock item via Cloudflare AI Gateway
+ *
+ * NOTE: Unlike OpenAI and Google, Bedrock via AI Gateway still requires AWS Signature V4 signing.
+ * The gateway routes the request but doesn't handle authentication.
+ * @see https://developers.cloudflare.com/ai-gateway/usage/providers/bedrock/
+ *
+ * Gateway URL format: {gateway_url}/aws-bedrock/bedrock-runtime/{region}/model/{model}/invoke
+ */
+async function processBedrockItemViaGateway(
+  item: BatchItem,
+  config: ReturnType<typeof getConfig>,
+  model: string
+): Promise<BatchResult> {
+  // AI Gateway URL for Bedrock - requires full path including region
+  // Format: {gateway_url}/aws-bedrock/bedrock-runtime/{region}/model/{model}/invoke
+  const url = `${config.gatewayUrl}/aws-bedrock/bedrock-runtime/${config.region}/model/${encodeURIComponent(model)}/invoke`
+
+  // Build the request body (Anthropic format for Claude models)
+  const body: Record<string, unknown> = {
+    anthropic_version: 'bedrock-2023-05-31',
+    max_tokens: item.options?.maxTokens || 4096,
+    messages: [{ role: 'user', content: item.prompt }],
+    system: item.options?.system,
+    temperature: item.options?.temperature,
+  }
+
+  const bodyStr = JSON.stringify(body)
+
+  // NOTE: Bedrock via Gateway still requires AWS SigV4 signing
+  // We need both the gateway token AND AWS credentials
+  if (!config.accessKeyId || !config.secretAccessKey) {
+    throw new Error(
+      'Bedrock via AI Gateway still requires AWS credentials for SigV4 signing. ' +
+      'Set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.'
+    )
+  }
+
+  const headers = await signRequest('POST', url, bodyStr, config, 'bedrock')
+  headers.set('cf-aig-authorization', `Bearer ${config.gatewayToken}`)
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: bodyStr,
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Bedrock via Gateway error: ${response.status} ${error}`)
+  }
+
+  const data = await response.json() as {
+    content?: Array<{ type: string; text?: string }>
+    usage?: { input_tokens: number; output_tokens: number }
+  }
+
+  // Extract content (Anthropic format)
+  const textContent = data.content?.find((c) => c.type === 'text')
+  let content = textContent?.text
+  let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
+
+  if (data.usage) {
+    usage = {
+      promptTokens: data.usage.input_tokens,
+      completionTokens: data.usage.output_tokens,
+      totalTokens: data.usage.input_tokens + data.usage.output_tokens,
     }
   }
 

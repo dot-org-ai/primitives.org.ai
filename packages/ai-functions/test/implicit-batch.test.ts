@@ -249,9 +249,9 @@ describe('Implicit Batch Processing', () => {
       expect(isFlexAvailable()).toBe(false)
     })
 
-    it('isFlexAvailable returns false for google', () => {
+    it('isFlexAvailable returns true for google', () => {
       configure({ provider: 'google' })
-      expect(isFlexAvailable()).toBe(false)
+      expect(isFlexAvailable()).toBe(true)
     })
 
     it('isFlexAvailable returns false for cloudflare', () => {

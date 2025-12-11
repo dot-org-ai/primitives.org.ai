@@ -27,12 +27,24 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest",
+    "test:unit": "vitest run --exclude 'test/evals/**' --exclude 'test/e2e-*'",
+    "test:evals": "vitest run test/evals/",
+    "test:evals:primitives": "vitest run test/evals/primitives.eval.test.ts",
+    "test:evals:define": "vitest run test/evals/define-function.eval.test.ts",
+    "eval": "tsx evals/run-evals.ts",
+    "eval:fast": "tsx evals/run-evals.ts",
+    "eval:all": "tsx evals/run-evals.ts --all",
+    "eval:math": "tsx evals/run-evals.ts --math",
+    "eval:class": "tsx evals/run-evals.ts --class",
+    "eval:marketing": "tsx evals/marketing.eval.ts",
+    "eval:marketing:all": "tsx evals/marketing.eval.ts --all",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai": "^4.0.0",
+    "@ai-sdk/amazon-bedrock": "^3.0.0",
+    "ai": "^5.0.0",
     "ai-providers": "workspace:^",
     "language-models": "workspace:*",
     "rpc.do": "^0.1.0",
@@ -53,6 +65,7 @@
   "license": "MIT",
   "devDependencies": {
     "dotenv": "^17.2.3",
+    "tsx": "^4.0.0",
     "vitest": "^2.1.0"
   }
 }

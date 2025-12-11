@@ -328,5 +328,5 @@ export function shouldUseBatchAPI(itemCount: number): boolean {
  */
 export function isFlexAvailable(): boolean {
   const provider = getProvider()
-  return provider === 'openai' || provider === 'bedrock'
+  return provider === 'openai' || provider === 'bedrock' || provider === 'google'
 }

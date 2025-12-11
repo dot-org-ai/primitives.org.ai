@@ -205,16 +205,16 @@ export async function generateText(
  */
 export async function streamObject<T>(
   options: GenerateObjectOptions<T>
-) {
+): Promise<StreamObjectResult<T, T, never>> {
   const model = await resolveModel(options.model)
   const schema = resolveSchema(options.schema as SchemaArg)
-  // Use 'as any' to handle AI SDK v4 API variance
+  // Use 'as any' to handle AI SDK API variance
   return sdkStreamObject({
     ...options,
     model,
     schema,
     output: 'object'
-  } as any)
+  } as any) as unknown as StreamObjectResult<T, T, never>
 }
 
 /**
