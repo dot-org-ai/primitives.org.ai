@@ -215,6 +215,22 @@ export {
 } from './projects.js'
 
 // =============================================================================
+// Planning (Work items, plans - beads-compatible)
+// =============================================================================
+
+export {
+  WorkItem,
+  WorkItemComment,
+  WorkItemEvent,
+  Comment as PlanningComment,
+  Event as PlanningEvent,
+  Plan,
+  DependencyTypes,
+  type DependencyType,
+  PlanningEntities,
+} from './planning.js'
+
+// =============================================================================
 // Communication (Communication & collaboration)
 // =============================================================================
 
@@ -273,6 +289,7 @@ import { PartnershipEntities } from './partnerships.js'
 import { LegalEntities } from './legal.js'
 import { RiskEntities } from './risk.js'
 import { ProjectEntities } from './projects.js'
+import { PlanningEntities } from './planning.js'
 import { CommunicationEntities } from './communication.js'
 import { AssetEntities } from './assets.js'
 import { MarketEntities } from './market.js'
@@ -294,6 +311,7 @@ export const AllBusinessEntities = {
   legal: LegalEntities,
   risk: RiskEntities,
   projects: ProjectEntities,
+  planning: PlanningEntities,
   communication: CommunicationEntities,
   assets: AssetEntities,
   market: MarketEntities,
@@ -316,6 +334,7 @@ export const BusinessEntityCategories = [
   'legal',
   'risk',
   'projects',
+  'planning',
   'communication',
   'assets',
   'market',
@@ -353,6 +372,8 @@ export const Entities = {
   ...RiskEntities,
   // Projects
   ...ProjectEntities,
+  // Planning (beads-compatible work items)
+  ...PlanningEntities,
   // Communication
   ...CommunicationEntities,
   // Assets
