@@ -1,4 +1,4 @@
-# @dotdo/config
+# @org.ai/config
 
 Shared TypeScript and ESLint configurations for the primitives.org.ai monorepo.
 
@@ -8,7 +8,7 @@ Shared TypeScript and ESLint configurations for the primitives.org.ai monorepo.
 
 ```json
 {
-  "extends": "@dotdo/config/typescript/base"
+  "extends": "@org.ai/config/typescript/base"
 }
 ```
 
@@ -22,7 +22,7 @@ Includes:
 
 ```json
 {
-  "extends": "@dotdo/config/typescript/library"
+  "extends": "@org.ai/config/typescript/library"
 }
 ```
 
@@ -32,7 +32,7 @@ Extends base with settings optimized for npm packages.
 
 ```json
 {
-  "extends": "@dotdo/config/typescript/react"
+  "extends": "@org.ai/config/typescript/react"
 }
 ```
 
@@ -44,7 +44,7 @@ Extends base with React-specific settings and DOM lib.
 
 ```javascript
 // eslint.config.js
-import config from '@dotdo/config/eslint'
+import config from '@org.ai/config/eslint'
 
 export default config
 ```
@@ -52,7 +52,7 @@ export default config
 Or import parts:
 
 ```javascript
-import { base, ignores } from '@dotdo/config/eslint'
+import { base, ignores } from '@org.ai/config/eslint'
 
 export default [
   ...base,
@@ -63,7 +63,7 @@ export default [
 ### React Configuration
 
 ```javascript
-import { react } from '@dotdo/config/eslint'
+import { react } from '@org.ai/config/eslint'
 
 export default [
   ...react,
@@ -107,7 +107,7 @@ Reference in any package's `tsconfig.json`:
 
 ```json
 {
-  "extends": "@dotdo/config/typescript/library",
+  "extends": "@org.ai/config/typescript/library",
   "compilerOptions": {
     "outDir": "dist"
   },
@@ -118,6 +118,6 @@ Reference in any package's `tsconfig.json`:
 Reference in `eslint.config.js`:
 
 ```javascript
-import config from '@dotdo/config/eslint'
+import config from '@org.ai/config/eslint'
 export default config
 ```

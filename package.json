@@ -16,7 +16,7 @@
     "release": "pnpm build && changeset version && pnpm -r publish --access public"
   },
   "devDependencies": {
-    "@dotdo/config": "workspace:*",
+    "@org.ai/config": "workspace:*",
     "@changesets/cli": "^2.27.0",
     "@types/node": "^20.0.0",
     "eslint": "^9.16.0",

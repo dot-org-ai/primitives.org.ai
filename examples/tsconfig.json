@@ -1,5 +1,5 @@
 {
-  "extends": "@dotdo/config/typescript/library",
+  "extends": "@org.ai/config/typescript/library",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": ".",

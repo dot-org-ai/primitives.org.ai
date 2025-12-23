@@ -1,7 +1,6 @@
 {
-  "name": "@dotdo/config",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@org.ai/config",
+  "version": "0.0.1",
   "type": "module",
   "exports": {
     "./typescript": "./typescript/base.json",
