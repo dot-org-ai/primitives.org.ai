@@ -1,6 +1,6 @@
 {
   "name": "services-as-software",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Primitives for building AI-powered services that operate as software",
   "type": "module",
   "main": "dist/index.js",

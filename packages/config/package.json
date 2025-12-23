@@ -1,6 +1,6 @@
 {
   "name": "@org.ai/config",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "exports": {
     "./typescript": "./typescript/base.json",
@@ -14,7 +14,10 @@
     "./eslint/base": "./eslint/base.js",
     "./eslint/react": "./eslint/react.js"
   },
-  "files": ["typescript/*.json", "eslint/*.js"],
+  "files": [
+    "typescript/*.json",
+    "eslint/*.js"
+  ],
   "dependencies": {
     "@eslint/js": "^9.16.0",
     "typescript-eslint": "^8.17.0"

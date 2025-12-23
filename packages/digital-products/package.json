@@ -1,6 +1,6 @@
 {
   "name": "digital-products",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Primitives for defining and building digital products",
   "type": "module",
   "main": "dist/index.js",

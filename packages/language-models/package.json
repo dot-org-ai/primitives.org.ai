@@ -1,6 +1,6 @@
 {
   "name": "language-models",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Model listing and resolution for LLM providers",
   "type": "module",
   "main": "dist/index.js",

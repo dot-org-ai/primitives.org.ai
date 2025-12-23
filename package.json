@@ -13,7 +13,8 @@
     "clean": "turbo clean",
     "prepare-publish": "tsx scripts/prepare-publish.ts",
     "version-packages": "changeset version",
-    "release": "pnpm build && changeset version && pnpm -r publish --access public"
+    "publish-packages": "tsx scripts/publish.ts",
+    "release": "pnpm build && changeset version && pnpm publish-packages"
   },
   "devDependencies": {
     "@org.ai/config": "workspace:*",
