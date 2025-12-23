@@ -50,6 +50,35 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
+  packages/ai-evaluate:
+    dependencies:
+      ai-functions:
+        specifier: workspace:*
+        version: link:../ai-functions
+      ai-tests:
+        specifier: workspace:*
+        version: link:../ai-tests
+      capnweb:
+        specifier: ^0.2.0
+        version: 0.2.0
+      rpc.do:
+        specifier: ^0.1.0
+        version: 0.1.1
+    optionalDependencies:
+      esbuild:
+        specifier: ^0.24.0
+        version: 0.24.2
+      miniflare:
+        specifier: ^3.20241106.0
+        version: 3.20250718.2
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^2.1.0
+        version: 2.1.9(vitest@2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+
   packages/ai-experiments:
     dependencies:
       ai-functions:
@@ -142,35 +171,6 @@ importers:
         version: 16.6.1
       vitest:
         specifier: ^2.0.0
-        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
-
-  packages/ai-sandbox:
-    dependencies:
-      ai-functions:
-        specifier: workspace:*
-        version: link:../ai-functions
-      ai-tests:
-        specifier: workspace:*
-        version: link:../ai-tests
-      capnweb:
-        specifier: ^0.2.0
-        version: 0.2.0
-      rpc.do:
-        specifier: ^0.1.0
-        version: 0.1.1
-    optionalDependencies:
-      esbuild:
-        specifier: ^0.24.0
-        version: 0.24.2
-      miniflare:
-        specifier: ^3.20241106.0
-        version: 3.20250718.2
-    devDependencies:
-      '@vitest/coverage-v8':
-        specifier: ^2.1.0
-        version: 2.1.9(vitest@2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))
-      vitest:
-        specifier: ^2.1.0
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
   packages/ai-tests:

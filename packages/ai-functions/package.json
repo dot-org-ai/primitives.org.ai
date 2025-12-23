@@ -1,6 +1,6 @@
 {
   "name": "ai-functions",
-  "version": "0.4.0",
+  "version": "2.0.1",
   "description": "Core AI primitives for building intelligent applications",
   "type": "module",
   "main": "dist/index.js",
