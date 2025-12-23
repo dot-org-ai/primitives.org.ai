@@ -28,8 +28,13 @@ interface PackageJson {
 function getPackages(): string[] {
   return readdirSync(packagesDir).filter(name => {
     const pkgPath = join(packagesDir, name)
-    return statSync(pkgPath).isDirectory() &&
-           statSync(join(pkgPath, 'package.json')).isFile()
+    const pkgJsonPath = join(pkgPath, 'package.json')
+    try {
+      return statSync(pkgPath).isDirectory() && statSync(pkgJsonPath).isFile()
+    } catch {
+      // Directory exists but no package.json - skip it
+      return false
+    }
   })
 }
 

@@ -13,7 +13,7 @@
     "clean": "turbo clean",
     "prepare-publish": "tsx scripts/prepare-publish.ts",
     "version-packages": "changeset version",
-    "release": "pnpm build && pnpm prepare-publish && changeset publish"
+    "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
     "@dotdo/config": "workspace:*",
