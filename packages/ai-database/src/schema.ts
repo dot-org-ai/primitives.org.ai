@@ -3247,8 +3247,9 @@ async function generateEntity(
       }
     } else if (field.operator === '->' && field.direction === 'forward') {
       // Recursively generate nested forward exact relations
-      // This handles cases like Person.bio -> Bio
-      if (!field.isOptional) {
+      // This handles cases like Person.bio -> Bio (single relations, not arrays)
+      // Array relations are handled by resolveForwardExact or cascadeGenerate
+      if (!field.isOptional && !field.isArray) {
         const nestedGenerated = await generateEntity(
           field.relatedType!,
           field.prompt,
