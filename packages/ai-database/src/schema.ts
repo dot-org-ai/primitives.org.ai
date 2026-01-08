@@ -30,7 +30,7 @@
  */
 
 import type { MDXLD } from 'mdxld'
-import { DBPromise, wrapEntityOperations, type ForEachOptions, type ForEachResult } from './ai-promise-db.js'
+import { DBPromise, wrapEntityOperations, setProviderResolver, type ForEachOptions, type ForEachResult } from './ai-promise-db.js'
 import {
   cosineSimilarity,
   computeRRF,
@@ -896,12 +896,18 @@ export function parseSchema(schema: DatabaseSchema): ParsedSchema {
         if (field.relatedType === entityName) continue
 
         // For union types, validate each type in the union individually
+        // But only if at least one union type exists in the schema
+        // (allows "external" types when none are defined)
         if (field.unionTypes && field.unionTypes.length > 0) {
-          for (const unionType of field.unionTypes) {
-            if (unionType !== entityName && !entities.has(unionType)) {
-              throw new Error(
-                `Invalid schema: ${entityName}.${fieldName} references non-existent type '${unionType}'`
-              )
+          const existingTypes = field.unionTypes.filter(t => entities.has(t))
+          // Only validate if at least one union type exists in schema
+          if (existingTypes.length > 0) {
+            for (const unionType of field.unionTypes) {
+              if (unionType !== entityName && !entities.has(unionType)) {
+                throw new Error(
+                  `Invalid schema: ${entityName}.${fieldName} references non-existent type '${unionType}'`
+                )
+              }
             }
           }
         } else {
@@ -2072,6 +2078,8 @@ const FILE_COUNT_THRESHOLD = 10_000
 export function setProvider(provider: DBProvider): void {
   globalProvider = provider
   providerPromise = null
+  // Also update the ai-promise-db module's provider resolver
+  setProviderResolver(() => Promise.resolve(provider))
 }
 
 /**
@@ -2240,6 +2248,11 @@ async function resolveProvider(): Promise<DBProvider> {
         const { createMemoryProvider } = await import('./memory-provider.js')
         globalProvider = createMemoryProvider()
       }
+    }
+
+    // Update the ai-promise-db module's provider resolver
+    if (globalProvider) {
+      setProviderResolver(() => Promise.resolve(globalProvider!))
     }
 
     return globalProvider!
@@ -2622,70 +2635,131 @@ export function DB<TSchema extends DatabaseSchema>(
         }
 
         // Handle cascade creation
-        if (options?.cascade && options?.maxDepth && options.maxDepth > 0) {
+        // Default maxDepth to 3 if cascade is enabled but maxDepth not specified
+        const effectiveMaxDepth = options?.maxDepth ?? (options?.cascade ? 3 : 0)
+        if (options?.cascade && effectiveMaxDepth > 0) {
           const provider = await resolveProvider()
           const entityDef = parsedSchema.entities.get(entityName)
           if (entityDef) {
-            // Generate child entities for array relations before creating parent
+            // Track cascade progress state (shared across recursive calls via closure)
+            // _cascadeState is an internal property to pass state through recursive calls
+            const cascadeState = (options as any)._cascadeState ?? {
+              totalEntitiesCreated: 0,
+              initialMaxDepth: effectiveMaxDepth,
+              rootOnProgress: options.onProgress,
+              rootOnError: options.onError,
+              stopOnError: options.stopOnError,
+              cascadeTypes: options.cascadeTypes,
+            }
+            const currentDepth = cascadeState.initialMaxDepth - effectiveMaxDepth
+
+            // Generate child entities for relations before creating parent
             const cascadeData = { ...data }
 
             for (const [fieldName, field] of entityDef.fields) {
               // Skip if value already provided
               if (cascadeData[fieldName] !== undefined) continue
 
-              // Only cascade for forward array relations
-              if (field.operator === '->' && field.isArray && field.relatedType) {
+              // Only cascade for forward relations (both singular and array)
+              if (field.operator === '->' && field.relatedType) {
+                // Check cascadeTypes filter
+                if (cascadeState.cascadeTypes && !cascadeState.cascadeTypes.includes(field.relatedType)) {
+                  continue
+                }
+
                 const relatedEntity = parsedSchema.entities.get(field.relatedType)
                 if (!relatedEntity) continue
 
-                // Generate at least one child entity
-                const childEntityData: Record<string, unknown> = {}
+                try {
+                  // Emit progress event for generating this type
+                  // depth is the level at which the child entity is being created (parent depth + 1)
+                  cascadeState.rootOnProgress?.({
+                    phase: 'generating',
+                    depth: currentDepth + 1,
+                    currentType: field.relatedType,
+                    totalEntitiesCreated: cascadeState.totalEntitiesCreated,
+                  })
 
-                // Get parent instructions for context propagation
-                const parentInstructions = entityDef.schema?.$instructions as string | undefined
-                const childInstructions = relatedEntity.schema?.$instructions as string | undefined
+                  // Generate child entity data
+                  const childEntityData: Record<string, unknown> = {}
 
-                // Build context from parent data and instructions
-                const contextParts: string[] = []
-                if (parentInstructions) contextParts.push(parentInstructions)
-                if (childInstructions) contextParts.push(childInstructions)
+                  // Get parent instructions for context propagation
+                  const parentInstructions = entityDef.schema?.$instructions as string | undefined
+                  const childInstructions = relatedEntity.schema?.$instructions as string | undefined
 
-                // Add parent data as context
-                for (const [key, value] of Object.entries(cascadeData)) {
-                  if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
-                    contextParts.push(`${key}: ${value}`)
+                  // Build context from parent data and instructions
+                  const contextParts: string[] = []
+                  if (parentInstructions) contextParts.push(parentInstructions)
+                  if (childInstructions) contextParts.push(childInstructions)
+
+                  // Add parent data as context
+                  for (const [key, value] of Object.entries(cascadeData)) {
+                    if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
+                      contextParts.push(`${key}: ${value}`)
+                    }
                   }
-                }
 
-                const fullContext = contextParts.join(' | ')
+                  const fullContext = contextParts.join(' | ')
 
-                // Generate values for child entity fields
-                for (const [childFieldName, childField] of relatedEntity.fields) {
-                  if (!childField.isRelation && childField.type === 'string') {
-                    childEntityData[childFieldName] = generateContextAwareValue(
-                      childFieldName,
-                      field.relatedType,
-                      fullContext,
-                      undefined,
-                      cascadeData
-                    )
+                  // Generate values for child entity fields
+                  for (const [childFieldName, childField] of relatedEntity.fields) {
+                    if (!childField.isRelation && childField.type === 'string') {
+                      childEntityData[childFieldName] = generateContextAwareValue(
+                        childFieldName,
+                        field.relatedType,
+                        fullContext,
+                        undefined,
+                        cascadeData
+                      )
+                    }
                   }
-                }
 
-                // Create child entity with reduced depth
-                const childOptions = { ...options, maxDepth: options.maxDepth - 1 }
-                const childEntity = await entityOperations[field.relatedType]?.create(childEntityData, childOptions) as Record<string, unknown>
-                if (childEntity?.$id) {
-                  cascadeData[fieldName] = [childEntity.$id]
+                  // Create child entity with reduced depth, passing cascade state
+                  const childOptions = {
+                    ...options,
+                    maxDepth: effectiveMaxDepth - 1,
+                    _cascadeState: cascadeState,
+                  } as CreateEntityOptions
+                  const childEntity = await entityOperations[field.relatedType]?.create(childEntityData, childOptions) as Record<string, unknown>
+
+                  if (childEntity?.$id) {
+                    cascadeState.totalEntitiesCreated++
+                    if (field.isArray) {
+                      cascadeData[fieldName] = [childEntity.$id]
+                    } else {
+                      cascadeData[fieldName] = childEntity.$id
+                    }
+                  }
+                } catch (error) {
+                  cascadeState.rootOnError?.(error as Error)
+                  if (cascadeState.stopOnError) {
+                    throw error
+                  }
                 }
               }
             }
 
-            // Create parent with cascade data
+            // Create parent entity
+            let result
             if (id) {
-              return originalCreate.call(wrappedOps, id, cascadeData)
+              result = await originalCreate.call(wrappedOps, id, cascadeData)
+            } else {
+              result = await originalCreate.call(wrappedOps, cascadeData)
             }
-            return originalCreate.call(wrappedOps, cascadeData)
+
+            // Count the parent entity
+            cascadeState.totalEntitiesCreated++
+
+            // Emit complete event only at root level (depth 0)
+            if (currentDepth === 0) {
+              cascadeState.rootOnProgress?.({
+                phase: 'complete',
+                depth: currentDepth,
+                totalEntitiesCreated: cascadeState.totalEntitiesCreated,
+              })
+            }
+
+            return result
           }
         }
 
