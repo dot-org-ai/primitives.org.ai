@@ -3426,11 +3426,37 @@ async function resolveForwardFuzzy(
   schema: ParsedSchema,
   provider: DBProvider,
   parentId: string
-): Promise<{ data: Record<string, unknown>; pendingRelations: Array<{ fieldName: string; targetType: string; targetId: string; similarity?: number }> }> {
+): Promise<{ data: Record<string, unknown>; pendingRelations: Array<{ fieldName: string; targetType: string; targetId: string; similarity?: number; matchedType?: string }> }> {
   const resolved = { ...data }
-  const pendingRelations: Array<{ fieldName: string; targetType: string; targetId: string; similarity?: number }> = []
+  const pendingRelations: Array<{ fieldName: string; targetType: string; targetId: string; similarity?: number; matchedType?: string }> = []
   // Default threshold from entity schema or 0.75
   const defaultThreshold = (entity.schema as any)?.$fuzzyThreshold ?? 0.75
+
+  /**
+   * Search all union types in parallel and return the best match
+   */
+  async function searchUnionTypes(
+    types: string[],
+    searchQuery: string,
+    threshold: number
+  ): Promise<{ id: string; type: string; score: number } | null> {
+    if (!('semanticSearch' in provider)) return null
+
+    // Search all types in parallel
+    const allMatches = await Promise.all(
+      types.map(async type => {
+        const matches = await (provider as any).semanticSearch(type, searchQuery, { minScore: threshold, limit: 3 })
+        return matches.map((m: any) => ({ ...m, $matchedType: type }))
+      })
+    )
+
+    // Flatten and find the best match
+    const flat = allMatches.flat()
+    if (flat.length === 0) return null
+
+    const best = flat.reduce((a: any, b: any) => (a.$score > b.$score ? a : b))
+    return best.$score >= threshold ? { id: best.$id, type: best.$matchedType, score: best.$score } : null
+  }
 
   for (const [fieldName, field] of entity.fields) {
     if (field.operator === '~>' && field.direction === 'forward') {
@@ -3454,115 +3480,119 @@ async function resolveForwardFuzzy(
       // Get threshold - field-level overrides entity-level
       const threshold = field.threshold ?? defaultThreshold
 
+      // Get all types to search (union types or just the single related type)
+      const typesToSearch = field.unionTypes || [field.relatedType!]
+
       if (field.isArray) {
         // Array fuzzy field - can contain both matched and generated
         const hints = Array.isArray(hintValue) ? hintValue : [hintValue].filter(Boolean)
         const resultIds: string[] = []
+        const matchedTypes: string[] = []
 
         for (const hint of hints) {
           const hintStr = String(hint || fieldName)
           let matched = false
 
-          // Try semantic search first
-          if ('semanticSearch' in provider) {
-            const matches = await (provider as any).semanticSearch(
-              field.relatedType!,
-              hintStr,
-              { minScore: threshold, limit: 5 }
-            )
-
-            if (matches.length > 0 && matches[0].$score >= threshold) {
-              resultIds.push(matches[0].$id as string)
-              pendingRelations.push({
-                fieldName,
-                targetType: field.relatedType!,
-                targetId: matches[0].$id as string,
-                similarity: matches[0].$score
-              })
-              matched = true
-            }
+          // Try semantic search across all union types
+          const match = await searchUnionTypes(typesToSearch, hintStr, threshold)
+          if (match) {
+            resultIds.push(match.id)
+            matchedTypes.push(match.type)
+            pendingRelations.push({
+              fieldName,
+              targetType: match.type,
+              targetId: match.id,
+              similarity: match.score,
+              matchedType: match.type
+            })
+            matched = true
           }
 
-          // Generate if no match found
+          // Generate if no match found - use first type in union
           if (!matched) {
+            const generateType = typesToSearch[0]!
             const generated = await generateEntity(
-              field.relatedType!,
+              generateType,
               hintStr,
               { parent: typeName, parentData: data, parentId },
               schema
             )
 
             // Resolve any pending nested relations
-            const relatedEntity = schema.entities.get(field.relatedType!)
+            const relatedEntity = schema.entities.get(generateType)
             if (relatedEntity) {
               const resolvedGenerated = await resolveNestedPending(generated, relatedEntity, schema, provider)
-              const created = await provider.create(field.relatedType!, undefined, {
+              const created = await provider.create(generateType, undefined, {
                 ...resolvedGenerated,
                 $generated: true,
                 $generatedBy: 'fuzzy-resolution',
                 $sourceField: fieldName
               })
               resultIds.push(created.$id as string)
+              matchedTypes.push(generateType)
               pendingRelations.push({
                 fieldName,
-                targetType: field.relatedType!,
-                targetId: created.$id as string
+                targetType: generateType,
+                targetId: created.$id as string,
+                matchedType: generateType
               })
             }
           }
         }
 
         resolved[fieldName] = resultIds
+        // Store matched types for array fields
+        if (matchedTypes.length > 0) {
+          resolved[`${fieldName}$matchedTypes`] = matchedTypes
+        }
       } else {
         // Single fuzzy field
         let matched = false
 
-        // Try semantic search first
-        if ('semanticSearch' in provider) {
-          const matches = await (provider as any).semanticSearch(
-            field.relatedType!,
-            searchQuery,
-            { minScore: threshold, limit: 5 }
-          )
-
-          if (matches.length > 0 && matches[0].$score >= threshold) {
-            resolved[fieldName] = matches[0].$id
-            resolved[`${fieldName}$matched`] = true
-            resolved[`${fieldName}$score`] = matches[0].$score
-            pendingRelations.push({
-              fieldName,
-              targetType: field.relatedType!,
-              targetId: matches[0].$id as string,
-              similarity: matches[0].$score
-            })
-            matched = true
-          }
+        // Try semantic search across all union types
+        const match = await searchUnionTypes(typesToSearch, searchQuery, threshold)
+        if (match) {
+          resolved[fieldName] = match.id
+          resolved[`${fieldName}$matched`] = true
+          resolved[`${fieldName}$score`] = match.score
+          resolved[`${fieldName}$matchedType`] = match.type
+          pendingRelations.push({
+            fieldName,
+            targetType: match.type,
+            targetId: match.id,
+            similarity: match.score,
+            matchedType: match.type
+          })
+          matched = true
         }
 
-        // Generate if no match found
+        // Generate if no match found - use first type in union
         if (!matched) {
+          const generateType = typesToSearch[0]!
           const generated = await generateEntity(
-            field.relatedType!,
+            generateType,
             field.prompt || searchQuery,
             { parent: typeName, parentData: data, parentId },
             schema
           )
 
           // Resolve any pending nested relations
-          const relatedEntity = schema.entities.get(field.relatedType!)
+          const relatedEntity = schema.entities.get(generateType)
           if (relatedEntity) {
             const resolvedGenerated = await resolveNestedPending(generated, relatedEntity, schema, provider)
-            const created = await provider.create(field.relatedType!, undefined, {
+            const created = await provider.create(generateType, undefined, {
               ...resolvedGenerated,
               $generated: true,
               $generatedBy: 'fuzzy-resolution',
               $sourceField: fieldName
             })
             resolved[fieldName] = created.$id
+            resolved[`${fieldName}$matchedType`] = generateType
             pendingRelations.push({
               fieldName,
-              targetType: field.relatedType!,
-              targetId: created.$id as string
+              targetType: generateType,
+              targetId: created.$id as string,
+              matchedType: generateType
             })
           }
         }
@@ -4182,14 +4212,24 @@ function hydrateEntity(
       // - Can be awaited to get the related entity (thenable)
       if (!isBackward && !field.isArray && data[fieldName]) {
         const storedId = data[fieldName] as string
+        // For union types, get the actual matched type from stored metadata
+        const matchedType = (data[`${fieldName}$matchedType`] as string) || field.relatedType!
+        const actualRelatedEntity = schema.entities.get(matchedType) || relatedEntity
+
         const thenableProxy = new Proxy({} as Record<string, unknown>, {
           get(target, prop) {
             if (prop === 'then') {
               return (resolve: (value: unknown) => void, reject: (reason: unknown) => void) => {
                 return (async () => {
                   const provider = await resolveProvider()
-                  const result = await provider.get(field.relatedType!, storedId)
-                  return result ? hydrateEntity(result, relatedEntity, schema) : null
+                  const result = await provider.get(matchedType, storedId)
+                  if (!result) return null
+                  const hydratedResult = hydrateEntity(result, actualRelatedEntity, schema)
+                  // Add $matchedType to the result for union type tracking
+                  if (field.unionTypes && field.unionTypes.length > 0) {
+                    (hydratedResult as any).$matchedType = matchedType
+                  }
+                  return hydratedResult
                 })().then(resolve, reject)
               }
             }
@@ -4203,7 +4243,7 @@ function hydrateEntity(
               return (regex: RegExp) => storedId.match(regex)
             }
             if (prop === '$type') {
-              return field.relatedType
+              return matchedType
             }
             return undefined
           },
@@ -4307,7 +4347,33 @@ function hydrateEntity(
                 results.map((r) => hydrateEntity(r, relatedEntity, schema))
               )
             } else if (field.isArray) {
-              // Forward array relation - get related entities via relationship
+              // Forward array relation - get related entities
+              // For union types, we need to look up each entity from its matched type
+              const storedIds = data[fieldName] as string[] | undefined
+              const matchedTypes = data[`${fieldName}$matchedTypes`] as string[] | undefined
+
+              if (storedIds && storedIds.length > 0 && field.unionTypes && matchedTypes) {
+                // Union type array - fetch each entity from its specific type
+                const results = await Promise.all(
+                  storedIds.map(async (targetId, index) => {
+                    const targetType = matchedTypes[index] || field.relatedType!
+                    const targetEntity = schema.entities.get(targetType)
+                    const result = await provider.get(targetType, targetId)
+                    if (!result) return null
+                    const hydrated = targetEntity
+                      ? hydrateEntity(result, targetEntity, schema)
+                      : result
+                    // Add $matchedType for union type tracking
+                    if (hydrated) {
+                      (hydrated as any).$matchedType = targetType
+                    }
+                    return hydrated
+                  })
+                )
+                return results.filter(r => r !== null)
+              }
+
+              // Non-union type array - use standard relation lookup
               const results = await provider.related(
                 entity.name,
                 id,
