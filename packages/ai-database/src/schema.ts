@@ -578,6 +578,27 @@ export interface CreateEntityOptions {
 }
 
 /**
+ * Internal state for cascade operations passed through recursive calls
+ * @internal
+ */
+interface CascadeState {
+  totalEntitiesCreated: number
+  initialMaxDepth: number
+  rootOnProgress?: (progress: CascadeProgress) => void
+  rootOnError?: (error: Error) => void
+  stopOnError?: boolean
+  cascadeTypes?: string[]
+}
+
+/**
+ * Extended create options with internal cascade state
+ * @internal
+ */
+interface CreateEntityOptionsInternal extends CreateEntityOptions {
+  _cascadeState?: CascadeState
+}
+
+/**
  * Result of parsing a relationship operator from a field definition
  */
 export interface OperatorParseResult {
@@ -2062,6 +2083,179 @@ export interface DBProvider {
   ): Promise<void>
 }
 
+/**
+ * Semantic search result with score
+ */
+export interface SemanticSearchResult extends Record<string, unknown> {
+  $id: string
+  $type: string
+  $score: number
+}
+
+/**
+ * Hybrid search result with RRF and FTS scores
+ */
+export interface HybridSearchResult extends SemanticSearchResult {
+  $rrfScore: number
+  $ftsRank: number
+  $semanticRank: number
+}
+
+/**
+ * Extended provider interface with optional advanced features
+ *
+ * Providers may implement these additional methods for features like:
+ * - Semantic/embedding-based search
+ * - Event sourcing
+ * - Background actions
+ * - Artifact storage
+ */
+export interface DBProviderExtended extends DBProvider {
+  /** Configure embeddings settings */
+  setEmbeddingsConfig?(config: EmbeddingsConfig): void
+
+  /** Semantic search using embeddings */
+  semanticSearch?(
+    type: string,
+    query: string,
+    options?: SemanticSearchOptions
+  ): Promise<SemanticSearchResult[]>
+
+  /** Hybrid search combining FTS and semantic */
+  hybridSearch?(
+    type: string,
+    query: string,
+    options?: HybridSearchOptions
+  ): Promise<HybridSearchResult[]>
+
+  /** Subscribe to events */
+  on?(pattern: string, handler: (event: DBEvent) => void): () => void
+
+  /** Emit an event */
+  emit?(optionsOrType: CreateEventOptions | string, data?: unknown): Promise<DBEvent>
+
+  /** List events */
+  listEvents?(options?: EventListOptions): Promise<DBEvent[]>
+
+  /** Replay events */
+  replayEvents?(options?: EventReplayOptions): Promise<void>
+
+  /** Create an action */
+  createAction?(options: CreateActionOptions): Promise<DBAction>
+
+  /** Get an action */
+  getAction?(id: string): Promise<DBAction | null>
+
+  /** Update an action */
+  updateAction?(id: string, updates: Partial<DBAction>): Promise<DBAction>
+
+  /** List actions */
+  listActions?(options?: ActionListOptions): Promise<DBAction[]>
+
+  /** Retry an action */
+  retryAction?(id: string): Promise<DBAction>
+
+  /** Cancel an action */
+  cancelAction?(id: string): Promise<void>
+
+  /** Get an artifact */
+  getArtifact?(url: string, type: string): Promise<unknown>
+
+  /** Set an artifact */
+  setArtifact?(url: string, type: string, data: unknown): Promise<void>
+
+  /** Delete an artifact */
+  deleteArtifact?(url: string, type: string): Promise<void>
+
+  /** List artifacts for a URL */
+  listArtifacts?(url: string): Promise<string[]>
+}
+
+/**
+ * Database action for background operations
+ */
+export interface DBAction {
+  id: string
+  type: string
+  status: 'pending' | 'active' | 'completed' | 'failed'
+  progress?: number
+  total?: number
+  data: Record<string, unknown>
+  result?: unknown
+  error?: string
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+/**
+ * Database event
+ */
+export interface DBEvent {
+  id: string
+  actor: string
+  actorData?: Record<string, unknown>
+  event: string
+  object?: string
+  objectData?: Record<string, unknown>
+  result?: string
+  resultData?: Record<string, unknown>
+  meta?: Record<string, unknown>
+  timestamp: Date
+}
+
+/**
+ * Options for listing events
+ */
+export interface EventListOptions {
+  type?: string
+  actor?: string
+  since?: Date
+  until?: Date
+  limit?: number
+}
+
+/**
+ * Options for replaying events
+ */
+export interface EventReplayOptions {
+  type?: string
+  since?: Date
+  until?: Date
+  handler?: (event: DBEvent) => void | Promise<void>
+}
+
+/**
+ * Options for creating events
+ */
+export interface CreateEventOptions {
+  actor: string
+  actorData?: Record<string, unknown>
+  event: string
+  object?: string
+  objectData?: Record<string, unknown>
+  result?: string
+  resultData?: Record<string, unknown>
+  meta?: Record<string, unknown>
+}
+
+/**
+ * Options for creating actions
+ */
+export interface CreateActionOptions {
+  type: string
+  data: Record<string, unknown>
+  total?: number
+}
+
+/**
+ * Options for listing actions
+ */
+export interface ActionListOptions {
+  type?: string
+  status?: 'pending' | 'active' | 'completed' | 'failed'
+  limit?: number
+}
+
 // =============================================================================
 // Provider Resolution
 // =============================================================================
@@ -2185,8 +2379,9 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'fs': {
         try {
-          const { createFsProvider } = await import('@mdxdb/fs' as any)
-          globalProvider = createFsProvider({ root: parsed.root })
+          // Dynamic import of optional @mdxdb/fs package
+          const fsModule = await import('@mdxdb/fs') as { createFsProvider: (options: { root: string }) => DBProvider }
+          globalProvider = fsModule.createFsProvider({ root: parsed.root })
 
           // Check file count and warn if approaching threshold
           checkFileCountThreshold(parsed.root)
@@ -2200,15 +2395,16 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'sqlite': {
         try {
-          const { createSqliteProvider } = await import('@mdxdb/sqlite' as any)
+          // Dynamic import of optional @mdxdb/sqlite package
+          const sqliteModule = await import('@mdxdb/sqlite') as { createSqliteProvider: (options: { url: string }) => Promise<DBProvider> }
 
           if (parsed.remoteUrl) {
             // Remote Turso
-            globalProvider = await createSqliteProvider({ url: parsed.remoteUrl })
+            globalProvider = await sqliteModule.createSqliteProvider({ url: parsed.remoteUrl })
           } else {
             // Local SQLite in .db folder
             const dbPath = `${parsed.root}/.db/index.sqlite`
-            globalProvider = await createSqliteProvider({ url: `file:${dbPath}` })
+            globalProvider = await sqliteModule.createSqliteProvider({ url: `file:${dbPath}` })
           }
         } catch (err) {
           console.warn('@mdxdb/sqlite not available, falling back to memory provider')
@@ -2220,18 +2416,20 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'clickhouse': {
         try {
-          const { createClickhouseProvider } = await import('@mdxdb/clickhouse' as any)
+          // Dynamic import of optional @mdxdb/clickhouse package
+          type ClickhouseOptions = { mode: 'http' | 'chdb'; url: string }
+          const chModule = await import('@mdxdb/clickhouse') as { createClickhouseProvider: (options: ClickhouseOptions) => Promise<DBProvider> }
 
           if (parsed.remoteUrl) {
             // Remote ClickHouse
-            globalProvider = await createClickhouseProvider({
+            globalProvider = await chModule.createClickhouseProvider({
               mode: 'http',
               url: parsed.remoteUrl,
             })
           } else {
             // Local chDB in .db folder
             const dbPath = `${parsed.root}/.db/clickhouse`
-            globalProvider = await createClickhouseProvider({
+            globalProvider = await chModule.createClickhouseProvider({
               mode: 'chdb',
               url: dbPath,
             })
@@ -2521,8 +2719,9 @@ export function DB<TSchema extends DatabaseSchema>(
   // Configure provider with embeddings settings if provided
   if (options?.embeddings) {
     resolveProvider().then(provider => {
-      if ('setEmbeddingsConfig' in provider) {
-        (provider as any).setEmbeddingsConfig(options.embeddings)
+      const extProvider = provider as DBProviderExtended
+      if (extProvider.setEmbeddingsConfig) {
+        extProvider.setEmbeddingsConfig(options.embeddings!)
       }
     })
   }
@@ -2538,32 +2737,34 @@ export function DB<TSchema extends DatabaseSchema>(
 
   // Create Actions API early so it can be injected into entity operations
   const actionsAPI = {
-    async create(options: CreateActionOptions | { type: string; data: unknown; total?: number }) {
+    async create(actionOptions: CreateActionOptions | { type: string; data: unknown; total?: number }) {
       const provider = await resolveProvider()
-      if ('createAction' in provider) {
-        return (provider as any).createAction(options)
+      const extProvider = provider as DBProviderExtended
+      if (extProvider.createAction) {
+        return extProvider.createAction(actionOptions as CreateActionOptions)
       }
       throw new Error('Provider does not support actions')
     },
     async get(id: string) {
       const provider = await resolveProvider()
-      if ('getAction' in provider) {
-        return (provider as any).getAction(id)
+      const extProvider = provider as DBProviderExtended
+      if (extProvider.getAction) {
+        return extProvider.getAction(id)
       }
       return null
     },
-    async update(id: string, updates: unknown) {
+    async update(id: string, updates: Partial<DBAction>) {
       const provider = await resolveProvider()
-      if ('updateAction' in provider) {
-        return (provider as any).updateAction(id, updates)
+      const extProvider = provider as DBProviderExtended
+      if (extProvider.updateAction) {
+        return extProvider.updateAction(id, updates)
       }
       throw new Error('Provider does not support actions')
     },
   }
 
   // Create entity operations for each type with promise pipelining
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const entityOperations: Record<string, any> = {}
+  const entityOperations: Record<string, ReturnType<typeof wrapEntityOperations>> = {}
 
   // Internal event emitter for draft/resolve events (defined early for use in entity operations)
   const eventHandlersForOps = new Map<string, Set<(data: unknown) => void>>()
@@ -2592,20 +2793,39 @@ export function DB<TSchema extends DatabaseSchema>(
       const wrappedOps = wrapEntityOperations(entityName, baseOps, actionsAPI)
 
       // Add draft and resolve with event emission
-      const draftFn = async (data: Record<string, unknown>, options?: DraftOptions): Promise<unknown> => {
-        const draft = await (baseOps as any).draft(data, options)
-        draft.$type = entityName
+      const draftFn = async (data: Record<string, unknown>, draftOptions?: DraftOptions): Promise<unknown> => {
+        // baseOps.draft is implemented by createEntityOperations
+        const draft = await baseOps.draft!(data, draftOptions)
+        ;(draft as Record<string, unknown>).$type = entityName
         emitInternalEventForOps('draft', draft)
         return draft
       }
       wrappedOps.draft = draftFn
 
-      const resolveFn = async (draft: unknown, options?: ResolveOptions): Promise<unknown> => {
-        const resolved = await (baseOps as any).resolve(draft, options)
+      const resolveFn = async (draftEntity: unknown, resolveOpts?: ResolveOptions): Promise<unknown> => {
+        // baseOps.resolve is implemented by createEntityOperations
+        const resolved = await baseOps.resolve!(draftEntity as Draft<Record<string, unknown>>, resolveOpts)
         if (resolved && typeof resolved === 'object') {
           (resolved as Record<string, unknown>).$type = entityName
         }
         emitInternalEventForOps('resolve', resolved)
+        // Also emit resolve:complete to provider for EventsAPI subscribers
+        try {
+          const provider = await resolveProvider()
+          const extProvider = provider as DBProviderExtended
+          if (extProvider.emit) {
+            const resolvedObj = resolved as Record<string, unknown>
+            await extProvider.emit({
+              actor: 'system',
+              event: 'resolve:complete',
+              object: `${entityName}/${resolvedObj.$id}`,
+              objectData: resolvedObj,
+              result: `${entityName}/${resolvedObj.$id}`,
+            })
+          }
+        } catch {
+          // Provider may not support emit, ignore
+        }
         return resolved
       }
       wrappedOps.resolve = resolveFn
@@ -2639,11 +2859,13 @@ export function DB<TSchema extends DatabaseSchema>(
         const effectiveMaxDepth = options?.maxDepth ?? (options?.cascade ? 3 : 0)
         if (options?.cascade && effectiveMaxDepth > 0) {
           const provider = await resolveProvider()
+          const extProvider = provider as DBProviderExtended
           const entityDef = parsedSchema.entities.get(entityName)
           if (entityDef) {
             // Track cascade progress state (shared across recursive calls via closure)
             // _cascadeState is an internal property to pass state through recursive calls
-            const cascadeState = (options as any)._cascadeState ?? {
+            const internalOpts = options as CreateEntityOptionsInternal
+            const cascadeState: CascadeState = internalOpts._cascadeState ?? {
               totalEntitiesCreated: 0,
               initialMaxDepth: effectiveMaxDepth,
               rootOnProgress: options.onProgress,
@@ -2673,12 +2895,23 @@ export function DB<TSchema extends DatabaseSchema>(
                 try {
                   // Emit progress event for generating this type
                   // depth is the level at which the child entity is being created (parent depth + 1)
-                  cascadeState.rootOnProgress?.({
+                  const progressData: CascadeProgress = {
                     phase: 'generating',
                     depth: currentDepth + 1,
                     currentType: field.relatedType,
                     totalEntitiesCreated: cascadeState.totalEntitiesCreated,
-                  })
+                  }
+                  cascadeState.rootOnProgress?.(progressData)
+
+                  // Also emit cascade:progress to provider for EventsAPI subscribers
+                  if (extProvider.emit) {
+                    extProvider.emit({
+                      actor: 'system',
+                      event: 'cascade:progress',
+                      object: entityName,
+                      meta: progressData,
+                    }).catch(() => {}) // Ignore errors
+                  }
 
                   // Generate child entity data
                   const childEntityData: Record<string, unknown> = {}
@@ -2752,11 +2985,23 @@ export function DB<TSchema extends DatabaseSchema>(
 
             // Emit complete event only at root level (depth 0)
             if (currentDepth === 0) {
-              cascadeState.rootOnProgress?.({
+              const completeData = {
                 phase: 'complete',
                 depth: currentDepth,
                 totalEntitiesCreated: cascadeState.totalEntitiesCreated,
-              })
+              }
+              cascadeState.rootOnProgress?.(completeData)
+
+              // Also emit cascade:progress (complete phase) to provider for EventsAPI subscribers
+              if ('emit' in provider) {
+                ;(provider as any).emit({
+                  actor: 'system',
+                  event: 'cascade:progress',
+                  object: entityName,
+                  result: (result as Record<string, unknown>)?.$id ? `${entityName}/${(result as Record<string, unknown>).$id}` : undefined,
+                  meta: completeData,
+                }).catch(() => {}) // Ignore errors
+              }
             }
 
             return result

@@ -156,6 +156,20 @@ export type {
 // Event/Action/Artifact types for @mdxdb adapters (simple event sourcing style)
 export type { Event, Action, Artifact } from './schema.js'
 
+// =============================================================================
+// Events API - Public event subscription and emission
+// =============================================================================
+
+// Export event utilities and constants
+export {
+  StandardEventTypes,
+  entityEvent,
+  typePattern,
+  actionPattern,
+} from './events.js'
+
+export type { StandardEventType } from './events.js'
+
 // Promise pipelining exports
 export {
   DBPromise,

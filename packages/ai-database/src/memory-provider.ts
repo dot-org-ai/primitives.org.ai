@@ -916,8 +916,10 @@ export class MemoryProvider implements DBProvider {
     // Auto-generate embedding
     await this.autoEmbed(type, entityId, entity)
 
-    // Emit event
-    await this.emit(`${type}.created`, { $id: entityId, $type: type, ...entity })
+    // Emit type-specific and global events
+    const eventData = { $id: entityId, $type: type, ...entity }
+    await this.emit(`${type}.created`, eventData)
+    await this.emit('entity:created', eventData)
 
     return { ...entity, $id: entityId, $type: type }
   }
@@ -948,8 +950,10 @@ export class MemoryProvider implements DBProvider {
     // Invalidate non-embedding artifacts when data changes
     await this.invalidateArtifacts(`${type}/${id}`)
 
-    // Emit event
-    await this.emit(`${type}.updated`, { $id: id, $type: type, ...updated })
+    // Emit type-specific and global events
+    const eventData = { $id: id, $type: type, ...updated }
+    await this.emit(`${type}.updated`, eventData)
+    await this.emit('entity:updated', eventData)
 
     return { ...updated, $id: id, $type: type }
   }
@@ -963,8 +967,10 @@ export class MemoryProvider implements DBProvider {
 
     store.delete(id)
 
-    // Emit event
-    await this.emit(`${type}.deleted`, { $id: id, $type: type })
+    // Emit type-specific and global events
+    const eventData = { $id: id, $type: type }
+    await this.emit(`${type}.deleted`, eventData)
+    await this.emit('entity:deleted', eventData)
 
     // Clean up relations
     for (const [key, targets] of this.relations) {

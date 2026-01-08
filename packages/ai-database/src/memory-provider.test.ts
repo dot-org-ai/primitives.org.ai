@@ -526,7 +526,9 @@ describe('MemoryProvider', () => {
       await provider.create('User', 'john', { name: 'John' })
       await provider.update('User', 'john', { name: 'Jane' })
 
-      expect(handler).toHaveBeenCalledTimes(2)
+      // Now emits both type-specific and global events:
+      // User.created, entity:created, User.updated, entity:updated
+      expect(handler).toHaveBeenCalledTimes(4)
     })
 
     it('allows unsubscribing from events', async () => {
