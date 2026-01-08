@@ -338,12 +338,14 @@ describe('Schema Operator Parsing', () => {
       })
 
       // Create an existing occupation
-      await db.Occupation.create({ title: 'Engineer' })
+      // "researcher" vs "scientist" has ~0.895 similarity, between 0.7 and 0.95
+      await db.Occupation.create({ title: 'researcher' })
 
       // Create ICP with a hint that's similar but not exact
-      const icp = await db.ICP.create({ occupationHint: 'Developer' })
+      const icp = await db.ICP.create({ occupationHint: 'scientist' })
 
       // With high field-level threshold (0.95), should generate instead of match
+      // because 0.895 similarity < 0.95 threshold
       const occ = await icp.occupation
       expect(occ.$generated).toBe(true)  // 0.95 threshold not met
     })
