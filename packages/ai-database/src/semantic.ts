@@ -7,6 +7,8 @@
  * @packageDocumentation
  */
 
+import { EMBEDDING_DIMENSIONS } from './constants.js'
+
 // =============================================================================
 // SemanticProvider Interface
 // =============================================================================
@@ -214,11 +216,6 @@ const SEMANTIC_VECTORS: Record<string, number[]> = {
  * Default vector for unknown words
  */
 const DEFAULT_VECTOR = [0.1, 0.1, 0.1, 0.1]
-
-/**
- * Embedding dimensions (using 384 which is common for sentence transformers)
- */
-const EMBEDDING_DIMENSIONS = 384
 
 /**
  * Simple hash function for deterministic randomness

@@ -44,6 +44,26 @@ async function getProvider(): Promise<DBProvider | null> {
   return null
 }
 
+// Schema info for batch loading - stores relation field info for entity types
+// Maps entityType -> fieldName -> relatedType
+let schemaRelationInfo: Map<string, Map<string, string>> | null = null
+
+/**
+ * Set schema relation info for batch loading nested relations
+ * Called from schema.ts when DB() is initialized
+ */
+export function setSchemaRelationInfo(info: Map<string, Map<string, string>>): void {
+  schemaRelationInfo = info
+}
+
+/**
+ * Get the related type for a field on an entity type
+ */
+function getRelatedType(entityType: string, fieldName: string): string | undefined {
+  if (!schemaRelationInfo) return undefined
+  return schemaRelationInfo.get(entityType)?.get(fieldName)
+}
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -94,6 +114,8 @@ interface RelationRecording {
   type: string
   isArray: boolean
   nestedPaths: Set<string>
+  /** Nested relations accessed on this relation (e.g., customer.address where address is a relation) */
+  nestedRelations: Map<string, RelationRecording>
 }
 
 // =============================================================================
@@ -144,7 +166,7 @@ export interface ForEachActionsAPI {
 export interface ForEachActionState {
   id: string
   type: string
-  status: 'pending' | 'active' | 'completed' | 'failed'
+  status: 'pending' | 'active' | 'completed' | 'failed' | 'cancelled'
   progress?: number
   total?: number
   data: {
@@ -393,7 +415,7 @@ export class DBPromise<T> implements PromiseLike<T> {
 
         // Phase 2: Analyze recordings and batch-load relations
         const batchLoads = analyzeBatchLoads(recordings, items)
-        const loadedRelations = await executeBatchLoads(batchLoads)
+        const loadedRelations = await executeBatchLoads(batchLoads, recordings)
 
         // Phase 3: Re-run callback with enriched items that have loaded relations
         const enrichedItems: Record<string, unknown>[] = []
@@ -981,7 +1003,7 @@ function createBatchLoadingArray<T>(items: T[]): T[] {
 
       // Phase 2: Analyze recordings and batch-load relations
       const batchLoads = analyzeBatchLoads(recordings, items)
-      const loadedRelations = await executeBatchLoads(batchLoads)
+      const loadedRelations = await executeBatchLoads(batchLoads, recordings)
 
       // Phase 3: Re-run callback with enriched items that have loaded relations
       const enrichedItems: Record<string, unknown>[] = []
@@ -1007,10 +1029,15 @@ function createBatchLoadingArray<T>(items: T[]): T[] {
 /**
  * Create a proxy that records nested property accesses for relations
  * This returns placeholder values to allow the callback to complete
+ *
+ * When accessing customer.address.city:
+ * - At depth 0 (path=[]), accessing 'address' records it in nestedPaths
+ * - Accessing 'city' on 'address' creates a nestedRelation for 'address' and records 'city' in its nestedPaths
  */
 function createRelationRecordingProxy(
   relationRecording: RelationRecording,
-  path: string[] = []
+  path: string[] = [],
+  currentNestedRecording?: RelationRecording
 ): unknown {
   // Return a proxy that records all nested accesses
   return new Proxy({} as Record<string, unknown>, {
@@ -1018,10 +1045,6 @@ function createRelationRecordingProxy(
       if (typeof prop === 'symbol') {
         return undefined
       }
-
-      // Record the nested path
-      const fullPath = [...path, prop].join('.')
-      relationRecording.nestedPaths.add(prop) // Just the immediate property
 
       // For common array methods that don't need recording
       if (prop === 'map' || prop === 'filter' || prop === 'forEach' || prop === 'length') {
@@ -1035,8 +1058,51 @@ function createRelationRecordingProxy(
         return undefined
       }
 
-      // Return another nested proxy for continued chaining
-      return createRelationRecordingProxy(relationRecording, [...path, prop])
+      if (path.length === 0) {
+        // First level: recording access to properties of the relation itself (e.g., customer.address)
+        // This is a direct property access on the relation - record it
+        relationRecording.nestedPaths.add(prop)
+
+        // Create a nested recording for potential deeper access
+        // We don't know if 'prop' is a relation yet, but if there's further access we'll need it
+        let nestedRec = relationRecording.nestedRelations.get(prop)
+        if (!nestedRec) {
+          nestedRec = {
+            type: 'unknown', // Type will be inferred when loading
+            isArray: false,
+            nestedPaths: new Set(),
+            nestedRelations: new Map(),
+          }
+          relationRecording.nestedRelations.set(prop, nestedRec)
+        }
+
+        // Return a proxy that will record further accesses into the nested recording
+        return createRelationRecordingProxy(relationRecording, [prop], nestedRec)
+      } else {
+        // Deeper level: recording access to properties of a nested relation (e.g., customer.address.city)
+        // Record this property in the current nested recording
+        if (currentNestedRecording) {
+          currentNestedRecording.nestedPaths.add(prop)
+
+          // Create another nested recording for even deeper access
+          let deeperRec = currentNestedRecording.nestedRelations.get(prop)
+          if (!deeperRec) {
+            deeperRec = {
+              type: 'unknown',
+              isArray: false,
+              nestedPaths: new Set(),
+              nestedRelations: new Map(),
+            }
+            currentNestedRecording.nestedRelations.set(prop, deeperRec)
+          }
+
+          return createRelationRecordingProxy(relationRecording, [...path, prop], deeperRec)
+        }
+
+        // Fallback - just record in nestedPaths of root
+        relationRecording.nestedPaths.add(prop)
+        return createRelationRecordingProxy(relationRecording, [...path, prop])
+      }
     },
   })
 }
@@ -1075,6 +1141,7 @@ function createRecordingProxy(
             type: relationType,
             isArray: Array.isArray(value),
             nestedPaths: new Set(),
+            nestedRelations: new Map(),
           }
           recording.relations.set(prop, relationRecording)
         }
@@ -1108,6 +1175,7 @@ function createRecordingProxy(
               type: relationType,
               isArray: true,
               nestedPaths: new Set(),
+              nestedRelations: new Map(),
             }
             recording.relations.set(prop, relationRecording)
           }
@@ -1227,11 +1295,20 @@ function analyzeBatchLoads(
   return batchLoads
 }
 
+/** Info about nested relations to load */
+interface NestedRelationInfo {
+  type: string
+  ids: string[]
+  nestedPaths: Set<string>
+  nestedRelations: Map<string, RelationRecording>
+}
+
 /**
- * Execute batch loads for relations
+ * Execute batch loads for relations, including nested relations recursively
  */
 async function executeBatchLoads(
-  batchLoads: Map<string, { type: string; ids: string[] }>
+  batchLoads: Map<string, { type: string; ids: string[] }>,
+  recordings?: PropertyRecording[]
 ): Promise<Map<string, Map<string, unknown>>> {
   const results = new Map<string, Map<string, unknown>>()
 
@@ -1242,6 +1319,32 @@ async function executeBatchLoads(
       results.set(relationName, new Map())
     }
     return results
+  }
+
+  // Collect nested relation info from recordings
+  const nestedRelationInfo = new Map<string, { nestedPaths: Set<string>; nestedRelations: Map<string, RelationRecording> }>()
+  if (recordings) {
+    for (const recording of recordings) {
+      for (const [relationName, relationRecording] of recording.relations) {
+        if (!nestedRelationInfo.has(relationName)) {
+          nestedRelationInfo.set(relationName, {
+            nestedPaths: new Set(relationRecording.nestedPaths),
+            nestedRelations: new Map(relationRecording.nestedRelations),
+          })
+        } else {
+          // Merge nested paths
+          const existing = nestedRelationInfo.get(relationName)!
+          for (const path of relationRecording.nestedPaths) {
+            existing.nestedPaths.add(path)
+          }
+          for (const [nestedName, nestedRec] of relationRecording.nestedRelations) {
+            if (!existing.nestedRelations.has(nestedName)) {
+              existing.nestedRelations.set(nestedName, nestedRec)
+            }
+          }
+        }
+      }
+    }
   }
 
   // Batch load each relation type
@@ -1266,6 +1369,82 @@ async function executeBatchLoads(
     }
 
     results.set(relationName, relationResults)
+
+    // Check for nested relations that need to be loaded
+    const nestedInfo = nestedRelationInfo.get(relationName)
+    if (nestedInfo && nestedInfo.nestedPaths.size > 0) {
+      // For each nested path, check if it's actually a relation (string ID) on loaded entities
+      const nestedBatchLoads = new Map<string, { type: string; ids: string[] }>()
+
+      for (const nestedPath of nestedInfo.nestedPaths) {
+        // Collect IDs from all loaded entities for this nested path
+        const nestedIds: string[] = []
+        let nestedType: string | undefined
+
+        for (const entity of relationResults.values()) {
+          const entityObj = entity as Record<string, unknown>
+          const entityType = entityObj.$type as string | undefined
+          const nestedValue = entityObj[nestedPath]
+
+          if (typeof nestedValue === 'string') {
+            // It's a string - could be an ID
+            nestedIds.push(nestedValue)
+            // Try to determine the type from various sources
+            if (!nestedType) {
+              // First, check the nested relation recording
+              const nestedRecording = nestedInfo.nestedRelations.get(nestedPath)
+              if (nestedRecording && nestedRecording.type !== 'unknown') {
+                nestedType = nestedRecording.type
+              }
+              // Then, try to get from schema info using the entity's $type
+              if (!nestedType && entityType) {
+                nestedType = getRelatedType(entityType, nestedPath)
+              }
+            }
+          } else if (nestedValue && typeof nestedValue === 'object') {
+            // Check if it has a $type marker (for already-hydrated proxies)
+            const valueType = (nestedValue as any).$type
+            if (valueType && typeof valueType === 'string') {
+              nestedType = valueType
+              // Try to get the ID
+              if (typeof (nestedValue as any).valueOf === 'function') {
+                const val = (nestedValue as any).valueOf()
+                if (typeof val === 'string') {
+                  nestedIds.push(val)
+                }
+              }
+            }
+          }
+        }
+
+        if (nestedIds.length > 0 && nestedType) {
+          nestedBatchLoads.set(nestedPath, { type: nestedType, ids: nestedIds })
+        }
+      }
+
+      // Recursively load nested relations
+      if (nestedBatchLoads.size > 0) {
+        // Create nested recordings for the next level if available
+        const nestedRecordings: PropertyRecording[] = []
+        for (const nestedRecording of nestedInfo.nestedRelations.values()) {
+          nestedRecordings.push({
+            paths: new Set(),
+            relations: new Map([[nestedRecording.type, nestedRecording]]),
+          })
+        }
+
+        const nestedResults = await executeBatchLoads(nestedBatchLoads, nestedRecordings.length > 0 ? nestedRecordings : undefined)
+
+        // Enrich the already-loaded entities with their nested relations
+        for (const [entityId, entity] of relationResults) {
+          const enrichedEntity = enrichItemWithLoadedRelations(
+            entity as Record<string, unknown>,
+            nestedResults
+          )
+          relationResults.set(entityId, enrichedEntity)
+        }
+      }
+    }
   }
 
   return results

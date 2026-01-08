@@ -13,6 +13,7 @@ import {
   extractEmbeddableText,
   generateContentHash,
 } from './semantic.js'
+import { EMBEDDING_DIMENSIONS } from './constants.js'
 
 // =============================================================================
 // Semaphore for Concurrency Control
@@ -203,6 +204,15 @@ export interface MemoryProviderOptions {
 // Generate ID
 // =============================================================================
 
+/**
+ * Generate a unique ID for a new entity
+ *
+ * Uses crypto.randomUUID() to generate a UUID v4 identifier.
+ *
+ * @returns A new UUID string
+ *
+ * @internal
+ */
 function generateId(): string {
   return crypto.randomUUID()
 }
@@ -258,12 +268,37 @@ function conjugateVerb(verb: string): { action: string; act: string; activity: s
   }
 }
 
-/** Check if character is a vowel */
+/**
+ * Check if a character is a vowel (a, e, i, o, u)
+ *
+ * @param char - The character to check
+ * @returns True if the character is a vowel
+ *
+ * @internal
+ */
 function isVowel(char: string | undefined): boolean {
   return char ? 'aeiou'.includes(char.toLowerCase()) : false
 }
 
-/** Check if we should double the final consonant */
+/**
+ * Check if we should double the final consonant when adding a suffix
+ *
+ * English spelling rules require doubling the final consonant in certain
+ * cases when adding suffixes like -ing or -ed. This applies to short words
+ * ending in consonant-vowel-consonant patterns.
+ *
+ * @param verb - The verb to check
+ * @returns True if the final consonant should be doubled
+ *
+ * @example
+ * ```ts
+ * shouldDoubleConsonant('run')  // => true  (running)
+ * shouldDoubleConsonant('play') // => false (playing)
+ * shouldDoubleConsonant('fix')  // => false (fixing - x is excluded)
+ * ```
+ *
+ * @internal
+ */
 function shouldDoubleConsonant(verb: string): boolean {
   if (verb.length < 2) return false
   const last = verb[verb.length - 1]!
@@ -275,7 +310,26 @@ function shouldDoubleConsonant(verb: string): boolean {
   return false
 }
 
-/** Convert verb to present 3rd person (create → creates) */
+/**
+ * Convert a verb to present tense third person singular form
+ *
+ * Applies English conjugation rules for third person singular:
+ * - Verbs ending in consonant + y: change y to ies (try → tries)
+ * - Verbs ending in s, x, z, ch, sh: add es (push → pushes)
+ * - Other verbs: add s (run → runs)
+ *
+ * @param verb - The base form of the verb
+ * @returns The third person singular present tense form
+ *
+ * @example
+ * ```ts
+ * toPresent('create')  // => 'creates'
+ * toPresent('push')    // => 'pushes'
+ * toPresent('try')     // => 'tries'
+ * ```
+ *
+ * @internal
+ */
 function toPresent(verb: string): string {
   if (verb.endsWith('y') && !isVowel(verb[verb.length - 2])) {
     return verb.slice(0, -1) + 'ies'
@@ -287,7 +341,27 @@ function toPresent(verb: string): string {
   return verb + 's'
 }
 
-/** Convert verb to gerund (create → creating) */
+/**
+ * Convert a verb to gerund/present participle form (-ing)
+ *
+ * Applies English spelling rules for adding -ing:
+ * - Verbs ending in ie: change ie to ying (die → dying)
+ * - Verbs ending in e (not ee): drop e, add ing (create → creating)
+ * - Verbs requiring consonant doubling: double + ing (run → running)
+ * - Other verbs: add ing (play → playing)
+ *
+ * @param verb - The base form of the verb
+ * @returns The gerund/present participle form
+ *
+ * @example
+ * ```ts
+ * toGerund('create')  // => 'creating'
+ * toGerund('run')     // => 'running'
+ * toGerund('die')     // => 'dying'
+ * ```
+ *
+ * @internal
+ */
 function toGerund(verb: string): string {
   if (verb.endsWith('ie')) return verb.slice(0, -2) + 'ying'
   if (verb.endsWith('e') && !verb.endsWith('ee')) return verb.slice(0, -1) + 'ing'
@@ -326,9 +400,6 @@ export class MemoryProvider implements DBProvider {
 
   // Embedding configuration
   private embeddingsConfig: EmbeddingsConfig
-
-  // Embedding dimensions (matching semantic.ts)
-  private readonly EMBEDDING_DIMENSIONS = 384
 
   constructor(options: MemoryProviderOptions = {}) {
     this.semaphore = new Semaphore(options.concurrency ?? 10)
@@ -552,7 +623,7 @@ export class MemoryProvider implements DBProvider {
       .filter(w => w.length > 0)
 
     if (words.length === 0) {
-      return Array.from({ length: this.EMBEDDING_DIMENSIONS }, (_, i) =>
+      return Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) =>
         seededRandom(0, i) * 0.01
       )
     }
@@ -575,9 +646,9 @@ export class MemoryProvider implements DBProvider {
 
     // Expand to full dimensions
     const textHash = simpleHash(text)
-    const embedding = new Array(this.EMBEDDING_DIMENSIONS)
+    const embedding = new Array(EMBEDDING_DIMENSIONS)
 
-    for (let i = 0; i < this.EMBEDDING_DIMENSIONS; i++) {
+    for (let i = 0; i < EMBEDDING_DIMENSIONS; i++) {
       const baseIndex = i % 4
       const base = normalized[baseIndex]!
       const noise = seededRandom(textHash, i) * 0.1 - 0.05
@@ -590,7 +661,17 @@ export class MemoryProvider implements DBProvider {
   }
 
   /**
-   * Check if embeddings should be generated for a type
+   * Check if embeddings should be generated for a given entity type
+   *
+   * Consults the embeddings configuration to determine:
+   * - If embeddings are disabled for this type (config === false)
+   * - If specific fields are configured for embedding
+   * - If auto-detection of text fields should be used (default)
+   *
+   * @param type - The entity type name
+   * @returns Object with enabled flag and optional field list
+   *
+   * @internal
    */
   private shouldEmbed(type: string): { enabled: boolean; fields?: string[] } {
     const config = this.embeddingsConfig[type]
@@ -605,7 +686,17 @@ export class MemoryProvider implements DBProvider {
   }
 
   /**
-   * Auto-generate embedding for an entity
+   * Auto-generate and store an embedding for an entity
+   *
+   * Called during create/update operations to automatically generate
+   * embeddings for entities based on their text content. The embedding
+   * is stored as an artifact associated with the entity.
+   *
+   * @param type - The entity type name
+   * @param id - The entity ID
+   * @param data - The entity data to extract text from
+   *
+   * @internal
    */
   private async autoEmbed(type: string, id: string, data: Record<string, unknown>): Promise<void> {
     const { enabled, fields } = this.shouldEmbed(type)
@@ -626,7 +717,7 @@ export class MemoryProvider implements DBProvider {
       sourceHash: contentHash,
       metadata: {
         fields: embeddedFields,
-        dimensions: this.EMBEDDING_DIMENSIONS,
+        dimensions: EMBEDDING_DIMENSIONS,
         text: text.slice(0, 200),
       },
     })
@@ -636,6 +727,17 @@ export class MemoryProvider implements DBProvider {
   // Things (Records)
   // ===========================================================================
 
+  /**
+   * Get or create the storage map for an entity type
+   *
+   * Lazily creates the type-specific storage map if it doesn't exist.
+   * This ensures each entity type has its own namespace for ID collisions.
+   *
+   * @param type - The entity type name
+   * @returns The Map storing entities of this type (id -> entity data)
+   *
+   * @internal
+   */
   private getTypeStore(type: string): Map<string, Record<string, unknown>> {
     if (!this.entities.has(type)) {
       this.entities.set(type, new Map())
@@ -990,6 +1092,19 @@ export class MemoryProvider implements DBProvider {
   // Relationships
   // ===========================================================================
 
+  /**
+   * Generate a unique key for storing relationships
+   *
+   * Creates a composite key from source entity type, ID, and relation name
+   * that serves as the key in the relations Map.
+   *
+   * @param fromType - The source entity type
+   * @param fromId - The source entity ID
+   * @param relation - The relationship name
+   * @returns Composite key in format "type:id:relation"
+   *
+   * @internal
+   */
   private relationKey(
     fromType: string,
     fromId: string,
@@ -1145,6 +1260,18 @@ export class MemoryProvider implements DBProvider {
     return event
   }
 
+  /**
+   * Get all event handlers matching an event type
+   *
+   * Collects handlers from all registered patterns that match the given
+   * event type. Supports exact matches, wildcards (*), and prefix/suffix
+   * patterns (*.created, Post.*).
+   *
+   * @param type - The event type to match handlers for
+   * @returns Array of matching event handlers
+   *
+   * @internal
+   */
   private getEventHandlers(type: string): Array<(event: Event) => void | Promise<void>> {
     const handlers: Array<(event: Event) => void | Promise<void>> = []
 
@@ -1157,6 +1284,21 @@ export class MemoryProvider implements DBProvider {
     return handlers
   }
 
+  /**
+   * Check if an event type matches a subscription pattern
+   *
+   * Supports several pattern formats:
+   * - Exact match: 'Post.created' matches 'Post.created'
+   * - Global wildcard: '*' matches everything
+   * - Prefix wildcard: 'Post.*' matches 'Post.created', 'Post.updated', etc.
+   * - Suffix wildcard: '*.created' matches 'Post.created', 'User.created', etc.
+   *
+   * @param type - The event type to check
+   * @param pattern - The subscription pattern to match against
+   * @returns True if the type matches the pattern
+   *
+   * @internal
+   */
   private matchesPattern(type: string, pattern: string): boolean {
     if (pattern === type) return true
     if (pattern === '*') return true
@@ -1466,6 +1608,18 @@ export class MemoryProvider implements DBProvider {
   // Artifacts
   // ===========================================================================
 
+  /**
+   * Generate a unique key for storing artifacts
+   *
+   * Creates a composite key from URL and artifact type for storage
+   * in the artifacts Map.
+   *
+   * @param url - The entity URL (e.g., 'Post/123')
+   * @param type - The artifact type (e.g., 'embedding')
+   * @returns Composite key in format "url:type"
+   *
+   * @internal
+   */
   private artifactKey(url: string, type: string): string {
     return `${url}:${type}`
   }
@@ -1504,6 +1658,17 @@ export class MemoryProvider implements DBProvider {
     }
   }
 
+  /**
+   * Invalidate cached artifacts for an entity (except embeddings)
+   *
+   * Called when entity data changes to ensure stale computed content
+   * (like cached transformations) is regenerated. Embeddings are preserved
+   * as they're regenerated separately via autoEmbed.
+   *
+   * @param url - The entity URL whose artifacts should be invalidated
+   *
+   * @internal
+   */
   private async invalidateArtifacts(url: string): Promise<void> {
     // Keep embedding artifact but mark others for regeneration
     for (const [key, artifact] of this.artifacts) {

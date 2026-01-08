@@ -170,6 +170,23 @@ export {
 
 export type { StandardEventType } from './events.js'
 
+// =============================================================================
+// Actions API - Durable execution for long-running operations
+// =============================================================================
+
+// Export action utilities and constants
+export {
+  ActionStatuses,
+  isTerminal,
+  isInProgress,
+  canRetry,
+  canCancel,
+  getProgressPercent,
+  formatActionStatus,
+} from './actions.js'
+
+export type { ActionStatusType } from './actions.js'
+
 // Promise pipelining exports
 export {
   DBPromise,
@@ -180,6 +197,7 @@ export {
   createSearchPromise,
   wrapEntityOperations,
   setProviderResolver,
+  setSchemaRelationInfo,
   DB_PROMISE_SYMBOL,
   RAW_DB_PROMISE_SYMBOL,
 } from './ai-promise-db.js'
