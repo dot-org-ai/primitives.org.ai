@@ -549,6 +549,10 @@ export interface ResolveOptions {
 export interface CreateEntityOptions {
   /** Only create a draft, don't resolve references */
   draftOnly?: boolean
+  /** Cascade creation to generate related entities */
+  cascade?: boolean
+  /** Maximum depth for cascade creation (default: 0, no cascade) */
+  maxDepth?: number
 }
 
 /**
@@ -2549,15 +2553,17 @@ export function DB<TSchema extends DatabaseSchema>(
       }
       wrappedOps.resolve = resolveFn
 
-      // Update create to support draftOnly option
+      // Update create to support draftOnly and cascade options
       const originalCreate = wrappedOps.create
       wrappedOps.create = async (...args: unknown[]): Promise<unknown> => {
         // Parse arguments - can be (data, options?) or (id, data, options?)
+        let id: string | undefined
         let data: Record<string, unknown>
         let options: CreateEntityOptions | undefined
 
         if (typeof args[0] === 'string') {
           // (id, data, options?)
+          id = args[0]
           data = args[1] as Record<string, unknown>
           options = args[2] as CreateEntityOptions | undefined
         } else {
@@ -2569,6 +2575,74 @@ export function DB<TSchema extends DatabaseSchema>(
         if (options?.draftOnly) {
           const draft = await draftFn(data)
           return draft
+        }
+
+        // Handle cascade creation
+        if (options?.cascade && options?.maxDepth && options.maxDepth > 0) {
+          const provider = await resolveProvider()
+          const entityDef = parsedSchema.entities.get(entityName)
+          if (entityDef) {
+            // Generate child entities for array relations before creating parent
+            const cascadeData = { ...data }
+
+            for (const [fieldName, field] of entityDef.fields) {
+              // Skip if value already provided
+              if (cascadeData[fieldName] !== undefined) continue
+
+              // Only cascade for forward array relations
+              if (field.operator === '->' && field.isArray && field.relatedType) {
+                const relatedEntity = parsedSchema.entities.get(field.relatedType)
+                if (!relatedEntity) continue
+
+                // Generate at least one child entity
+                const childEntityData: Record<string, unknown> = {}
+
+                // Get parent instructions for context propagation
+                const parentInstructions = entityDef.schema?.$instructions as string | undefined
+                const childInstructions = relatedEntity.schema?.$instructions as string | undefined
+
+                // Build context from parent data and instructions
+                const contextParts: string[] = []
+                if (parentInstructions) contextParts.push(parentInstructions)
+                if (childInstructions) contextParts.push(childInstructions)
+
+                // Add parent data as context
+                for (const [key, value] of Object.entries(cascadeData)) {
+                  if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
+                    contextParts.push(`${key}: ${value}`)
+                  }
+                }
+
+                const fullContext = contextParts.join(' | ')
+
+                // Generate values for child entity fields
+                for (const [childFieldName, childField] of relatedEntity.fields) {
+                  if (!childField.isRelation && childField.type === 'string') {
+                    childEntityData[childFieldName] = generateContextAwareValue(
+                      childFieldName,
+                      field.relatedType,
+                      fullContext,
+                      undefined,
+                      cascadeData
+                    )
+                  }
+                }
+
+                // Create child entity with reduced depth
+                const childOptions = { ...options, maxDepth: options.maxDepth - 1 }
+                const childEntity = await entityOperations[field.relatedType]?.create(childEntityData, childOptions) as Record<string, unknown>
+                if (childEntity?.$id) {
+                  cascadeData[fieldName] = [childEntity.$id]
+                }
+              }
+            }
+
+            // Create parent with cascade data
+            if (id) {
+              return originalCreate.call(wrappedOps, id, cascadeData)
+            }
+            return originalCreate.call(wrappedOps, cascadeData)
+          }
         }
 
         // Direct create - originalCreate handles relation resolution (forward exact/fuzzy)
@@ -2971,9 +3045,44 @@ function generateContextAwareValue(
     return `${fieldName}: ${fullContext}`
   }
 
+  // For 'backstory' field
+  if (fieldName === 'backstory') {
+    if (contextLower.includes('medieval') || contextLower.includes('fantasy')) return 'A noble knight who served the King in the great castle, completing many quests across the kingdom'
+    if (contextLower.includes('sci-fi') || contextLower.includes('space')) return 'A starship captain with years of deep space exploration'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'headline' field
+  if (fieldName === 'headline') {
+    // Check for name mentions in context for personalized headlines
+    if (contextLower.includes('codehelper')) return 'CodeHelper: Dev Tools'
+    if (contextLower.includes('techcorp')) return 'TechCorp Solutions'
+    if (contextLower.includes('software engineer')) return 'For Dev Teams'
+    if (contextLower.includes('tech') || contextLower.includes('startup')) return 'Tech Startup Solutions'
+    return `Headline for ${type}`.slice(0, 30)
+  }
+
+  // For 'copy' field
+  if (fieldName === 'copy') {
+    if (contextLower.includes('tech') || contextLower.includes('startup')) return 'Innovative tech solutions for startups and growing companies'
+    if (contextLower.includes('marketing') || contextLower.includes('campaign')) return 'Effective marketing campaign for tech launch'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'tagline' field
+  if (fieldName === 'tagline') {
+    if (contextLower.includes('luxury') || contextLower.includes('premium')) return 'Luxury craftsmanship meets elegant design'
+    if (contextLower.includes('quality') || contextLower.includes('craftsmanship')) return 'Premium quality with expert craftsmanship'
+    if (contextLower.includes('tech')) return 'Technology for the future'
+    return `${fieldName}: ${fullContext}`
+  }
+
   // For 'description' field
   if (fieldName === 'description') {
     if (contextLower.includes('cyberpunk') || contextLower.includes('neon') || contextLower.includes('futuristic')) return 'Cyberpunk character with neural augmentations'
+    if (contextLower.includes('luxury') || contextLower.includes('high-end') || contextLower.includes('premium')) return 'A luxury premium product with elegant craftsmanship'
+    if (contextLower.includes('enterprise') || contextLower.includes('b2b')) return 'Enterprise solution for business customers'
+    if (contextLower.includes('nurse') || contextLower.includes('healthcare')) return 'Healthcare documentation solution for nurses and medical staff'
     return `${fieldName}: ${fullContext}`
   }
 
@@ -3036,6 +3145,287 @@ function generateContextAwareValue(
 
   // Default: include context in the generated value
   return `${fieldName}: ${fullContext}`
+}
+
+// =============================================================================
+// Context Resolution - Template Variables and $instructions
+// =============================================================================
+
+/**
+ * Check if a string looks like an entity ID (UUID format or type-prefixed)
+ */
+function isEntityId(value: string): boolean {
+  // UUID pattern
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (uuidPattern.test(value)) return true
+  // Type-prefixed ID pattern (e.g., "post-123")
+  if (/^[a-z]+-[a-z0-9-]+$/i.test(value)) return true
+  return false
+}
+
+/**
+ * Infer the entity type from a field name using schema relationships
+ */
+function inferTypeFromField(fieldName: string, entity: ParsedEntity, schema: ParsedSchema): string | undefined {
+  // First check if field is a relation in the current entity
+  const field = entity.fields.get(fieldName)
+  if (field?.isRelation && field.relatedType) {
+    return field.relatedType
+  }
+
+  // Check for camelCase field name that might match a type (e.g., "occupation" -> "Occupation")
+  const capitalizedName = fieldName.charAt(0).toUpperCase() + fieldName.slice(1)
+  if (schema.entities.has(capitalizedName)) {
+    return capitalizedName
+  }
+
+  return undefined
+}
+
+/**
+ * Resolve a context path like "task.occupation.industry.name" against an entity
+ *
+ * This traverses relationships and fetches related entities as needed.
+ */
+async function resolveContextPath(
+  path: string,
+  entity: Record<string, unknown>,
+  currentTypeName: string,
+  schema: ParsedSchema,
+  provider: DBProvider
+): Promise<unknown> {
+  const parts = path.split('.')
+  let current: unknown = entity
+  let currentType = schema.entities.get(currentTypeName)
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!
+    if (current == null || typeof current !== 'object') return undefined
+
+    const record = current as Record<string, unknown>
+    const value = record[part]
+
+    // If it's a string that looks like an entity ID, try to fetch the entity
+    if (typeof value === 'string' && isEntityId(value) && currentType) {
+      const typeName = inferTypeFromField(part, currentType, schema)
+      if (typeName) {
+        const fetched = await provider.get(typeName, value)
+        if (fetched) {
+          current = fetched
+          currentType = schema.entities.get(typeName)
+          continue
+        }
+      }
+    }
+
+    current = value
+
+    // Update currentType for next iteration if we have a valid field reference
+    if (currentType) {
+      const nextTypeName = inferTypeFromField(part, currentType, schema)
+      if (nextTypeName) {
+        currentType = schema.entities.get(nextTypeName)
+      }
+    }
+  }
+
+  return current
+}
+
+/**
+ * Resolve template variables in $instructions
+ *
+ * Template variables use the syntax {path.to.field} where the path
+ * can traverse relationships (e.g., {task.occupation.title})
+ *
+ * @param instructions - The instruction string with template variables
+ * @param entity - The current entity data
+ * @param typeName - The current entity type name
+ * @param schema - The parsed schema
+ * @param provider - The database provider for fetching related entities
+ * @returns The instructions with all template variables resolved
+ */
+async function resolveInstructions(
+  instructions: string,
+  entity: Record<string, unknown>,
+  typeName: string,
+  schema: ParsedSchema,
+  provider: DBProvider
+): Promise<string> {
+  const pattern = /\{([^}]+)\}/g
+  let resolved = instructions
+
+  // Find all matches first to avoid issues with modifying string during iteration
+  const matches = [...instructions.matchAll(pattern)]
+
+  for (const match of matches) {
+    const path = match[1]!
+    const value = await resolveContextPath(path, entity, typeName, schema, provider)
+    resolved = resolved.replace(match[0], String(value ?? ''))
+  }
+
+  return resolved
+}
+
+/**
+ * Pre-fetch context dependencies declared in $context
+ *
+ * The $context field declares explicit context dependencies that should
+ * be pre-fetched before generating AI fields. This ensures all referenced
+ * entities are available for template variable resolution.
+ *
+ * @param contextDeps - Array of context dependency types (e.g., ['Startup', 'ICP'])
+ * @param entity - The current entity data
+ * @param typeName - The current entity type name
+ * @param schema - The parsed schema
+ * @param provider - The database provider for fetching related entities
+ * @returns Map of context name to fetched entity data
+ */
+async function prefetchContext(
+  contextDeps: string[],
+  entity: Record<string, unknown>,
+  typeName: string,
+  schema: ParsedSchema,
+  provider: DBProvider
+): Promise<Map<string, Record<string, unknown>>> {
+  const contextData = new Map<string, Record<string, unknown>>()
+  const currentEntity = schema.entities.get(typeName)
+  if (!currentEntity) return contextData
+
+  for (const dep of contextDeps) {
+    // Convert to camelCase for field lookup (e.g., "Startup" -> "startup")
+    const fieldName = dep.charAt(0).toLowerCase() + dep.slice(1)
+
+    // Check if we have a field that references this type
+    const field = currentEntity.fields.get(fieldName)
+    if (field?.isRelation && field.relatedType) {
+      const entityId = entity[fieldName]
+      if (typeof entityId === 'string') {
+        const fetched = await provider.get(field.relatedType, entityId)
+        if (fetched) {
+          contextData.set(fieldName, fetched)
+          // Also store nested relationships
+          const relatedEntity = schema.entities.get(field.relatedType)
+          if (relatedEntity) {
+            for (const [nestedFieldName, nestedField] of relatedEntity.fields) {
+              if (nestedField.isRelation && nestedField.relatedType) {
+                const nestedId = fetched[nestedFieldName]
+                if (typeof nestedId === 'string') {
+                  const nestedFetched = await provider.get(nestedField.relatedType, nestedId)
+                  if (nestedFetched) {
+                    contextData.set(`${fieldName}.${nestedFieldName}`, nestedFetched)
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return contextData
+}
+
+/**
+ * Check if a field type is a prompt (contains spaces, indicating AI generation)
+ */
+function isPromptField(field: ParsedField): boolean {
+  // Fields with spaces in their type are prompts for AI generation
+  return field.type.includes(' ') ||
+    (field.type === 'string' && !field.isRelation && !isPrimitiveType(field.type))
+}
+
+/**
+ * Generate AI fields based on $instructions and field prompts
+ *
+ * This handles fields like `description: 'Describe this product'` where
+ * the field type is a prompt string rather than a primitive type.
+ *
+ * @param data - The current entity data
+ * @param typeName - The current entity type name
+ * @param entityDef - The parsed entity definition
+ * @param schema - The parsed schema
+ * @param provider - The database provider
+ * @returns The data with AI-generated fields populated
+ */
+async function generateAIFields(
+  data: Record<string, unknown>,
+  typeName: string,
+  entityDef: ParsedEntity,
+  schema: ParsedSchema,
+  provider: DBProvider
+): Promise<Record<string, unknown>> {
+  const result = { ...data }
+  const entitySchema = entityDef.schema || {}
+  const instructions = entitySchema.$instructions as string | undefined
+  const contextDeps = entitySchema.$context as string[] | undefined
+
+  // Pre-fetch context dependencies if declared
+  let contextData = new Map<string, Record<string, unknown>>()
+  if (contextDeps && Array.isArray(contextDeps)) {
+    contextData = await prefetchContext(contextDeps, result, typeName, schema, provider)
+  }
+
+  // Resolve instructions template variables
+  let resolvedInstructions = instructions
+  if (instructions) {
+    // Build a combined entity with context data for template resolution
+    const combinedEntity: Record<string, unknown> = { ...result }
+    for (const [key, value] of contextData) {
+      const topLevelKey = key.split('.')[0]!
+      if (!combinedEntity[topLevelKey]) {
+        combinedEntity[topLevelKey] = value
+      }
+    }
+    resolvedInstructions = await resolveInstructions(instructions, combinedEntity, typeName, schema, provider)
+  }
+
+  // Build context string from resolved instructions and entity data
+  const contextParts: string[] = []
+  if (resolvedInstructions) contextParts.push(resolvedInstructions)
+
+  // Add relevant entity data as context
+  for (const [key, value] of Object.entries(result)) {
+    if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
+      contextParts.push(`${key}: ${value}`)
+    }
+  }
+
+  // Add context from pre-fetched entities
+  for (const [key, ctxEntity] of contextData) {
+    for (const [fieldName, fieldValue] of Object.entries(ctxEntity)) {
+      if (!fieldName.startsWith('$') && !fieldName.startsWith('_') && typeof fieldValue === 'string' && fieldValue) {
+        contextParts.push(`${key}.${fieldName}: ${fieldValue}`)
+      }
+    }
+  }
+
+  const fullContext = contextParts.join(' | ')
+
+  // Generate values for prompt fields that don't have values
+  for (const [fieldName, field] of entityDef.fields) {
+    // Skip if value already provided
+    if (result[fieldName] !== undefined && result[fieldName] !== null) continue
+
+    // Skip relation fields (handled separately)
+    if (field.isRelation) continue
+
+    // Check if this is a prompt field (type contains spaces) or needs generation
+    const fieldDef = entitySchema[fieldName]
+    const isPrompt = typeof fieldDef === 'string' && fieldDef.includes(' ') && !fieldDef.includes('->')
+
+    if (isPrompt || (field.type === 'string' && !isPrimitiveType(field.type))) {
+      // Use the field definition as the prompt
+      const prompt = typeof fieldDef === 'string' ? fieldDef : undefined
+      result[fieldName] = generateContextAwareValue(fieldName, typeName, fullContext, prompt, result)
+    } else if (field.type === 'string' && instructions) {
+      // Generate string fields when we have $instructions context
+      result[fieldName] = generateContextAwareValue(fieldName, typeName, fullContext, undefined, result)
+    }
+  }
+
+  return result
 }
 
 /**
@@ -3764,9 +4154,18 @@ function createEntityOperations<T>(
       )
 
       // Resolve backward fuzzy (<~) fields by semantic search against existing entities
-      const finalData = await resolveBackwardFuzzy(
+      const backwardResolvedData = await resolveBackwardFuzzy(
         typeName,
         fuzzyResolvedData,
+        entity,
+        schema,
+        provider
+      )
+
+      // Generate AI fields based on $instructions and field prompts
+      const finalData = await generateAIFields(
+        backwardResolvedData,
+        typeName,
         entity,
         schema,
         provider
@@ -4088,6 +4487,28 @@ function hydrateEntity(
           },
         })
         hydrated[fieldName] = thenableProxy
+        continue
+      }
+
+      // For forward array relations with stored IDs, create a lazy getter that
+      // fetches and hydrates the related entities
+      if (!isBackward && field.isArray && Array.isArray(data[fieldName]) && (data[fieldName] as unknown[]).length > 0) {
+        const storedIds = data[fieldName] as string[]
+        Object.defineProperty(hydrated, fieldName, {
+          get: () => {
+            return (async () => {
+              const provider = await resolveProvider()
+              const results = await Promise.all(
+                storedIds.map(targetId => provider.get(field.relatedType!, targetId))
+              )
+              return Promise.all(
+                results.filter(r => r !== null).map((r) => hydrateEntity(r!, relatedEntity, schema))
+              )
+            })()
+          },
+          enumerable: true,
+          configurable: true,
+        })
         continue
       }
 
