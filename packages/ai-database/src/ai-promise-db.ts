@@ -21,6 +21,8 @@
  * @packageDocumentation
  */
 
+import { Semaphore } from './memory-provider.js'
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -890,40 +892,6 @@ const DB_PROXY_HANDLERS: ProxyHandler<DBPromise<unknown>> = {
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-/**
- * Simple semaphore for concurrency control
- */
-class Semaphore {
-  private permits: number
-  private queue: Array<() => void> = []
-
-  constructor(permits: number) {
-    this.permits = permits
-  }
-
-  async acquire(): Promise<() => void> {
-    if (this.permits > 0) {
-      this.permits--
-      return () => this.release()
-    }
-
-    return new Promise((resolve) => {
-      this.queue.push(() => {
-        this.permits--
-        resolve(() => this.release())
-      })
-    })
-  }
-
-  private release(): void {
-    this.permits++
-    const next = this.queue.shift()
-    if (next) {
-      next()
-    }
-  }
 }
 
 /**
