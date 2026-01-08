@@ -148,3 +148,4 @@ Thumbs.db
 .open-next
 .source
 .wrangler
+.claude/settings.local.json
