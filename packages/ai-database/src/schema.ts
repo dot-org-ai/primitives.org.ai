@@ -31,6 +31,15 @@
 
 import type { MDXLD } from 'mdxld'
 import { DBPromise, wrapEntityOperations, type ForEachOptions, type ForEachResult } from './ai-promise-db.js'
+import {
+  cosineSimilarity,
+  computeRRF,
+  extractEmbeddableText,
+  generateContentHash,
+  type EmbeddingsConfig,
+  type SemanticSearchOptions as SemanticOpts,
+  type HybridSearchOptions as HybridOpts,
+} from './semantic.js'
 
 // =============================================================================
 // Re-exports from modular files
@@ -81,6 +90,9 @@ export type {
 } from './types.js'
 
 export { toExpanded, toFlat, Verbs, resolveUrl, resolveShortUrl, parseUrl } from './types.js'
+
+// Re-export semantic types
+export type { EmbeddingsConfig } from './semantic.js'
 
 // Re-export linguistic utilities from linguistic.ts
 export {
@@ -445,6 +457,32 @@ function parseField(name: string, definition: FieldDefinition): ParsedField {
   let isRelation = false
   let relatedType: string | undefined
   let backref: string | undefined
+  let operator: '->' | '~>' | '<-' | '<~' | undefined
+  let direction: 'forward' | 'backward' | undefined
+  let matchMode: 'exact' | 'fuzzy' | undefined
+  let prompt: string | undefined
+
+  // Check for operators: ->, ~>, <-, <~
+  // Order matters: check longer operators first (those with ~)
+  const operators = ['~>', '<~', '->', '<-'] as const
+  for (const op of operators) {
+    const opIndex = type.indexOf(op)
+    if (opIndex !== -1) {
+      operator = op
+      // Extract prompt (text before operator)
+      const beforeOp = type.slice(0, opIndex).trim()
+      if (beforeOp) {
+        prompt = beforeOp
+      }
+      // Extract target type (text after operator)
+      type = type.slice(opIndex + op.length).trim()
+      // Set direction based on operator (< = backward, otherwise forward)
+      direction = op.startsWith('<') ? 'backward' : 'forward'
+      // Set matchMode based on operator (~ = fuzzy, otherwise exact)
+      matchMode = op.includes('~') ? 'fuzzy' : 'exact'
+      break
+    }
+  }
 
   // Check for optional modifier
   if (type.endsWith('?')) {
@@ -471,7 +509,8 @@ function parseField(name: string, definition: FieldDefinition): ParsedField {
     relatedType = type
   }
 
-  return {
+  // Build result object
+  const result: ParsedField = {
     name,
     type,
     isArray,
@@ -480,6 +519,18 @@ function parseField(name: string, definition: FieldDefinition): ParsedField {
     relatedType,
     backref,
   }
+
+  // Only add operator properties if an operator was found
+  if (operator) {
+    result.operator = operator
+    result.direction = direction
+    result.matchMode = matchMode
+    if (prompt) {
+      result.prompt = prompt
+    }
+  }
+
+  return result
 }
 
 /**
@@ -712,6 +763,28 @@ export interface PipelineEntityOperations<T> {
     callback: (entity: T, index: number) => U | Promise<U>,
     options?: ForEachOptions<T>
   ): Promise<ForEachResult>
+
+  /**
+   * Semantic search using embedding similarity
+   *
+   * @example
+   * ```ts
+   * const results = await db.Document.semanticSearch('deep learning neural networks')
+   * // Returns documents with $score field sorted by similarity
+   * ```
+   */
+  semanticSearch(query: string, options?: SemanticSearchOptions): Promise<Array<T & { $score: number }>>
+
+  /**
+   * Hybrid search combining FTS and semantic search with RRF scoring
+   *
+   * @example
+   * ```ts
+   * const results = await db.Post.hybridSearch('React useState')
+   * // Returns posts with $rrfScore, $ftsRank, $semanticRank fields
+   * ```
+   */
+  hybridSearch(query: string, options?: HybridSearchOptions): Promise<Array<T & { $rrfScore: number; $ftsRank: number; $semanticRank: number; $score: number }>>
 }
 
 export interface ListOptions {
@@ -725,6 +798,52 @@ export interface ListOptions {
 export interface SearchOptions extends ListOptions {
   fields?: string[]
   minScore?: number
+}
+
+/**
+ * Options for semantic search
+ */
+export interface SemanticSearchOptions {
+  /** Minimum similarity score (0-1) */
+  minScore?: number
+  /** Maximum number of results */
+  limit?: number
+}
+
+/**
+ * Options for hybrid search (FTS + semantic)
+ */
+export interface HybridSearchOptions {
+  /** Minimum similarity score for semantic results */
+  minScore?: number
+  /** Maximum number of results */
+  limit?: number
+  /** Offset for pagination */
+  offset?: number
+  /** RRF k parameter (default: 60) */
+  rrfK?: number
+  /** Weight for FTS results (default: 0.5) */
+  ftsWeight?: number
+  /** Weight for semantic results (default: 0.5) */
+  semanticWeight?: number
+}
+
+/**
+ * Embedding configuration for a specific entity type
+ */
+export interface EmbeddingTypeConfig {
+  /** Fields to embed (defaults to text/markdown fields) */
+  fields?: string[]
+}
+
+// EmbeddingsConfig is imported from semantic.ts
+
+/**
+ * DB Options for configuring embeddings and other settings
+ */
+export interface DBOptions {
+  /** Embedding configuration per type */
+  embeddings?: EmbeddingsConfig
 }
 
 // =============================================================================
@@ -824,6 +943,17 @@ export type TypedDB<TSchema extends DatabaseSchema> = {
    * ```
    */
   ask: NLQueryFn
+
+  /**
+   * Global semantic search across all entity types
+   *
+   * @example
+   * ```ts
+   * const results = await db.semanticSearch('artificial intelligence')
+   * // Returns results from all types with $type and $score fields
+   * ```
+   */
+  semanticSearch(query: string, options?: SemanticSearchOptions): Promise<Array<{ $id: string; $type: string; $score: number; [key: string]: unknown }>>
 }
 
 /**
@@ -1796,7 +1926,8 @@ async function checkFileCountThreshold(root: string): Promise<void> {
  * ```
  */
 export function DB<TSchema extends DatabaseSchema>(
-  schema: TSchema
+  schema: TSchema,
+  options?: DBOptions
 ): DBResult<TSchema> {
   const parsedSchema = parseSchema(schema)
 
@@ -1826,7 +1957,8 @@ export function DB<TSchema extends DatabaseSchema>(
   }
 
   // Create entity operations for each type with promise pipelining
-  const entityOperations: Record<string, PipelineEntityOperations<unknown>> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const entityOperations: Record<string, any> = {}
 
   for (const [entityName, entity] of parsedSchema.entities) {
     const baseOps = createEntityOperations(entityName, entity, parsedSchema)

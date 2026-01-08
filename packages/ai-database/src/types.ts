@@ -145,6 +145,14 @@ export interface ParsedField {
   isRelation: boolean
   relatedType?: string
   backref?: string
+  /** Operator used in field definition: ->, ~>, <-, <~ */
+  operator?: '->' | '~>' | '<-' | '<~'
+  /** Direction of the relationship */
+  direction?: 'forward' | 'backward'
+  /** Match mode for the relationship */
+  matchMode?: 'exact' | 'fuzzy'
+  /** Natural language prompt before operator */
+  prompt?: string
 }
 
 /**
