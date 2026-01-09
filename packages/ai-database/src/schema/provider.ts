@@ -91,7 +91,7 @@ export interface DBProvider {
     relation: string,
     toType: string,
     toId: string,
-    metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number }
+    metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number; matchedType?: string }
   ): Promise<void>
 
   /** Remove a relationship */

@@ -1141,7 +1141,7 @@ export class MemoryProvider implements DBProvider {
     relation: string,
     toType: string,
     toId: string,
-    metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number }
+    metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number; matchedType?: string }
   ): Promise<void> {
     const key = this.relationKey(fromType, fromId, relation)
 
