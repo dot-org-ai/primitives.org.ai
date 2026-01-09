@@ -229,7 +229,18 @@ export class AIPromise<T> implements PromiseLike<T> {
       maxTokens: this._options.maxTokens,
     })
 
-    this._resolvedValue = result.object as T
+    // Extract the value based on type
+    let value = result.object as T
+    if (this._options.type === 'text' && typeof value === 'object' && value !== null && 'text' in value) {
+      value = (value as { text: T }).text
+    } else if (this._options.type === 'boolean' && typeof value === 'object' && value !== null && 'answer' in value) {
+      const answer = (value as { answer: string }).answer
+      value = (answer === 'true' || answer === true) as unknown as T
+    } else if (this._options.type === 'list' && typeof value === 'object' && value !== null && 'items' in value) {
+      value = (value as { items: T }).items
+    }
+
+    this._resolvedValue = value
     this._isResolved = true
     pendingPromises.delete(this)
 
