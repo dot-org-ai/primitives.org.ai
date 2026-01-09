@@ -236,7 +236,7 @@ export class AIPromise<T> implements PromiseLike<T> {
     } else if (this._options.type === 'boolean' && typeof value === 'object' && value !== null && 'answer' in value) {
       const answer = (value as { answer: string }).answer
       value = (answer === 'true' || answer === true) as unknown as T
-    } else if (this._options.type === 'list' && typeof value === 'object' && value !== null && 'items' in value) {
+    } else if ((this._options.type === 'list' || this._options.type === 'extract') && typeof value === 'object' && value !== null && 'items' in value) {
       value = (value as { items: T }).items
     }
 
@@ -263,6 +263,8 @@ export class AIPromise<T> implements PromiseLike<T> {
       switch (this._options.type) {
         case 'list':
           return { items: ['List items'] }
+        case 'extract':
+          return { items: ['Extracted items'] }
         case 'lists':
           return { categories: ['Category names'], data: 'JSON object with categorized lists' }
         case 'boolean':
