@@ -353,6 +353,15 @@ importers:
         specifier: workspace:*
         version: link:../digital-workers
 
+  packages/types:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+
   site:
     dependencies:
       '@opennextjs/cloudflare':

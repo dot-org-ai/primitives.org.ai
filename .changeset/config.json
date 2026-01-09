@@ -1,9 +1,10 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
-  "changelog": "@changesets/cli/changelog",
+  "changelog": ["@changesets/changelog-github", { "repo": "dot-org-ai/primitives.org.ai" }],
   "commit": false,
   "fixed": [
     [
+      "@primitives/types",
       "ai-functions",
       "ai-database",
       "ai-workflows",
