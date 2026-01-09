@@ -4,7 +4,7 @@
   "commit": false,
   "fixed": [
     [
-      "@primitives/types",
+      "@org.ai/types",
       "ai-functions",
       "ai-database",
       "ai-workflows",

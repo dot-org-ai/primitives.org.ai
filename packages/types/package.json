@@ -1,5 +1,5 @@
 {
-  "name": "@primitives/types",
+  "name": "@org.ai/types",
   "version": "2.1.1",
   "description": "Shared type definitions for AI primitives packages",
   "type": "module",
@@ -27,5 +27,8 @@
     "primitives",
     "typescript"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }
