@@ -196,6 +196,21 @@ export {
 export { resolveBackwardFuzzy, resolveForwardFuzzy } from './schema/semantic.js'
 
 // =============================================================================
+// Re-exports from schema/verb-derivation.ts
+// =============================================================================
+
+export {
+  FORWARD_TO_REVERSE,
+  BIDIRECTIONAL_PAIRS,
+  deriveReverseVerb,
+  fieldNameToVerb,
+  isPassiveVerb,
+  registerVerbPair,
+  registerBidirectionalPair,
+  registerFieldVerb,
+} from './schema/verb-derivation.js'
+
+// =============================================================================
 // Re-exports from schema/index.ts (main factory and operations)
 // =============================================================================
 

@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
-    "ai-workflows": "workspace:*"
+    "ai-workflows": "workspace:*",
+    "zod": "^3.23.0"
   },
   "keywords": [
     "ai",

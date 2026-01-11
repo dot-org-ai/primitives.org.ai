@@ -274,6 +274,9 @@ importers:
       ai-workflows:
         specifier: workspace:*
         version: link:../ai-workflows
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
 
   packages/human-in-the-loop:
     dependencies:

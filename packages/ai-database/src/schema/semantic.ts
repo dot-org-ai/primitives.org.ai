@@ -17,6 +17,7 @@ import type { DBProvider, SemanticSearchResult } from './provider.js'
 import { hasSemanticSearch } from './provider.js'
 import { resolveNestedPending } from './resolve.js'
 import { generateEntity } from './cascade.js'
+import { searchUnionTypes, createProviderSearcher, type FallbackSearchOptions } from './union-fallback.js'
 
 /**
  * Safely extract the fuzzy threshold from entity schema
@@ -92,61 +93,53 @@ export async function resolveBackwardFuzzy(
 
       // Check if provider supports semantic search
       if (hasSemanticSearch(provider)) {
+        // Filter to only types that exist in the schema
+        const validTypes = typesToSearch.filter(t => schema.entities.has(t))
+        if (validTypes.length === 0) continue
+
+        // Create a searcher from the provider
+        const searcher = createProviderSearcher(provider)
+
+        // Determine search mode:
+        // - For single fields with union types, use ordered fallback (search in order, stop on first match)
+        // - For array fields, use parallel mode to collect all matches
+        const searchMode: FallbackSearchOptions['mode'] = field.isArray ? 'parallel' : 'ordered'
+
+        const searchResult = await searchUnionTypes(
+          validTypes,
+          searchQuery,
+          {
+            mode: searchMode,
+            threshold,
+            searcher,
+            returnAll: field.isArray, // For arrays, get all matches
+            limit: field.isArray ? 10 : 1, // Single fields only need 1 result per type
+          }
+        )
+
         if (field.isArray) {
-          // For array fields, collect matches from all union types
-          const allMatches: Array<{ id: string; score: number; matchedType: string }> = []
-
-          for (const searchType of typesToSearch) {
-            // Only search types that exist in the schema
-            if (!schema.entities.has(searchType)) continue
-
-            const matches: SemanticSearchResult[] = await provider.semanticSearch(
-              searchType,
-              searchQuery,
-              { minScore: threshold, limit: 10 }
-            )
-
-            for (const match of matches) {
-              if (match.$score >= threshold) {
-                allMatches.push({
-                  id: match.$id,
-                  score: match.$score,
-                  matchedType: searchType
-                })
-              }
+          // For array fields, collect all matches sorted by score
+          if (searchResult.matches.length > 0) {
+            resolved[fieldName] = searchResult.matches.map(m => m.$id)
+            // Track metadata about the search
+            if (searchResult.fallbackTriggered) {
+              resolved[`${fieldName}$fallbackUsed`] = true
             }
+            resolved[`${fieldName}$searchedTypes`] = searchResult.searchedTypes
           }
-
-          // Sort by score descending and take best matches
-          allMatches.sort((a, b) => b.score - a.score)
-          resolved[fieldName] = allMatches.map(m => m.id)
         } else {
-          // For single fields, find the best match across all union types
-          let bestMatch: SemanticSearchResult | undefined
-          let bestMatchType: string | undefined
-
-          for (const searchType of typesToSearch) {
-            // Only search types that exist in the schema
-            if (!schema.entities.has(searchType)) continue
-
-            const matches: SemanticSearchResult[] = await provider.semanticSearch(
-              searchType,
-              searchQuery,
-              { minScore: threshold, limit: 1 }
-            )
-
-            const firstMatch = matches[0]
-            if (firstMatch && firstMatch.$score >= threshold) {
-              if (!bestMatch || firstMatch.$score > bestMatch.$score) {
-                bestMatch = firstMatch
-                bestMatchType = searchType
-              }
-            }
-          }
-
-          if (bestMatch && bestMatchType) {
+          // For single fields, use the best match (or first match in ordered mode)
+          if (searchResult.matches.length > 0) {
+            const bestMatch = searchResult.matches[0]!
             resolved[fieldName] = bestMatch.$id
-            resolved[`${fieldName}$matchedType`] = bestMatchType
+            resolved[`${fieldName}$matchedType`] = bestMatch.$type
+            resolved[`${fieldName}$score`] = bestMatch.$score
+
+            // Track if fallback was used (matched type != first type in union)
+            if (searchResult.fallbackTriggered) {
+              resolved[`${fieldName}$fallbackUsed`] = true
+              resolved[`${fieldName}$searchOrder`] = searchResult.searchOrder
+            }
           }
         }
       }

@@ -25,6 +25,7 @@
 
 import type { FunctionOptions } from './template.js'
 import type { BatchProvider } from './batch-queue.js'
+import type { BudgetConfig, RequestContext as IRequestContext, ModelPricing } from './budget.js'
 
 // ============================================================================
 // Types
@@ -36,6 +37,18 @@ export type BatchMode =
   | 'immediate'  // Execute immediately (concurrent requests, full price)
   | 'flex'       // Use flex processing (faster than batch, ~50% discount, minutes)
   | 'deferred'   // Always use provider batch API (50% discount, up to 24hr)
+
+/** Budget configuration for context */
+export interface ContextBudgetConfig {
+  /** Maximum total tokens allowed */
+  maxTokens?: number
+  /** Maximum cost in USD */
+  maxCost?: number
+  /** Alert thresholds as fractions (e.g., [0.5, 0.8, 1.0]) */
+  alertThresholds?: number[]
+  /** Custom pricing for models not in default pricing table */
+  customPricing?: Record<string, ModelPricing>
+}
 
 /** Execution context configuration */
 export interface ExecutionContext extends FunctionOptions {
@@ -51,6 +64,10 @@ export interface ExecutionContext extends FunctionOptions {
   webhookUrl?: string
   /** Custom metadata for batch jobs */
   metadata?: Record<string, unknown>
+  /** Budget configuration for tracking and limits */
+  budget?: ContextBudgetConfig
+  /** Request context for tracing */
+  requestContext?: IRequestContext
 }
 
 // ============================================================================

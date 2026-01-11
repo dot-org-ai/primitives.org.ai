@@ -110,6 +110,42 @@ export {
   type EventRegistrationWithDeps,
 } from './dependency-graph.js'
 
+// Barrier/Join Semantics - Parallel step coordination
+export {
+  Barrier,
+  BarrierTimeoutError,
+  createBarrier,
+  waitForAll,
+  waitForAny,
+  withConcurrencyLimit,
+  type BarrierOptions,
+  type BarrierProgress,
+  type BarrierResult,
+  type WaitForAllOptions,
+  type WaitForAnyOptions,
+  type WaitForAnyResult,
+  type ConcurrencyOptions,
+} from './barrier.js'
+
+// Cascade Executor - code -> generative -> agentic -> human pattern
+export {
+  CascadeExecutor,
+  CascadeTimeoutError,
+  TierSkippedError,
+  AllTiersFailedError,
+  TIER_ORDER,
+  DEFAULT_TIER_TIMEOUTS,
+  type CapabilityTier,
+  type TierHandler,
+  type TierContext,
+  type TierResult,
+  type TierRetryConfig,
+  type CascadeConfig,
+  type CascadeResult,
+  type CascadeMetrics,
+  type SkipCondition,
+} from './cascade-executor.js'
+
 // Types
 export type {
   EventHandler,

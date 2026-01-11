@@ -137,6 +137,35 @@ export {
   DecisionAnalytics,
 } from './fallback-resolution.js'
 
+// Export AI failure to human escalation integration
+export {
+  AIFailureClassifier,
+  ContextSanitizer,
+  AutoEscalationTrigger,
+  EscalationRouter,
+} from './ai-failure-escalation.js'
+
+export type {
+  // AI failure types
+  AIFailure,
+  FailureCategory,
+  FailureSeverity,
+  CascadeTierId,
+  FailureTypeConfig,
+  CategoryRule,
+  SanitizedContext,
+  ContextSanitizerOptions,
+  // Escalation types
+  EscalationConfig,
+  EscalationEvent,
+  FailureRecord,
+  EscalationRoute,
+  ReviewerConfig,
+  RoutingMetrics,
+  EscalationRequestParams,
+  CreatedEscalationRequest,
+} from './ai-failure-escalation.js'
+
 export type {
   // Decision logging
   DecisionContext,

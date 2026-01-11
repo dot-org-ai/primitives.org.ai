@@ -30,7 +30,7 @@
  * @packageDocumentation
  */
 
-import { generateObject } from './generate.js'
+import { generateObject, streamObject, streamText } from './generate.js'
 import type { SimpleSchema } from './schema.js'
 import type { FunctionOptions } from './template.js'
 import {
@@ -41,6 +41,36 @@ import {
   BatchMapPromise,
 } from './batch-map.js'
 import { getModel } from './context.js'
+
+// ============================================================================
+// Streaming Types
+// ============================================================================
+
+/**
+ * Options for streaming
+ */
+export interface StreamOptions {
+  /** Abort signal for cancellation */
+  abortSignal?: AbortSignal
+}
+
+/**
+ * Streaming result wrapper that provides both AsyncIterable interface
+ * and access to the final result
+ */
+export interface StreamingAIPromise<T> extends AsyncIterable<T extends string ? string : Partial<T>> {
+  /** Stream of text chunks (for text generation) */
+  textStream: AsyncIterable<string>
+  /** Stream of partial objects (for object generation) */
+  partialObjectStream: AsyncIterable<Partial<T>>
+  /** Promise that resolves to the final complete result */
+  result: Promise<T>
+  /** Promise interface - then() */
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2>
+}
 
 // ============================================================================
 // Types
@@ -463,6 +493,35 @@ export class AIPromise<T> implements PromiseLike<T> {
   }
 
   /**
+   * Stream the AI generation - returns chunks as they arrive
+   *
+   * For text generation, yields string chunks.
+   * For object generation, yields partial objects as they build up.
+   * For list generation, yields items as they're generated.
+   *
+   * @example
+   * ```ts
+   * // Text streaming
+   * const stream = write`Write a story`.stream()
+   * for await (const chunk of stream.textStream) {
+   *   process.stdout.write(chunk)
+   * }
+   *
+   * // Object streaming with partial updates
+   * const stream = ai`Generate a recipe`.stream()
+   * for await (const partial of stream.partialObjectStream) {
+   *   console.log('Building:', partial)
+   * }
+   *
+   * // Get final result after streaming
+   * const finalResult = await stream.result
+   * ```
+   */
+  stream(options?: StreamOptions): StreamingAIPromise<T> {
+    return createStreamingAIPromise(this, options)
+  }
+
+  /**
    * Promise interface - then()
    */
   then<TResult1 = T, TResult2 = never>(
@@ -532,7 +591,7 @@ const PROXY_HANDLERS: ProxyHandler<AIPromise<unknown>> = {
     }
 
     // Handle AIPromise methods
-    if (prop === 'map' || prop === 'forEach' || prop === 'resolve') {
+    if (prop === 'map' || prop === 'forEach' || prop === 'resolve' || prop === 'stream' || prop === 'addDependency' || prop === 'mapImmediate' || prop === 'mapDeferred') {
       return (target as any)[prop].bind(target)
     }
 
@@ -794,4 +853,274 @@ export function createAITemplateFunction<T>(
   }
 
   return templateFn as any
+}
+
+// ============================================================================
+// Streaming Implementation
+// ============================================================================
+
+/**
+ * Create a streaming wrapper for an AIPromise
+ *
+ * This function creates a StreamingAIPromise that:
+ * - Resolves dependencies before streaming
+ * - Streams text or partial objects based on the promise type
+ * - Collects the final result as stream is consumed
+ * - Supports cancellation via AbortSignal
+ */
+function createStreamingAIPromise<T>(
+  promise: AIPromise<T>,
+  options?: StreamOptions
+): StreamingAIPromise<T> {
+  const rawPromise = getRawPromise(promise)
+  const promiseOptions = (rawPromise as any)._options as AIPromiseOptions
+  const dependencies = (rawPromise as any)._dependencies as Dependency[]
+
+  // Result promise state
+  let resultResolve: (value: T) => void
+  let resultReject: (error: unknown) => void
+  const resultPromise = new Promise<T>((resolve, reject) => {
+    resultResolve = resolve
+    resultReject = reject
+  })
+
+  // Shared state to prevent multiple API calls
+  let streamStarted = false
+  let cachedTextChunks: string[] | null = null
+  let cachedPartialObjects: Partial<T>[] | null = null
+  let streamError: unknown = null
+  let finalValue: T | undefined
+
+  // Resolve dependencies and prepare the final prompt
+  const preparePrompt = async (): Promise<string> => {
+    const resolvedDeps: Record<string, unknown> = {}
+
+    for (const dep of dependencies) {
+      const value = await dep.promise.resolve()
+      const key = dep.path.length > 0 ? dep.path.join('.') : `dep_${dependencies.indexOf(dep)}`
+      resolvedDeps[key] = value
+    }
+
+    let finalPrompt = rawPromise.prompt
+    for (const [key, value] of Object.entries(resolvedDeps)) {
+      finalPrompt = finalPrompt.replace(
+        new RegExp(`\\$\\{${key}\\}`, 'g'),
+        String(value)
+      )
+    }
+
+    return finalPrompt
+  }
+
+  // Build schema from accessed properties
+  const buildSchema = (): SimpleSchema => {
+    return (rawPromise as any)._buildSchema()
+  }
+
+  // Extract value based on type (same logic as resolve())
+  const extractFinalValue = (obj: unknown): T => {
+    let value = obj as T
+    if (promiseOptions.type === 'text' && typeof value === 'object' && value !== null && 'text' in value) {
+      value = (value as { text: T }).text
+    } else if (promiseOptions.type === 'boolean' && typeof value === 'object' && value !== null && 'answer' in value) {
+      const answer = (value as { answer: string }).answer
+      value = (answer === 'true' || answer === true) as unknown as T
+    } else if ((promiseOptions.type === 'list' || promiseOptions.type === 'extract') && typeof value === 'object' && value !== null && 'items' in value) {
+      value = (value as { items: T }).items
+    }
+    return value
+  }
+
+  // Create text stream that collects chunks for result
+  async function* createTextStream(): AsyncGenerator<string> {
+    if (cachedTextChunks !== null) {
+      // Return cached chunks if we already streamed
+      for (const chunk of cachedTextChunks) {
+        yield chunk
+      }
+      return
+    }
+
+    if (streamStarted && streamError) {
+      throw streamError
+    }
+
+    streamStarted = true
+    cachedTextChunks = []
+
+    try {
+      const finalPrompt = await preparePrompt()
+
+      const result = await streamText({
+        model: promiseOptions.model || 'sonnet',
+        prompt: finalPrompt,
+        system: promiseOptions.system,
+        temperature: promiseOptions.temperature,
+        maxTokens: promiseOptions.maxTokens,
+        abortSignal: options?.abortSignal,
+      })
+
+      let fullText = ''
+      for await (const chunk of result.textStream) {
+        cachedTextChunks!.push(chunk)
+        fullText += chunk
+        yield chunk
+      }
+
+      finalValue = fullText as T
+      resultResolve!(finalValue)
+    } catch (error) {
+      streamError = error
+      resultReject!(error)
+      throw error
+    }
+  }
+
+  // Create partial object stream that collects objects for result
+  async function* createPartialObjectStream(): AsyncGenerator<Partial<T>> {
+    if (cachedPartialObjects !== null) {
+      // Return cached partials if we already streamed
+      for (const partial of cachedPartialObjects) {
+        yield partial
+      }
+      return
+    }
+
+    if (streamStarted && streamError) {
+      throw streamError
+    }
+
+    streamStarted = true
+    cachedPartialObjects = []
+
+    try {
+      const finalPrompt = await preparePrompt()
+      const schema = buildSchema()
+
+      const result = await streamObject({
+        model: promiseOptions.model || 'sonnet',
+        schema,
+        prompt: finalPrompt,
+        system: promiseOptions.system,
+        temperature: promiseOptions.temperature,
+        maxTokens: promiseOptions.maxTokens,
+        abortSignal: options?.abortSignal,
+      })
+
+      let lastPartial: Partial<T> = {} as Partial<T>
+      for await (const partial of result.partialObjectStream) {
+        cachedPartialObjects!.push(partial as Partial<T>)
+        lastPartial = partial as Partial<T>
+        yield partial as Partial<T>
+      }
+
+      finalValue = extractFinalValue(lastPartial)
+      resultResolve!(finalValue)
+    } catch (error) {
+      streamError = error
+      resultReject!(error)
+      throw error
+    }
+  }
+
+  // Create main stream based on type
+  async function* createMainStream(): AsyncGenerator<T extends string ? string : Partial<T>> {
+    if (promiseOptions.type === 'text') {
+      for await (const chunk of createTextStream()) {
+        yield chunk as any
+      }
+    } else if (promiseOptions.type === 'list') {
+      // For lists, yield new items as they appear
+      let lastLength = 0
+      for await (const partial of createPartialObjectStream()) {
+        const items = (partial as { items?: string[] }).items || []
+        for (let i = lastLength; i < items.length; i++) {
+          yield items[i] as any
+        }
+        lastLength = items.length
+      }
+    } else {
+      for await (const partial of createPartialObjectStream()) {
+        yield partial as any
+      }
+    }
+  }
+
+  // Start the stream collection in background if result is awaited
+  const ensureStreamStarted = (): void => {
+    if (!streamStarted) {
+      // Start consuming the appropriate stream to populate result
+      if (promiseOptions.type === 'text') {
+        ;(async () => {
+          try {
+            for await (const _ of createTextStream()) {
+              // consume
+            }
+          } catch {
+            // Error already handled in stream
+          }
+        })()
+      } else {
+        ;(async () => {
+          try {
+            for await (const _ of createPartialObjectStream()) {
+              // consume
+            }
+          } catch {
+            // Error already handled in stream
+          }
+        })()
+      }
+    }
+  }
+
+  // Create a lazy result promise that starts streaming when accessed
+  const lazyResult: Promise<T> & { _started?: boolean } = Object.assign(
+    {
+      then<TResult1 = T, TResult2 = never>(
+        onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+      ): Promise<TResult1 | TResult2> {
+        ensureStreamStarted()
+        return resultPromise.then(onfulfilled, onrejected)
+      },
+      catch<TResult = never>(
+        onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null
+      ): Promise<T | TResult> {
+        ensureStreamStarted()
+        return resultPromise.catch(onrejected)
+      },
+      finally(onfinally?: (() => void) | null): Promise<T> {
+        ensureStreamStarted()
+        return resultPromise.finally(onfinally)
+      },
+      [Symbol.toStringTag]: 'Promise' as const,
+    }
+  ) as Promise<T> & { _started?: boolean }
+
+  // Create the streaming object
+  const streamingPromise: StreamingAIPromise<T> = {
+    textStream: {
+      [Symbol.asyncIterator]: createTextStream,
+    },
+
+    partialObjectStream: {
+      [Symbol.asyncIterator]: createPartialObjectStream,
+    },
+
+    result: lazyResult,
+
+    [Symbol.asyncIterator]: createMainStream,
+
+    then<TResult1 = T, TResult2 = never>(
+      onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): Promise<TResult1 | TResult2> {
+      // If result is awaited before stream consumption, start the stream
+      ensureStreamStarted()
+      return resultPromise.then(onfulfilled, onrejected)
+    },
+  }
+
+  return streamingPromise
 }
