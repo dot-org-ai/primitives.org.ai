@@ -185,3 +185,58 @@ export type {
   ContextChange,
   ContextDiff,
 } from './cascade-context.js'
+
+// Export agent-to-agent communication layer
+export {
+  // Message Bus
+  AgentMessageBus,
+  createMessageBus,
+  // Core Functions
+  sendToAgent,
+  broadcastToGroup,
+  requestFromAgent,
+  onMessage,
+  acknowledge,
+  // Coordination Patterns
+  requestResponse,
+  fanOut,
+  fanIn,
+  pipeline,
+  // Handoff Protocol
+  initiateHandoff,
+  acceptHandoff,
+  rejectHandoff,
+  completeHandoff,
+} from './agent-comms.js'
+
+export type {
+  // Message Types
+  AgentMessage,
+  MessageEnvelope,
+  MessageAck,
+  MessageType,
+  MessagePriority,
+  DeliveryStatus,
+  // Handoff Types
+  HandoffRequest,
+  HandoffResult,
+  HandoffStatus,
+  // Coordination Types
+  CoordinationPattern,
+  // Handler Types
+  MessageHandler,
+  SubscribeOptions,
+  // Options Types
+  MessageBusOptions,
+  SendOptions,
+  RequestOptions,
+  OnMessageOptions,
+  RequestResponseOptions,
+  FanOutOptions,
+  FanOutResult,
+  FanInOptions,
+  PipelineOptions,
+  InitiateHandoffOptions,
+  RejectHandoffOptions,
+  CompleteHandoffOptions,
+} from './agent-comms.js'
