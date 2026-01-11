@@ -240,3 +240,36 @@ export type {
   RejectHandoffOptions,
   CompleteHandoffOptions,
 } from './agent-comms.js'
+
+// Export load balancing and routing for agent coordination
+export {
+  // Balancer Factories
+  createRoundRobinBalancer,
+  createLeastBusyBalancer,
+  createCapabilityRouter,
+  createPriorityQueueBalancer,
+  createAgentAvailabilityTracker,
+  createCompositeBalancer,
+  createRoutingRuleEngine,
+  // Metrics
+  collectRoutingMetrics,
+  resetRoutingMetrics,
+} from './load-balancing.js'
+
+export type {
+  // Core Types
+  LoadBalancer,
+  BalancerStrategy,
+  AgentInfo,
+  TaskRequest,
+  RouteResult,
+  // Availability Types
+  AgentAvailability,
+  // Rule Types
+  RoutingRule,
+  RoutingRuleCondition,
+  // Metrics Types
+  RoutingMetrics,
+  // Composite Types
+  CompositeBalancerConfig,
+} from './load-balancing.js'
