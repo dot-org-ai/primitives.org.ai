@@ -110,6 +110,60 @@ export {
 // Re-export semantic functions
 export { resolveBackwardFuzzy, resolveForwardFuzzy } from './semantic.js'
 
+// Re-export dependency graph functions
+export {
+  buildDependencyGraph,
+  topologicalSort,
+  detectCycles,
+  getParallelGroups,
+  getAllDependencies,
+  hasCycles,
+  visualizeGraph,
+  CircularDependencyError,
+  PRIMITIVE_TYPES,
+  type SchemaDepGraph,
+  type SchemaDepNode,
+  type SchemaDepEdge,
+  type DetectCyclesOptions,
+} from './dependency-graph.js'
+
+// Re-export union fallback functions
+export {
+  parseUnionTypes,
+  parseUnionThresholds,
+  searchUnionTypes,
+  createProviderSearcher,
+  type UnionMatch,
+  type UnionSearchResult,
+  type UnionSearcher,
+  type FallbackSearchOptions,
+  type SearchError,
+} from './union-fallback.js'
+
+// Re-export generation context
+export {
+  GenerationContext,
+  createGenerationContext,
+  ContextOverflowError,
+  type Entity as GenerationEntity,
+  type GenerationContextOptions,
+  type ContextSnapshot,
+  type FieldContext,
+  type BuildContextOptions,
+} from './generation-context.js'
+
+// Re-export verb derivation functions
+export {
+  FORWARD_TO_REVERSE,
+  BIDIRECTIONAL_PAIRS,
+  deriveReverseVerb,
+  fieldNameToVerb,
+  isPassiveVerb,
+  registerVerbPair,
+  registerBidirectionalPair,
+  registerFieldVerb,
+} from './verb-derivation.js'
+
 // Import for internal use
 import type {
   EntitySchema,

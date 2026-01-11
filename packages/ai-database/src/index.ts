@@ -136,6 +136,15 @@ export {
   resolveUrl,
   resolveShortUrl,
   parseUrl,
+  // Verb derivation
+  FORWARD_TO_REVERSE,
+  BIDIRECTIONAL_PAIRS,
+  deriveReverseVerb,
+  fieldNameToVerb,
+  isPassiveVerb,
+  registerVerbPair,
+  registerBidirectionalPair,
+  registerFieldVerb,
 } from './schema.js'
 
 export {
@@ -398,3 +407,21 @@ export type {
   ClickHouseExecutor,
   ClickHouseDurableConfig,
 } from './durable-clickhouse.js'
+
+// =============================================================================
+// Generation Context - Context accumulation across cascading generations
+// =============================================================================
+
+export {
+  GenerationContext,
+  createGenerationContext,
+  ContextOverflowError,
+} from './schema/generation-context.js'
+
+export type {
+  Entity as GenerationEntity,
+  GenerationContextOptions,
+  ContextSnapshot,
+  FieldContext,
+  BuildContextOptions,
+} from './schema/generation-context.js'
