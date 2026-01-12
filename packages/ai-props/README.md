@@ -1,44 +1,43 @@
 # ai-props
 
-AI-powered props primitives for intelligent component properties.
+**Stop manually writing placeholder props. Let AI fill in the blanks.**
 
-## Overview
+You've built a beautiful component library. But every time you use a component, you're stuck inventing placeholder text, mock data, and dummy content. Your `<UserCard />` needs a bio. Your `<ProductCard />` needs a description. Your `<SEOHead />` needs meta tags.
 
-`ai-props` provides utilities for automatically generating component props using AI based on schema definitions. It's designed to work seamlessly with React components, Next.js, and other frameworks.
+What if your components could intelligently complete themselves?
 
-## Installation
-
-```bash
-npm install ai-props
-```
-
-## Quick Start
+## Before & After
 
 ```typescript
-import { AI, generateProps } from 'ai-props'
+// BEFORE: Manual placeholder props (tedious, repetitive, inconsistent)
+<UserCard
+  name="John Doe"
+  bio="Lorem ipsum dolor sit amet..."  // You've typed this a thousand times
+  avatar="/placeholder.png"
+/>
 
-// Define an AI-powered component schema
+// AFTER: AI-powered props (intelligent, contextual, automatic)
 const UserCard = AI({
   schema: {
     name: 'User name',
     bio: 'User biography',
     avatar: 'Avatar URL',
   },
-  defaults: {
-    avatar: '/default-avatar.png',
-  },
 })
 
-// Generate props with AI
-const props = await UserCard({ name: 'John' })
-// { name: 'John', bio: 'AI-generated bio...', avatar: '/default-avatar.png' }
+const props = await UserCard({ name: 'John Doe' })
+// { name: 'John Doe', bio: 'Software engineer passionate about...', avatar: 'https://...' }
 ```
 
-## Core Features
+## Quick Start
 
-### AI() Wrapper
+### 1. Install
 
-Create AI-powered component wrappers that automatically fill in missing props:
+```bash
+npm install ai-props
+```
+
+### 2. Define Your Schema
 
 ```typescript
 import { AI } from 'ai-props'
@@ -49,17 +48,48 @@ const ProductCard = AI({
     description: 'Product description',
     price: 'Price (number)',
   },
-  required: ['price'],  // Required props won't be generated
-  exclude: ['internal'], // Exclude props from generation
+  required: ['price'],  // AI won't generate required props
 })
-
-// Use the component
-const props = await ProductCard({ price: 99 })
 ```
 
-### generateProps()
+### 3. Generate Props
 
-Low-level function for direct prop generation:
+```typescript
+const props = await ProductCard({ price: 99 })
+// { title: 'Premium Widget Pro', description: 'A high-quality...', price: 99 }
+```
+
+That's it. Your components now complete themselves intelligently.
+
+---
+
+## Core API
+
+### `AI()` - The Smart Component Wrapper
+
+Wrap any component schema to enable intelligent prop generation:
+
+```typescript
+import { AI } from 'ai-props'
+
+const UserCard = AI({
+  schema: {
+    name: 'Full name of the user',
+    bio: 'A short biography',
+    avatar: 'URL to avatar image',
+  },
+  defaults: {
+    avatar: '/default-avatar.png',
+  },
+  exclude: ['internal'],  // Never generate these props
+})
+
+const props = await UserCard({ name: 'Jane' })
+```
+
+### `generateProps()` - Low-Level Generation
+
+Direct access to prop generation with full metadata:
 
 ```typescript
 import { generateProps } from 'ai-props'
@@ -73,14 +103,14 @@ const result = await generateProps({
   context: { topic: 'AI-powered applications' },
 })
 
-console.log(result.props)    // Generated props
-console.log(result.cached)   // Whether result came from cache
-console.log(result.metadata) // Model info, duration, etc.
+console.log(result.props)     // Generated props
+console.log(result.cached)    // Cache hit?
+console.log(result.metadata)  // Model info, duration
 ```
 
-### createAIComponent()
+### `createAIComponent()` - Full TypeScript Support
 
-Create typed AI components:
+Get complete type inference for your generated props:
 
 ```typescript
 import { createAIComponent } from 'ai-props'
@@ -94,18 +124,19 @@ interface ProductProps {
 const ProductCard = createAIComponent<ProductProps>({
   schema: {
     title: 'Product title',
-    price: 'Price (number)',
+    price: 'Price in USD (number)',
     description: 'Product description',
   },
 })
 
-const props = await ProductCard({})
-// props is typed as ProductProps
+const props = await ProductCard({})  // Typed as ProductProps
 ```
 
-### createComponentFactory()
+---
 
-Create a factory for generating multiple instances:
+## Batch & Factory Patterns
+
+### Generate Multiple Items
 
 ```typescript
 import { createComponentFactory } from 'ai-props'
@@ -117,25 +148,18 @@ const factory = createComponentFactory({
   },
 })
 
-// Generate a single instance
+// Single item
 const product = await factory.generate({ category: 'electronics' })
 
-// Generate multiple instances
+// Multiple items in parallel
 const products = await factory.generateMany([
   { category: 'electronics' },
   { category: 'clothing' },
+  { category: 'home' },
 ])
-
-// Generate with overrides
-const custom = await factory.generateWith(
-  { category: 'tech' },
-  { price: 99 }
-)
 ```
 
-### composeAIComponents()
-
-Compose multiple schemas together:
+### Compose Multiple Schemas
 
 ```typescript
 import { composeAIComponents } from 'ai-props'
@@ -155,11 +179,11 @@ const profile = await FullProfile({
 })
 ```
 
-## HOC Utilities
+---
 
-### createPropsEnhancer()
+## SSR & Framework Integration
 
-Create a props enhancer for any component system:
+### Props Enhancer
 
 ```typescript
 import { createPropsEnhancer } from 'ai-props'
@@ -169,15 +193,13 @@ const enhancer = createPropsEnhancer({
     title: 'Page title',
     description: 'Page description',
   },
-  defaults: { title: 'Default Title' },
+  defaults: { title: 'My App' },
 })
 
-const props = await enhancer({ description: 'My page' })
+const props = await enhancer({ description: 'Welcome page' })
 ```
 
-### createAsyncPropsProvider()
-
-Create an async props provider for SSR:
+### Async Props Provider (Next.js)
 
 ```typescript
 import { createAsyncPropsProvider } from 'ai-props'
@@ -196,9 +218,7 @@ export async function getStaticProps() {
 }
 ```
 
-### createBatchGenerator()
-
-Generate props for multiple items efficiently:
+### Batch Generation
 
 ```typescript
 import { createBatchGenerator } from 'ai-props'
@@ -214,15 +234,16 @@ const items = await batch.generate([
 ])
 ```
 
+---
+
 ## Validation
 
-### validateProps()
-
-Validate props against a schema:
+Ensure your props match expectations:
 
 ```typescript
-import { validateProps } from 'ai-props'
+import { validateProps, assertValidProps } from 'ai-props'
 
+// Validate and get errors
 const result = validateProps(
   { name: 'John', age: '25' },
   { name: 'Name', age: 'Age (number)' }
@@ -232,78 +253,56 @@ if (!result.valid) {
   console.log(result.errors)
   // [{ path: 'age', message: 'Expected number, got string' }]
 }
+
+// Or throw on invalid
+assertValidProps(props, schema)
 ```
 
-### assertValidProps()
-
-Assert props are valid (throws on error):
-
-```typescript
-import { assertValidProps } from 'ai-props'
-
-assertValidProps(
-  { name: 'John', age: 25 },
-  { name: 'Name', age: 'Age (number)' }
-)
-```
-
-### Other Validation Utilities
+### Validation Utilities
 
 ```typescript
 import {
   hasRequiredProps,
   getMissingProps,
   isComplete,
-  getMissingFromSchema,
   sanitizeProps,
   mergeWithDefaults,
   createValidator,
 } from 'ai-props'
 
-// Check required props
-hasRequiredProps({ name: 'John' }, ['name', 'email']) // false
+hasRequiredProps({ name: 'John' }, ['name', 'email'])  // false
+getMissingProps({ name: 'John' }, ['name', 'email'])   // ['email']
+isComplete({ name: 'John' }, { name: 'Name', age: 'Age' })  // false
+sanitizeProps({ name: 'John', extra: 'x' }, { name: 'Name' })  // { name: 'John' }
 
-// Get missing props
-getMissingProps({ name: 'John' }, ['name', 'email']) // ['email']
-
-// Check schema completion
-isComplete({ name: 'John' }, { name: 'Name', age: 'Age' }) // false
-
-// Sanitize extra props
-sanitizeProps({ name: 'John', extra: 'value' }, { name: 'Name' })
-// { name: 'John' }
-
-// Merge with defaults
-mergeWithDefaults({ name: 'John' }, { age: 0 }, { name: 'Name', age: 'Age' })
-// { name: 'John', age: 0 }
-
-// Create reusable validator
 const validate = createValidator({ name: 'Name', age: 'Age (number)' })
-validate({ name: 'John', age: 25 }) // { valid: true, errors: [] }
+validate({ name: 'John', age: 25 })  // { valid: true, errors: [] }
 ```
+
+---
 
 ## Caching
 
-### Cache Configuration
+Avoid redundant AI calls with built-in caching:
 
 ```typescript
 import { configureAIProps, configureCache, clearCache } from 'ai-props'
 
-// Configure global settings
+// Global configuration
 configureAIProps({
   model: 'gpt-4',
   cache: true,
-  cacheTTL: 5 * 60 * 1000, // 5 minutes
+  cacheTTL: 5 * 60 * 1000,  // 5 minutes
 })
 
-// Configure cache with custom TTL
-configureCache(10 * 60 * 1000) // 10 minutes
+// Or configure cache directly
+configureCache(10 * 60 * 1000)
 
-// Clear all cached props
+// Clear when needed
 clearCache()
 ```
 
-### Cache Classes
+### Cache Implementations
 
 ```typescript
 import { MemoryPropsCache, LRUPropsCache } from 'ai-props'
@@ -314,17 +313,15 @@ const memCache = new MemoryPropsCache(5 * 60 * 1000)
 // LRU cache with max entries
 const lruCache = new LRUPropsCache(100, 5 * 60 * 1000)
 
-// Cache operations
 lruCache.set('key', { name: 'John' })
 const entry = lruCache.get<{ name: string }>('key')
-lruCache.delete('key')
-lruCache.clear()
-console.log(lruCache.size)
 ```
+
+---
 
 ## Schema Type Hints
 
-Use type hints in schema strings:
+Use type hints in your schema strings for precise generation:
 
 ```typescript
 const schema = {
@@ -341,33 +338,31 @@ const schema = {
 }
 ```
 
+---
+
 ## Configuration
 
 ```typescript
 import { configureAIProps, getConfig, resetConfig } from 'ai-props'
 
-// Configure globally
 configureAIProps({
-  model: 'sonnet',           // Default model
-  cache: true,               // Enable caching
-  cacheTTL: 300000,          // Cache TTL in ms
-  system: 'Custom prompt',   // System prompt
+  model: 'sonnet',
+  cache: true,
+  cacheTTL: 300000,
+  system: 'Generate realistic, contextual content',
   generate: async (schema, context) => {
-    // Custom generator
-    return { /* generated props */ }
+    // Custom generation logic
+    return { /* props */ }
   },
 })
 
-// Get current config
 const config = getConfig()
-
-// Reset to defaults
 resetConfig()
 ```
 
-## API Reference
+---
 
-### Types
+## TypeScript Reference
 
 ```typescript
 interface PropSchema {
@@ -411,6 +406,22 @@ interface ValidationError {
   received?: unknown
 }
 ```
+
+---
+
+## What You Achieve
+
+With `ai-props`, you:
+
+- **Ship faster** - No more inventing placeholder content
+- **Stay consistent** - AI generates contextually appropriate props
+- **Type safely** - Full TypeScript inference throughout
+- **Cache intelligently** - Avoid redundant AI calls
+- **Scale effortlessly** - Batch generation for multiple items
+
+Your components become smarter. Your development becomes faster. Your content becomes consistent.
+
+---
 
 ## License
 

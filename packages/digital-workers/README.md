@@ -1,28 +1,201 @@
 # digital-workers
 
-Abstract interface for organizing digital work, independent of whether AI or humans perform individual tasks.
+**You're building AI-powered workflows. But who should actually do the work?**
 
-## Overview
+Sometimes it's an AI agent operating autonomously. Sometimes it requires human judgment. Often it's both working together. And as AI capabilities evolve, you need workflows that can adapt without rewriting everything.
 
-**Digital workers** provides the foundational abstraction for structuring and organizing work in the digital enterprise. It defines a unified interface that both AI agents and humans implement, enabling you to design workflows without coupling them to specific execution strategies.
+`digital-workers` gives you a single interface that works whether the worker is human or AI - so you can design once and swap implementations as your needs change.
 
-### Why This Abstraction Matters
-
-When building AI-powered systems, you face a fundamental question: *who should do this task?* Sometimes it's an AI agent operating autonomously. Sometimes it requires human judgment. Often it's a mix of both.
-
-`digital-workers` lets you define work in terms of **what** needs to happen, not **who** does it:
+## The Problem
 
 ```typescript
-// This workflow doesn't care if alice is an AI agent or a human
+// Without digital-workers: You're locked into implementation details
+if (task.requiresHumanJudgment) {
+  await sendSlackToAlice(task.description)
+  const approval = await waitForSlackResponse()
+  // Different code path for humans...
+} else {
+  await callAIAgent(task.description)
+  // Completely different code path for AI...
+}
+```
+
+Your workflow logic becomes tangled with *who* does the work instead of *what* needs to happen.
+
+## The Solution
+
+```typescript
+// With digital-workers: Define what, not who
 await worker$.approve('Deploy v2.0 to production', alice, { via: 'slack' })
 ```
 
-The same Worker interface works whether `alice` is:
+The same code works whether `alice` is:
 - A human product manager who gets a Slack notification
 - An AI agent that evaluates deployment criteria autonomously
 - A supervised AI that escalates to humans for high-risk decisions
 
-### Package Relationships
+## Quick Start
+
+### 1. Install
+
+```bash
+pnpm add digital-workers
+```
+
+### 2. Define Your Workers
+
+```typescript
+import type { Worker } from 'digital-workers'
+
+const alice: Worker = {
+  id: 'user_alice',
+  name: 'Alice',
+  type: 'human',
+  status: 'available',
+  contacts: {
+    email: 'alice@company.com',
+    slack: { workspace: 'acme', user: 'U123' },
+  },
+}
+
+const codeReviewer: Worker = {
+  id: 'agent_reviewer',
+  name: 'Code Reviewer',
+  type: 'agent',
+  status: 'available',
+  contacts: {
+    api: { endpoint: 'https://api.internal/reviewer' },
+  },
+}
+```
+
+### 3. Build Your Workflow
+
+```typescript
+import { Workflow } from 'ai-workflows'
+import { registerWorkerActions, withWorkers } from 'digital-workers'
+
+const workflow = Workflow($ => {
+  registerWorkerActions($)
+  const worker$ = withWorkers($)
+
+  $.on.Expense.submitted(async (expense) => {
+    // Notify the finance team
+    await worker$.notify(finance, `New expense: ${expense.amount}`)
+
+    // Request approval from manager
+    const approval = await worker$.approve(
+      `Expense: $${expense.amount} for ${expense.description}`,
+      manager,
+      { via: 'slack' }
+    )
+
+    if (approval.approved) {
+      await worker$.notify(expense.submitter, 'Your expense was approved!')
+    }
+  })
+})
+```
+
+## What You Can Do
+
+### Notify - Send Messages
+
+```typescript
+await worker$.notify(target, 'Deployment complete', {
+  via: 'slack',
+  priority: 'urgent',
+})
+```
+
+### Ask - Request Information
+
+```typescript
+const result = await worker$.ask<{ priority: string }>(
+  target,
+  'What priority should this be?',
+  { schema: { priority: 'low | normal | high' } }
+)
+console.log(result.answer.priority) // 'high'
+```
+
+### Approve - Get Sign-off
+
+```typescript
+const result = await worker$.approve(
+  'Deploy v2.0 to production',
+  manager,
+  { via: 'slack', timeout: 3600000 }
+)
+
+if (result.approved) {
+  console.log(`Approved by ${result.approvedBy?.name}`)
+}
+```
+
+### Decide - Make Choices
+
+```typescript
+const result = await worker$.decide({
+  options: ['React', 'Vue', 'Svelte'],
+  context: 'Choosing a frontend framework',
+  criteria: ['DX', 'Performance', 'Ecosystem'],
+})
+
+console.log(result.choice)     // 'React'
+console.log(result.reasoning)  // 'React offers the best ecosystem...'
+console.log(result.confidence) // 0.85
+```
+
+## Teams
+
+Group workers with shared contacts:
+
+```typescript
+import { Team } from 'digital-workers'
+
+const engineering = Team({
+  id: 'team_eng',
+  name: 'Engineering',
+  members: [alice, bob, codeReviewer],
+  contacts: {
+    slack: '#engineering',
+    email: 'eng@company.com',
+  },
+  lead: alice,
+})
+
+// Notify the whole team
+await worker$.notify(engineering, 'Sprint planning in 10 minutes')
+```
+
+## Standalone Usage
+
+Use outside of workflows:
+
+```typescript
+import { notify, ask, approve, decide } from 'digital-workers'
+
+// Simple notification
+await notify(alice, 'Task completed', { via: 'slack' })
+
+// Ask variants
+await ask(alice, 'What is the status?')
+await ask.ai('What is our refund policy?', { policies: [...] })
+await ask.yesNo(manager, 'Should we proceed?')
+
+// Approval variants
+await approve('Deploy to production', manager)
+await approve.all('Major change', [cto, vpe, securityLead])  // All must approve
+await approve.any('Urgent fix', oncallTeam)                   // Any one can approve
+
+// Decision variants
+await decide({ options: ['A', 'B', 'C'], criteria: ['cost', 'time'] })
+await decide.yesNo('Should we proceed?', context)
+await decide.prioritize(['Task 1', 'Task 2', 'Task 3'])
+```
+
+## How It Fits Together
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -44,294 +217,75 @@ The same Worker interface works whether `alice` is:
 └─────────────────────┘   └─────────────────────────────┘
 ```
 
-- **digital-workers**: Defines the abstract `Worker` interface, action types, and communication patterns
+- **digital-workers**: The abstract `Worker` interface, action types, and communication patterns
 - **autonomous-agents**: Implements `Worker` for AI agents with autonomous decision-making
 - **human-in-the-loop**: Implements `Worker` for humans with approval workflows and notifications
+- **ai-workflows**: Orchestrates work execution with durable, event-driven workflows
 
-## Installation
+## Advanced Features
 
-```bash
-pnpm add digital-workers
-```
+### Capability Tiers
 
-## Core Concepts
-
-### The Worker Abstraction
-
-A **Worker** is the unified interface for any entity that can perform work—whether AI or human. This abstraction enables you to:
-
-1. **Design workflows once** - Define your business logic without hardcoding execution strategy
-2. **Swap implementations** - Start with humans, transition to AI agents as they prove reliable
-3. **Mix freely** - Teams can include both AI agents and humans working together
-4. **Route dynamically** - Assign tasks based on availability, capability, or risk level
-
-### Worker
-
-A **Worker** is the common interface for both AI agents and humans:
+Route work based on agent capabilities:
 
 ```typescript
-import type { Worker } from 'digital-workers'
+import { matchTierToComplexity, canExecuteAtTier } from 'digital-workers'
 
-const alice: Worker = {
-  id: 'user_alice',
-  name: 'Alice',
-  type: 'human',
-  status: 'available',
-  contacts: {
-    email: 'alice@company.com',
-    slack: { workspace: 'acme', user: 'U123' },
-    phone: '+1-555-1234',
-  },
-}
-
-const codeReviewer: Worker = {
-  id: 'agent_reviewer',
-  name: 'Code Reviewer',
-  type: 'agent',
-  status: 'available',
-  contacts: {
-    api: { endpoint: 'https://api.internal/reviewer', auth: 'bearer' },
-    webhook: { url: 'https://hooks.internal/reviewer' },
-  },
-}
+const tier = matchTierToComplexity({ reasoning: 'high', toolUse: true })
+// Returns: { tier: 'agentic', confidence: 0.9 }
 ```
 
-### Contacts
+### Load Balancing
 
-Workers have **contacts** that define how they can be reached:
+Distribute work across available workers:
 
 ```typescript
-import type { Contacts } from 'digital-workers'
+import { createLeastBusyBalancer, createCapabilityRouter } from 'digital-workers'
 
-const contacts: Contacts = {
-  email: 'team@company.com',                    // Simple string
-  slack: { workspace: 'acme', channel: '#eng' }, // Config object
-  phone: { number: '+1-555-0000', voice: 'en-US' },
-  sms: '+1-555-0001',
-  teams: { tenant: 'company', channel: 'Engineering' },
-  discord: { server: 'dev-community', channel: 'support' },
-  telegram: { chat: '@company_support' },
-  web: { url: 'https://dashboard.company.com', pushEnabled: true },
-  api: { endpoint: 'https://api.company.com', auth: 'bearer' },
-  webhook: { url: 'https://hooks.company.com/events' },
-}
+const balancer = createLeastBusyBalancer(workers)
+const router = createCapabilityRouter(agents)
 ```
 
-### Team
+### Error Escalation
 
-**Teams** group workers with shared contacts:
-
-```typescript
-import { Team } from 'digital-workers'
-
-const engineering = Team({
-  id: 'team_eng',
-  name: 'Engineering',
-  members: [alice, bob, codeReviewer],
-  contacts: {
-    slack: '#engineering',
-    email: 'eng@company.com',
-  },
-  lead: alice,
-})
-```
-
-## Worker Actions
-
-Worker actions are durable workflow actions with Actor/Object semantics that integrate with `ai-workflows`:
-
-### Using with Workflows (Recommended)
+Automatic escalation when things go wrong:
 
 ```typescript
-import { Workflow } from 'ai-workflows'
-import { registerWorkerActions, withWorkers } from 'digital-workers'
+import { createEscalationEngine, createEscalationPolicy } from 'digital-workers'
 
-const workflow = Workflow($ => {
-  registerWorkerActions($)
-  const worker$ = withWorkers($)
-
-  $.on.Expense.submitted(async (expense) => {
-    // Notify finance team
-    await worker$.notify(finance, `New expense: ${expense.amount}`)
-
-    // Request approval from manager
-    const approval = await worker$.approve(
-      `Expense: $${expense.amount} for ${expense.description}`,
-      manager,
-      { via: 'slack' }
-    )
-
-    if (approval.approved) {
-      await worker$.notify(expense.submitter, 'Your expense was approved!')
-    }
-  })
-})
-```
-
-### Direct Workflow Integration
-
-```typescript
-// Using $.do for durable actions
-await $.do('Worker.notify', {
-  actor: 'system',
-  object: alice,
-  action: 'notify',
-  message: 'Deployment complete',
-  via: 'slack',
+const policy = createEscalationPolicy({
+  maxRetries: 3,
+  escalationPath: ['junior-agent', 'senior-agent', 'human'],
 })
 
-// Using $.send for fire-and-forget
-await $.send('Worker.notified', { ... })
+const engine = createEscalationEngine(policy)
 ```
 
-### Action Types
+### Agent Communication
 
-#### notify - Send notifications
-
-```typescript
-await worker$.notify(target, 'Message content', {
-  via: 'slack',           // Channel to use
-  priority: 'urgent',     // 'low' | 'normal' | 'high' | 'urgent'
-})
-```
-
-#### ask - Request information
+Direct agent-to-agent messaging:
 
 ```typescript
-const result = await worker$.ask<Priority>(
-  target,
-  'What priority should this be?',
-  {
-    via: 'slack',
-    schema: { priority: 'low | normal | high' },
-  }
-)
-console.log(result.answer) // { priority: 'high' }
-```
+import { sendToAgent, requestFromAgent, initiateHandoff } from 'digital-workers'
 
-#### approve - Request approval
-
-```typescript
-const result = await worker$.approve(
-  'Deploy v2.0 to production',
-  manager,
-  {
-    via: 'slack',
-    context: { version: '2.0', environment: 'production' },
-    timeout: 3600000, // 1 hour
-  }
-)
-
-if (result.approved) {
-  console.log(`Approved by ${result.approvedBy?.name}`)
-}
-```
-
-#### decide - AI-powered decisions
-
-```typescript
-const result = await worker$.decide({
-  options: ['React', 'Vue', 'Svelte'],
-  context: 'Choosing a frontend framework for our new project',
-  criteria: ['DX', 'Performance', 'Ecosystem'],
-})
-
-console.log(result.choice)     // 'React'
-console.log(result.reasoning)  // 'React offers the best ecosystem...'
-console.log(result.confidence) // 0.85
-```
-
-## Standalone Functions
-
-For use outside workflows:
-
-```typescript
-import { notify, ask, approve, decide } from 'digital-workers'
-
-// Simple notification
-await notify(alice, 'Task completed', { via: 'slack' })
-
-// Ask with variants
-await ask(alice, 'What is the status?')
-await ask.ai('What is our refund policy?', { policies: [...] })
-await ask.yesNo(manager, 'Should we proceed?')
-
-// Approval variants
-await approve('Deploy to production', manager)
-await approve.all('Major change', [cto, vpe, securityLead])
-await approve.any('Urgent fix', oncallTeam)
-
-// Decision making
-await decide({ options: ['A', 'B', 'C'], criteria: ['cost', 'time'] })
-await decide.yesNo('Should we proceed?', context)
-await decide.prioritize(['Task 1', 'Task 2', 'Task 3'])
-```
-
-## Additional Utilities
-
-### Role Definition
-
-```typescript
-import { Role } from 'digital-workers'
-
-const engineer = Role({
-  name: 'Software Engineer',
-  description: 'Builds and maintains software',
-  responsibilities: ['Write code', 'Review PRs', 'Fix bugs'],
-  skills: ['TypeScript', 'React', 'Node.js'],
-})
-```
-
-### Goals & KPIs
-
-```typescript
-import { Goals, kpis, okrs } from 'digital-workers'
-
-const teamGoals = Goals({
-  shortTerm: ['Ship v2.0', 'Reduce tech debt'],
-  longTerm: ['100% test coverage'],
-  metrics: [
-    { name: 'Velocity', current: 42, target: 50, unit: 'points' },
-  ],
-})
-```
-
-### Content Generation
-
-```typescript
-import { generate } from 'digital-workers'
-
-const result = await generate('Write a product description', {
-  type: 'text',
-  instructions: 'Keep it under 100 words',
-})
-```
-
-### Type Validation
-
-```typescript
-import { is } from 'digital-workers'
-
-const result = await is('hello@example.com', 'email')
-console.log(result.valid) // true
+await sendToAgent(targetAgent, { type: 'task', payload: data })
+const response = await requestFromAgent(agent, query, { timeout: 5000 })
+await initiateHandoff(fromAgent, toAgent, context)
 ```
 
 ## Type Reference
 
-Key types exported:
+Key exports:
 
-- `Worker` - Worker interface
-- `Team` - Team interface
-- `WorkerRef` - Lightweight worker reference
-- `Contacts` - Contact configuration
-- `ContactChannel` - Channel names
-- `WorkerAction` - Action types
-- `NotifyResult`, `AskResult`, `ApprovalResult`, `DecideResult`, `DoResult`
-- `WorkerContext` - Context extension for workflows
+- `Worker`, `Team`, `WorkerRef` - Core interfaces
+- `Contacts`, `ContactChannel` - Communication configuration
+- `NotifyResult`, `AskResult`, `ApprovalResult`, `DecideResult`, `DoResult` - Action results
+- `CapabilityTier`, `CapabilityProfile` - Agent capability levels
+- `LoadBalancer`, `EscalationEngine` - Advanced orchestration
 
 ## Related Packages
 
-- `autonomous-agents` - **Implements** `Worker` for AI agents with autonomous decision-making, goals, and metrics
-- `human-in-the-loop` - **Implements** `Worker` for humans with approval workflows, notifications, and escalation
-- `ai-workflows` - **Uses** `digital-workers` to orchestrate work execution with durable, event-driven workflows
-- `services-as-software` - External service integration (crosses company boundaries, unlike workers)
+- **autonomous-agents** - Implements `Worker` for AI agents with goals, metrics, and autonomous decision-making
+- **human-in-the-loop** - Implements `Worker` for humans with approval workflows, notifications, and escalation
+- **ai-workflows** - Uses `digital-workers` to orchestrate work execution with durable, event-driven workflows
+- **services-as-software** - External service integration (crosses company boundaries, unlike workers)

@@ -1,112 +1,157 @@
 # ai-providers
 
-Unified AI provider registry with Cloudflare AI Gateway support.
+**Stop juggling API keys. Start building.**
 
-## Installation
+You're building AI features, not managing provider configurations. But every model needs its own SDK, its own API key, its own quirks. OpenAI, Anthropic, Google, Llama, Mistral... each one is another dependency to install, another secret to manage, another authentication pattern to remember.
 
-```bash
-pnpm add ai-providers
+What if you could just say `model('sonnet')` and it worked?
+
+## The Problem
+
+```typescript
+// Before: Provider chaos
+import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const google = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY)
+
+// Different APIs, different patterns, different headaches
+```
+
+## The Solution
+
+```typescript
+// After: One import, any model
+import { model } from 'ai-providers'
+import { generateText } from 'ai'
+
+const { text } = await generateText({
+  model: await model('sonnet'),  // Just works
+  prompt: 'Hello!'
+})
+
+// Switch models in seconds
+await model('opus')        // Anthropic Claude Opus 4.5
+await model('gpt-4o')      // OpenAI GPT-4o
+await model('gemini')      // Google Gemini 2.5 Flash
+await model('llama-70b')   // Meta Llama 3.3 70B
+await model('deepseek')    // DeepSeek Chat
+await model('mistral')     // Mistral Large
 ```
 
 ## Quick Start
 
-```typescript
-import { model } from 'ai-providers'
-import { generateText } from 'ai'
+### 1. Install
 
-// Simple aliases - just works
-const { text } = await generateText({
-  model: await model('sonnet'),  // → anthropic/claude-sonnet-4.5
-  prompt: 'Hello!'
-})
-
-// All these work too
-await model('opus')        // → anthropic/claude-opus-4.5
-await model('gpt-4o')      // → openai/gpt-4o
-await model('gemini')      // → google/gemini-2.5-flash
-await model('llama-70b')   // → meta-llama/llama-3.3-70b-instruct
-await model('mistral')     // → mistralai/mistral-large-2411
-await model('deepseek')    // → deepseek/deepseek-chat
+```bash
+pnpm add ai-providers ai
 ```
 
-## How It Works
+### 2. Configure (choose one)
 
-### Smart Routing
+**Option A: Cloudflare AI Gateway (Recommended)**
 
-The `model()` function uses intelligent routing based on model data from OpenRouter:
-
-1. **Direct Provider Routing** - When `provider_model_id` is available and the provider matches (openai, anthropic, google), routes directly to the provider's native SDK. This enables provider-specific features like:
-   - Anthropic: MCP (Model Context Protocol), extended thinking
-   - OpenAI: Function calling, JSON mode, vision
-   - Google: Grounding, code execution
-
-2. **OpenRouter Fallback** - All other models route through OpenRouter, which provides:
-   - 200+ models from all major providers
-   - Unified API with consistent model ID format
-   - Automatic model ID translation
-   - Fallback routing if a provider is down
-
-Model aliases are resolved by the `language-models` package, which includes `provider_model_id` data from OpenRouter's API for direct routing when available.
-
-## Configuration
-
-### Cloudflare AI Gateway (Recommended)
-
-Set up a Cloudflare AI Gateway with stored secrets for each provider:
+One gateway, all providers, zero API key management:
 
 ```bash
 export AI_GATEWAY_URL=https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_name}
 export AI_GATEWAY_TOKEN=your-gateway-auth-token
 ```
 
-The gateway handles authentication - you don't need individual API keys.
-
-### Direct API Keys (Fallback)
-
-If not using a gateway:
+**Option B: Direct API Keys**
 
 ```bash
-export OPENROUTER_API_KEY=sk-or-...
-export OPENAI_API_KEY=sk-...           # for embeddings
-export CLOUDFLARE_ACCOUNT_ID=...       # for CF embeddings
-export CLOUDFLARE_API_TOKEN=...        # for CF embeddings
+export OPENROUTER_API_KEY=sk-or-...  # Access 200+ models
 ```
 
-## API
-
-### `model(id: string)`
-
-Get a language model by alias or full ID.
+### 3. Build
 
 ```typescript
 import { model } from 'ai-providers'
+import { generateText } from 'ai'
 
-// Aliases (requires language-models package)
-await model('opus')        // anthropic/claude-opus-4.5
-await model('sonnet')      // anthropic/claude-sonnet-4.5
-await model('gpt-4o')      // openai/gpt-4o
-await model('llama')       // meta-llama/llama-4-maverick
+const { text } = await generateText({
+  model: await model('sonnet'),
+  prompt: 'What is the meaning of life?'
+})
+```
 
-// Full IDs always work
+That's it. No provider-specific SDKs. No authentication dance. Just AI.
+
+## How It Works
+
+`ai-providers` is your guide through the AI provider landscape:
+
+```
+Your Code
+    │
+    ▼
+┌─────────────────┐
+│   ai-providers  │  Resolves aliases, routes intelligently
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+┌───────┐ ┌──────────┐
+│Direct │ │OpenRouter│
+│SDK    │ │          │
+└───────┘ └──────────┘
+    │         │
+    ▼         ▼
+Anthropic   200+ models
+OpenAI      from any
+Google      provider
+```
+
+**Smart routing** gives you the best of both worlds:
+- **Direct SDK access** for OpenAI, Anthropic, and Google - enabling provider-specific features like MCP, extended thinking, and structured outputs
+- **OpenRouter fallback** for everything else - 200+ models with automatic failover
+
+## Model Aliases
+
+Simple names that just work:
+
+| Alias | Model |
+|-------|-------|
+| `opus` | Claude Opus 4.5 |
+| `sonnet` | Claude Sonnet 4.5 |
+| `haiku` | Claude Haiku 4.5 |
+| `gpt-4o` | GPT-4o |
+| `o1`, `o3` | OpenAI o1, o3 |
+| `gemini` | Gemini 2.5 Flash |
+| `llama` | Llama 4 Maverick |
+| `deepseek`, `r1` | DeepSeek Chat, R1 |
+| `mistral` | Mistral Large |
+| `qwen` | Qwen3 235B |
+| `grok` | Grok 3 |
+
+Or use full model IDs:
+
+```typescript
 await model('anthropic/claude-opus-4.5')
 await model('mistralai/codestral-2501')
 await model('meta-llama/llama-3.3-70b-instruct')
 ```
 
-### `embeddingModel(id: string)`
-
-Get an embedding model.
+## Embeddings
 
 ```typescript
 import { embeddingModel } from 'ai-providers'
+import { embed } from 'ai'
 
-await embeddingModel('openai:text-embedding-3-small')
-await embeddingModel('cloudflare:@cf/baai/bge-m3')
+const model = await embeddingModel('openai:text-embedding-3-small')
+const { embedding } = await embed({ model, value: 'Hello world' })
+
+// Or use Cloudflare Workers AI
+const cfModel = await embeddingModel('cloudflare:@cf/baai/bge-m3')
 ```
 
-### `createRegistry(config?)`
+## Advanced Usage
 
-Create a custom provider registry.
+### Custom Registry
 
 ```typescript
 import { createRegistry } from 'ai-providers'
@@ -116,89 +161,42 @@ const registry = await createRegistry({
   gatewayToken: 'your-token'
 })
 
-// Use registry directly
-const model = registry.languageModel('openrouter:anthropic/claude-sonnet-4.5')
+const model = registry.languageModel('anthropic:claude-sonnet-4-5-20251101')
 ```
 
-### `getRegistry()`
+### Direct Provider Access
 
-Get the default singleton registry (lazily created).
+When you need provider-specific features:
 
 ```typescript
-import { getRegistry } from 'ai-providers'
+// Bedrock with bearer token auth
+await model('bedrock:us.anthropic.claude-3-5-sonnet-20241022-v2:0')
 
-const registry = await getRegistry()
+// Direct provider routing
+await model('openai:gpt-4o')
+await model('anthropic:claude-sonnet-4-5-20251101')
+await model('google:gemini-2.5-flash')
 ```
 
-## Model Aliases
+## Why Cloudflare AI Gateway?
 
-When `language-models` is installed, these aliases work:
+When configured with AI Gateway:
 
-| Alias | Model ID |
-|-------|----------|
-| `opus` | anthropic/claude-opus-4.5 |
-| `sonnet` | anthropic/claude-sonnet-4.5 |
-| `haiku` | anthropic/claude-haiku-4.5 |
-| `gpt`, `gpt-4o` | openai/gpt-4o |
-| `o1`, `o3` | openai/o1, openai/o3 |
-| `gemini`, `flash` | google/gemini-2.5-flash |
-| `llama`, `llama-4` | meta-llama/llama-4-maverick |
-| `mistral` | mistralai/mistral-large-2411 |
-| `deepseek`, `r1` | deepseek/deepseek-chat, deepseek/deepseek-r1 |
-| `qwen` | qwen/qwen3-235b-a22b |
-| `grok` | x-ai/grok-3 |
+1. **One token** authenticates everything - gateway injects provider keys from its secrets
+2. **Unified logging** - see all AI calls in one dashboard
+3. **Rate limiting** - protect your budget across providers
+4. **Caching** - reduce costs with intelligent response caching
+5. **Fallback routing** - automatic failover if a provider is down
 
-## Cloudflare Embeddings
+No gateway? No problem. Set individual API keys and `ai-providers` works the same way.
 
-The package includes a Cloudflare Workers AI embedding provider:
+## What You Get
 
-```typescript
-import { cloudflareEmbedding } from 'ai-providers/cloudflare'
-import { embed } from 'ai'
+With `ai-providers`, you can:
 
-const model = cloudflareEmbedding('@cf/baai/bge-m3')
-const { embedding } = await embed({ model, value: 'Hello world' })
-```
+- **Ship faster** - one import, any model, zero config
+- **Stay flexible** - switch providers without code changes
+- **Build with confidence** - production-ready with Cloudflare AI Gateway
+- **Access everything** - 200+ models through OpenRouter, native SDK features through direct routing
 
-Available models:
-- `@cf/baai/bge-m3` (default, multilingual)
-- `@cf/baai/bge-base-en-v1.5`
-- `@cf/baai/bge-large-en-v1.5`
-- `@cf/baai/bge-small-en-v1.5`
-
-## Architecture
-
-```
-┌─────────────────┐
-│   ai-functions  │  Uses model() for generation
-└────────┬────────┘
-         │
-┌────────▼────────┐
-│   ai-providers  │  Resolves aliases, smart routing
-└────────┬────────┘
-         │
-┌────────▼────────┐
-│ language-models │  Model data with provider_model_id
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-┌───▼───┐ ┌───▼───┐
-│Direct │ │OpenRou│  Direct: openai, anthropic, google
-│SDK    │ │ter    │  OpenRouter: all other providers
-└───────┘ └───────┘
-```
-
-## Gateway Authentication
-
-When using Cloudflare AI Gateway with stored secrets:
-
-1. Gateway URL points to your gateway endpoint
-2. `AI_GATEWAY_TOKEN` authenticates with the gateway
-3. Gateway injects provider API keys from its stored secrets
-4. No individual API keys needed in your app
-
-The package automatically:
-- Strips SDK-added API key headers
-- Adds `cf-aig-authorization` header for gateway auth
-- Lets the gateway inject the real API keys
+Stop wrestling with provider APIs. Start building AI features.

@@ -1,46 +1,88 @@
 # @org.ai/types
 
-Shared type definitions for AI primitives packages.
+**You're building AI-powered applications, but TypeScript keeps fighting you.** Your AI functions return `any`, your workflow contexts are untyped blobs, and refactoring means breaking things you cannot see.
 
-## Installation
+`@org.ai/types` gives you the type safety you need to build AI applications with confidence.
+
+## The Problem
+
+```typescript
+// Without types: runtime errors waiting to happen
+const result = await aiFunction(input) // What does this return?
+workflow.on('event', (data) => {       // What's in data?
+  workflow.state.user = data           // Is this right?
+})
+```
+
+## The Solution
+
+```typescript
+import type { AIFunctionType, WorkflowContextType, EventHandlerType } from '@org.ai/types'
+
+// With types: autocomplete, refactoring, and compile-time safety
+const summarize: AIFunctionType<Summary, Document> = async (doc) => {
+  // TypeScript knows doc is Document, return must be Summary
+}
+
+const handler: EventHandlerType<void, UserEvent> = (data, ctx) => {
+  // data is UserEvent, ctx has full WorkflowContextType methods
+  ctx.send('notification', { userId: data.userId })
+}
+```
+
+## Quick Start
+
+### 1. Install
 
 ```bash
 npm install @org.ai/types
 ```
 
-## Usage
+### 2. Import the types you need
 
 ```typescript
-import {
-  AIFunction,
-  EventHandler,
-  WorkflowContext,
-  RelationshipOperator,
-  ParsedField,
+import type {
+  AIFunctionType,
+  EventHandlerType,
+  WorkflowContextType,
+  RelationshipOperatorType,
+  ParsedFieldType,
 } from '@org.ai/types'
 ```
 
-## Types
+### 3. Build with confidence
 
-### AIFunction<TOutput, TInput, TConfig>
+Your IDE now understands your AI code. Refactor fearlessly.
 
-Generic AI function type with output-first parameter order (like `Promise<T>`).
+## Type Reference
 
-### EventHandler<TOutput, TInput>
+| Type | Purpose |
+|------|---------|
+| `AIFunctionType<TOutput, TInput, TConfig>` | Generic AI function with output-first parameter order |
+| `EventHandlerType<TOutput, TInput>` | Workflow event handlers with typed context |
+| `WorkflowContextType` | The `$` workflow proxy with `send`, `try`, `do`, `on`, `every` |
+| `RelationshipOperatorType` | Database relationship operators (`->`, `~>`, `<-`, `<~`) |
+| `ParsedFieldType` | Schema field definitions with relationship metadata |
 
-Event handler type for workflow events.
+## Why Output-First Generics?
 
-### WorkflowContext
+Just like `Promise<T>` puts the important part first, `AIFunctionType<TOutput>` leads with what matters most:
 
-Interface for the `$` workflow context proxy.
+```typescript
+// Natural reading order: "an AI function that returns a Summary"
+type Summarizer = AIFunctionType<Summary>
 
-### RelationshipOperator
+// vs the awkward alternative
+type Summarizer = AIFunctionType<Document, Summary>  // Wait, which is which?
+```
 
-Types for database relationship operators (`>>`, `=>`, `<>`, etc.).
+## Part of the org.ai Ecosystem
 
-### ParsedField
-
-Parsed schema field with type information.
+This package provides shared types for:
+- [@org.ai/ai-functions](../ai-functions) - AI function primitives
+- [@org.ai/ai-workflows](../ai-workflows) - Workflow orchestration
+- [@org.ai/ai-database](../ai-database) - AI-native database with relationships
+- And [more packages](../) in the org.ai monorepo
 
 ## License
 

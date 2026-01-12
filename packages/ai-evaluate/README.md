@@ -1,92 +1,100 @@
 # ai-evaluate
 
-Secure code execution in sandboxed environments. Run untrusted code safely using Cloudflare Workers or Miniflare.
+**You need to run user code. But untrusted code is terrifying.**
 
-## Installation
+One malicious snippet could crash your server, access your file system, or make unauthorized network requests. You've seen the horror stories. You know the risks.
+
+What if you could run any code with confidence?
+
+## The Solution
+
+`ai-evaluate` runs untrusted code in V8 isolates with zero access to your system. No file system. No network (by default). No risk.
+
+```typescript
+// Before: Dangerous eval
+const result = eval(userCode) // Could do ANYTHING
+
+// After: Sandboxed execution
+import { evaluate } from 'ai-evaluate'
+
+const result = await evaluate({
+  script: userCode
+})
+// Runs in isolated V8 context - your system is protected
+```
+
+## Quick Start
+
+**1. Install**
 
 ```bash
 pnpm add ai-evaluate
 ```
 
-## Quick Start
+**2. Evaluate code safely**
 
 ```typescript
 import { evaluate } from 'ai-evaluate'
 
-// Run a simple script
 const result = await evaluate({
   script: '1 + 1'
 })
 // { success: true, value: 2, logs: [], duration: 5 }
+```
 
-// With a module and tests
+**3. Run tests on user code**
+
+```typescript
 const result = await evaluate({
   module: `
     export const add = (a, b) => a + b
-    export const multiply = (a, b) => a * b
   `,
   tests: `
-    describe('math', () => {
+    describe('add', () => {
       it('adds numbers', () => {
-        expect(add(2, 3)).toBe(5);
-      })
-      it('multiplies numbers', () => {
-        expect(multiply(2, 3)).toBe(6);
+        expect(add(2, 3)).toBe(5)
       })
     })
-  `,
-  script: 'add(10, 20)'
+  `
 })
+// result.testResults.passed === 1
 ```
 
-## Features
+## What You Get
 
-- **Secure isolation** - Code runs in a sandboxed V8 isolate
-- **Vitest-compatible tests** - `describe`, `it`, `expect` in global scope
-- **Module exports** - Define modules and use exports in scripts/tests
-- **Cloudflare Workers** - Uses worker_loaders in production
-- **Miniflare** - Uses Miniflare for local development and Node.js
-- **Network isolation** - External network access blocked by default
+- **Complete isolation** - Code runs in sandboxed V8 isolates
+- **Built-in testing** - Vitest-compatible `describe`, `it`, `expect`
+- **Module support** - Define exports and use them in scripts/tests
+- **Production-ready** - Cloudflare Workers in production, Miniflare locally
+- **Network blocked** - External access disabled by default
 
-## API
+## API Reference
 
 ### evaluate(options)
 
-Execute code in a sandboxed environment.
-
 ```typescript
 interface EvaluateOptions {
-  /** Module code with exports */
-  module?: string
-  /** Test code using vitest-style API */
-  tests?: string
-  /** Script code to run (module exports in scope) */
-  script?: string
-  /** Timeout in milliseconds (default: 5000) */
-  timeout?: number
-  /** Environment variables */
-  env?: Record<string, string>
+  module?: string              // Module code with exports
+  tests?: string               // Vitest-style test code
+  script?: string              // Script to execute
+  timeout?: number             // Default: 5000ms
+  env?: Record<string, string> // Environment variables
+  sdk?: SDKConfig | boolean    // Enable $, db, ai globals
 }
 
 interface EvaluateResult {
-  /** Whether execution succeeded */
-  success: boolean
-  /** Return value from script */
-  value?: unknown
-  /** Console output */
-  logs: LogEntry[]
-  /** Test results (if tests provided) */
-  testResults?: TestResults
-  /** Error message if failed */
-  error?: string
-  /** Execution time in ms */
-  duration: number
+  success: boolean             // Execution succeeded
+  value?: unknown              // Script return value
+  logs: LogEntry[]             // Console output
+  testResults?: TestResults    // Test results if tests provided
+  error?: string               // Error message if failed
+  duration: number             // Execution time in ms
 }
 ```
 
 ### createEvaluator(env)
 
-Create an evaluate function bound to a specific environment. Useful for Cloudflare Workers.
+Bind to a Cloudflare Workers environment.
 
 ```typescript
 import { createEvaluator } from 'ai-evaluate'
@@ -94,24 +102,22 @@ import { createEvaluator } from 'ai-evaluate'
 export default {
   async fetch(request, env) {
     const sandbox = createEvaluator(env)
-    const result = await sandbox({
-      script: '1 + 1'
-    })
+    const result = await sandbox({ script: '1 + 1' })
     return Response.json(result)
   }
 }
 ```
 
-## Usage Patterns
+## Usage Examples
 
-### Simple Script Execution
+### Simple Script
 
 ```typescript
 const result = await evaluate({
   script: `
-    const x = 10;
-    const y = 20;
-    return x + y;
+    const x = 10
+    const y = 20
+    return x + y
   `
 })
 // result.value === 30
@@ -122,188 +128,136 @@ const result = await evaluate({
 ```typescript
 const result = await evaluate({
   module: `
-    exports.greet = (name) => \`Hello, \${name}!\`;
-    exports.sum = (...nums) => nums.reduce((a, b) => a + b, 0);
+    exports.greet = (name) => \`Hello, \${name}!\`
+    exports.sum = (...nums) => nums.reduce((a, b) => a + b, 0)
   `,
   script: `
-    console.log(greet('World'));
-    return sum(1, 2, 3, 4, 5);
+    console.log(greet('World'))
+    return sum(1, 2, 3, 4, 5)
   `
 })
 // result.value === 15
 // result.logs[0].message === 'Hello, World!'
 ```
 
-### Running Tests
+### Testing User Code
 
 ```typescript
 const result = await evaluate({
   module: `
     exports.isPrime = (n) => {
-      if (n < 2) return false;
+      if (n < 2) return false
       for (let i = 2; i <= Math.sqrt(n); i++) {
-        if (n % i === 0) return false;
+        if (n % i === 0) return false
       }
-      return true;
-    };
+      return true
+    }
   `,
   tests: `
     describe('isPrime', () => {
       it('returns false for numbers less than 2', () => {
-        expect(isPrime(0)).toBe(false);
-        expect(isPrime(1)).toBe(false);
-      });
+        expect(isPrime(0)).toBe(false)
+        expect(isPrime(1)).toBe(false)
+      })
 
       it('returns true for prime numbers', () => {
-        expect(isPrime(2)).toBe(true);
-        expect(isPrime(3)).toBe(true);
-        expect(isPrime(17)).toBe(true);
-      });
+        expect(isPrime(2)).toBe(true)
+        expect(isPrime(17)).toBe(true)
+      })
 
       it('returns false for composite numbers', () => {
-        expect(isPrime(4)).toBe(false);
-        expect(isPrime(9)).toBe(false);
-        expect(isPrime(100)).toBe(false);
-      });
-    });
+        expect(isPrime(4)).toBe(false)
+        expect(isPrime(100)).toBe(false)
+      })
+    })
   `
 })
 
-console.log(result.testResults)
-// {
-//   total: 3,
-//   passed: 3,
-//   failed: 0,
-//   skipped: 0,
-//   tests: [...]
-// }
+// result.testResults = { total: 3, passed: 3, failed: 0, ... }
 ```
 
 ## Test Framework
 
-The sandbox provides a vitest-compatible test API with async support.
+Full vitest-compatible API with async support.
 
-### describe / it / test
+### Test Structure
 
 ```typescript
-describe('group name', () => {
-  it('test name', () => {
-    // test code
-  });
-
-  test('another test', () => {
-    // test code
-  });
-
-  it.skip('skipped test', () => {
-    // won't run
-  });
-
-  it.only('only this test', () => {
-    // when .only is used, only these tests run
-  });
-});
+describe('group', () => {
+  it('test name', () => { /* ... */ })
+  test('another test', () => { /* ... */ })
+  it.skip('skipped', () => { /* ... */ })
+  it.only('focused', () => { /* ... */ })
+})
 ```
 
 ### Async Tests
 
 ```typescript
-describe('async operations', () => {
-  it('supports async/await', async () => {
-    const result = await someAsyncFunction();
-    expect(result).toBe('expected');
-  });
-
-  it('supports promises', () => {
-    return fetchData().then(data => {
-      expect(data).toBeDefined();
-    });
-  });
-});
+it('async/await', async () => {
+  const result = await someAsyncFunction()
+  expect(result).toBe('expected')
+})
 ```
 
 ### Hooks
 
 ```typescript
 describe('with setup', () => {
-  let data;
+  let data
 
-  beforeEach(() => {
-    data = { count: 0 };
-  });
+  beforeEach(() => { data = { count: 0 } })
+  afterEach(() => { data = null })
 
-  afterEach(() => {
-    data = null;
-  });
-
-  it('uses setup data', () => {
-    data.count++;
-    expect(data.count).toBe(1);
-  });
-});
+  it('uses setup', () => {
+    data.count++
+    expect(data.count).toBe(1)
+  })
+})
 ```
 
-### expect matchers
+### Matchers
 
 ```typescript
 // Equality
-expect(value).toBe(expected)           // Strict equality (===)
-expect(value).toEqual(expected)        // Deep equality
-expect(value).toStrictEqual(expected)  // Strict deep equality
+expect(value).toBe(expected)
+expect(value).toEqual(expected)
+expect(value).toStrictEqual(expected)
 
 // Truthiness
-expect(value).toBeTruthy()             // Truthy check
-expect(value).toBeFalsy()              // Falsy check
-expect(value).toBeNull()               // null check
-expect(value).toBeUndefined()          // undefined check
-expect(value).toBeDefined()            // not undefined
-expect(value).toBeNaN()                // NaN check
+expect(value).toBeTruthy()
+expect(value).toBeFalsy()
+expect(value).toBeNull()
+expect(value).toBeUndefined()
+expect(value).toBeDefined()
 
 // Numbers
-expect(value).toBeGreaterThan(n)       // > comparison
-expect(value).toBeLessThan(n)          // < comparison
-expect(value).toBeGreaterThanOrEqual(n)// >= comparison
-expect(value).toBeLessThanOrEqual(n)   // <= comparison
-expect(value).toBeCloseTo(n, digits)   // Floating point comparison
+expect(value).toBeGreaterThan(n)
+expect(value).toBeLessThan(n)
+expect(value).toBeCloseTo(n, digits)
 
-// Strings
-expect(value).toMatch(/pattern/)       // Regex match
-expect(value).toMatch('substring')     // Contains substring
-
-// Arrays & Strings
-expect(value).toContain(item)          // Array/string contains
-expect(value).toContainEqual(item)     // Array contains (deep equality)
-expect(value).toHaveLength(n)          // Length check
+// Strings & Arrays
+expect(value).toMatch(/pattern/)
+expect(value).toContain(item)
+expect(value).toHaveLength(n)
 
 // Objects
-expect(value).toHaveProperty('path')   // Has property
-expect(value).toHaveProperty('path', v)// Has property with value
-expect(value).toMatchObject(partial)   // Partial object match
-
-// Types
-expect(value).toBeInstanceOf(Class)    // instanceof check
-expect(value).toBeTypeOf('string')     // typeof check
+expect(value).toHaveProperty('path')
+expect(value).toMatchObject(partial)
 
 // Errors
-expect(fn).toThrow()                   // Throws any error
-expect(fn).toThrow('message')          // Throws with message
-expect(fn).toThrow(/pattern/)          // Throws matching pattern
-expect(fn).toThrow(ErrorClass)         // Throws specific error type
+expect(fn).toThrow()
+expect(fn).toThrow('message')
 
-// Negated matchers
+// Negation
 expect(value).not.toBe(expected)
-expect(value).not.toEqual(expected)
-expect(value).not.toContain(item)
-expect(fn).not.toThrow()
 
-// Promise matchers
+// Promises
 await expect(promise).resolves.toBe(value)
 await expect(promise).rejects.toThrow('error')
 ```
 
 ## Cloudflare Workers Setup
-
-To use in Cloudflare Workers with worker_loaders:
 
 ### wrangler.toml
 
@@ -315,7 +269,7 @@ main = "src/index.ts"
 binding = "LOADER"
 ```
 
-### Worker Code
+### Worker
 
 ```typescript
 import { createEvaluator } from 'ai-evaluate'
@@ -327,7 +281,6 @@ export interface Env {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const sandbox = createEvaluator(env)
-
     const { code, tests } = await request.json()
 
     const result = await sandbox({
@@ -340,58 +293,33 @@ export default {
 }
 ```
 
-## Node.js / Development
+## Local Development
 
-In Node.js or during development, the evaluate function automatically uses Miniflare:
+In Node.js, Miniflare is used automatically:
 
 ```typescript
 import { evaluate } from 'ai-evaluate'
 
-// Miniflare is used automatically when LOADER binding is not present
 const result = await evaluate({
   script: 'return "Hello from Node!"'
 })
 ```
 
-Make sure `miniflare` is installed:
+Ensure Miniflare is installed:
 
 ```bash
 pnpm add miniflare
 ```
 
-## Security
+## Security Model
 
-The sandbox provides several security features:
-
-1. **V8 Isolate** - Code runs in an isolated V8 context
-2. **No Network** - External network access is blocked (`globalOutbound: null`)
-3. **No File System** - No access to the file system
-4. **Memory Limits** - Standard Worker memory limits apply
-5. **CPU Limits** - Execution time is limited
-
-## Example: Code Evaluation API
-
-```typescript
-import { evaluate } from 'ai-evaluate'
-import { Hono } from 'hono'
-
-const app = new Hono()
-
-app.post('/evaluate', async (c) => {
-  const { module, tests, script } = await c.req.json()
-
-  const result = await evaluate({
-    module,
-    tests,
-    script,
-    timeout: 5000
-  })
-
-  return c.json(result)
-})
-
-export default app
-```
+| Protection | Description |
+|------------|-------------|
+| V8 Isolate | Code runs in isolated V8 context |
+| No Network | External access blocked by default |
+| No File System | Zero filesystem access |
+| Memory Limits | Standard Worker limits apply |
+| CPU Limits | Execution time bounded |
 
 ## Types
 
@@ -417,4 +345,12 @@ interface TestResult {
   error?: string
   duration: number
 }
+```
+
+---
+
+**Stop worrying about untrusted code. Start building.**
+
+```bash
+pnpm add ai-evaluate
 ```
