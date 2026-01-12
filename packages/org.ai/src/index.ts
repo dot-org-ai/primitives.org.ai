@@ -174,10 +174,8 @@ export {
 } from 'business-as-code'
 export type {
   BusinessConfig,
-  KPI,
-  KPICategory,
-  OKR,
-  Objective,
+  KPIDefinition as KPI,
+  OKRDefinition as OKR,
   KeyResult,
   FinancialMetrics,
 } from 'business-as-code'
@@ -188,10 +186,10 @@ export {
   HumanManager,
 } from 'human-in-the-loop'
 export type {
-  HumanConfig,
-  ApprovalConfig,
-  ReviewConfig,
-  EscalationConfig,
+  RetryConfig,
+  SLAConfig,
+  CascadeTier,
+  TierConfig,
 } from 'human-in-the-loop'
 
 // AI props - AI-powered component props
@@ -202,9 +200,9 @@ export {
   configureAIProps,
 } from 'ai-props'
 export type {
-  AIComponentConfig,
-  PropsSchema,
-  GeneratedProps,
+  AIPropsConfig,
+  PropSchema,
+  GeneratePropsResult,
 } from 'ai-props'
 
 // Evaluate - secure code execution
@@ -233,9 +231,9 @@ export {
 } from 'ai-experiments'
 export type {
   ExperimentConfig,
-  Variant,
-  VariantResult,
-  TrackingConfig,
+  ExperimentVariant,
+  ExperimentResult,
+  TrackingOptions,
 } from 'ai-experiments'
 
 // Tests - test utilities

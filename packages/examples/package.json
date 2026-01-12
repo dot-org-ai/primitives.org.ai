@@ -1,6 +1,6 @@
 {
   "name": "@org.ai/examples",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Example code for ai-functions - Getting Started Guide",
   "type": "module",
   "main": "dist/index.js",

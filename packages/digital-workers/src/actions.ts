@@ -325,13 +325,14 @@ export function withWorkers($: WorkflowContext): WorkflowContext & WorkerContext
       message: string,
       options: NotifyOptions = {}
     ): Promise<NotifyResult> {
-      return $.do<NotifyActionData, NotifyResult>('Worker.notify', {
+      // Workflow handler returns NotifyResult; $.do passes through the result
+      return $.do<NotifyResult>('Worker.notify', {
         actor: 'system',
         object: target,
         action: 'notify',
         message,
         ...options,
-      })
+      } as NotifyActionData)
     },
 
     async ask<T = string>(
@@ -339,13 +340,13 @@ export function withWorkers($: WorkflowContext): WorkflowContext & WorkerContext
       question: string,
       options: AskOptions = {}
     ): Promise<AskResult<T>> {
-      return $.do<AskActionData, AskResult<T>>('Worker.ask', {
+      return $.do<AskResult<T>>('Worker.ask', {
         actor: 'system',
         object: target,
         action: 'ask',
         question,
         ...options,
-      })
+      } as AskActionData)
     },
 
     async approve(
@@ -360,24 +361,24 @@ export function withWorkers($: WorkflowContext): WorkflowContext & WorkerContext
           ? { id: target.id, type: 'type' in target ? target.type : undefined, name: 'name' in target ? target.name : undefined }
           : 'system'
 
-      return $.do<ApproveActionData, ApprovalResult>('Worker.approve', {
+      return $.do<ApprovalResult>('Worker.approve', {
         actor,
         object: target,
         action: 'approve',
         request,
         ...options,
-      })
+      } as ApproveActionData)
     },
 
     async decide<T = string>(
       options: DecideOptions<T>
     ): Promise<DecideResult<T>> {
-      return $.do<DecideActionData, DecideResult<T>>('Worker.decide', {
+      return $.do<DecideResult<T>>('Worker.decide', {
         actor: 'ai',
         object: 'decision',
         action: 'decide',
         ...options,
-      })
+      } as DecideActionData)
     },
   }
 

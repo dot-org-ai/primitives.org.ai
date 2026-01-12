@@ -1,6 +1,6 @@
 {
   "name": "ai4",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "AI primitives for autonomous agents and humans in the loop",
   "type": "module",
   "main": "dist/index.js",

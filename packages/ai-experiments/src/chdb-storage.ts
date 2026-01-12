@@ -310,7 +310,9 @@ export class ChdbStorage implements TrackingBackend {
 
     if (!result.trim()) return null
 
-    const row = JSON.parse(result.trim().split('\n')[0])
+    const firstLine = result.trim().split('\n')[0]
+    if (!firstLine) return null
+    const row = JSON.parse(firstLine)
     return {
       variantId: row.variantId,
       variantName: row.variantName,

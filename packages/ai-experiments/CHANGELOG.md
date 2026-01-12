@@ -1,5 +1,12 @@
 # ai-experiments
 
+## 2.1.3
+
+### Patch Changes
+
+- Updated dependencies
+  - ai-functions@2.1.3
+
 ## 2.1.1
 
 ### Patch Changes

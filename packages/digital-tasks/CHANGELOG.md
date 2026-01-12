@@ -1,5 +1,14 @@
 # digital-tasks
 
+## 2.1.3
+
+### Patch Changes
+
+- Updated dependencies
+  - ai-functions@2.1.3
+  - digital-workers@2.1.3
+  - digital-tools@2.1.3
+
 ## 2.1.1
 
 ### Patch Changes

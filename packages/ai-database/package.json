@@ -1,6 +1,6 @@
 {
   "name": "ai-database",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "AI-powered database interface primitives with mdxld conventions",
   "type": "module",
   "main": "dist/index.js",

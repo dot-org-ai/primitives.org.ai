@@ -1,6 +1,6 @@
 {
   "name": "human-in-the-loop",
-  "version": "2.1.1",
+  "version": "2.1.3",
   "description": "Primitives for integrating human oversight and intervention in AI workflows",
   "type": "module",
   "main": "dist/index.js",

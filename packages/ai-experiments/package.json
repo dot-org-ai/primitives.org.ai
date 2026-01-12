@@ -1,6 +1,6 @@
 {
   "name": "ai-experiments",
-  "version": "2.1.1",
+  "version": "2.1.3",
   "description": "AI-powered experimentation primitives for testing and evaluating models",
   "type": "module",
   "main": "dist/index.js",
