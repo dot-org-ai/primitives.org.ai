@@ -2,6 +2,13 @@
  * Core types for AI functions
  */
 
+// Re-export HumanFunctionPending types from ai-core
+export {
+  PENDING_HUMAN_RESULT_SYMBOL,
+  isPendingHumanResult,
+} from '@org.ai/core'
+export type { HumanFunctionPending } from '@org.ai/core'
+
 /**
  * A function definition that can be called by AI
  *

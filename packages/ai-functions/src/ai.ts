@@ -30,6 +30,7 @@ export interface RPCSessionOptions {
 import { generateObject } from './generate.js'
 import type { SimpleSchema } from './schema.js'
 import type { LanguageModel } from 'ai'
+import { PENDING_HUMAN_RESULT_SYMBOL } from './types.js'
 import type {
   AIClient,
   AIFunctionDefinition,
@@ -55,7 +56,6 @@ import type {
   CodeLanguage,
   FunctionRegistry,
   AutoDefineResult,
-  PENDING_HUMAN_RESULT_SYMBOL
 } from './types.js'
 import { schema as convertSchema, type SimpleSchema as SimpleSchemaType } from './schema.js'
 

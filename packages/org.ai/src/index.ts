@@ -25,8 +25,16 @@ export * from 'ai-functions'
 // AI providers and model registry
 export * from 'ai-providers'
 
-// Language models - model listing and resolution
-export * from 'language-models'
+// Language models - model listing and resolution (renamed to avoid conflict with ai-functions list)
+export {
+  resolve as resolveModel,
+  resolveWithProvider,
+  list as listModels,
+  get as getModel,
+  search as searchModels,
+  DIRECT_PROVIDERS,
+} from 'language-models'
+export type { ModelInfo, ResolvedModel, DirectProvider } from 'language-models'
 
 // Database - schema-first database with promise pipelining
 export { DB } from 'ai-database'
@@ -49,7 +57,6 @@ export {
   on,
   every,
   send,
-  trigger,
 } from 'ai-workflows'
 export type {
   WorkflowContext,
@@ -64,39 +71,29 @@ export {
   Role,
   Team,
   Goals,
-  Supervisor,
-  AgentPool,
-  Swarm,
 } from 'autonomous-agents'
 export type {
   AgentConfig,
   AgentMode,
-  AgentState,
-  AgentResult,
-  RoleConfig,
-  TeamConfig,
+  AgentStatus,
   Goal,
-  GoalStatus,
   ApprovalRequest,
   ApprovalResult,
 } from 'autonomous-agents'
 
 // Digital workers - abstract interface for organizing work
 export {
-  Worker,
   registerWorkerActions,
   withWorkers,
 } from 'digital-workers'
 export type {
-  WorkerConfig,
+  Worker,
   WorkerType,
   WorkerAction,
-  WorkerCapability,
 } from 'digital-workers'
 
 // Digital tasks - task management primitives
 export {
-  Task,
   createTask,
   startTask,
   completeTask,
@@ -109,20 +106,16 @@ export {
   toMarkdown,
 } from 'digital-tasks'
 export type {
-  TaskConfig,
+  Task,
   TaskStatus,
   TaskPriority,
   TaskResult,
   Project,
-  ProjectConfig,
 } from 'digital-tasks'
 
 // Digital tools - tools for humans and AI agents
 export {
   defineTool,
-  createTool,
-  toolRegistry,
-  MCPToolProvider,
 } from 'digital-tools'
 export type {
   Tool,
@@ -144,10 +137,7 @@ export {
   registry as productRegistry,
 } from 'digital-products'
 export type {
-  ProductConfig,
   AppConfig,
-  APIConfig,
-  ContentConfig,
 } from 'digital-products'
 
 // Services as software - AI-powered services
@@ -173,7 +163,6 @@ export {
   financials,
 } from 'business-as-code'
 export type {
-  BusinessConfig,
   KPIDefinition as KPI,
   OKRDefinition as OKR,
   KeyResult,
