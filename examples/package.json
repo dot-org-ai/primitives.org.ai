@@ -1,5 +1,5 @@
 {
-  "name": "@org.ai/demo-apps",
+  "name": "@org.ai/demos",
   "version": "0.0.1",
   "description": "Real-world demo apps showing digital businesses using primitives.org.ai",
   "type": "module",
