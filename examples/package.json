@@ -1,7 +1,7 @@
 {
-  "name": "@org.ai/examples",
+  "name": "@org.ai/demo-apps",
   "version": "0.0.1",
-  "description": "Real-world examples of digital businesses using primitives.org.ai",
+  "description": "Real-world demo apps showing digital businesses using primitives.org.ai",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
