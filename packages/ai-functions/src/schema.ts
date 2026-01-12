@@ -15,7 +15,7 @@
  */
 
 import { z, type ZodTypeAny } from 'zod'
-import { isZodSchema } from 'ai-core'
+import { isZodSchema } from '@org.ai/core'
 
 /**
  * Simplified schema types

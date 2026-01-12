@@ -45,7 +45,7 @@
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^3.0.0",
     "ai": "^5.0.0",
-    "ai-core": "workspace:^",
+    "@org.ai/core": "workspace:^",
     "ai-providers": "workspace:^",
     "language-models": "workspace:*",
     "yaml": "^2.8.0",

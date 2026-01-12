@@ -56,10 +56,10 @@ export type {
   DefinedFunction,
   FunctionRegistry,
   AutoDefineResult,
-} from 'ai-core'
+} from '@org.ai/core'
 
 // Schema exports from ai-core
-export { schema, type SimpleSchema } from 'ai-core'
+export { schema, type SimpleSchema } from '@org.ai/core'
 
 // Template exports from ai-core
 export {
@@ -73,7 +73,7 @@ export {
   type BatchableFunction,
   type StreamableList,
   type ChainablePromise,
-} from 'ai-core'
+} from '@org.ai/core'
 
 // AIPromise exports from ai-core
 export {
@@ -93,10 +93,10 @@ export {
   type AIPromiseOptions,
   type StreamingAIPromise,
   type StreamOptions,
-} from 'ai-core'
+} from '@org.ai/core'
 
 // Generation exports from ai-core
-export { generateObject, generateText, streamObject, streamText } from 'ai-core'
+export { generateObject, generateText, streamObject, streamText } from '@org.ai/core'
 
 // Primitives from ai-core
 export {
@@ -125,7 +125,7 @@ export {
   review,
   type HumanOptions,
   type HumanResult,
-} from 'ai-core'
+} from '@org.ai/core'
 
 // Context exports from ai-core (basic version)
 export {
@@ -137,10 +137,10 @@ export {
   getModel,
   getProvider,
   type ExecutionContext,
-} from 'ai-core'
+} from '@org.ai/core'
 
 // Type guards from ai-core
-export { isZodSchema } from 'ai-core'
+export { isZodSchema } from '@org.ai/core'
 
 // ============================================================================
 // Export AI Proxy (the AI class/proxy from ai.ts)
@@ -150,7 +150,7 @@ export { isZodSchema } from 'ai-core'
 export { AI, define, defineFunction, type AIProxy } from './ai.js'
 
 // Also export 'ai' primitive as 'aiPrompt' to avoid conflict with AIProxy
-export { ai as aiPrompt } from 'ai-core'
+export { ai as aiPrompt } from '@org.ai/core'
 
 // Export embedding utilities (not in ai-core)
 export * from './embeddings.js'

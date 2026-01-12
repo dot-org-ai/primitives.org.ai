@@ -21,7 +21,7 @@ import {
   type LanguageModel
 } from 'ai'
 import { schema as convertSchema, type SimpleSchema } from './schema.js'
-import { isZodSchema } from 'ai-core'
+import { isZodSchema } from '@org.ai/core'
 import type { ZodTypeAny } from 'zod'
 
 type ModelArg = string | LanguageModel
