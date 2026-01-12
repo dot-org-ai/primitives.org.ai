@@ -1,6 +1,7 @@
 {
   "name": "@org.ai/examples",
   "version": "0.0.1",
+  "private": true,
   "description": "Example apps and code snippets for primitives.org.ai",
   "type": "module",
   "main": "dist/index.js",
