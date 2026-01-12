@@ -112,12 +112,12 @@ importers:
       '@ai-sdk/amazon-bedrock':
         specifier: ^3.0.0
         version: 3.0.68(zod@3.25.76)
+      '@org.ai/core':
+        specifier: workspace:^
+        version: link:../ai-core
       ai:
         specifier: ^5.0.0
         version: 5.0.108(zod@3.25.76)
-      ai-core:
-        specifier: workspace:^
-        version: link:../ai-core
       ai-providers:
         specifier: workspace:^
         version: link:../ai-providers
@@ -215,19 +215,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
-  packages/ai4:
-    dependencies:
-      autonomous-agents:
-        specifier: workspace:*
-        version: link:../autonomous-agents
-      human-in-the-loop:
-        specifier: workspace:*
-        version: link:../human-in-the-loop
-    devDependencies:
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-
   packages/autonomous-agents:
     dependencies:
       ai-functions:
@@ -302,25 +289,6 @@ importers:
       zod:
         specifier: ^3.23.0
         version: 3.25.76
-
-  packages/examples:
-    dependencies:
-      ai-functions:
-        specifier: workspace:*
-        version: link:../ai-functions
-    devDependencies:
-      ai:
-        specifier: ^5.0.0
-        version: 5.0.108(zod@4.1.13)
-      ai-providers:
-        specifier: workspace:*
-        version: link:../ai-providers
-      typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
   packages/human-in-the-loop:
     dependencies:
