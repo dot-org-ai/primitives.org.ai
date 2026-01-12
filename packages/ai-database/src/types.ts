@@ -11,6 +11,7 @@
  */
 
 import type { MDXLD } from 'mdxld'
+import type { ParsedFieldType, RelationshipOperatorType } from '@org.ai/types'
 
 // =============================================================================
 // Thing Types (mdxld-based entity structure)
@@ -135,28 +136,24 @@ export type DatabaseSchema = Record<string, EntitySchema>
 // =============================================================================
 
 /**
- * Parsed field information
+ * Parsed field information.
+ * Extends ParsedFieldType from @org.ai/types with database-specific fields.
  */
-export interface ParsedField {
-  name: string
-  type: string
+export interface ParsedField extends ParsedFieldType {
+  /** Whether the field is an array (required, extends optional base field) */
   isArray: boolean
+  /** Whether the field is optional (required, extends optional base field) */
   isOptional: boolean
+  /** Whether this is a relationship field */
   isRelation: boolean
-  relatedType?: string
-  backref?: string
   /** Operator used in field definition: ->, ~>, <-, <~ */
-  operator?: '->' | '~>' | '<-' | '<~'
+  operator?: RelationshipOperatorType
   /** Direction of the relationship */
   direction?: 'forward' | 'backward'
   /** Match mode for the relationship */
   matchMode?: 'exact' | 'fuzzy'
   /** Natural language prompt before operator */
   prompt?: string
-  /** Similarity threshold for fuzzy matching (0-1), parsed from ~>Type(0.9) syntax */
-  threshold?: number
-  /** Union types for polymorphic references (e.g., ->A|B|C parses to ['A', 'B', 'C']) */
-  unionTypes?: string[]
 }
 
 /**

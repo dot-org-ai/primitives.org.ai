@@ -2,6 +2,8 @@
  * Types for ai-workflows
  */
 
+import type { WorkflowContextType } from '@org.ai/types'
+
 /**
  * Handler function with source code for remote execution
  */
@@ -21,6 +23,9 @@ export interface HandlerFunction<T = unknown> {
  * Generic order follows Promise<T> convention:
  * - TOutput (first) is what the handler returns
  * - TInput (second) is what the handler receives
+ *
+ * Note: Uses WorkflowContext (extends WorkflowContextType from @org.ai/types)
+ * for workflow-specific features like OnProxy, EveryProxy, getState, log.
  */
 export type EventHandler<TOutput = unknown, TInput = unknown> = (
   data: TInput,
@@ -35,9 +40,10 @@ export type ScheduleHandler = (
 ) => void | Promise<void>
 
 /**
- * Workflow context ($) passed to handlers
+ * Workflow context ($) passed to handlers.
+ * Extends WorkflowContextType from @org.ai/types with workflow-specific features.
  */
-export interface WorkflowContext {
+export interface WorkflowContext extends WorkflowContextType {
   /**
    * Send an event (fire and forget, durable)
    * Confirms receipt but doesn't wait for result

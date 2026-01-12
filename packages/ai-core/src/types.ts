@@ -499,6 +499,79 @@ export interface HumanFunctionResult<T = unknown> {
 }
 
 /**
+ * Symbol used to identify pending human function results
+ */
+export const PENDING_HUMAN_RESULT_SYMBOL = Symbol.for('HumanFunctionPending')
+
+/**
+ * Pending human function result returned when human input is not yet available.
+ *
+ * This is returned by human functions that need actual human input but are running
+ * in a placeholder mode (e.g., during testing or when channel integrations are not configured).
+ *
+ * Use `isPendingHumanResult()` to check if a result is pending before using it.
+ *
+ * @example
+ * ```ts
+ * const result = await approveRefund({ amount: 500, reason: 'Duplicate charge' })
+ *
+ * if (isPendingHumanResult(result)) {
+ *   console.log('Waiting for human approval via:', result.channel)
+ *   // Handle pending state - queue for later, show UI, etc.
+ * } else {
+ *   // result is the actual TOutput type
+ *   console.log('Approved:', result.approved)
+ * }
+ * ```
+ */
+export interface HumanFunctionPending<TExpected = unknown> {
+  /** Symbol marker for type identification */
+  readonly [PENDING_HUMAN_RESULT_SYMBOL]: true
+  /** Indicates this is a pending placeholder, not actual human response */
+  readonly _pending: true
+  /** The channel where human input was requested */
+  readonly channel: HumanChannel
+  /** Generated UI/content artifacts for the channel */
+  readonly artifacts: unknown
+  /** The expected response type schema */
+  readonly expectedResponseType: TExpected
+}
+
+/**
+ * Type guard to check if a result is a pending human function result.
+ *
+ * Use this to safely handle cases where human input is not yet available.
+ *
+ * @param value - The value to check
+ * @returns True if the value is a HumanFunctionPending object
+ *
+ * @example
+ * ```ts
+ * const result = await reviewDocument({ docId: '123' })
+ *
+ * if (isPendingHumanResult(result)) {
+ *   // result is HumanFunctionPending - human input needed
+ *   console.warn('Human review pending:', result.channel)
+ *   return { status: 'pending', channel: result.channel }
+ * }
+ *
+ * // result is ReviewResult - actual human response
+ * return { status: 'reviewed', approved: result.approved }
+ * ```
+ */
+export function isPendingHumanResult<T>(
+  value: T | HumanFunctionPending
+): value is HumanFunctionPending {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    '_pending' in value &&
+    value._pending === true &&
+    PENDING_HUMAN_RESULT_SYMBOL in value
+  )
+}
+
+/**
  * Union of all function definition types
  *
  * @typeParam TOutput - The return type schema

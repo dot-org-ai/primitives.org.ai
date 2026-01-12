@@ -19,7 +19,9 @@
     "lint": "eslint .",
     "clean": "rm -rf dist"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@org.ai/types": "workspace:*"
+  },
   "devDependencies": {
     "vitest": "^2.1.0"
   },

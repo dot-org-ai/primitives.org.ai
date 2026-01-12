@@ -768,3 +768,273 @@ describe('Token Usage Tracking', () => {
     expect(result.usage!.totalTokens).toBe(160)
   })
 })
+
+// ============================================================================
+// cachedTool Tests - Tool result caching with cleanup
+// ============================================================================
+
+import { cachedTool, type CachedTool } from '../src/tool-orchestration.js'
+
+describe('cachedTool', () => {
+  describe('basic caching behavior', () => {
+    it('should cache tool results', async () => {
+      let executionCount = 0
+      const countingTool: Tool = {
+        name: 'counting',
+        description: 'Counts executions',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => {
+          executionCount++
+          return { key, count: executionCount }
+        },
+      }
+
+      const cached = cachedTool(countingTool, { ttl: 1000 })
+
+      // First call executes the tool
+      const result1 = await cached.execute({ key: 'test' })
+      expect(result1).toEqual({ key: 'test', count: 1 })
+
+      // Second call with same key returns cached result
+      const result2 = await cached.execute({ key: 'test' })
+      expect(result2).toEqual({ key: 'test', count: 1 })
+      expect(executionCount).toBe(1) // Only executed once
+
+      // Different key executes again
+      const result3 = await cached.execute({ key: 'other' })
+      expect(result3).toEqual({ key: 'other', count: 2 })
+    })
+
+    it('should expire cached entries after TTL', async () => {
+      vi.useFakeTimers()
+      let executionCount = 0
+      const countingTool: Tool = {
+        name: 'counting',
+        description: 'Counts executions',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => {
+          executionCount++
+          return { key, count: executionCount }
+        },
+      }
+
+      const cached = cachedTool(countingTool, { ttl: 100 })
+
+      // First call
+      await cached.execute({ key: 'test' })
+      expect(executionCount).toBe(1)
+
+      // After TTL expires
+      vi.advanceTimersByTime(150)
+
+      // Should execute again since cache expired
+      await cached.execute({ key: 'test' })
+      expect(executionCount).toBe(2)
+
+      vi.useRealTimers()
+    })
+  })
+
+  describe('cache cleanup', () => {
+    it('should periodically clean up expired entries', async () => {
+      vi.useFakeTimers()
+      let executionCount = 0
+      const countingTool: Tool = {
+        name: 'counting',
+        description: 'Counts executions',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => {
+          executionCount++
+          return { key, count: executionCount }
+        },
+      }
+
+      const cached = cachedTool(countingTool, {
+        ttl: 100,
+        cleanupIntervalMs: 50,
+      }) as CachedTool
+
+      // Execute to populate cache
+      await cached.execute({ key: 'entry1' })
+      await cached.execute({ key: 'entry2' })
+
+      expect(cached.cacheSize()).toBe(2)
+
+      // Wait for TTL to expire and cleanup to run
+      vi.advanceTimersByTime(150)
+
+      // Entries should be cleaned up automatically
+      expect(cached.cacheSize()).toBe(0)
+
+      // Cleanup timer
+      cached.destroy()
+      vi.useRealTimers()
+    })
+
+    it('should stop cleanup timer and clear cache when destroyed', async () => {
+      vi.useFakeTimers()
+      const countingTool: Tool = {
+        name: 'counting',
+        description: 'Counts executions',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => ({ key }),
+      }
+
+      const cached = cachedTool(countingTool, {
+        ttl: 100,
+        cleanupIntervalMs: 50,
+      }) as CachedTool
+
+      await cached.execute({ key: 'entry1' })
+      expect(cached.cacheSize()).toBe(1)
+
+      // Destroy stops cleanup timer and clears cache to prevent memory leaks
+      cached.destroy()
+
+      // Cache should be cleared immediately on destroy
+      expect(cached.cacheSize()).toBe(0)
+
+      // Advancing time should have no effect (timer is stopped)
+      vi.advanceTimersByTime(150)
+      expect(cached.cacheSize()).toBe(0)
+
+      vi.useRealTimers()
+    })
+
+    it('should clear all cache entries on clearCache()', async () => {
+      const countingTool: Tool = {
+        name: 'counting',
+        description: 'Counts executions',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => ({ key }),
+      }
+
+      const cached = cachedTool(countingTool, { ttl: 60000 }) as CachedTool
+
+      await cached.execute({ key: 'entry1' })
+      await cached.execute({ key: 'entry2' })
+      await cached.execute({ key: 'entry3' })
+
+      expect(cached.cacheSize()).toBe(3)
+
+      cached.clearCache()
+      expect(cached.cacheSize()).toBe(0)
+
+      cached.destroy()
+    })
+  })
+
+  describe('max cache size (LRU eviction)', () => {
+    it('should evict oldest entries when maxSize is reached', async () => {
+      vi.useFakeTimers()
+      let executionCount = 0
+      const countingTool: Tool = {
+        name: 'counting',
+        description: 'Counts executions',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => {
+          executionCount++
+          return { key, count: executionCount }
+        },
+      }
+
+      const cached = cachedTool(countingTool, {
+        ttl: 60000,
+        maxSize: 3,
+      }) as CachedTool
+
+      // Fill cache to max
+      await cached.execute({ key: 'a' })
+      vi.advanceTimersByTime(10)
+      await cached.execute({ key: 'b' })
+      vi.advanceTimersByTime(10)
+      await cached.execute({ key: 'c' })
+      vi.advanceTimersByTime(10)
+
+      expect(cached.cacheSize()).toBe(3)
+      expect(executionCount).toBe(3)
+
+      // Adding 4th entry should evict oldest ('a')
+      await cached.execute({ key: 'd' })
+      expect(cached.cacheSize()).toBe(3)
+
+      // Accessing 'a' should re-execute since it was evicted
+      await cached.execute({ key: 'a' })
+      expect(executionCount).toBe(5) // New execution
+
+      cached.destroy()
+      vi.useRealTimers()
+    })
+
+    it('should update LRU order on cache hit', async () => {
+      vi.useFakeTimers()
+      let executionCount = 0
+      const countingTool: Tool = {
+        name: 'counting',
+        description: 'Counts executions',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => {
+          executionCount++
+          return { key, count: executionCount }
+        },
+      }
+
+      const cached = cachedTool(countingTool, {
+        ttl: 60000,
+        maxSize: 3,
+      }) as CachedTool
+
+      // Fill cache: a, b, c (oldest to newest)
+      await cached.execute({ key: 'a' })
+      vi.advanceTimersByTime(10)
+      await cached.execute({ key: 'b' })
+      vi.advanceTimersByTime(10)
+      await cached.execute({ key: 'c' })
+      vi.advanceTimersByTime(10)
+
+      // Access 'a' to make it recently used
+      await cached.execute({ key: 'a' }) // Cache hit
+      vi.advanceTimersByTime(10)
+      expect(executionCount).toBe(3) // No new execution
+
+      // Add 'd' - should evict 'b' (now oldest) not 'a'
+      await cached.execute({ key: 'd' })
+
+      // 'b' was evicted, 'a' and 'c' remain
+      await cached.execute({ key: 'b' }) // Should re-execute
+      expect(executionCount).toBe(5)
+
+      await cached.execute({ key: 'a' }) // Still cached
+      expect(executionCount).toBe(5)
+
+      cached.destroy()
+      vi.useRealTimers()
+    })
+  })
+
+  describe('resource cleanup on tool destruction', () => {
+    it('should clean up timers and memory when destroy is called', async () => {
+      const tool: Tool = {
+        name: 'test',
+        description: 'Test tool',
+        parameters: z.object({ key: z.string() }),
+        execute: async ({ key }) => ({ key }),
+      }
+
+      const cached = cachedTool(tool, {
+        ttl: 1000,
+        cleanupIntervalMs: 100,
+      }) as CachedTool
+
+      await cached.execute({ key: 'test' })
+      expect(cached.cacheSize()).toBe(1)
+
+      cached.destroy()
+      expect(cached.cacheSize()).toBe(0)
+
+      // Should still work after destroy but without caching
+      await cached.execute({ key: 'test2' })
+      expect(cached.cacheSize()).toBe(0)
+    })
+  })
+})

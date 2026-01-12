@@ -69,6 +69,9 @@ importers:
 
   packages/ai-database:
     dependencies:
+      '@org.ai/types':
+        specifier: workspace:*
+        version: link:../types
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
@@ -217,6 +220,10 @@ importers:
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
   packages/ai-workflows:
+    dependencies:
+      '@org.ai/types':
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       vitest:
         specifier: ^2.1.0

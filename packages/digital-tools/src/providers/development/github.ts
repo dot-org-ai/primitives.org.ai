@@ -26,6 +26,114 @@ import { defineProvider } from '../registry.js'
 
 const GITHUB_API_URL = 'https://api.github.com'
 
+// =============================================================================
+// GitHub API Response Types
+// =============================================================================
+
+/**
+ * GitHub API user/owner object
+ */
+interface GitHubUser {
+  login: string
+  id: number
+  avatar_url: string
+  type: string
+}
+
+/**
+ * GitHub API repository response
+ */
+interface GitHubRepository {
+  id: number
+  name: string
+  full_name: string
+  description: string | null
+  private: boolean
+  default_branch: string
+  html_url: string
+  clone_url: string
+  stargazers_count: number
+  forks_count: number
+  open_issues_count: number
+  created_at: string
+  updated_at: string
+  owner: GitHubUser
+}
+
+/**
+ * GitHub API label object
+ */
+interface GitHubLabel {
+  id: number
+  name: string
+  color: string
+  description: string | null
+}
+
+/**
+ * GitHub API issue response
+ */
+interface GitHubIssue {
+  id: number
+  number: number
+  title: string
+  body: string | null
+  state: 'open' | 'closed'
+  html_url: string
+  created_at: string
+  updated_at: string
+  closed_at: string | null
+  user: GitHubUser
+  labels: GitHubLabel[]
+  assignees: GitHubUser[]
+  pull_request?: {
+    url: string
+    html_url: string
+  }
+}
+
+/**
+ * GitHub API branch reference
+ */
+interface GitHubBranchRef {
+  ref: string
+  sha: string
+  label: string
+  user: GitHubUser
+}
+
+/**
+ * GitHub API pull request response
+ */
+interface GitHubPullRequest {
+  id: number
+  number: number
+  title: string
+  body: string | null
+  state: 'open' | 'closed'
+  html_url: string
+  created_at: string
+  updated_at: string
+  closed_at: string | null
+  merged_at: string | null
+  draft: boolean
+  mergeable: boolean | null
+  user: GitHubUser
+  head: GitHubBranchRef
+  base: GitHubBranchRef
+}
+
+/**
+ * GitHub API comment response
+ */
+interface GitHubComment {
+  id: number
+  body: string
+  created_at: string
+  updated_at: string
+  user: GitHubUser
+}
+
 /**
  * GitHub provider info
  */
@@ -119,13 +227,13 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any[]
-      const repos: RepoData[] = data.map((repo: any) => ({
+      const data = await response.json() as GitHubRepository[]
+      const repos: RepoData[] = data.map((repo) => ({
         id: String(repo.id),
         owner: repo.owner.login,
         name: repo.name,
         fullName: repo.full_name,
-        description: repo.description,
+        description: repo.description ?? undefined,
         private: repo.private,
         defaultBranch: repo.default_branch,
         url: repo.html_url,
@@ -165,13 +273,13 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubRepository
       return {
         id: String(data.id),
         owner: data.owner.login,
         name: data.name,
         fullName: data.full_name,
-        description: data.description,
+        description: data.description ?? undefined,
         private: data.private,
         defaultBranch: data.default_branch,
         url: data.html_url,
@@ -211,15 +319,15 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubIssue
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body,
+        body: data.body ?? undefined,
         state: data.state,
-        labels: data.labels.map((l: any) => l.name),
-        assignees: data.assignees.map((a: any) => a.login),
+        labels: data.labels.map((l) => l.name),
+        assignees: data.assignees.map((a) => a.login),
         authorId: data.user.login,
         url: data.html_url,
         createdAt: new Date(data.created_at),
@@ -251,15 +359,15 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubIssue
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body,
+        body: data.body ?? undefined,
         state: data.state,
-        labels: data.labels.map((l: any) => l.name),
-        assignees: data.assignees.map((a: any) => a.login),
+        labels: data.labels.map((l) => l.name),
+        assignees: data.assignees.map((a) => a.login),
         authorId: data.user.login,
         url: data.html_url,
         createdAt: new Date(data.created_at),
@@ -299,15 +407,15 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubIssue
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body,
+        body: data.body ?? undefined,
         state: data.state,
-        labels: data.labels.map((l: any) => l.name),
-        assignees: data.assignees.map((a: any) => a.login),
+        labels: data.labels.map((l) => l.name),
+        assignees: data.assignees.map((a) => a.login),
         authorId: data.user.login,
         url: data.html_url,
         createdAt: new Date(data.created_at),
@@ -356,17 +464,17 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubIssue[]
       const issues: DevIssueData[] = data
-        .filter((item: any) => !item.pull_request) // Filter out PRs
-        .map((issue: any) => ({
+        .filter((item) => !item.pull_request) // Filter out PRs
+        .map((issue) => ({
           id: String(issue.id),
           number: issue.number,
           title: issue.title,
-          body: issue.body,
+          body: issue.body ?? undefined,
           state: issue.state,
-          labels: issue.labels.map((l: any) => l.name),
-          assignees: issue.assignees.map((a: any) => a.login),
+          labels: issue.labels.map((l) => l.name),
+          assignees: issue.assignees.map((a) => a.login),
           authorId: issue.user.login,
           url: issue.html_url,
           createdAt: new Date(issue.created_at),
@@ -413,18 +521,18 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubPullRequest
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body,
+        body: data.body ?? undefined,
         state: data.merged_at ? 'merged' : data.state,
         head: data.head.ref,
         base: data.base.ref,
         authorId: data.user.login,
         draft: data.draft,
-        mergeable: data.mergeable,
+        mergeable: data.mergeable ?? undefined,
         url: data.html_url,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
@@ -456,18 +564,18 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubPullRequest
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body,
+        body: data.body ?? undefined,
         state: data.merged_at ? 'merged' : data.state,
         head: data.head.ref,
         base: data.base.ref,
         authorId: data.user.login,
         draft: data.draft,
-        mergeable: data.mergeable,
+        mergeable: data.mergeable ?? undefined,
         url: data.html_url,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
@@ -513,18 +621,18 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
-      const prs: PRData[] = data.map((pr: any) => ({
+      const data = await response.json() as GitHubPullRequest[]
+      const prs: PRData[] = data.map((pr) => ({
         id: String(pr.id),
         number: pr.number,
         title: pr.title,
-        body: pr.body,
+        body: pr.body ?? undefined,
         state: pr.merged_at ? 'merged' : pr.state,
         head: pr.head.ref,
         base: pr.base.ref,
         authorId: pr.user.login,
         draft: pr.draft,
-        mergeable: pr.mergeable,
+        mergeable: pr.mergeable ?? undefined,
         url: pr.html_url,
         createdAt: new Date(pr.created_at),
         updatedAt: new Date(pr.updated_at),
@@ -588,7 +696,7 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as any
+      const data = await response.json() as GitHubComment
       return {
         id: String(data.id),
         body: data.body,

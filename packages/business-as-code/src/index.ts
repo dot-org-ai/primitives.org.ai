@@ -528,3 +528,91 @@ export {
   Entities,
   type BusinessEntityCategory,
 } from './entities/index.js'
+
+// =============================================================================
+// Business Model Canvas
+// =============================================================================
+
+export type {
+  // Canvas types
+  BusinessModelCanvas,
+  CanvasValidation,
+  CanvasSummary,
+  CanvasStrengthAnalysis,
+  CanvasGaps,
+
+  // Building block types
+  CustomerSegment,
+  CustomerSegmentType,
+  ValueProposition as CanvasValueProposition,
+  ValueType,
+  Channel as CanvasChannel,
+  ChannelType,
+  ChannelPhase,
+  CustomerRelationship as CanvasCustomerRelationship,
+  RelationshipType,
+  RevenueStream,
+  RevenueType,
+  PricingModel,
+  PricingTier,
+  KeyResource,
+  ResourceType,
+  KeyActivity as CanvasKeyActivity,
+  ActivityCategory,
+  KeyPartnership,
+  PartnershipType,
+  CostItem,
+  CostCategory,
+
+  // Unit economics types (renamed to avoid conflict with query builder)
+  UnitEconomics as CanvasUnitEconomics,
+  LTVInput,
+  CACInput,
+  UnitEconomicsInput,
+  Margins,
+  MarginsInput,
+
+  // Financial projection types
+  FinancialProjection,
+  RevenueProjection,
+  CostProjection,
+  ProfitabilityProjection,
+  MonthlyRevenue,
+  MonthlyCost,
+  MonthlyProfitability,
+  RevenueProjectionInput,
+  CostProjectionInput,
+  ProfitabilityProjectionInput,
+} from './canvas/index.js'
+
+export {
+  // Canvas operations
+  createCanvas,
+  validateCanvas,
+  generateCanvasSummary,
+  analyzeCanvasStrength,
+  identifyCanvasGaps,
+
+  // Building block creators
+  createCustomerSegment,
+  createValueProposition,
+  createChannel,
+  createCustomerRelationship,
+  createRevenueStream,
+  createKeyResource,
+  createKeyActivity,
+  createKeyPartnership,
+  createCostItem,
+
+  // Unit economics
+  calculateLTV as calculateCanvasLTV,
+  calculateCAC as calculateCanvasCAC,
+  calculateUnitEconomics,
+  calculateMargins,
+
+  // Financial projections
+  projectRevenue,
+  projectCosts,
+  projectProfitability,
+  createProjection,
+} from './canvas/index.js'

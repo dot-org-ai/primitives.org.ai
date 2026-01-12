@@ -20,6 +20,137 @@ import type {
 } from '../types.js'
 import { defineProvider } from '../registry.js'
 
+// =============================================================================
+// Zendesk API Response Types
+// =============================================================================
+
+/**
+ * Zendesk API error response
+ */
+interface ZendeskErrorResponse {
+  error?: string
+  description?: string
+  details?: Record<string, unknown>
+}
+
+/**
+ * Zendesk ticket from API
+ */
+interface ZendeskTicket {
+  id: number
+  subject: string
+  description: string
+  status: string
+  priority: string | null
+  type: string | null
+  requester_id: number | null
+  assignee_id: number | null
+  tags: string[]
+  created_at: string
+  updated_at: string
+  solved_at: string | null
+}
+
+/**
+ * Zendesk single ticket response
+ */
+interface ZendeskTicketResponse {
+  ticket: ZendeskTicket
+}
+
+/**
+ * Zendesk tickets list response
+ */
+interface ZendeskTicketsListResponse {
+  tickets: ZendeskTicket[]
+  count?: number
+  next_page: string | null
+  after_cursor?: string
+}
+
+/**
+ * Zendesk comment from API
+ */
+interface ZendeskComment {
+  id: number
+  body: string
+  plain_body?: string
+  author_id: number | null
+  public: boolean
+  created_at: string
+}
+
+/**
+ * Zendesk comments list response
+ */
+interface ZendeskCommentsResponse {
+  comments: ZendeskComment[]
+}
+
+/**
+ * Zendesk audit event
+ */
+interface ZendeskAuditEvent {
+  type: string
+  id?: number
+}
+
+/**
+ * Zendesk audit from ticket update
+ */
+interface ZendeskAudit {
+  id?: number
+  author_id?: number
+  created_at?: string
+  events?: ZendeskAuditEvent[]
+}
+
+/**
+ * Zendesk ticket update response with audit
+ */
+interface ZendeskTicketUpdateResponse {
+  ticket: ZendeskTicket
+  audit?: ZendeskAudit
+}
+
+/**
+ * Zendesk user from API
+ */
+interface ZendeskUser {
+  id: number
+  name: string
+  email: string
+  role: string
+  created_at: string
+}
+
+/**
+ * Zendesk single user response
+ */
+interface ZendeskUserResponse {
+  user: ZendeskUser
+}
+
+/**
+ * Zendesk users search response
+ */
+interface ZendeskUsersSearchResponse {
+  users: ZendeskUser[]
+}
+
+/**
+ * Zendesk ticket update request body
+ */
+interface ZendeskTicketUpdateBody {
+  subject?: string
+  priority?: string
+  type?: string
+  assignee_id?: string
+  tags?: string[]
+  custom_fields?: Record<string, unknown>
+  comment?: { body: string }
+}
+
 /**
  * Zendesk provider info
  */
@@ -113,11 +244,11 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
         })
 
         if (!response.ok) {
-          const error = await response.json().catch(() => ({}))
-          throw new Error((error as any)?.error || `HTTP ${response.status}`)
+          const error = (await response.json().catch(() => ({}))) as ZendeskErrorResponse
+          throw new Error(error.error || `HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
+        const data = (await response.json()) as ZendeskTicketResponse
         return mapZendeskTicket(data.ticket)
       } catch (error) {
         throw new Error(`Failed to create ticket: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -138,7 +269,7 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
+        const data = (await response.json()) as ZendeskTicketResponse
         return mapZendeskTicket(data.ticket)
       } catch {
         return null
@@ -146,21 +277,21 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
     },
 
     async updateTicket(ticketId: string, updates: Partial<CreateTicketOptions>): Promise<TicketData> {
-      const body: Record<string, unknown> = {
-        ticket: {
-          ...(updates.subject && { subject: updates.subject }),
-          ...(updates.priority && { priority: updates.priority }),
-          ...(updates.type && { type: updates.type }),
-          ...(updates.assigneeId && { assignee_id: updates.assigneeId }),
-          ...(updates.tags && { tags: updates.tags }),
-          ...(updates.customFields && { custom_fields: updates.customFields }),
-        },
+      const ticketBody: ZendeskTicketUpdateBody = {
+        ...(updates.subject && { subject: updates.subject }),
+        ...(updates.priority && { priority: updates.priority }),
+        ...(updates.type && { type: updates.type }),
+        ...(updates.assigneeId && { assignee_id: updates.assigneeId }),
+        ...(updates.tags && { tags: updates.tags }),
+        ...(updates.customFields && { custom_fields: updates.customFields }),
       }
 
       // Add comment if description is provided
       if (updates.description) {
-        (body.ticket as any).comment = { body: updates.description }
+        ticketBody.comment = { body: updates.description }
       }
+
+      const body = { ticket: ticketBody }
 
       try {
         const response = await fetch(`${baseUrl}/tickets/${ticketId}.json`, {
@@ -173,11 +304,11 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
         })
 
         if (!response.ok) {
-          const error = await response.json().catch(() => ({}))
-          throw new Error((error as any)?.error || `HTTP ${response.status}`)
+          const error = (await response.json().catch(() => ({}))) as ZendeskErrorResponse
+          throw new Error(error.error || `HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
+        const data = (await response.json()) as ZendeskTicketResponse
         return mapZendeskTicket(data.ticket)
       } catch (error) {
         throw new Error(`Failed to update ticket: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -208,7 +339,7 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
+        const data = (await response.json()) as ZendeskTicketsListResponse
         const tickets = (data.tickets || []).map(mapZendeskTicket)
 
         return {
@@ -262,13 +393,13 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
         })
 
         if (!response.ok) {
-          const error = await response.json().catch(() => ({}))
-          throw new Error((error as any)?.error || `HTTP ${response.status}`)
+          const error = (await response.json().catch(() => ({}))) as ZendeskErrorResponse
+          throw new Error(error.error || `HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
-        const audit = data.audit || {}
-        const comment = audit.events?.find((e: any) => e.type === 'Comment')
+        const data = (await response.json()) as ZendeskTicketUpdateResponse
+        const audit: ZendeskAudit = data.audit || {}
+        const comment = audit.events?.find((e: ZendeskAuditEvent) => e.type === 'Comment')
 
         return {
           id: audit.id?.toString() || '',
@@ -296,8 +427,8 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
-        return (data.comments || []).map((comment: any) => ({
+        const data = (await response.json()) as ZendeskCommentsResponse
+        return (data.comments || []).map((comment: ZendeskComment) => ({
           id: comment.id.toString(),
           ticketId,
           body: comment.body || comment.plain_body || '',
@@ -324,7 +455,7 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
+        const data = (await response.json()) as ZendeskUserResponse
         return mapZendeskUser(data.user)
       } catch {
         return null
@@ -345,7 +476,7 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
+        const data = (await response.json()) as ZendeskUsersSearchResponse
         return (data.users || []).map(mapZendeskUser)
       } catch (error) {
         throw new Error(`Failed to search users: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -357,14 +488,14 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
 /**
  * Map Zendesk ticket to TicketData
  */
-function mapZendeskTicket(ticket: any): TicketData {
+function mapZendeskTicket(ticket: ZendeskTicket): TicketData {
   return {
     id: ticket.id.toString(),
     subject: ticket.subject || '',
     description: ticket.description || '',
     status: mapZendeskStatus(ticket.status),
     priority: ticket.priority || 'normal',
-    type: ticket.type,
+    type: ticket.type ?? undefined,
     requesterId: ticket.requester_id?.toString(),
     assigneeId: ticket.assignee_id?.toString(),
     tags: ticket.tags || [],
@@ -399,7 +530,7 @@ function mapZendeskStatus(status: string): TicketData['status'] {
 /**
  * Map Zendesk user to SupportUserData
  */
-function mapZendeskUser(user: any): SupportUserData {
+function mapZendeskUser(user: ZendeskUser): SupportUserData {
   return {
     id: user.id.toString(),
     name: user.name || '',

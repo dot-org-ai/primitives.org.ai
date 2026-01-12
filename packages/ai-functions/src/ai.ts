@@ -50,10 +50,12 @@ import type {
   GenerativeFunctionDefinition,
   AgenticFunctionDefinition,
   HumanFunctionDefinition,
+  HumanFunctionPending,
   HumanChannel,
   CodeLanguage,
   FunctionRegistry,
-  AutoDefineResult
+  AutoDefineResult,
+  PENDING_HUMAN_RESULT_SYMBOL
 } from './types.js'
 import { schema as convertSchema, type SimpleSchema as SimpleSchemaType } from './schema.js'
 
@@ -590,7 +592,7 @@ What is your next step?`,
 /**
  * Execute a human function - generates UI and waits for human input
  *
- * **Note: This function currently returns placeholder/mock data.**
+ * **Note: This function currently returns a pending placeholder.**
  *
  * In a complete implementation, this function would:
  * 1. Generate channel-specific UI (Slack blocks, email templates, web forms, etc.)
@@ -602,25 +604,33 @@ What is your next step?`,
  * placeholder instead of actually sending to the channel and waiting for response.
  * This allows testing the UI generation without requiring actual channel integrations.
  *
+ * **Important:** Use `isPendingHumanResult()` to check if the result is pending
+ * before attempting to use it as the expected output type.
+ *
  * @param definition - The human function definition with channel and instructions
  * @param args - Arguments to pass to the function
- * @returns A placeholder result with `_pending: true` and generated artifacts
+ * @returns Either the actual TOutput from human input, or a HumanFunctionPending placeholder
  *
  * @example
  * ```ts
- * // The result will be a placeholder, not an actual human response:
- * // {
- * //   _pending: true,
- * //   channel: 'workspace',
- * //   artifacts: { ... generated UI ... },
- * //   expectedResponseType: { approved: boolean }
- * // }
+ * import { isPendingHumanResult } from '@org.ai/functions'
+ *
+ * const result = await approveRefund({ amount: 500 })
+ *
+ * if (isPendingHumanResult(result)) {
+ *   // Handle pending state
+ *   console.log('Awaiting human approval via:', result.channel)
+ *   return { status: 'pending' }
+ * }
+ *
+ * // result is the actual approval response
+ * console.log('Approved:', result.approved)
  * ```
  */
 async function executeHumanFunction<TOutput, TInput>(
   definition: HumanFunctionDefinition<TOutput, TInput>,
   args: TInput
-): Promise<TOutput> {
+): Promise<TOutput | HumanFunctionPending<TOutput>> {
   const { channel, instructions, promptTemplate, returnType } = definition
 
   const prompt = promptTemplate
@@ -676,22 +686,24 @@ ${JSON.stringify(returnType)}
 Generate the appropriate ${channel} UI/content to collect this response from a human.`,
   })
 
-  // NOTE: This is a placeholder implementation.
-  // In a real implementation, this would:
-  // 1. Send the generated UI to the appropriate channel (Slack, email, etc.)
-  // 2. Wait for human response with optional timeout
-  // 3. Return the validated response
-  //
-  // Current behavior: Returns generated artifacts as a pending placeholder
-  // Cast required: This is a placeholder implementation that returns a different shape
-  // than TOutput. When fully implemented, this would return actual TOutput from human input.
-  // The _pending flag allows consumers to detect placeholder vs real responses.
-  return {
+  // Runtime warning for developers
+  console.warn(
+    `[HumanFunction] Returning pending placeholder for channel '${channel}'. ` +
+    `Use isPendingHumanResult() to check before using the result. ` +
+    `Full channel integration is not yet implemented.`
+  )
+
+  // Return a properly typed pending result
+  // The symbol marker allows isPendingHumanResult() to reliably identify this
+  const pendingResult: HumanFunctionPending<TOutput> = {
+    [PENDING_HUMAN_RESULT_SYMBOL]: true,
     _pending: true,
     channel,
     artifacts: result.object,
-    expectedResponseType: returnType,
-  } as unknown as TOutput
+    expectedResponseType: returnType as TOutput,
+  }
+
+  return pendingResult
 }
 
 /**
@@ -845,11 +857,65 @@ class InMemoryFunctionRegistry implements FunctionRegistry {
 }
 
 /**
+ * Factory function to create a new isolated function registry instance.
+ *
+ * Use this when you need:
+ * - Test isolation: Each test can have its own registry
+ * - Scoped registries: Different parts of an app can have separate registries
+ * - Custom lifecycle management: Control when registries are created/destroyed
+ *
+ * @example
+ * ```ts
+ * // Create isolated registry for tests
+ * const registry = createFunctionRegistry()
+ * const fn = defineFunction({ ... })
+ * registry.set('myFunc', fn)
+ *
+ * // Later, registry can be discarded without affecting global state
+ * ```
+ *
+ * @returns A new FunctionRegistry instance
+ */
+export function createFunctionRegistry(): FunctionRegistry {
+  return new InMemoryFunctionRegistry()
+}
+
+/**
  * Global function registry
  *
  * Note: This is in-memory only. For persistence, use mdxai or mdxdb packages.
+ *
+ * **Lifecycle:**
+ * - Created once at module load time
+ * - Shared across the entire application
+ * - Use `resetGlobalRegistry()` in tests to clear state between test runs
+ * - For isolated registries, use `createFunctionRegistry()` instead
  */
 export const functions: FunctionRegistry = new InMemoryFunctionRegistry()
+
+/**
+ * Reset the global function registry to a clean state.
+ *
+ * **Important:** This is primarily intended for test cleanup to ensure
+ * test isolation. In production code, prefer using `createFunctionRegistry()`
+ * for isolated registries.
+ *
+ * @example
+ * ```ts
+ * // In test setup/teardown
+ * beforeEach(() => {
+ *   resetGlobalRegistry()
+ * })
+ *
+ * // Or after each test
+ * afterEach(() => {
+ *   resetGlobalRegistry()
+ * })
+ * ```
+ */
+export function resetGlobalRegistry(): void {
+  functions.clear()
+}
 
 // ============================================================================
 // Auto-Define Functions

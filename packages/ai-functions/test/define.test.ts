@@ -5,14 +5,14 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { define, defineFunction, functions } from '../src/index.js'
+import { define, defineFunction, functions, createFunctionRegistry, resetGlobalRegistry } from '../src/index.js'
 
 // Skip tests if no gateway configured
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
 
 describe('functions registry', () => {
   beforeEach(() => {
-    functions.clear()
+    resetGlobalRegistry()
   })
 
   it('starts empty', () => {
@@ -75,14 +75,152 @@ describe('functions registry', () => {
     functions.set('func1', fn1)
     functions.set('func2', fn2)
 
-    functions.clear()
+    resetGlobalRegistry()
+    expect(functions.list()).toEqual([])
+  })
+})
+
+describe('createFunctionRegistry', () => {
+  beforeEach(() => {
+    resetGlobalRegistry()
+  })
+
+  it('creates an isolated registry instance', () => {
+    const registry = createFunctionRegistry()
+    expect(registry.list()).toEqual([])
+  })
+
+  it('registry operations do not affect global registry', () => {
+    // Add function to global registry
+    const globalFn = defineFunction({
+      type: 'generative',
+      name: 'globalFunc',
+      args: { input: 'Test input' },
+      output: 'string',
+    })
+    functions.set('globalFunc', globalFn)
+
+    // Create isolated registry and add different function
+    const registry = createFunctionRegistry()
+    const isolatedFn = defineFunction({
+      type: 'generative',
+      name: 'isolatedFunc',
+      args: { data: 'Test data' },
+      output: 'string',
+    })
+    registry.set('isolatedFunc', isolatedFn)
+
+    // Verify isolation
+    expect(functions.has('globalFunc')).toBe(true)
+    expect(functions.has('isolatedFunc')).toBe(false)
+    expect(registry.has('isolatedFunc')).toBe(true)
+    expect(registry.has('globalFunc')).toBe(false)
+  })
+
+  it('multiple registries are independent of each other', () => {
+    const registry1 = createFunctionRegistry()
+    const registry2 = createFunctionRegistry()
+
+    const fn1 = defineFunction({
+      type: 'generative',
+      name: 'func1',
+      args: {},
+      output: 'string',
+    })
+    const fn2 = defineFunction({
+      type: 'generative',
+      name: 'func2',
+      args: {},
+      output: 'string',
+    })
+
+    registry1.set('func1', fn1)
+    registry2.set('func2', fn2)
+
+    expect(registry1.has('func1')).toBe(true)
+    expect(registry1.has('func2')).toBe(false)
+    expect(registry2.has('func1')).toBe(false)
+    expect(registry2.has('func2')).toBe(true)
+  })
+
+  it('isolated registry supports all operations', () => {
+    const registry = createFunctionRegistry()
+
+    const fn = defineFunction({
+      type: 'generative',
+      name: 'testFunc',
+      args: { x: 'number' },
+      output: 'string',
+    })
+
+    // set and get
+    registry.set('testFunc', fn)
+    expect(registry.get('testFunc')).toBe(fn)
+
+    // has
+    expect(registry.has('testFunc')).toBe(true)
+
+    // list
+    expect(registry.list()).toEqual(['testFunc'])
+
+    // delete
+    expect(registry.delete('testFunc')).toBe(true)
+    expect(registry.has('testFunc')).toBe(false)
+
+    // clear
+    registry.set('a', fn)
+    registry.set('b', fn)
+    registry.clear()
+    expect(registry.list()).toEqual([])
+  })
+})
+
+describe('resetGlobalRegistry', () => {
+  it('clears all functions from global registry', () => {
+    const fn = defineFunction({
+      type: 'generative',
+      name: 'testFunc',
+      args: {},
+      output: 'string',
+    })
+    functions.set('testFunc', fn)
+    expect(functions.has('testFunc')).toBe(true)
+
+    resetGlobalRegistry()
+    expect(functions.has('testFunc')).toBe(false)
+    expect(functions.list()).toEqual([])
+  })
+
+  it('does not affect isolated registries', () => {
+    const isolatedRegistry = createFunctionRegistry()
+    const fn = defineFunction({
+      type: 'generative',
+      name: 'isolatedFunc',
+      args: {},
+      output: 'string',
+    })
+    isolatedRegistry.set('isolatedFunc', fn)
+
+    // Add to global and reset
+    functions.set('globalFunc', fn)
+    resetGlobalRegistry()
+
+    // Global should be empty, isolated should still have function
+    expect(functions.list()).toEqual([])
+    expect(isolatedRegistry.has('isolatedFunc')).toBe(true)
+  })
+
+  it('can be called multiple times safely', () => {
+    resetGlobalRegistry()
+    resetGlobalRegistry()
+    resetGlobalRegistry()
     expect(functions.list()).toEqual([])
   })
 })
 
 describe('defineFunction', () => {
   beforeEach(() => {
-    functions.clear()
+    resetGlobalRegistry()
   })
 
   it('creates a generative function definition', () => {
@@ -163,7 +301,7 @@ describe('defineFunction', () => {
 
 describe('define helpers', () => {
   beforeEach(() => {
-    functions.clear()
+    resetGlobalRegistry()
   })
 
   it('define.generative registers function', () => {
@@ -214,7 +352,7 @@ describe('define helpers', () => {
 
 describe.skipIf(!hasGateway)('generative function execution', () => {
   beforeEach(() => {
-    functions.clear()
+    resetGlobalRegistry()
   })
 
   it('executes a generative string function', async () => {
@@ -251,7 +389,7 @@ describe.skipIf(!hasGateway)('generative function execution', () => {
 
 describe.skipIf(!hasGateway)('auto-define', () => {
   beforeEach(() => {
-    functions.clear()
+    resetGlobalRegistry()
   })
 
   it('auto-defines a function from name and args', async () => {

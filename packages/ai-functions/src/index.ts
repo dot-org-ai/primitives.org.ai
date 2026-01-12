@@ -147,7 +147,15 @@ export { isZodSchema } from '@org.ai/core'
 // This is separate from the core 'ai' template function
 // ============================================================================
 
-export { AI, define, defineFunction, type AIProxy } from './ai.js'
+export {
+  AI,
+  define,
+  defineFunction,
+  functions,
+  createFunctionRegistry,
+  resetGlobalRegistry,
+  type AIProxy,
+} from './ai.js'
 
 // Also export 'ai' primitive as 'aiPrompt' to avoid conflict with AIProxy
 export { ai as aiPrompt } from '@org.ai/core'

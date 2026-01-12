@@ -23,6 +23,224 @@ import { defineProvider } from '../registry.js'
 const NOTION_API_URL = 'https://api.notion.com/v1'
 const NOTION_VERSION = '2022-06-28'
 
+// =============================================================================
+// Notion API Types
+// =============================================================================
+
+/**
+ * Notion rich text object
+ */
+interface NotionRichText {
+  type: 'text' | 'mention' | 'equation'
+  text?: {
+    content: string
+    link?: { url: string } | null
+  }
+  plain_text: string
+  annotations?: {
+    bold: boolean
+    italic: boolean
+    strikethrough: boolean
+    underline: boolean
+    code: boolean
+    color: string
+  }
+  href?: string | null
+}
+
+/**
+ * Notion user reference
+ */
+interface NotionUserReference {
+  id: string
+  object?: 'user'
+}
+
+/**
+ * Notion icon object
+ */
+interface NotionIcon {
+  type: 'emoji' | 'external' | 'file'
+  emoji?: string
+  external?: { url: string }
+  file?: { url: string; expiry_time?: string }
+}
+
+/**
+ * Notion cover object
+ */
+interface NotionCover {
+  type: 'external' | 'file'
+  external?: { url: string }
+  file?: { url: string; expiry_time?: string }
+}
+
+/**
+ * Notion parent object
+ */
+interface NotionParent {
+  type: 'page_id' | 'database_id' | 'workspace' | 'block_id'
+  page_id?: string
+  database_id?: string
+  workspace?: boolean
+  block_id?: string
+}
+
+/**
+ * Notion property value types
+ */
+interface NotionTitleProperty {
+  type: 'title'
+  title: NotionRichText[]
+  id: string
+}
+
+interface NotionRichTextProperty {
+  type: 'rich_text'
+  rich_text: NotionRichText[]
+  id: string
+}
+
+interface NotionProperty {
+  type: string
+  id: string
+  title?: NotionRichText[]
+  rich_text?: NotionRichText[]
+  [key: string]: unknown
+}
+
+/**
+ * Notion page object from API
+ */
+interface NotionPage {
+  object: 'page'
+  id: string
+  created_time: string
+  last_edited_time: string
+  created_by: NotionUserReference
+  last_edited_by: NotionUserReference
+  cover: NotionCover | null
+  icon: NotionIcon | null
+  parent: NotionParent
+  archived: boolean
+  in_trash: boolean
+  properties: Record<string, NotionProperty>
+  url: string
+  public_url?: string | null
+  child_page?: { title: string }
+}
+
+/**
+ * Notion database object from API
+ */
+interface NotionDatabase {
+  object: 'database'
+  id: string
+  created_time: string
+  last_edited_time: string
+  created_by: NotionUserReference
+  last_edited_by: NotionUserReference
+  title: NotionRichText[]
+  description: NotionRichText[]
+  icon: NotionIcon | null
+  cover: NotionCover | null
+  parent: NotionParent
+  url: string
+  public_url?: string | null
+  archived: boolean
+  in_trash: boolean
+  is_inline: boolean
+  properties: Record<string, NotionProperty>
+}
+
+/**
+ * Notion API error response
+ */
+interface NotionErrorResponse {
+  object: 'error'
+  status: number
+  code: string
+  message: string
+}
+
+/**
+ * Notion paginated response
+ */
+interface NotionPaginatedResponse<T> {
+  object: 'list'
+  results: T[]
+  next_cursor: string | null
+  has_more: boolean
+  type?: string
+}
+
+/**
+ * Request body for creating a page
+ */
+interface NotionCreatePageBody {
+  parent: { page_id: string } | { database_id: string }
+  properties: {
+    title: Array<{ text: { content: string } }>
+  }
+  icon?: { emoji: string }
+  cover?: { external: { url: string } }
+  children?: NotionBlock[]
+}
+
+/**
+ * Notion block object
+ */
+interface NotionBlock {
+  object: 'block'
+  type: string
+  paragraph?: {
+    rich_text: Array<{
+      type: 'text'
+      text: { content: string }
+    }>
+  }
+  [key: string]: unknown
+}
+
+/**
+ * Request body for database query
+ */
+interface NotionDatabaseQueryBody {
+  page_size?: number
+  start_cursor?: string
+  filter?: Record<string, unknown>
+  sorts?: Array<Record<string, unknown>>
+}
+
+/**
+ * Request body for search
+ */
+interface NotionSearchBody {
+  query?: string
+  page_size?: number
+  start_cursor?: string
+  filter?: {
+    property: 'object'
+    value: 'page' | 'database'
+  }
+  sort?: {
+    direction: 'ascending' | 'descending'
+    timestamp: 'last_edited_time'
+  }
+}
+
+/**
+ * Request body for updating a page
+ */
+interface NotionUpdatePageBody {
+  properties: {
+    title?: Array<{ text: { content: string } }>
+  }
+  icon?: { emoji: string } | null
+  cover?: { external: { url: string } } | null
+  archived?: boolean
+}
+
 /**
  * Notion provider info
  */
@@ -68,7 +286,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
   /**
    * Convert Notion page to PageData
    */
-  function convertNotionPage(notionPage: any): PageData {
+  function convertNotionPage(notionPage: NotionPage): PageData {
     const title = extractTitle(notionPage)
     const parentId = notionPage.parent?.page_id || notionPage.parent?.database_id || undefined
 
@@ -91,20 +309,28 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
   /**
    * Extract title from Notion page properties
    */
-  function extractTitle(notionPage: any): string {
-    // Check for title property
+  function extractTitle(notionPage: NotionPage | NotionDatabase): string {
+    // For databases, title is a top-level property
+    if ('title' in notionPage && Array.isArray(notionPage.title)) {
+      const dbPage = notionPage as NotionDatabase
+      if (dbPage.title.length > 0) {
+        return dbPage.title.map((t) => t.plain_text).join('')
+      }
+    }
+
+    // Check for title property in page properties
     const properties = notionPage.properties || {}
 
     // Look for title or Name property
-    for (const [key, value] of Object.entries(properties)) {
-      const prop = value as any
-      if (prop.type === 'title' && prop.title?.length > 0) {
-        return prop.title.map((t: any) => t.plain_text).join('')
+    for (const [_key, value] of Object.entries(properties)) {
+      const prop = value as NotionProperty
+      if (prop.type === 'title' && prop.title && prop.title.length > 0) {
+        return prop.title.map((t) => t.plain_text).join('')
       }
     }
 
     // Fallback to page title in child_page parent
-    if (notionPage.child_page?.title) {
+    if ('child_page' in notionPage && notionPage.child_page?.title) {
       return notionPage.child_page.title
     }
 
@@ -114,7 +340,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
   /**
    * Build page properties for creation/update
    */
-  function buildPageProperties(title: string): any {
+  function buildPageProperties(title: string): { title: Array<{ text: { content: string } }> } {
     return {
       title: [
         {
@@ -129,7 +355,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
   /**
    * Build parent object for page creation
    */
-  function buildParent(parentId?: string, spaceId?: string): any {
+  function buildParent(parentId?: string, spaceId?: string): { page_id: string } | { database_id: string } {
     const targetParent = parentId || spaceId || defaultParentId || defaultDatabaseId
 
     if (!targetParent) {
@@ -186,7 +412,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
     async createPage(page: CreatePageOptions): Promise<PageData> {
       const parent = buildParent(page.parentId, page.spaceId)
 
-      const body: any = {
+      const body: NotionCreatePageBody = {
         parent,
         properties: buildPageProperties(page.title),
       }
@@ -224,13 +450,13 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to create page: ${(errorData as any)?.message || response.statusText}`
+            `Failed to create page: ${errorData?.message || response.statusText}`
           )
         }
 
-        const notionPage = await response.json() as any
+        const notionPage = await response.json() as NotionPage
         return convertNotionPage(notionPage)
       } catch (error) {
         throw new Error(
@@ -248,16 +474,16 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         }
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to get page: ${(errorData as any)?.message || response.statusText}`
+            `Failed to get page: ${errorData?.message || response.statusText}`
           )
         }
 
-        const notionPage = await response.json() as any
+        const notionPage = await response.json() as NotionPage
         return convertNotionPage(notionPage)
       } catch (error) {
-        if ((error as any)?.message?.includes('404')) {
+        if (error instanceof Error && error.message.includes('404')) {
           return null
         }
         throw new Error(
@@ -267,7 +493,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
     },
 
     async updatePage(pageId: string, updates: Partial<CreatePageOptions>): Promise<PageData> {
-      const body: any = {
+      const body: NotionUpdatePageBody = {
         properties: {},
       }
 
@@ -290,13 +516,13 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to update page: ${(errorData as any)?.message || response.statusText}`
+            `Failed to update page: ${errorData?.message || response.statusText}`
           )
         }
 
-        const notionPage = await response.json() as any
+        const notionPage = await response.json() as NotionPage
         return convertNotionPage(notionPage)
       } catch (error) {
         throw new Error(
@@ -313,9 +539,9 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to delete page: ${(errorData as any)?.message || response.statusText}`
+            `Failed to delete page: ${errorData?.message || response.statusText}`
           )
         }
 
@@ -336,7 +562,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
       }
 
       try {
-        const body: any = {
+        const body: NotionDatabaseQueryBody = {
           page_size: options?.limit || 100,
         }
 
@@ -350,13 +576,13 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to list pages: ${(errorData as any)?.message || response.statusText}`
+            `Failed to list pages: ${errorData?.message || response.statusText}`
           )
         }
 
-        const data = await response.json() as any
+        const data = await response.json() as NotionPaginatedResponse<NotionPage>
         const pages = data.results.map(convertNotionPage)
 
         return {
@@ -373,7 +599,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
 
     async searchPages(query: string, options?: PaginationOptions): Promise<PaginatedResult<PageData>> {
       try {
-        const body: any = {
+        const body: NotionSearchBody = {
           query,
           page_size: options?.limit || 100,
           filter: {
@@ -392,13 +618,13 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to search pages: ${(errorData as any)?.message || response.statusText}`
+            `Failed to search pages: ${errorData?.message || response.statusText}`
           )
         }
 
-        const data = await response.json() as any
+        const data = await response.json() as NotionPaginatedResponse<NotionPage>
         const pages = data.results.map(convertNotionPage)
 
         return {
@@ -416,7 +642,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
     async listSpaces(): Promise<SpaceData[]> {
       try {
         // List databases as "spaces"
-        const body = {
+        const body: NotionSearchBody = {
           filter: {
             property: 'object',
             value: 'database',
@@ -430,15 +656,15 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to list spaces: ${(errorData as any)?.message || response.statusText}`
+            `Failed to list spaces: ${errorData?.message || response.statusText}`
           )
         }
 
-        const data = await response.json() as any
+        const data = await response.json() as NotionPaginatedResponse<NotionDatabase>
 
-        return data.results.map((db: any): SpaceData => ({
+        return data.results.map((db): SpaceData => ({
           id: db.id,
           name: extractTitle(db),
           description: db.description?.[0]?.plain_text,
@@ -462,13 +688,13 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         }
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
+          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
           throw new Error(
-            `Failed to get space: ${(errorData as any)?.message || response.statusText}`
+            `Failed to get space: ${errorData?.message || response.statusText}`
           )
         }
 
-        const db = await response.json() as any
+        const db = await response.json() as NotionDatabase
 
         return {
           id: db.id,
@@ -478,7 +704,7 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
           url: db.url,
         }
       } catch (error) {
-        if ((error as any)?.message?.includes('404')) {
+        if (error instanceof Error && error.message.includes('404')) {
           return null
         }
         throw new Error(

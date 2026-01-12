@@ -907,33 +907,153 @@ export function wrapTool<T extends Tool>(
 }
 
 /**
+ * Options for cachedTool
+ */
+export interface CachedToolOptions {
+  /** Time-to-live in milliseconds (default: 60000) */
+  ttl?: number
+  /** Function to generate cache key from params (default: JSON.stringify) */
+  keyFn?: (params: unknown) => string
+  /** Interval in ms for automatic cleanup of expired entries (default: 0 = disabled) */
+  cleanupIntervalMs?: number
+  /** Maximum cache size before LRU eviction kicks in (default: 0 = unlimited) */
+  maxSize?: number
+}
+
+/**
+ * Extended tool interface with cache management methods
+ */
+export interface CachedTool extends Tool {
+  /** Get the current number of entries in the cache */
+  cacheSize(): number
+  /** Clear all cache entries */
+  clearCache(): void
+  /** Stop cleanup timer and clear cache */
+  destroy(): void
+}
+
+/**
  * Create a tool with caching support
+ *
+ * Features:
+ * - TTL-based expiration
+ * - Optional periodic cleanup of expired entries (prevents memory leaks)
+ * - Optional max size with LRU eviction
+ * - Manual cache control (clear, destroy)
  */
 export function cachedTool<T extends Tool>(
   tool: T,
-  options: {
-    ttl?: number
-    keyFn?: (params: unknown) => string
-  } = {}
-): Tool {
-  const cache = new Map<string, { value: unknown; expires: number }>()
-  const { ttl = 60000, keyFn = JSON.stringify } = options
+  options: CachedToolOptions = {}
+): CachedTool {
+  const { ttl = 60000, keyFn = JSON.stringify, cleanupIntervalMs = 0, maxSize = 0 } = options
 
-  return {
+  interface CacheEntry {
+    value: unknown
+    expires: number
+    lastAccessed: number
+  }
+
+  const cache = new Map<string, CacheEntry>()
+  let cleanupTimer: ReturnType<typeof setInterval> | null = null
+  let destroyed = false
+
+  // Cleanup function to remove expired entries
+  const cleanupExpired = () => {
+    const now = Date.now()
+    for (const [key, entry] of cache) {
+      if (entry.expires <= now) {
+        cache.delete(key)
+      }
+    }
+  }
+
+  // Start periodic cleanup if configured
+  if (cleanupIntervalMs > 0) {
+    cleanupTimer = setInterval(cleanupExpired, cleanupIntervalMs)
+    // Unref the timer so it doesn't keep the process alive (Node.js)
+    if (typeof cleanupTimer === 'object' && 'unref' in cleanupTimer) {
+      cleanupTimer.unref()
+    }
+  }
+
+  // Evict oldest entries based on lastAccessed (LRU)
+  const evictOldest = () => {
+    if (maxSize <= 0 || cache.size < maxSize) return
+
+    // Find the entry with oldest lastAccessed
+    let oldestKey: string | null = null
+    let oldestTime = Infinity
+
+    for (const [key, entry] of cache) {
+      if (entry.lastAccessed < oldestTime) {
+        oldestTime = entry.lastAccessed
+        oldestKey = key
+      }
+    }
+
+    if (oldestKey) {
+      cache.delete(oldestKey)
+    }
+  }
+
+  const cachedToolInstance: CachedTool = {
     ...tool,
     execute: async (params: unknown) => {
+      if (destroyed) {
+        // If destroyed, just execute without caching
+        return tool.execute(params)
+      }
+
       const key = keyFn(params)
       const cached = cache.get(key)
+      const now = Date.now()
 
-      if (cached && cached.expires > Date.now()) {
+      if (cached && cached.expires > now) {
+        // Cache hit - update last accessed time for LRU
+        cached.lastAccessed = now
         return cached.value
       }
 
+      // Cache miss or expired - remove expired entry if present
+      if (cached) {
+        cache.delete(key)
+      }
+
       const result = await tool.execute(params)
-      cache.set(key, { value: result, expires: Date.now() + ttl })
+
+      // Evict oldest if we're at max size
+      if (maxSize > 0 && cache.size >= maxSize) {
+        evictOldest()
+      }
+
+      cache.set(key, {
+        value: result,
+        expires: now + ttl,
+        lastAccessed: now,
+      })
+
       return result
     },
+
+    cacheSize(): number {
+      return cache.size
+    },
+
+    clearCache(): void {
+      cache.clear()
+    },
+
+    destroy(): void {
+      destroyed = true
+      if (cleanupTimer !== null) {
+        clearInterval(cleanupTimer)
+        cleanupTimer = null
+      }
+      cache.clear()
+    },
   }
+
+  return cachedToolInstance
 }
 
 /**

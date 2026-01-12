@@ -34,6 +34,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@org.ai/types": "workspace:*",
     "ai-functions": "workspace:*",
     "mdxld": "^1.0.1"
   },
