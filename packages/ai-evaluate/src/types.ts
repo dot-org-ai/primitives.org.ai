@@ -131,10 +131,17 @@ export interface WorkerCode {
 }
 
 /**
+ * Worker entrypoint with fetch method
+ */
+export interface WorkerEntrypoint {
+  fetch(request: Request): Promise<Response>
+}
+
+/**
  * Worker stub returned by loader
  */
 export interface WorkerStub {
-  fetch(request: Request): Promise<Response>
+  getEntrypoint(): WorkerEntrypoint
 }
 
 /**

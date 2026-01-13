@@ -145,7 +145,9 @@ async function evaluateWithWorkerLoader(
     }
   }))
 
-  const response = await worker.fetch(new Request('http://sandbox/execute'))
+  // Get the entrypoint and call fetch (required by Cloudflare worker_loaders API)
+  const entrypoint = worker.getEntrypoint()
+  const response = await entrypoint.fetch(new Request('http://sandbox/execute'))
   const result = await response.json() as EvaluateResult
 
   return {
