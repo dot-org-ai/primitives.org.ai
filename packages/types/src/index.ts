@@ -33,22 +33,56 @@ export type EventHandlerType<TOutput = unknown, TInput = unknown> = (
  * Workflow execution context interface
  * Provides methods for event handling, scheduling, and state management.
  * This is a base interface that packages can extend with more specific types.
+ *
+ * Execution semantics:
+ *
+ *               |  Fire & Forget  |   Durable
+ * --------------|-----------------|---------------
+ *    Event      |  track() -> void|  send() -> EventId
+ * --------------|-----------------|---------------
+ *    Action     |  try() -> T     |  do() -> T
  */
 export interface WorkflowContextType {
-  /** Fire-and-forget event dispatch (non-blocking, non-durable) */
-  send: <T = unknown>(event: string, data: T) => Promise<void>
-  /** Quick attempt at an action (non-durable, may be sync or async) */
-  try: <TResult = unknown, TInput = unknown>(event: string, data: TInput) => TResult | Promise<TResult>
-  /** Durable execution with retries (blocking, durable) */
-  do: <TResult = unknown, TInput = unknown>(event: string, data: TInput) => Promise<TResult>
+  /**
+   * Track an event (fire and forget)
+   * Best effort, no confirmation, swallows errors silently
+   * Use for telemetry, analytics, non-critical logging
+   */
+  track: (event: string, data: unknown) => void
+
+  /**
+   * Send an event (durable)
+   * Guaranteed delivery with retries, returns trackable EventId
+   * Use for important domain events that must not be lost
+   */
+  send: <T = unknown>(event: string, data: T) => string  // Returns EventId
+
+  /**
+   * Try an action (fire and forget)
+   * Single attempt, use .catch() for error handling
+   * No retries, no persistence
+   */
+  try: <TResult = unknown, TInput = unknown>(action: string, data: TInput) => Promise<TResult>
+
+  /**
+   * Do an action (durable)
+   * Retries on failure, guaranteed completion
+   * Stores result durably, can await receipt confirmation
+   */
+  do: <TResult = unknown, TInput = unknown>(action: string, data: TInput) => Promise<TResult>
+
   /** Event handler registry - $.on.Noun.verb(handler) */
   on: Record<string, Record<string, (handler: EventHandlerType) => void>>
+
   /** Scheduling registry - $.every.monday.at('9am')(handler) */
   every: Record<string, unknown>
+
   /** State storage */
   state: Record<string, unknown>
+
   /** Set a value in state */
   set: <T>(key: string, value: T) => void
+
   /** Get a value from state */
   get: <T>(key: string) => T | undefined
 }

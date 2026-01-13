@@ -45,10 +45,17 @@ export type ScheduleHandler = (
  */
 export interface WorkflowContext extends WorkflowContextType {
   /**
-   * Send an event (fire and forget, durable)
-   * Confirms receipt but doesn't wait for result
+   * Track an event (fire and forget)
+   * Best effort, no confirmation, swallows errors
+   * Use for telemetry and non-critical events
    */
-  send: <T = unknown>(event: string, data: T) => Promise<void>
+  track: (event: string, data: unknown) => void
+
+  /**
+   * Send an event (durable)
+   * Guaranteed delivery, returns trackable EventId
+   */
+  send: <T = unknown>(event: string, data: T) => string
 
   /**
    * Do an action (durable, waits for result)

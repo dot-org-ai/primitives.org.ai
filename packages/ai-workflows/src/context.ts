@@ -51,9 +51,24 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
   ) as EveryProxy
 
   return {
-    async send<T = unknown>(event: string, data: T): Promise<void> {
+    track(event: string, data: unknown): void {
+      // Fire and forget - swallow errors
+      try {
+        addHistory({ type: 'event', name: `track:${event}`, data })
+        eventBus.emit(event, data).catch(() => {})
+      } catch {
+        // Silently swallow errors
+      }
+    },
+
+    send<T = unknown>(event: string, data: T): string {
+      const eventId = crypto.randomUUID()
       addHistory({ type: 'event', name: event, data })
-      await eventBus.emit(event, data)
+      // Fire async but don't await - guaranteed delivery via event bus
+      eventBus.emit(event, { ...data as object, _eventId: eventId }).catch(err => {
+        console.error(`[workflow] Failed to send event ${event}:`, err)
+      })
+      return eventId
     },
 
     async do<TData = unknown, TResult = unknown>(_event: string, _data: TData): Promise<TResult> {

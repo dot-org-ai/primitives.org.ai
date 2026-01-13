@@ -357,15 +357,33 @@ export function Workflow(
    * Create the $ context
    */
   const $: WorkflowContext = {
-    async send<T = unknown>(event: string, data: T): Promise<void> {
+    track(event: string, data: unknown): void {
+      // Fire and forget - swallow errors
+      try {
+        addHistory({ type: 'event', name: `track:${event}`, data })
+        deliverEvent(event, data).catch(() => {})
+      } catch {
+        // Silently swallow errors
+      }
+    },
+
+    send<T = unknown>(event: string, data: T): string {
+      const eventId = crypto.randomUUID()
       addHistory({ type: 'event', name: event, data })
 
-      // Record to database if connected (durable)
+      // Record to database if connected (durable) - fire async
       if (options.db) {
-        await options.db.recordEvent(event, data)
+        options.db.recordEvent(event, { ...data as object, _eventId: eventId }).catch(err => {
+          console.error(`[workflow] Failed to record event ${event}:`, err)
+        })
       }
 
-      await deliverEvent(event, data)
+      // Deliver event asynchronously
+      deliverEvent(event, { ...data as object, _eventId: eventId }).catch(err => {
+        console.error(`[workflow] Failed to deliver event ${event}:`, err)
+      })
+
+      return eventId
     },
 
     async do<TData = unknown, TResult = unknown>(event: string, data: TData): Promise<TResult> {
@@ -513,8 +531,15 @@ export function createTestContext(): WorkflowContext & { emittedEvents: Array<{ 
   const $: WorkflowContext & { emittedEvents: Array<{ event: string; data: unknown }> } = {
     emittedEvents,
 
-    async send<T = unknown>(event: string, data: T): Promise<void> {
-      emittedEvents.push({ event, data })
+    track(event: string, data: unknown): void {
+      // Fire and forget for testing - just record it
+      emittedEvents.push({ event: `track:${event}`, data })
+    },
+
+    send<T = unknown>(event: string, data: T): string {
+      const eventId = crypto.randomUUID()
+      emittedEvents.push({ event, data: { ...data as object, _eventId: eventId } })
+      return eventId
     },
 
     async do<TData = unknown, TResult = unknown>(_event: string, _data: TData): Promise<TResult> {
