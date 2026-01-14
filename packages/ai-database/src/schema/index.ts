@@ -1120,7 +1120,7 @@ function createEntityOperations<T>(
           if (field.isArray) {
             // Get hint value for array fuzzy matching (e.g., categoriesHint for categories field)
             const hintKey = `${fieldName}Hint`
-            const hintValue = data[hintKey]
+            const hintValue = (data as Record<string, unknown>)[hintKey]
 
             // Get fuzzy threshold from entity schema
             const threshold = field.threshold ?? getFuzzyThreshold(entity)
@@ -1143,8 +1143,8 @@ function createEntityOperations<T>(
               const generatedText = String(hint)
               return {
                 field: fieldName,
-                operator: field.operator,
-                type: field.relatedType,
+                operator: field.operator!,
+                type: field.relatedType!,
                 unionTypes: field.unionTypes,
                 matchMode,
                 resolved: false,
@@ -1167,7 +1167,7 @@ function createEntityOperations<T>(
           } else {
             // Get hint value for fuzzy matching (e.g., contentHint for content field)
             const hintKey = `${fieldName}Hint`
-            const hintValue = data[hintKey] as string | undefined
+            const hintValue = (data as Record<string, unknown>)[hintKey] as string | undefined
 
             // Get fuzzy threshold from entity schema
             const threshold = field.threshold ?? getFuzzyThreshold(entity)

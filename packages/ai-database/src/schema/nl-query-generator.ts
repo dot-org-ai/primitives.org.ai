@@ -40,7 +40,9 @@ function buildQueryPrompt(query: string, context: NLQueryContext): string {
       const fieldsStr = type.fields.join(', ')
       const relationsStr =
         type.relationships.length > 0
-          ? ` | Relations: ${type.relationships.map((r) => `${r.name} -> ${r.to} (${r.cardinality})`).join(', ')}`
+          ? ` | Relations: ${type.relationships
+              .map((r) => `${r.name} -> ${r.to} (${r.cardinality})`)
+              .join(', ')}`
           : ''
       return `- ${type.name} (${type.singular}/${type.plural}): Fields: [${fieldsStr}]${relationsStr}`
     })
@@ -89,10 +91,7 @@ Guidelines:
  * ```
  */
 export function createDefaultNLQueryGenerator(): NLQueryGenerator {
-  return async (
-    query: string,
-    context: NLQueryContext
-  ): Promise<NLQueryPlan> => {
+  return async (query: string, context: NLQueryContext): Promise<NLQueryPlan> => {
     const config = getAIGenerationConfig()
 
     if (!config.enabled) {
@@ -116,27 +115,38 @@ export function createDefaultNLQueryGenerator(): NLQueryGenerator {
       prompt,
     })
 
-    const plan = result.object as NLQueryPlan & {
+    // Raw object has string dates from LLM output
+    const rawPlan = result.object as unknown as {
+      types?: string[]
+      filters?: Record<string, unknown>
+      search?: string
       timeRange?: { since?: string; until?: string }
+      include?: string[]
+      interpretation?: string
+      confidence?: number
+    }
+
+    // Convert to NLQueryPlan with proper Date objects
+    const plan: NLQueryPlan = {
+      types: rawPlan.types ?? [],
+      filters: rawPlan.filters,
+      search: rawPlan.search,
+      include: rawPlan.include,
+      interpretation: rawPlan.interpretation ?? `Query: "${query}"`,
+      confidence: rawPlan.confidence ?? 0.5,
     }
 
     // Convert ISO date strings to Date objects if present
-    if (plan.timeRange) {
+    if (rawPlan.timeRange) {
       plan.timeRange = {
-        since: plan.timeRange.since
-          ? new Date(plan.timeRange.since)
-          : undefined,
-        until: plan.timeRange.until
-          ? new Date(plan.timeRange.until)
-          : undefined,
+        since: rawPlan.timeRange.since ? new Date(rawPlan.timeRange.since) : undefined,
+        until: rawPlan.timeRange.until ? new Date(rawPlan.timeRange.until) : undefined,
       }
     }
 
     // Ensure types array is populated
     if (!plan.types || plan.types.length === 0) {
-      plan.types = context.targetType
-        ? [context.targetType]
-        : context.types.map((t) => t.name)
+      plan.types = context.targetType ? [context.targetType] : context.types.map((t) => t.name)
     }
 
     return plan
@@ -199,10 +209,7 @@ function toComparableNumber(value: unknown): number {
  * matchesFilter('enterprise', { $regex: 'enter' }) // true
  * ```
  */
-export function matchesFilter(
-  value: unknown,
-  condition: unknown
-): boolean {
+export function matchesFilter(value: unknown, condition: unknown): boolean {
   if (condition === null || condition === undefined) {
     return value === condition
   }

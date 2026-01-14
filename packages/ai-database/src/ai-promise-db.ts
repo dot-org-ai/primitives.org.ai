@@ -1094,7 +1094,7 @@ function createBatchLoadingArray<T>(items: T[]): T[] {
 
       // If no relations were accessed, run synchronously like native Array.map
       if (!hasRelations) {
-        return Array.prototype.map.call(items, (item: T, i: number) => callback(item, i))
+        return Array.prototype.map.call(items, (item: T, i: number) => callback(item, i)) as U[]
       }
 
       // Phase 2 & 3: Async batch loading path (returns a Promise)
