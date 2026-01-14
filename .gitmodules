@@ -1,3 +1,6 @@
 [submodule "tools"]
 	path = tools
 	url = https://github.com/ai-primitives/tools.org.ai.git
+[submodule "ai/primitives"]
+	path = ai/primitives
+	url = https://github.com/dot-org-ai/primitives.org.ai.git
