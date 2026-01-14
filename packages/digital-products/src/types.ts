@@ -5,7 +5,12 @@
 import type { SimpleSchema } from 'ai-functions'
 
 /**
- * Base Product type with schema.org.ai-style identifiers
+ * Product - Base interface for digital products
+ *
+ * Represents any digital product with schema.org.ai-style identifiers.
+ * Extended by App, API, Site, and other specific product types.
+ *
+ * @see https://schema.org.ai/Product
  */
 export interface Product {
   /** Unique identifier URI */
@@ -21,7 +26,12 @@ export interface Product {
 }
 
 /**
- * App - Application product
+ * App - Application product (web, mobile, desktop)
+ *
+ * Represents interactive user-facing applications that run on
+ * various platforms including web browsers, mobile devices, and desktops.
+ *
+ * @see https://schema.org.ai/App
  */
 export interface App extends Omit<Product, '$type'> {
   /** Type URI for App */
@@ -33,7 +43,12 @@ export interface App extends Omit<Product, '$type'> {
 }
 
 /**
- * API - API product
+ * API - API product with versioning and auth
+ *
+ * Represents programmatic interfaces that expose functionality
+ * to other software via HTTP/REST, GraphQL, or other protocols.
+ *
+ * @see https://schema.org.ai/API
  */
 export interface API extends Omit<Product, '$type'> {
   /** Type URI for API */
@@ -47,7 +62,12 @@ export interface API extends Omit<Product, '$type'> {
 }
 
 /**
- * Site - Website product
+ * Site - Website product (marketing, docs, blog)
+ *
+ * Represents websites including marketing pages, documentation sites,
+ * blogs, and other web-based content destinations.
+ *
+ * @see https://schema.org.ai/Site
  */
 export interface Site extends Omit<Product, '$type'> {
   /** Type URI for Site */

@@ -14,7 +14,7 @@
  * @packageDocumentation
  */
 
-// Export all types
+// Export all types (includes core schema.org.ai types: Product, App, API, Site)
 export * from './types.js'
 
 // Export entity definitions (Nouns) as namespace to avoid conflicts with types
