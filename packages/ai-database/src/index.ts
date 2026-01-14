@@ -103,6 +103,8 @@ export type {
   // Client Interfaces
   DBClient,
   DBClientExtended,
+  // Seed types
+  SeedResult,
 } from './schema.js'
 
 // Export CreateEventOptions and CreateActionOptions from types.ts

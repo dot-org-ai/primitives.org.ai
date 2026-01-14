@@ -439,7 +439,9 @@ export async function generateAIFields(
 
   const fullContext = contextParts.join(' | ')
 
-  // Generate values for prompt fields that don't have values
+  // Collect fields that need generation
+  const fieldsToGenerate: Array<{ fieldName: string; prompt: string | undefined }> = []
+
   for (const [fieldName, field] of entityDef.fields) {
     // Skip if value already provided
     if (result[fieldName] !== undefined && result[fieldName] !== null) continue
@@ -454,10 +456,55 @@ export async function generateAIFields(
     if (isPrompt || (field.type === 'string' && !isPrimitiveType(field.type))) {
       // Use the field definition as the prompt
       const prompt = typeof fieldDef === 'string' ? fieldDef : undefined
-      result[fieldName] = generateContextAwareValue(fieldName, typeName, fullContext, prompt, result)
+      fieldsToGenerate.push({ fieldName, prompt })
     } else if (field.type === 'string' && instructions) {
       // Generate string fields when we have $instructions context
-      result[fieldName] = generateContextAwareValue(fieldName, typeName, fullContext, undefined, result)
+      fieldsToGenerate.push({ fieldName, prompt: undefined })
+    }
+  }
+
+  // Try AI generation for all fields that need it
+  if (fieldsToGenerate.length > 0 && aiConfig.enabled) {
+    try {
+      const { generateObject } = await import('ai-functions')
+
+      // Build a schema for all fields to generate
+      const fieldsSchema: Record<string, string> = {}
+      for (const { fieldName, prompt } of fieldsToGenerate) {
+        fieldsSchema[fieldName] = prompt || `Generate a ${fieldName}`
+      }
+
+      // Build prompt with resolved instructions
+      const promptParts: string[] = []
+      if (resolvedInstructions) {
+        promptParts.push(resolvedInstructions)
+      }
+      promptParts.push(`Generate a ${typeName} with the following fields.`)
+      const aiPrompt = promptParts.join('\n')
+
+      const aiResult = await generateObject({
+        model: aiConfig.model,
+        schema: fieldsSchema,
+        prompt: aiPrompt
+      })
+
+      // Apply generated values
+      const generated = aiResult.object as Record<string, unknown>
+      for (const { fieldName } of fieldsToGenerate) {
+        if (generated[fieldName] !== undefined) {
+          result[fieldName] = generated[fieldName]
+        }
+      }
+    } catch (error) {
+      // AI generation failed, fall through to placeholder generation
+      console.warn(`AI field generation failed for ${typeName}, falling back to placeholder:`, error)
+    }
+  }
+
+  // Fill in any remaining fields with placeholder values
+  for (const { fieldName, prompt } of fieldsToGenerate) {
+    if (result[fieldName] === undefined || result[fieldName] === null) {
+      result[fieldName] = generateContextAwareValue(fieldName, typeName, fullContext, prompt, result)
     }
   }
 

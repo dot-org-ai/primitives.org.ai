@@ -154,6 +154,20 @@ export interface ParsedField extends ParsedFieldType {
   matchMode?: 'exact' | 'fuzzy'
   /** Natural language prompt before operator */
   prompt?: string
+  /** Seed column mapping (e.g., '$.columnName') - maps source column to this field */
+  seedMapping?: string
+}
+
+/**
+ * Seed configuration extracted from entity schema
+ */
+export interface SeedConfig {
+  /** URL to fetch seed data from */
+  url: string
+  /** Column name to use as primary key (from $id field) */
+  idColumn: string
+  /** Map of field names to source column names */
+  fieldMappings: Map<string, string>
 }
 
 /**
@@ -164,6 +178,8 @@ export interface ParsedEntity {
   fields: Map<string, ParsedField>
   /** Original raw schema for accessing metadata like $fuzzyThreshold */
   schema?: EntitySchema
+  /** Seed configuration if $seed is defined */
+  seedConfig?: SeedConfig
 }
 
 /**

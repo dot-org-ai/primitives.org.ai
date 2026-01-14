@@ -54,6 +54,7 @@ export type {
   ParsedField,
   ParsedEntity,
   ParsedSchema,
+  SeedConfig,
   Verb,
   Noun,
   NounProperty,
@@ -155,6 +156,14 @@ export type {
 export { parseOperator, parseField, parseSchema, isPrimitiveType } from './schema/parse.js'
 
 // =============================================================================
+// Re-exports from schema/seed.ts
+// =============================================================================
+
+export { loadSeedData, fetchSeedData, parseDelimitedData, mapSeedDataToRecords } from './schema/seed.js'
+export type { SeedResult } from './schema/seed.js'
+export type { SeedResult as SeedOperationResult } from './schema/seed.js'
+
+// =============================================================================
 // Re-exports from schema/provider.ts
 // =============================================================================
 
@@ -199,6 +208,16 @@ export type { AIGenerationConfig } from './schema/cascade.js'
 // =============================================================================
 
 export { resolveBackwardFuzzy, resolveForwardFuzzy } from './schema/semantic.js'
+
+// =============================================================================
+// Re-exports from schema/nl-query-generator.ts
+// =============================================================================
+
+export {
+  createDefaultNLQueryGenerator,
+  matchesFilter,
+  applyFilters,
+} from './schema/nl-query-generator.js'
 
 // =============================================================================
 // Re-exports from schema/verb-derivation.ts

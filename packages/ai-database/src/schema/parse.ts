@@ -14,6 +14,7 @@ import type {
   ParsedField,
   ParsedEntity,
   ParsedSchema,
+  SeedConfig,
 } from '../types.js'
 
 import type { OperatorParseResult } from './types.js'
@@ -727,6 +728,20 @@ export function parseField(name: string, definition: FieldDefinition): ParsedFie
 
   let type = definition
 
+  // Handle seed column mapping syntax: '$.columnName'
+  // This maps a source column from seed data to this field
+  if (type.startsWith('$.')) {
+    const seedColumn = type.slice(2) // Remove '$.' prefix
+    return {
+      name,
+      type: 'string', // Seed fields are stored as strings
+      isArray: false,
+      isOptional: false,
+      isRelation: false,
+      seedMapping: seedColumn,
+    }
+  }
+
   // Validate operator syntax first (check for invalid operators)
   validateOperatorSyntax(type, name)
 
@@ -886,16 +901,47 @@ export function parseSchema(schema: DatabaseSchema): ParsedSchema {
       // Validate array syntax
       if (Array.isArray(fieldDef)) {
         validateArrayDefinition(fieldDef, fieldName, entityName)
-      } else {
-        // Validate field type (string definition)
+      } else if (!fieldDef.startsWith('$.')) {
+        // Validate field type (string definition) - skip seed column mappings
         validateFieldType(fieldDef, fieldName, entityName)
       }
 
       fields.set(fieldName, parseField(fieldName, fieldDef))
     }
 
+    // Extract seed configuration if $seed is defined
+    let seedConfig: SeedConfig | undefined
+    const seedUrl = entitySchema.$seed as string | undefined
+    const seedIdField = entitySchema.$id as string | undefined
+
+    if (seedUrl) {
+      // Extract the id column from $id field (e.g., '$.oNETSOCCode' -> 'oNETSOCCode')
+      const idColumn = seedIdField?.startsWith('$.') ? seedIdField.slice(2) : undefined
+      if (!idColumn) {
+        throw new SchemaValidationError(
+          `Entity '${entityName}' has $seed but missing $id field. Use $id: '$.columnName' to specify the primary key column.`,
+          'MISSING_SEED_ID',
+          entityName
+        )
+      }
+
+      // Build field mappings from fields with seedMapping
+      const fieldMappings = new Map<string, string>()
+      for (const [fieldName, field] of fields) {
+        if (field.seedMapping) {
+          fieldMappings.set(fieldName, field.seedMapping)
+        }
+      }
+
+      seedConfig = {
+        url: seedUrl,
+        idColumn,
+        fieldMappings,
+      }
+    }
+
     // Store raw schema for accessing metadata like $fuzzyThreshold
-    entities.set(entityName, { name: entityName, fields, schema: entitySchema })
+    entities.set(entityName, { name: entityName, fields, schema: entitySchema, seedConfig })
   }
 
   // Validation pass: check that all operator-based references (->, ~>, <-, <~) point to existing types

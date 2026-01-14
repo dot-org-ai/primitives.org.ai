@@ -72,6 +72,10 @@ export type {
 // Re-export parse functions
 export { parseOperator, parseField, parseSchema, isPrimitiveType } from './parse.js'
 
+// Re-export seed functions
+export { loadSeedData, fetchSeedData, parseDelimitedData, mapSeedDataToRecords } from './seed.js'
+export type { SeedResult as SeedOperationResult } from './seed.js'
+
 // Re-export provider
 export type { DBProvider, DBProviderExtended, SemanticSearchResult, HybridSearchResult } from './provider.js'
 export {
@@ -113,6 +117,13 @@ export {
 
 // Re-export semantic functions
 export { resolveBackwardFuzzy, resolveForwardFuzzy } from './semantic.js'
+
+// Re-export NL query generator functions
+export {
+  createDefaultNLQueryGenerator,
+  matchesFilter,
+  applyFilters,
+} from './nl-query-generator.js'
 
 // Re-export dependency graph functions
 export {
@@ -512,6 +523,14 @@ export interface EntityOperations<T> {
 }
 
 /**
+ * Result of a seed operation
+ */
+export interface SeedResult {
+  /** Number of records seeded */
+  count: number
+}
+
+/**
  * Operations with promise pipelining support
  */
 export interface PipelineEntityOperations<T> {
@@ -533,6 +552,8 @@ export interface PipelineEntityOperations<T> {
   ): Promise<ForEachResult>
   semanticSearch(query: string, options?: SemanticSearchOptions): Promise<Array<T & { $score: number }>>
   hybridSearch(query: string, options?: HybridSearchOptions): Promise<Array<T & { $rrfScore: number; $ftsRank: number; $semanticRank: number; $score: number }>>
+  /** Seed reference data from external URL (only available if $seed is defined) */
+  seed?(): Promise<SeedResult>
 }
 
 // =============================================================================
@@ -622,6 +643,9 @@ async function executeNLQuery<T>(
   schema: ParsedSchema,
   targetType?: string
 ): Promise<NLQueryResult<T>> {
+  // Import applyFilters for MongoDB-style filter support
+  const { applyFilters } = await import('./nl-query-generator.js')
+
   if (!nlQueryGenerator) {
     const provider = await resolveProvider()
     const results: T[] = []
@@ -665,19 +689,22 @@ async function executeNLQuery<T>(
   const plan = await nlQueryGenerator(question, context)
 
   const provider = await resolveProvider()
-  const results: T[] = []
+  let results: T[] = []
 
   for (const typeName of plan.types) {
     let typeResults: Record<string, unknown>[]
 
     if (plan.search) {
-      typeResults = await provider.search(typeName, plan.search, {
-        where: plan.filters,
-      })
+      // Use provider's search, then apply filters in memory for MongoDB-style operators
+      typeResults = await provider.search(typeName, plan.search)
     } else {
-      typeResults = await provider.list(typeName, {
-        where: plan.filters,
-      })
+      // List all and filter in memory
+      typeResults = await provider.list(typeName)
+    }
+
+    // Apply MongoDB-style filters in memory
+    if (plan.filters && Object.keys(plan.filters).length > 0) {
+      typeResults = applyFilters(typeResults, plan.filters)
     }
 
     results.push(...(typeResults as T[]))
@@ -1482,6 +1509,29 @@ export function DB<TSchema extends DatabaseSchema>(
         }
 
         return originalCreate.call(wrappedOps, ...args)
+      }
+
+      // Add seed method if entity has seed configuration
+      if (entity.seedConfig) {
+        const seedConfig = entity.seedConfig
+        ;(wrappedOps as Record<string, unknown>).seed = async (): Promise<{ count: number }> => {
+          const { loadSeedData } = await import('./seed.js')
+          const records = await loadSeedData(seedConfig)
+          const provider = await resolveProvider()
+
+          for (const record of records) {
+            const { $id, ...data } = record
+            // Upsert: check if exists, then update or create
+            const existing = await provider.get(entityName, $id)
+            if (existing) {
+              await provider.update(entityName, $id, data as Record<string, unknown>)
+            } else {
+              await provider.create(entityName, $id, data as Record<string, unknown>)
+            }
+          }
+
+          return { count: records.length }
+        }
       }
 
       // Make the entity operations callable as a tagged template literal
