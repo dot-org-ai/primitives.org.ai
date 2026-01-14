@@ -17,6 +17,158 @@ import { isPrimitiveType } from './parse.js'
 import { resolveNestedPending, prefetchContext, resolveInstructions } from './resolve.js'
 
 // =============================================================================
+// AI Generation Configuration
+// =============================================================================
+
+/**
+ * Configuration for AI-powered generation
+ */
+export interface AIGenerationConfig {
+  /** Model alias or identifier to use for generation */
+  model: string
+  /** Whether AI generation is enabled (default: true when generateObject is available) */
+  enabled: boolean
+}
+
+// Default configuration - uses 'sonnet' as the default model
+let aiConfig: AIGenerationConfig = {
+  model: 'sonnet',
+  enabled: true
+}
+
+/**
+ * Configure AI generation settings
+ *
+ * @param config - Partial configuration to merge with defaults
+ */
+export function configureAIGeneration(config: Partial<AIGenerationConfig>): void {
+  aiConfig = { ...aiConfig, ...config }
+}
+
+/**
+ * Get current AI generation configuration
+ */
+export function getAIGenerationConfig(): AIGenerationConfig {
+  return { ...aiConfig }
+}
+
+// =============================================================================
+// AI-Powered Entity Generation
+// =============================================================================
+
+/**
+ * Build a simple schema object for generateObject from entity fields
+ *
+ * @param entity - The parsed entity definition
+ * @returns A simple schema object mapping field names to type descriptions
+ */
+function buildSchemaForEntity(entity: ParsedEntity): Record<string, string> {
+  const schema: Record<string, string> = {}
+
+  for (const [fieldName, field] of entity.fields) {
+    // Only include non-relation scalar fields
+    if (!field.isRelation) {
+      if (field.type === 'string') {
+        // Use the field prompt if available, otherwise a generic description
+        schema[fieldName] = field.prompt || `Generate a ${fieldName}`
+      } else if (field.type === 'number') {
+        schema[fieldName] = `number`
+      } else if (field.type === 'boolean') {
+        schema[fieldName] = `boolean`
+      }
+      // Note: Arrays handled separately for now
+    }
+  }
+
+  return schema
+}
+
+/**
+ * Generate entity data using AI via generateObject from ai-functions
+ *
+ * @param type - The type name of the entity to generate
+ * @param entity - The parsed entity definition
+ * @param prompt - The generation prompt (from field definition)
+ * @param context - Context from parent entity for informed generation
+ * @returns Generated entity data, or null if AI generation failed/unavailable
+ */
+async function generateEntityDataWithAI(
+  type: string,
+  entity: ParsedEntity,
+  prompt: string | undefined,
+  context: {
+    parentData: Record<string, unknown>
+    instructions?: string
+    schemaContext?: string
+  }
+): Promise<Record<string, unknown> | null> {
+  if (!aiConfig.enabled) {
+    return null
+  }
+
+  try {
+    // Dynamically import generateObject to avoid circular dependencies
+    // and to allow the mock to work in tests
+    const { generateObject } = await import('ai-functions')
+
+    // Build schema for the target entity
+    const schema = buildSchemaForEntity(entity)
+
+    // If no fields to generate, return null
+    if (Object.keys(schema).length === 0) {
+      return null
+    }
+
+    // Build comprehensive prompt with context
+    const promptParts: string[] = []
+
+    // Add the field prompt (e.g., "What problem does this solve?")
+    if (prompt && prompt.trim()) {
+      promptParts.push(prompt)
+    }
+
+    // Add $instructions if available
+    if (context.instructions) {
+      promptParts.push(`Context: ${context.instructions}`)
+    }
+
+    // Add $context if available
+    if (context.schemaContext) {
+      promptParts.push(context.schemaContext)
+    }
+
+    // Add relevant parent data for context
+    const parentContextEntries: string[] = []
+    for (const [key, value] of Object.entries(context.parentData)) {
+      if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
+        parentContextEntries.push(`${key}: ${value}`)
+      }
+    }
+    if (parentContextEntries.length > 0) {
+      promptParts.push(`Parent entity: ${parentContextEntries.join(', ')}`)
+    }
+
+    // Add type context
+    promptParts.push(`Generate a ${type} entity with the following fields.`)
+
+    const fullPrompt = promptParts.join('\n')
+
+    // Call generateObject with the schema and prompt
+    const result = await generateObject({
+      model: aiConfig.model,
+      schema,
+      prompt: fullPrompt
+    })
+
+    return result.object as Record<string, unknown>
+  } catch (error) {
+    // Log the error but don't throw - fall back to placeholder generation
+    console.warn(`AI generation failed for ${type}, falling back to placeholder:`, error)
+    return null
+  }
+}
+
+// =============================================================================
 // Context-Aware Value Generation
 // =============================================================================
 
@@ -319,8 +471,8 @@ export async function generateAIFields(
 /**
  * Generate an entity based on its type and context
  *
- * For testing, generates deterministic content based on the prompt and type.
- * In production, this would integrate with AI generation.
+ * Uses AI generation via generateObject from ai-functions when available,
+ * falling back to deterministic placeholder values for testing or when AI fails.
  *
  * @param type - The type of entity to generate
  * @param prompt - Optional prompt for generation context
@@ -342,6 +494,44 @@ export async function generateEntity(
   const instructions = parentSchema.$instructions as string | undefined
   const schemaContext = parentSchema.$context as string | undefined
 
+  // Try AI-powered generation first
+  const aiGeneratedData = await generateEntityDataWithAI(type, entity, prompt, {
+    parentData: context.parentData,
+    instructions,
+    schemaContext
+  })
+
+  // If AI generation succeeded, use that data but still handle relations
+  if (aiGeneratedData) {
+    const data: Record<string, unknown> = { ...aiGeneratedData }
+
+    // Handle relations (AI doesn't generate these)
+    for (const [fieldName, field] of entity.fields) {
+      if (field.isRelation) {
+        if (field.operator === '<-' && field.direction === 'backward') {
+          // Backward relation to parent
+          if (field.relatedType === context.parent && context.parentId) {
+            data[fieldName] = context.parentId
+          }
+        } else if (field.operator === '->' && field.direction === 'forward') {
+          // Recursively generate nested forward exact relations
+          if (!field.isOptional) {
+            const nestedGenerated = await generateEntity(
+              field.relatedType!,
+              field.prompt,
+              { parent: type, parentData: data },
+              schema
+            )
+            data[`_pending_${fieldName}`] = { type: field.relatedType!, data: nestedGenerated }
+          }
+        }
+      }
+    }
+
+    return data
+  }
+
+  // Fallback to placeholder generation if AI is not available or failed
   // Extract relevant parent data for context (excluding metadata fields)
   const parentContextFields: string[] = []
   for (const [key, value] of Object.entries(context.parentData)) {

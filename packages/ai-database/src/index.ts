@@ -119,6 +119,9 @@ export {
   // Configuration
   setProvider,
   setNLQueryGenerator,
+  // AI Generation configuration
+  configureAIGeneration,
+  getAIGenerationConfig,
   // Schema parsing
   parseSchema,
   // Schema Definition
@@ -147,6 +150,8 @@ export {
   registerFieldVerb,
 } from './schema.js'
 
+export type { AIGenerationConfig } from './schema.js'
+
 export {
   MemoryProvider,
   createMemoryProvider,
@@ -160,6 +165,8 @@ export type {
   Action as MemoryAction,
   Artifact as MemoryArtifact,
   MemoryProviderOptions,
+  // Embedding provider interface for pluggable embeddings
+  EmbeddingProvider,
 } from './memory-provider.js'
 
 // Event/Action/Artifact types for @mdxdb adapters (simple event sourcing style)

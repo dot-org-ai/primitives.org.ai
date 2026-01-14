@@ -193,11 +193,42 @@ export interface Artifact {
   createdAt: Date
 }
 
+/**
+ * Embedding provider interface for pluggable embedding generation
+ *
+ * Allows injecting custom embedding implementations for testing or
+ * using different embedding providers (ai-functions, OpenAI, Voyage, etc.)
+ */
+export interface EmbeddingProvider {
+  /** Embed multiple texts and return their embeddings */
+  embedTexts(texts: string[]): Promise<{ embeddings: number[][] }>
+  /** Find similar items based on query embedding */
+  findSimilar?<T>(
+    queryEmbedding: number[],
+    embeddings: number[][],
+    items: T[],
+    options?: { topK?: number; minScore?: number }
+  ): Array<{ item: T; score: number; index: number }>
+  /** Calculate cosine similarity between two vectors */
+  cosineSimilarity?(a: number[], b: number[]): number
+}
+
 export interface MemoryProviderOptions {
   /** Concurrency limit for operations (default: 10) */
   concurrency?: number
   /** Embedding configuration per type */
   embeddings?: EmbeddingsConfig
+  /**
+   * Use ai-functions for embeddings instead of deterministic mock embeddings.
+   * When enabled, embedTexts and cosineSimilarity from ai-functions will be used.
+   * Default: false (uses deterministic mock embeddings for testing)
+   */
+  useAiFunctions?: boolean
+  /**
+   * Custom embedding provider for testing or alternative embedding services.
+   * Takes precedence over useAiFunctions when provided.
+   */
+  embeddingProvider?: EmbeddingProvider
 }
 
 // =============================================================================
@@ -401,9 +432,31 @@ export class MemoryProvider implements DBProvider {
   // Embedding configuration
   private embeddingsConfig: EmbeddingsConfig
 
+  // Flag to use ai-functions for embeddings
+  private useAiFunctions: boolean
+
+  // Custom embedding provider (for testing or alternative services)
+  private embeddingProvider?: EmbeddingProvider
+
   constructor(options: MemoryProviderOptions = {}) {
     this.semaphore = new Semaphore(options.concurrency ?? 10)
     this.embeddingsConfig = options.embeddings ?? {}
+    this.useAiFunctions = options.useAiFunctions ?? false
+    this.embeddingProvider = options.embeddingProvider
+  }
+
+  /**
+   * Enable or disable ai-functions for embeddings
+   */
+  setUseAiFunctions(enabled: boolean): void {
+    this.useAiFunctions = enabled
+  }
+
+  /**
+   * Set a custom embedding provider
+   */
+  setEmbeddingProvider(provider: EmbeddingProvider | undefined): void {
+    this.embeddingProvider = provider
   }
 
   /**
@@ -692,6 +745,11 @@ export class MemoryProvider implements DBProvider {
    * embeddings for entities based on their text content. The embedding
    * is stored as an artifact associated with the entity.
    *
+   * Priority for embedding generation:
+   * 1. Custom embeddingProvider if set (for testing or alternative services)
+   * 2. ai-functions if useAiFunctions is enabled
+   * 3. Deterministic mock embedding (default for testing)
+   *
    * @param type - The entity type name
    * @param id - The entity ID
    * @param data - The entity data to extract text from
@@ -706,8 +764,37 @@ export class MemoryProvider implements DBProvider {
     const { text, fields: embeddedFields } = extractEmbeddableText(data, fields)
     if (!text.trim()) return
 
-    // Generate embedding
-    const embedding = this.generateEmbedding(text)
+    let embedding: number[]
+    let dimensions: number = EMBEDDING_DIMENSIONS
+    let source: string = 'mock'
+
+    // Priority: embeddingProvider > useAiFunctions > mock
+    if (this.embeddingProvider) {
+      try {
+        const result = await this.embeddingProvider.embedTexts([text])
+        embedding = result.embeddings[0] ?? this.generateEmbedding(text)
+        dimensions = embedding.length
+        source = 'custom-provider'
+      } catch (err) {
+        console.warn('Custom embedding provider failed, falling back to mock:', err)
+        embedding = this.generateEmbedding(text)
+      }
+    } else if (this.useAiFunctions) {
+      try {
+        const { embedTexts } = await import('ai-functions')
+        const result = await embedTexts([text])
+        embedding = result.embeddings[0] ?? this.generateEmbedding(text)
+        dimensions = embedding.length
+        source = 'ai-functions'
+      } catch (err) {
+        // Fallback to mock embedding if ai-functions fails
+        console.warn('ai-functions embedTexts failed, falling back to mock:', err)
+        embedding = this.generateEmbedding(text)
+      }
+    } else {
+      embedding = this.generateEmbedding(text)
+    }
+
     const contentHash = generateContentHash(text)
 
     // Store as artifact with complete metadata
@@ -717,8 +804,9 @@ export class MemoryProvider implements DBProvider {
       sourceHash: contentHash,
       metadata: {
         fields: embeddedFields,
-        dimensions: EMBEDDING_DIMENSIONS,
+        dimensions,
         text: text.slice(0, 200),
+        source,
       },
     })
   }
@@ -843,6 +931,11 @@ export class MemoryProvider implements DBProvider {
 
   /**
    * Semantic search using embedding similarity
+   *
+   * Priority for embedding and similarity operations:
+   * 1. Custom embeddingProvider if set
+   * 2. ai-functions if useAiFunctions is enabled
+   * 3. Local mock implementations (default)
    */
   async semanticSearch(
     type: string,
@@ -854,12 +947,49 @@ export class MemoryProvider implements DBProvider {
     const minScore = options?.minScore ?? 0
 
     // Generate query embedding
-    const queryEmbedding = this.generateEmbedding(query)
+    let queryEmbedding: number[]
+    if (this.embeddingProvider) {
+      try {
+        const result = await this.embeddingProvider.embedTexts([query])
+        queryEmbedding = result.embeddings[0] ?? this.generateEmbedding(query)
+      } catch (err) {
+        console.warn('Custom embedding provider failed for query, falling back to mock:', err)
+        queryEmbedding = this.generateEmbedding(query)
+      }
+    } else if (this.useAiFunctions) {
+      try {
+        const { embedTexts } = await import('ai-functions')
+        const result = await embedTexts([query])
+        queryEmbedding = result.embeddings[0] ?? this.generateEmbedding(query)
+      } catch (err) {
+        console.warn('ai-functions embedTexts failed for query, falling back to mock:', err)
+        queryEmbedding = this.generateEmbedding(query)
+      }
+    } else {
+      queryEmbedding = this.generateEmbedding(query)
+    }
 
-    const scored: Array<{ entity: Record<string, unknown>; score: number }> = []
+    // Get similarity function
+    let similarityFn: (a: number[], b: number[]) => number
+    if (this.embeddingProvider?.cosineSimilarity) {
+      similarityFn = this.embeddingProvider.cosineSimilarity
+    } else if (this.useAiFunctions) {
+      try {
+        const { cosineSimilarity: aiCosineSimilarity } = await import('ai-functions')
+        similarityFn = aiCosineSimilarity
+      } catch (err) {
+        console.warn('ai-functions cosineSimilarity not available, using local:', err)
+        similarityFn = cosineSimilarity
+      }
+    } else {
+      similarityFn = cosineSimilarity
+    }
+
+    // Collect embeddings and entities for potential findSimilar usage
+    const embeddings: number[][] = []
+    const entities: Array<{ entity: Record<string, unknown>; id: string }> = []
 
     for (const [id, entity] of store) {
-      // Get stored embedding from artifacts
       const url = `${type}/${id}`
       const artifact = await this.getArtifact(url, 'embedding')
 
@@ -867,14 +997,58 @@ export class MemoryProvider implements DBProvider {
         continue
       }
 
-      const embedding = artifact.content as number[]
-      const score = cosineSimilarity(queryEmbedding, embedding)
+      embeddings.push(artifact.content as number[])
+      entities.push({ entity: { ...entity, $id: id, $type: type }, id })
+    }
+
+    // If using embeddingProvider with findSimilar, use it
+    if (this.embeddingProvider?.findSimilar && entities.length > 0) {
+      try {
+        const results = this.embeddingProvider.findSimilar(
+          queryEmbedding,
+          embeddings,
+          entities,
+          { topK: limit, minScore }
+        )
+        return results.map(({ item, score }) => ({
+          ...item.entity,
+          $score: score,
+        }))
+      } catch (err) {
+        console.warn('Custom embedding provider findSimilar failed, falling back to manual scoring:', err)
+      }
+    }
+
+    // If using ai-functions and we have entities, try to use findSimilar
+    if (this.useAiFunctions && entities.length > 0) {
+      try {
+        const { findSimilar } = await import('ai-functions')
+        const results = findSimilar(
+          queryEmbedding,
+          embeddings,
+          entities,
+          { topK: limit, minScore }
+        )
+        return results.map(({ item, score }) => ({
+          ...item.entity,
+          $score: score,
+        }))
+      } catch (err) {
+        // Fall through to manual scoring if findSimilar fails
+        console.warn('ai-functions findSimilar failed, falling back to manual scoring:', err)
+      }
+    }
+
+    // Manual scoring fallback
+    const scored: Array<{ entity: Record<string, unknown>; score: number }> = []
+
+    for (let i = 0; i < entities.length; i++) {
+      const embedding = embeddings[i]!
+      const { entity } = entities[i]!
+      const score = similarityFn(queryEmbedding, embedding)
 
       if (score >= minScore) {
-        scored.push({
-          entity: { ...entity, $id: id, $type: type },
-          score,
-        })
+        scored.push({ entity, score })
       }
     }
 

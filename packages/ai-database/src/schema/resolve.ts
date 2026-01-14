@@ -354,10 +354,27 @@ export async function resolveReferenceSpec(
  * of the related type that have a reference pointing TO this entity.
  * This enables reverse lookups like "get all comments for a post".
  *
- * Backward reference resolution:
- * - Single backward ref with stored ID: resolve directly (e.g., member.team = teamId -> get Team by ID)
+ * ## Backward Exact (<-) vs Backward Fuzzy (<~) Resolution
+ *
+ * This function handles both backward exact and backward fuzzy resolution,
+ * but the resolution strategies differ:
+ *
+ * **Backward Exact (`<-`)**: Uses foreign key lookup (exact ID match)
+ * - Queries `provider.list(type, { where: { backrefField: id } })`
+ * - Returns all entities that explicitly reference the current entity
+ * - Example: `Blog.posts: ['<-Post']` finds Posts where `post.blog === blog.$id`
+ *
+ * **Backward Fuzzy (`<~`)**: Uses pre-resolved IDs from semantic search
+ * - During creation, `resolveBackwardFuzzy()` stores matched IDs
+ * - Hydration retrieves entities using those stored IDs
+ * - Example: `ICP.as: '<~Occupation'` was resolved via semantic search at creation time
+ *
+ * ## Resolution Cases
+ *
+ * - Single backward ref with stored ID: resolve directly (e.g., member.team = teamId)
  * - Single backward ref without stored ID: find related entity that points to us via relations
- * - Array backward ref: find all entities of related type where their forward ref points to us
+ * - Array backward ref with stored IDs: resolve each stored ID (backward fuzzy case)
+ * - Array backward ref without stored IDs: query via backref lookup (backward exact case)
  */
 export function hydrateEntity(
   data: Record<string, unknown>,

@@ -187,7 +187,12 @@ export {
   generateEntity,
   resolveForwardExact,
   generateNaturalLanguageContent,
+  // AI generation configuration
+  configureAIGeneration,
+  getAIGenerationConfig,
 } from './schema/cascade.js'
+
+export type { AIGenerationConfig } from './schema/cascade.js'
 
 // =============================================================================
 // Re-exports from schema/semantic.ts

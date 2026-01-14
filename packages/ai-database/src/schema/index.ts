@@ -105,6 +105,10 @@ export {
   generateEntity,
   resolveForwardExact,
   generateNaturalLanguageContent,
+  // AI generation configuration
+  configureAIGeneration,
+  getAIGenerationConfig,
+  type AIGenerationConfig,
 } from './cascade.js'
 
 // Re-export semantic functions

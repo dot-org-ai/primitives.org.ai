@@ -6,6 +6,22 @@
  * - But the edge is stored in the opposite direction
  * - Enables reverse lookups and aggregation queries
  *
+ * ## Distinction from Backward Fuzzy (<~)
+ *
+ * | Operator | Direction | Match Mode | Resolution Method |
+ * |----------|-----------|------------|-------------------|
+ * | `<-`     | backward  | exact      | Foreign key lookup (exact ID match) |
+ * | `<~`     | backward  | fuzzy      | Semantic search (embedding similarity) |
+ *
+ * - **`<-` (backward exact)**: Finds entities that explicitly reference the current
+ *   entity via a foreign key. Uses `provider.list(type, { where: { field: id } })`.
+ *   Example: `Blog.posts: ['<-Post']` finds all Posts where `post.blog === blog.$id`.
+ *
+ * - **`<~` (backward fuzzy)**: Grounds AI generation against reference data using
+ *   semantic search. Uses embedding similarity to find the best match from existing
+ *   entities. Does NOT generate new entities. Example: `ICP.as: '<~Occupation'`
+ *   matches an existing Occupation based on semantic similarity.
+ *
  * These tests validate:
  * 1. Inverted edge creation for <- references
  * 2. Aggregation queries via backward refs
@@ -112,7 +128,7 @@ describe('Backward Exact (<-) Resolution', () => {
       const { db } = DB({
         Problem: {
           task: '<-Task',
-          description: 'What is the problem?'
+          description: 'string'  // Plain string field for problem description
         },
         Task: {
           name: 'string',
