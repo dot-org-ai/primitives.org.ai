@@ -1,124 +1,21 @@
 /**
- * Semantic Search Infrastructure
+ * Mock Semantic Provider for Testing
  *
- * Provides embedding generation and semantic/hybrid search capabilities.
- * Uses a deterministic mock embedding provider for testing.
+ * Provides deterministic embeddings based on text content to enable
+ * meaningful semantic search in tests without real AI providers.
  *
  * @packageDocumentation
  */
 
-import { DEFAULT_EMBEDDING_DIMENSIONS, EMBEDDING_DIMENSIONS } from './constants.js'
+import { DEFAULT_EMBEDDING_DIMENSIONS } from '../../src/constants.js'
+import type {
+  SemanticProvider,
+  SemanticSearchOptions,
+  SemanticSearchResult,
+} from '../../src/semantic.js'
 
 // =============================================================================
-// SemanticProvider Interface
-// =============================================================================
-
-/**
- * Provider interface for embedding generation and semantic search
- */
-export interface SemanticProvider {
-  /**
-   * Generate embedding for a single text
-   */
-  embed(text: string): Promise<number[]>
-
-  /**
-   * Generate embeddings for multiple texts (batch operation)
-   */
-  embedBatch(texts: string[]): Promise<number[][]>
-
-  /**
-   * Search for similar entities by text query or embedding vector
-   */
-  search(
-    type: string,
-    query: string | number[],
-    options?: SemanticSearchOptions
-  ): Promise<SemanticSearchResult[]>
-
-  /**
-   * Get embedding dimensions
-   */
-  readonly dimensions: number
-}
-
-/**
- * Options for semantic search
- */
-export interface SemanticSearchOptions {
-  /** Minimum similarity score (0-1), defaults to 0 */
-  threshold?: number
-  /** Maximum number of results, defaults to 10 */
-  limit?: number
-  /** Fields to consider for embedding (used for metadata) */
-  fields?: string[]
-}
-
-/**
- * Result from semantic search
- */
-export interface SemanticSearchResult {
-  /** Entity ID */
-  id: string
-  /** Similarity score (0-1) */
-  score: number
-  /** Entity type */
-  type?: string
-}
-
-/**
- * Options for hybrid search (FTS + semantic)
- */
-export interface HybridSearchOptions {
-  /** Minimum similarity score for semantic results */
-  minScore?: number
-  /** Maximum number of results */
-  limit?: number
-  /** Offset for pagination */
-  offset?: number
-  /** RRF k parameter (default: 60) */
-  rrfK?: number
-  /** Weight for FTS results (default: 0.5) */
-  ftsWeight?: number
-  /** Weight for semantic results (default: 0.5) */
-  semanticWeight?: number
-}
-
-/**
- * Result from hybrid search with RRF scoring
- */
-export interface HybridSearchResult<T = unknown> {
-  /** The entity data */
-  entity: T
-  /** Combined RRF score */
-  rrfScore: number
-  /** Rank in FTS results (Infinity if not in FTS) */
-  ftsRank: number
-  /** Rank in semantic results (Infinity if not in semantic) */
-  semanticRank: number
-  /** Semantic similarity score (0-1) */
-  semanticScore: number
-}
-
-/**
- * Embedding configuration for a specific entity type
- */
-export interface EmbeddingConfig {
-  /** Fields to embed (defaults to text/markdown fields) */
-  fields?: string[]
-  /** Whether embeddings are enabled (defaults to true) */
-  enabled?: boolean
-}
-
-/**
- * Global embedding configuration
- */
-export interface EmbeddingsConfig {
-  [typeName: string]: EmbeddingConfig | false
-}
-
-// =============================================================================
-// Deterministic Mock Embedding Provider
+// Deterministic Mock Embedding Generation
 // =============================================================================
 
 /**
@@ -272,7 +169,7 @@ function getWordVector(word: string): number[] {
  * @param text - The text to generate an embedding for
  * @param dimensions - The number of dimensions for the embedding (default: DEFAULT_EMBEDDING_DIMENSIONS)
  */
-function generateEmbedding(
+export function generateMockEmbedding(
   text: string,
   dimensions: number = DEFAULT_EMBEDDING_DIMENSIONS
 ): number[] {
@@ -316,7 +213,7 @@ function generateEmbedding(
 /**
  * Calculate cosine similarity between two vectors
  */
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function mockCosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
     throw new Error(`Vector dimensions must match: ${a.length} vs ${b.length}`)
   }
@@ -338,39 +235,14 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return Math.max(0, Math.min(1, (dotProduct / magnitude + 1) / 2))
 }
 
-/**
- * Compute RRF (Reciprocal Rank Fusion) score
- *
- * RRF combines rankings from multiple sources using the formula:
- * score = sum(1 / (k + rank))
- *
- * @param ftsRank - Rank in FTS results (1-indexed, Infinity if not found)
- * @param semanticRank - Rank in semantic results (1-indexed, Infinity if not found)
- * @param k - Constant to prevent extreme scores (default: 60)
- * @param ftsWeight - Weight for FTS component (default: 0.5)
- * @param semanticWeight - Weight for semantic component (default: 0.5)
- */
-export function computeRRF(
-  ftsRank: number,
-  semanticRank: number,
-  k: number = 60,
-  ftsWeight: number = 0.5,
-  semanticWeight: number = 0.5
-): number {
-  const ftsScore = ftsRank < Infinity ? ftsWeight / (k + ftsRank) : 0
-  const semanticScore = semanticRank < Infinity ? semanticWeight / (k + semanticRank) : 0
-  return ftsScore + semanticScore
-}
-
 // =============================================================================
 // Mock Semantic Provider Implementation
 // =============================================================================
 
 /**
- * In-memory storage for embeddings (shared with MemoryProvider via artifacts)
- * @internal
+ * In-memory storage interface for embeddings
  */
-interface EmbeddingStore {
+export interface MockEmbeddingStore {
   getEmbedding(type: string, id: string): Promise<number[] | null>
   setEmbedding(
     type: string,
@@ -382,10 +254,9 @@ interface EmbeddingStore {
 }
 
 /**
- * Options for creating a semantic provider
- * @internal
+ * Options for creating a mock semantic provider
  */
-export interface SemanticProviderOptions {
+export interface MockSemanticProviderOptions {
   /**
    * The number of dimensions for embeddings.
    *
@@ -405,19 +276,28 @@ export interface SemanticProviderOptions {
  * Create a mock semantic provider for testing
  *
  * Uses deterministic embeddings based on text content to enable
- * meaningful semantic search in tests.
- *
- * @deprecated Import from 'ai-database/test/utils' or '../test/utils/mock-semantic.js' instead.
- * This export will be removed in a future version.
- *
- * @internal This function is intended for testing only and should not be used in production code.
+ * meaningful semantic search in tests without requiring real AI providers.
  *
  * @param store - The embedding store for persistence
  * @param options - Configuration options including embeddingDimensions
+ *
+ * @example
+ * ```ts
+ * import { createMockSemanticProvider } from '../test/utils/mock-semantic.js'
+ *
+ * const store = {
+ *   getEmbedding: async () => null,
+ *   setEmbedding: async () => {},
+ *   getAllEmbeddings: async () => [],
+ * }
+ *
+ * const provider = createMockSemanticProvider(store, { embeddingDimensions: 1536 })
+ * const embedding = await provider.embed('machine learning')
+ * ```
  */
 export function createMockSemanticProvider(
-  store: EmbeddingStore,
-  options?: SemanticProviderOptions
+  store: MockEmbeddingStore,
+  options?: MockSemanticProviderOptions
 ): SemanticProvider {
   const dimensions = options?.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS
 
@@ -425,11 +305,11 @@ export function createMockSemanticProvider(
     dimensions,
 
     async embed(text: string): Promise<number[]> {
-      return generateEmbedding(text, dimensions)
+      return generateMockEmbedding(text, dimensions)
     },
 
     async embedBatch(texts: string[]): Promise<number[][]> {
-      return texts.map((text) => generateEmbedding(text, dimensions))
+      return texts.map((text) => generateMockEmbedding(text, dimensions))
     },
 
     async search(
@@ -442,7 +322,7 @@ export function createMockSemanticProvider(
 
       // Get query embedding
       const queryEmbedding =
-        typeof query === 'string' ? generateEmbedding(query, dimensions) : query
+        typeof query === 'string' ? generateMockEmbedding(query, dimensions) : query
 
       // Get all embeddings for this type
       const embeddings = await store.getAllEmbeddings(type)
@@ -451,7 +331,7 @@ export function createMockSemanticProvider(
       const results: SemanticSearchResult[] = []
 
       for (const { id, embedding } of embeddings) {
-        const score = cosineSimilarity(queryEmbedding, embedding)
+        const score = mockCosineSimilarity(queryEmbedding, embedding)
 
         if (score >= threshold) {
           results.push({ id, score, type })
@@ -465,129 +345,4 @@ export function createMockSemanticProvider(
       return results.slice(0, limit)
     },
   }
-}
-
-// =============================================================================
-// Embedding Text Extraction
-// =============================================================================
-
-/**
- * Extract embeddable text from entity data
- *
- * @param data - Entity data object
- * @param fields - Fields to embed (undefined = auto-detect text fields)
- */
-export function extractEmbeddableText(
-  data: Record<string, unknown>,
-  fields?: string[]
-): { text: string; fields: string[] } {
-  const embeddedFields: string[] = []
-  const textParts: string[] = []
-
-  // If specific fields requested, use those
-  if (fields && fields.length > 0) {
-    for (const field of fields) {
-      const value = data[field]
-      if (typeof value === 'string' && value.trim()) {
-        textParts.push(value)
-        embeddedFields.push(field)
-      }
-    }
-  } else {
-    // Auto-detect text fields
-    for (const [key, value] of Object.entries(data)) {
-      // Skip internal fields
-      if (key.startsWith('$') || key.startsWith('_')) continue
-      // Skip timestamps
-      if (key.endsWith('At') || key.endsWith('_at')) continue
-
-      if (typeof value === 'string' && value.trim()) {
-        textParts.push(value)
-        embeddedFields.push(key)
-      } else if (Array.isArray(value)) {
-        // Handle string arrays (like tags)
-        const stringValues = value.filter((v) => typeof v === 'string')
-        if (stringValues.length > 0) {
-          textParts.push(stringValues.join(' '))
-          embeddedFields.push(key)
-        }
-      }
-    }
-  }
-
-  return {
-    text: textParts.join('\n\n'),
-    fields: embeddedFields,
-  }
-}
-
-/**
- * Generate content hash for cache invalidation
- */
-export function generateContentHash(text: string): string {
-  const hash = simpleHash(text)
-  return hash.toString(16).padStart(8, '0')
-}
-
-// =============================================================================
-// Default Embeddable Fields by Type
-// =============================================================================
-
-/**
- * Get fields to embed for an entity type
- *
- * Returns configured fields or auto-detects text fields.
- */
-export function getEmbeddableFields(
-  typeName: string,
-  schema: Record<string, string>,
-  config?: EmbeddingsConfig
-): string[] | null {
-  // Check if embeddings are disabled for this type
-  const typeConfig = config?.[typeName]
-  if (typeConfig === false) {
-    return null
-  }
-
-  // Use configured fields if specified
-  if (typeConfig && typeConfig.fields) {
-    return typeConfig.fields
-  }
-
-  // Auto-detect text fields from schema
-  const textFields: string[] = []
-  for (const [fieldName, fieldType] of Object.entries(schema)) {
-    const baseType = fieldType.replace(/[\?\[\]]/g, '').split('.')[0]
-    if (baseType === 'string' || baseType === 'markdown') {
-      textFields.push(fieldName)
-    }
-  }
-
-  return textFields.length > 0 ? textFields : null
-}
-
-// =============================================================================
-// Type-safe Result Types
-// =============================================================================
-
-/**
- * Entity with semantic search score
- */
-export type WithSemanticScore<T> = T & {
-  /** Semantic similarity score (0-1) */
-  $score: number
-}
-
-/**
- * Entity with hybrid search scores
- */
-export type WithHybridScore<T> = T & {
-  /** Combined RRF score */
-  $rrfScore: number
-  /** Rank in FTS results (Infinity if not in FTS) */
-  $ftsRank: number
-  /** Rank in semantic results (Infinity if not in semantic) */
-  $semanticRank: number
-  /** Semantic similarity score */
-  $score: number
 }

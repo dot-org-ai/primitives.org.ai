@@ -65,14 +65,3 @@ export const BatchPerformActionsSchema = z.object({
     })
   ),
 })
-
-// Type exports for use in ns.ts
-export type NounDefinitionInput = z.infer<typeof NounDefinitionSchema>
-export type VerbDefinitionInput = z.infer<typeof VerbDefinitionSchema>
-export type CreateThingInput = z.infer<typeof CreateThingSchema>
-export type UpdateThingInput = z.infer<typeof UpdateThingSchema>
-export type PerformActionInput = z.infer<typeof PerformActionSchema>
-export type BatchCreateThingsInput = z.infer<typeof BatchCreateThingsSchema>
-export type BatchUpdateThingsInput = z.infer<typeof BatchUpdateThingsSchema>
-export type BatchDeleteThingsInput = z.infer<typeof BatchDeleteThingsSchema>
-export type BatchPerformActionsInput = z.infer<typeof BatchPerformActionsSchema>

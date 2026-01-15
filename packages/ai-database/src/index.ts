@@ -240,6 +240,9 @@ export {
   computeRRF,
   extractEmbeddableText,
   generateContentHash,
+  // NOTE: createMockSemanticProvider has been moved to test utilities.
+  // Import from '../test/utils/mock-semantic.js' for testing.
+  // The export is kept here temporarily for backward compatibility but is deprecated.
   createMockSemanticProvider,
 } from './semantic.js'
 
@@ -468,3 +471,14 @@ export type {
 } from 'digital-objects'
 
 export { createMemoryProvider as createDigitalObjectsMemoryProvider } from 'digital-objects'
+
+// =============================================================================
+// Shared Constants
+// =============================================================================
+
+export {
+  RelationOperator,
+  DEFAULT_EMBEDDING_DIMENSIONS,
+  EMBEDDING_DIMENSIONS,
+} from './constants.js'
+export type { RelationOperatorType } from './constants.js'

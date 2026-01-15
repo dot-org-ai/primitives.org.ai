@@ -46,6 +46,26 @@ export class ConflictError extends DigitalObjectsError {
 }
 
 /**
+ * Thrown when a server error occurs (5xx status codes)
+ */
+export class ServerError extends DigitalObjectsError {
+  constructor(message: string, statusCode: number = 500) {
+    super(message, 'SERVER_ERROR', statusCode)
+    this.name = 'ServerError'
+  }
+}
+
+/**
+ * Thrown when a network error occurs (connection refused, timeout, etc.)
+ */
+export class NetworkError extends DigitalObjectsError {
+  constructor(message: string, public cause?: Error) {
+    super(message, 'NETWORK_ERROR', 503)
+    this.name = 'NetworkError'
+  }
+}
+
+/**
  * Convert an error to an HTTP-safe JSON response body
  */
 export function errorToResponse(error: unknown): { body: object; status: number } {

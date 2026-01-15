@@ -8,6 +8,7 @@ import {
 } from '../src/schema-validation.js'
 import type { FieldDefinition } from '../src/types.js'
 import { createMemoryProvider } from '../src/memory-provider.js'
+import { ValidationError } from '../src/errors.js'
 
 describe('Schema Validation', () => {
   describe('validateOnly', () => {
@@ -350,7 +351,7 @@ describe('Schema Validation', () => {
       ).rejects.toThrow(/Validation failed/)
     })
 
-    it('should include suggestions in provider error messages', async () => {
+    it('should include field errors in ValidationError', async () => {
       const provider = createMemoryProvider()
 
       await provider.defineNoun({
@@ -364,8 +365,11 @@ describe('Schema Validation', () => {
         await provider.create('Product', { price: '19.99' }, undefined, { validate: true })
         expect.fail('Should have thrown')
       } catch (error) {
-        const message = (error as Error).message
-        expect(message).toContain('Convert to number: 19.99')
+        expect(error).toBeInstanceOf(ValidationError)
+        const validationError = error as ValidationError
+        expect(validationError.errors).toHaveLength(1)
+        expect(validationError.errors[0].field).toBe('price')
+        expect(validationError.errors[0].message).toMatch(/number/i)
       }
     })
   })
@@ -407,7 +411,7 @@ describe('Schema Validation', () => {
       expect(codes.filter((c) => c === 'TYPE_MISMATCH')).toHaveLength(2)
     })
 
-    it('should format multiple errors in thrown message', () => {
+    it('should include multiple errors in ValidationError errors array', () => {
       const schema: Record<string, FieldDefinition> = {
         email: { type: 'string', required: true },
         age: 'number',
@@ -417,9 +421,19 @@ describe('Schema Validation', () => {
         validateData({ age: 'twenty' }, schema, { validate: true })
         expect.fail('Should have thrown')
       } catch (error) {
-        const message = (error as Error).message
-        expect(message).toContain("Missing required field 'email'")
-        expect(message).toContain("Field 'age' has wrong type")
+        expect(error).toBeInstanceOf(ValidationError)
+        const validationError = error as ValidationError
+        expect(validationError.errors).toHaveLength(2)
+
+        const fields = validationError.errors.map((e) => e.field)
+        expect(fields).toContain('email')
+        expect(fields).toContain('age')
+
+        const emailError = validationError.errors.find((e) => e.field === 'email')
+        expect(emailError?.message).toMatch(/required/i)
+
+        const ageError = validationError.errors.find((e) => e.field === 'age')
+        expect(ageError?.message).toMatch(/wrong type/i)
       }
     })
   })

@@ -220,21 +220,13 @@ describe('digital-objects Integration', () => {
       expect(related.length).toBeGreaterThanOrEqual(0)
     })
 
-    it('logs warning but does not throw on unrelate', async () => {
+    it('removes a relationship with unrelate', async () => {
       await provider.relate('User', 'john', 'posts', 'Post', 'post1')
 
-      // digital-objects adapter logs a warning for unrelate but doesn't throw
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
+      // digital-objects adapter supports unrelate by deleting the action
       await expect(
         provider.unrelate('User', 'john', 'posts', 'Post', 'post1')
       ).resolves.not.toThrow()
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'unrelate not fully supported - actions are immutable in digital-objects'
-      )
-
-      consoleSpy.mockRestore()
     })
 
     it('returns empty array for no relationships', async () => {

@@ -15,6 +15,7 @@ import type {
   ListOptions,
   ActionOptions,
 } from './types.js'
+import { NotFoundError, ServerError, NetworkError } from './errors.js'
 
 export interface NSClientOptions {
   /** Base URL of the NS worker */
@@ -77,17 +78,36 @@ export class NSClient implements DigitalObjectsProvider {
     init?: RequestInit,
     extraParams?: URLSearchParams
   ): Promise<T> {
-    const res = await this.fetchFn(this.url(path, extraParams), {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...init?.headers,
-      },
-    })
+    let res: Response
+    try {
+      res = await this.fetchFn(this.url(path, extraParams), {
+        ...init,
+        headers: {
+          'Content-Type': 'application/json',
+          ...init?.headers,
+        },
+      })
+    } catch (error) {
+      // Network errors (connection refused, timeout, etc.)
+      const message = error instanceof Error ? error.message : 'Network request failed'
+      throw new NetworkError(message, error instanceof Error ? error : undefined)
+    }
 
     if (!res.ok) {
       const text = await res.text()
-      throw new Error(`NS request failed: ${res.status} ${text}`)
+
+      // 404 - Not Found
+      if (res.status === 404) {
+        throw new NotFoundError('Resource', path)
+      }
+
+      // 5xx - Server errors
+      if (res.status >= 500) {
+        throw new ServerError(`NS request failed: ${res.status} ${text}`, res.status)
+      }
+
+      // Other HTTP errors (4xx except 404)
+      throw new ServerError(`NS request failed: ${res.status} ${text}`, res.status)
     }
 
     return res.json() as Promise<T>
@@ -105,8 +125,11 @@ export class NSClient implements DigitalObjectsProvider {
   async getNoun(name: string): Promise<Noun | null> {
     try {
       return await this.request(`/nouns/${encodeURIComponent(name)}`)
-    } catch {
-      return null
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return null
+      }
+      throw error
     }
   }
 
@@ -126,8 +149,11 @@ export class NSClient implements DigitalObjectsProvider {
   async getVerb(name: string): Promise<Verb | null> {
     try {
       return await this.request(`/verbs/${encodeURIComponent(name)}`)
-    } catch {
-      return null
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return null
+      }
+      throw error
     }
   }
 
@@ -147,8 +173,11 @@ export class NSClient implements DigitalObjectsProvider {
   async get<T>(id: string): Promise<Thing<T> | null> {
     try {
       return await this.request(`/things/${encodeURIComponent(id)}`)
-    } catch {
-      return null
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return null
+      }
+      throw error
     }
   }
 
@@ -212,8 +241,11 @@ export class NSClient implements DigitalObjectsProvider {
   async getAction<T>(id: string): Promise<Action<T> | null> {
     try {
       return await this.request(`/actions/${encodeURIComponent(id)}`)
-    } catch {
-      return null
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return null
+      }
+      throw error
     }
   }
 

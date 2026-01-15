@@ -16,6 +16,11 @@ export const DEFAULT_LIMIT = 100
 export const MAX_LIMIT = 1000
 
 /**
+ * Maximum batch size to prevent DoS attacks
+ */
+export const MAX_BATCH_SIZE = 1000
+
+/**
  * Direction for graph traversal
  */
 export type Direction = 'in' | 'out' | 'both'
@@ -108,12 +113,23 @@ export interface Action<T = Record<string, unknown>> {
   subject?: string // Thing ID (actor/from)
   object?: string // Thing ID (target/to)
   data?: T // Payload/metadata
-  status: ActionStatus
+  status: ActionStatusType
   createdAt: Date
   completedAt?: Date
 }
 
-export type ActionStatus = 'pending' | 'active' | 'completed' | 'failed' | 'cancelled'
+/**
+ * ActionStatus constants - use these instead of string literals
+ */
+export const ActionStatus = {
+  PENDING: 'pending',
+  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  CANCELLED: 'cancelled',
+} as const
+
+export type ActionStatusType = (typeof ActionStatus)[keyof typeof ActionStatus]
 
 /**
  * Field definition for schemas
@@ -175,7 +191,7 @@ export interface ActionOptions extends ListOptions {
   verb?: string
   subject?: string
   object?: string
-  status?: ActionStatus | ActionStatus[]
+  status?: ActionStatusType | ActionStatusType[]
 }
 
 /**

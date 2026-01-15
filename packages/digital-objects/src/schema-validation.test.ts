@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createMemoryProvider } from './memory-provider.js'
 import type { DigitalObjectsProvider, FieldDefinition } from './types.js'
+import { ValidationError } from './errors.js'
 
 describe('Schema Validation', () => {
   let provider: DigitalObjectsProvider
@@ -36,17 +37,35 @@ describe('Schema Validation', () => {
     })
 
     it('should reject data missing required fields', async () => {
-      await expect(
-        provider.create('User', { name: 'Alice' }, undefined, { validate: true })
-      ).rejects.toThrow(/required.*email/i)
+      try {
+        await provider.create('User', { name: 'Alice' }, undefined, { validate: true })
+        expect.fail('Should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError)
+        const validationError = error as ValidationError
+        const fields = validationError.errors.map((e) => e.field)
+        expect(fields).toContain('email')
+      }
     })
 
     it('should reject data with wrong types', async () => {
-      await expect(
-        provider.create('User', { name: 'Alice', email: 'a@b.com', age: 'thirty' }, undefined, {
-          validate: true,
-        })
-      ).rejects.toThrow(/age.*number/i)
+      try {
+        await provider.create(
+          'User',
+          { name: 'Alice', email: 'a@b.com', age: 'thirty' },
+          undefined,
+          {
+            validate: true,
+          }
+        )
+        expect.fail('Should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError)
+        const validationError = error as ValidationError
+        const ageError = validationError.errors.find((e) => e.field === 'age')
+        expect(ageError).toBeDefined()
+        expect(ageError?.message).toMatch(/number/i)
+      }
     })
 
     it('should allow extra fields not in schema', async () => {
@@ -92,9 +111,16 @@ describe('Schema Validation', () => {
           user: { type: 'object', required: true },
         },
       })
-      await expect(
-        provider.create('Profile', { user: 'not-an-object' }, undefined, { validate: true })
-      ).rejects.toThrow(/user.*object/i)
+      try {
+        await provider.create('Profile', { user: 'not-an-object' }, undefined, { validate: true })
+        expect.fail('Should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError)
+        const validationError = error as ValidationError
+        const userError = validationError.errors.find((e) => e.field === 'user')
+        expect(userError).toBeDefined()
+        expect(userError?.message).toMatch(/object/i)
+      }
     })
   })
 
@@ -106,9 +132,16 @@ describe('Schema Validation', () => {
           tags: { type: 'array' },
         },
       })
-      await expect(
-        provider.create('Post', { tags: 'not-array' }, undefined, { validate: true })
-      ).rejects.toThrow(/tags.*array/i)
+      try {
+        await provider.create('Post', { tags: 'not-array' }, undefined, { validate: true })
+        expect.fail('Should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError)
+        const validationError = error as ValidationError
+        const tagsError = validationError.errors.find((e) => e.field === 'tags')
+        expect(tagsError).toBeDefined()
+        expect(tagsError?.message).toMatch(/array/i)
+      }
     })
   })
 
@@ -119,9 +152,16 @@ describe('Schema Validation', () => {
         schema: { count: { type: 'number' } },
       })
       const item = await provider.create('Item', { count: 1 })
-      await expect(provider.update(item.id, { count: 'two' }, { validate: true })).rejects.toThrow(
-        /count.*number/i
-      )
+      try {
+        await provider.update(item.id, { count: 'two' }, { validate: true })
+        expect.fail('Should have thrown')
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationError)
+        const validationError = error as ValidationError
+        const countError = validationError.errors.find((e) => e.field === 'count')
+        expect(countError).toBeDefined()
+        expect(countError?.message).toMatch(/number/i)
+      }
     })
   })
 })

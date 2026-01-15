@@ -12,16 +12,22 @@ import type {
   VerbDefinition,
   Thing,
   Action,
-  ActionStatus,
+  ActionStatusType,
   ListOptions,
   ActionOptions,
   ValidationOptions,
   Direction,
 } from './types.js'
-import { DEFAULT_LIMIT, MAX_LIMIT, validateDirection } from './types.js'
+import {
+  DEFAULT_LIMIT,
+  MAX_LIMIT,
+  MAX_BATCH_SIZE,
+  validateDirection,
+  ActionStatus,
+} from './types.js'
 import { deriveNoun, deriveVerb } from './linguistic.js'
 import { validateData } from './schema-validation.js'
-import { NotFoundError } from './errors.js'
+import { NotFoundError, ValidationError } from './errors.js'
 
 /**
  * Calculate effective limit with safety bounds
@@ -32,6 +38,51 @@ function effectiveLimit(requestedLimit?: number): number {
 
 function generateId(): string {
   return crypto.randomUUID()
+}
+
+// Dangerous field names that could enable prototype pollution or other attacks
+const DANGEROUS_FIELDS = ['__proto__', 'constructor', 'prototype']
+
+/**
+ * Validates a where clause field name to prevent JSON path traversal and prototype pollution.
+ * Throws ValidationError if the field name is invalid.
+ *
+ * Rejects:
+ * - Dots (.) in field names (JSON path traversal)
+ * - __proto__, constructor, prototype (prototype pollution)
+ * - Special JSON path characters ([, ], $, @)
+ */
+function validateWhereField(field: string): void {
+  // Check for dangerous prototype-related field names
+  if (DANGEROUS_FIELDS.includes(field)) {
+    throw new ValidationError(`Invalid where field: '${field}' is not allowed`, [
+      { field, message: `Field name '${field}' is not allowed for security reasons` },
+    ])
+  }
+
+  // Check for dots (JSON path traversal)
+  if (field.includes('.')) {
+    throw new ValidationError(`Invalid where field: '${field}' contains dots`, [
+      { field, message: 'Field names cannot contain dots (JSON path traversal prevention)' },
+    ])
+  }
+
+  // Check for special JSON path characters
+  if (/[\[\]$@]/.test(field)) {
+    throw new ValidationError(`Invalid where field: '${field}' contains special characters`, [
+      { field, message: 'Field names cannot contain special JSON path characters ([, ], $, @)' },
+    ])
+  }
+
+  // Must match valid identifier pattern (starts with letter or underscore, followed by alphanumeric or underscore)
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field)) {
+    throw new ValidationError(`Invalid where field: '${field}'`, [
+      {
+        field,
+        message: 'Field name must be a valid identifier (letters, numbers, underscores only)',
+      },
+    ])
+  }
 }
 
 export class MemoryProvider implements DigitalObjectsProvider {
@@ -123,12 +174,36 @@ export class MemoryProvider implements DigitalObjectsProvider {
     return (this.things.get(id) as Thing<T>) ?? null
   }
 
+  /**
+   * Batch fetch multiple things by IDs
+   * More efficient than N individual get() calls
+   */
+  async getMany<T>(ids: string[]): Promise<Thing<T>[]> {
+    if (ids.length === 0) return []
+
+    const results: Thing<T>[] = []
+    for (const id of ids) {
+      const thing = this.things.get(id)
+      if (thing) {
+        results.push(thing as Thing<T>)
+      }
+    }
+    return results
+  }
+
   async list<T>(noun: string, options?: ListOptions): Promise<Thing<T>[]> {
     let results = Array.from(this.things.values()).filter((t) => t.noun === noun) as Thing<T>[]
 
     if (options?.where) {
+      // Use Object.getOwnPropertyNames to also catch __proto__ which is not enumerable with Object.keys
+      const whereKeys = Object.getOwnPropertyNames(options.where)
+      // Validate all field names before filtering
+      for (const key of whereKeys) {
+        validateWhereField(key)
+      }
       results = results.filter((t) => {
-        for (const [key, value] of Object.entries(options.where!)) {
+        for (const key of whereKeys) {
+          const value = (options.where as Record<string, unknown>)[key]
           if ((t.data as Record<string, unknown>)[key] !== value) {
             return false
           }
@@ -234,7 +309,7 @@ export class MemoryProvider implements DigitalObjectsProvider {
       subject,
       object,
       data,
-      status: 'completed' as ActionStatus,
+      status: ActionStatus.COMPLETED,
       createdAt: new Date(),
       completedAt: new Date(),
     }
@@ -302,11 +377,8 @@ export class MemoryProvider implements DigitalObjectsProvider {
       }
     }
 
-    let results: Thing<T>[] = []
-    for (const relatedId of relatedIds) {
-      const thing = await this.get<T>(relatedId)
-      if (thing) results.push(thing)
-    }
+    // Use batch query instead of N individual get() calls (fixes N+1 pattern)
+    let results = await this.getMany<T>([...relatedIds])
 
     // Apply limit with safety bounds
     const limit = effectiveLimit(options?.limit)
@@ -344,20 +416,42 @@ export class MemoryProvider implements DigitalObjectsProvider {
   // ==================== Batch Operations ====================
 
   async createMany<T>(noun: string, items: T[]): Promise<Thing<T>[]> {
+    if (items.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(`Batch size ${items.length} exceeds maximum of ${MAX_BATCH_SIZE}`, [
+        { field: 'items', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` },
+      ])
+    }
     return Promise.all(items.map((item) => this.create(noun, item)))
   }
 
   async updateMany<T>(updates: Array<{ id: string; data: Partial<T> }>): Promise<Thing<T>[]> {
+    if (updates.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(
+        `Batch size ${updates.length} exceeds maximum of ${MAX_BATCH_SIZE}`,
+        [{ field: 'items', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` }]
+      )
+    }
     return Promise.all(updates.map((u) => this.update(u.id, u.data)))
   }
 
   async deleteMany(ids: string[]): Promise<boolean[]> {
+    if (ids.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(`Batch size ${ids.length} exceeds maximum of ${MAX_BATCH_SIZE}`, [
+        { field: 'ids', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` },
+      ])
+    }
     return Promise.all(ids.map((id) => this.delete(id)))
   }
 
   async performMany<T>(
     actions: Array<{ verb: string; subject?: string; object?: string; data?: T }>
   ): Promise<Action<T>[]> {
+    if (actions.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(
+        `Batch size ${actions.length} exceeds maximum of ${MAX_BATCH_SIZE}`,
+        [{ field: 'actions', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` }]
+      )
+    }
     return Promise.all(actions.map((a) => this.perform(a.verb, a.subject, a.object, a.data)))
   }
 

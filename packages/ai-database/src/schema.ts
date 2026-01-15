@@ -94,7 +94,7 @@ export { toExpanded, toFlat, Verbs, resolveUrl, resolveShortUrl, parseUrl } from
 // Re-exports from semantic.ts
 // =============================================================================
 
-export type { EmbeddingsConfig } from './semantic.js'
+export type { EmbeddingsConfig, SemanticProviderOptions } from './semantic.js'
 
 // =============================================================================
 // Re-exports from linguistic.ts

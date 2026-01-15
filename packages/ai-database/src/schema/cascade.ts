@@ -8,6 +8,7 @@
  */
 
 import type { ParsedEntity, ParsedSchema } from '../types.js'
+import { AIGenerationError } from '../errors.js'
 
 import type { DBProvider } from './provider.js'
 import { isPrimitiveType } from './parse.js'
@@ -200,9 +201,14 @@ async function generateEntityDataWithAI(
 
     return result.object as Record<string, unknown>
   } catch (error) {
-    // Log the error but don't throw - fall back to placeholder generation
-    console.warn(`AI generation failed for ${type}, falling back to placeholder:`, error)
-    return null
+    // Throw AIGenerationError - don't silently fall back to placeholder
+    const cause = error instanceof Error ? error : undefined
+    throw new AIGenerationError(
+      cause?.message || 'Unknown AI generation failure',
+      type,
+      undefined,
+      cause
+    )
   }
 }
 
@@ -433,10 +439,13 @@ export async function generateAIFields(
         }
       }
     } catch (error) {
-      // AI generation failed, fall through to placeholder generation
-      console.warn(
-        `AI field generation failed for ${typeName}, falling back to placeholder:`,
-        error
+      // Throw AIGenerationError - don't silently fall back to placeholder
+      const cause = error instanceof Error ? error : undefined
+      throw new AIGenerationError(
+        cause?.message || 'Unknown AI field generation failure',
+        typeName,
+        undefined,
+        cause
       )
     }
   }

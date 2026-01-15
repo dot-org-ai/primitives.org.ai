@@ -6,6 +6,7 @@
  */
 
 import type { FieldDefinition, ExtendedFieldDefinition, ValidationOptions } from './types.js'
+import { ValidationError } from './errors.js'
 
 /**
  * Schema validation error with detailed context
@@ -318,8 +319,10 @@ export function validateData(
 
   if (errors.length > 0) {
     const errorCount = errors.length === 1 ? '1 error' : `${errors.length} errors`
-    const formatted = formatErrors(errors)
-    throw new Error(`Validation failed (${errorCount}):\n${formatted}`)
+    throw new ValidationError(
+      `Validation failed (${errorCount})`,
+      errors.map((e) => ({ field: e.field, message: e.message }))
+    )
   }
 }
 

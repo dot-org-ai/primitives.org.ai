@@ -22,7 +22,7 @@ export type {
   VerbDefinition,
   Thing,
   Action,
-  ActionStatus,
+  ActionStatusType,
   FieldDefinition,
   PrimitiveType,
   ListOptions,
@@ -31,8 +31,8 @@ export type {
   Direction,
 } from './types.js'
 
-// Validation utilities
-export { validateDirection } from './types.js'
+// Validation utilities and constants
+export { validateDirection, MAX_BATCH_SIZE, ActionStatus } from './types.js'
 
 // Memory Provider
 export { MemoryProvider, createMemoryProvider } from './memory-provider.js'

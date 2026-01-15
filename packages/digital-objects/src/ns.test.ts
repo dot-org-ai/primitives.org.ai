@@ -145,6 +145,13 @@ const createMockSqlStorage = (): MockSqlStorage => {
       return { rowsWritten: 0, [Symbol.iterator]: () => results[Symbol.iterator]() }
     }
 
+    // Handle SELECT * FROM things WHERE id IN (?, ?, ...) - batch query for getMany()
+    if (sql.includes('SELECT * FROM things WHERE id IN (')) {
+      const ids = params as string[]
+      const results = tables.get('things')!.filter((t) => ids.includes(t.id as string))
+      return { rowsWritten: 0, [Symbol.iterator]: () => results[Symbol.iterator]() }
+    }
+
     // Handle SELECT * FROM things WHERE noun = ? (with potential json_extract, ORDER BY, LIMIT, OFFSET)
     if (sql.includes('SELECT * FROM things WHERE noun = ?')) {
       let results = tables.get('things')!.filter((t) => t.noun === params[0])

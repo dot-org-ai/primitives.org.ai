@@ -15,13 +15,19 @@ import type {
   VerbDefinition,
   Thing,
   Action,
-  ActionStatus,
+  ActionStatusType,
   ListOptions,
   ActionOptions,
   ValidationOptions,
   Direction,
 } from './types.js'
-import { DEFAULT_LIMIT, MAX_LIMIT, validateDirection } from './types.js'
+import {
+  DEFAULT_LIMIT,
+  MAX_LIMIT,
+  MAX_BATCH_SIZE,
+  validateDirection,
+  ActionStatus,
+} from './types.js'
 import { deriveNoun, deriveVerb } from './linguistic.js'
 import { validateData } from './schema-validation.js'
 import { NotFoundError, ValidationError, errorToResponse } from './errors.js'
@@ -78,6 +84,84 @@ function validateOrderByField(field: string): boolean {
   // Only allow simple alphanumeric field names (letters, numbers, underscores)
   // Must start with a letter or underscore
   return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field)
+}
+
+/**
+ * Validates a namespace ID to ensure it contains only safe characters.
+ * Used to validate the 'ns' query parameter before using it to identify a Durable Object.
+ *
+ * Allowed: alphanumeric characters, hyphens, underscores
+ * Maximum length: 64 characters
+ *
+ * @param ns - The namespace ID to validate
+ * @returns true if valid, false otherwise
+ */
+export function validateNamespaceId(ns: string): boolean {
+  // Check length limit
+  if (ns.length > 64) return false
+  // Empty string is invalid
+  if (ns.length === 0) return false
+  // Allow alphanumeric, hyphens, underscores
+  return /^[a-zA-Z0-9_-]+$/.test(ns)
+}
+
+// Dangerous field names that could enable prototype pollution or other attacks
+const DANGEROUS_FIELDS = ['__proto__', 'constructor', 'prototype']
+
+/**
+ * Validates a where clause field name to prevent JSON path traversal and prototype pollution.
+ * Throws ValidationError if the field name is invalid.
+ *
+ * Rejects:
+ * - Dots (.) in field names (JSON path traversal)
+ * - __proto__, constructor, prototype (prototype pollution)
+ * - Special JSON path characters ([, ], $, @)
+ */
+function validateWhereField(field: string): void {
+  // Check for dangerous prototype-related field names
+  if (DANGEROUS_FIELDS.includes(field)) {
+    throw new ValidationError(`Invalid where field: '${field}' is not allowed`, [
+      { field, message: `Field name '${field}' is not allowed for security reasons` },
+    ])
+  }
+
+  // Check for dots (JSON path traversal)
+  if (field.includes('.')) {
+    throw new ValidationError(`Invalid where field: '${field}' contains dots`, [
+      { field, message: 'Field names cannot contain dots (JSON path traversal prevention)' },
+    ])
+  }
+
+  // Check for special JSON path characters
+  if (/[\[\]$@]/.test(field)) {
+    throw new ValidationError(`Invalid where field: '${field}' contains special characters`, [
+      { field, message: 'Field names cannot contain special JSON path characters ([, ], $, @)' },
+    ])
+  }
+
+  // Must match valid identifier pattern (starts with letter or underscore, followed by alphanumeric or underscore)
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(field)) {
+    throw new ValidationError(`Invalid where field: '${field}'`, [
+      {
+        field,
+        message: 'Field name must be a valid identifier (letters, numbers, underscores only)',
+      },
+    ])
+  }
+}
+
+/**
+ * Escapes LIKE pattern special characters (%, _, \) in a search query.
+ * This prevents SQL LIKE wildcards from being interpreted as pattern characters.
+ *
+ * - % matches zero or more characters in LIKE
+ * - _ matches exactly one character in LIKE
+ * - \ is the escape character itself
+ *
+ * Example: "100%" becomes "100\%" to match literal "100%"
+ */
+function escapeLikePattern(query: string): string {
+  return query.replace(/[%_\\]/g, '\\$&')
 }
 
 // Environment bindings
@@ -241,10 +325,26 @@ export class NS implements DigitalObjectsProvider {
         const offset = url.searchParams.get('offset')
         const orderBy = url.searchParams.get('orderBy')
         const order = url.searchParams.get('order')
+        const whereParam = url.searchParams.get('where')
         if (limit) options.limit = parseInt(limit, 10)
         if (offset) options.offset = parseInt(offset, 10)
         if (orderBy) options.orderBy = orderBy
         if (order === 'asc' || order === 'desc') options.order = order
+        // Parse where parameter: format is "field=value" or "field1=value1&field2=value2"
+        if (whereParam) {
+          const where: Record<string, unknown> = {}
+          for (const pair of whereParam.split('&')) {
+            const eqIdx = pair.indexOf('=')
+            if (eqIdx > 0) {
+              const key = pair.substring(0, eqIdx)
+              const value = pair.substring(eqIdx + 1)
+              // Validation happens in list() method, but we validate here too for early error detection
+              validateWhereField(key)
+              where[key] = value
+            }
+          }
+          options.where = where
+        }
         const things = await this.list(noun, options)
         return Response.json(things)
       }
@@ -288,7 +388,7 @@ export class NS implements DigitalObjectsProvider {
         if (subject) options.subject = subject
         if (object) options.object = object
         if (limit) options.limit = parseInt(limit, 10)
-        if (status) options.status = status as ActionStatus
+        if (status) options.status = status as ActionStatusType
         const actions = await this.listActions(options)
         return Response.json(actions)
       }
@@ -582,6 +682,31 @@ export class NS implements DigitalObjectsProvider {
     }
   }
 
+  /**
+   * Batch fetch multiple things by IDs using WHERE IN clause
+   * More efficient than N individual get() calls (fixes N+1 query pattern)
+   */
+  private async getMany<T>(ids: string[]): Promise<Thing<T>[]> {
+    if (ids.length === 0) return []
+
+    await this.ensureInitialized()
+
+    // Build WHERE IN clause with placeholders
+    const placeholders = ids.map(() => '?').join(',')
+    const rows = [...this.sql.exec(`SELECT * FROM things WHERE id IN (${placeholders})`, ...ids)]
+
+    return rows.map((row) => {
+      const r = row as Record<string, unknown>
+      return {
+        id: r.id as string,
+        noun: r.noun as string,
+        data: JSON.parse(r.data as string) as T,
+        createdAt: new Date(r.created_at as number),
+        updatedAt: new Date(r.updated_at as number),
+      }
+    })
+  }
+
   async list<T>(noun: string, options?: ListOptions): Promise<Thing<T>[]> {
     await this.ensureInitialized()
 
@@ -590,11 +715,12 @@ export class NS implements DigitalObjectsProvider {
 
     // Apply where filter in SQL using json_extract for better performance
     if (options?.where) {
-      for (const [key, value] of Object.entries(options.where)) {
-        // Validate field name to prevent SQL injection
-        if (!validateOrderByField(key)) {
-          throw new Error(`Invalid where field: ${key}`)
-        }
+      // Use Object.getOwnPropertyNames to also catch __proto__ which is not enumerable with Object.entries
+      const whereKeys = Object.getOwnPropertyNames(options.where)
+      for (const key of whereKeys) {
+        // Validate field name to prevent JSON path traversal and prototype pollution
+        validateWhereField(key)
+        const value = (options.where as Record<string, unknown>)[key]
         sql += ` AND json_extract(data, '$.${key}') = ?`
         // json_extract returns strings unquoted, numbers as numbers, booleans as 0/1, null as NULL
         params.push(value)
@@ -679,8 +805,9 @@ export class NS implements DigitalObjectsProvider {
   async search<T>(query: string, options?: ListOptions): Promise<Thing<T>[]> {
     await this.ensureInitialized()
 
-    const q = `%${query.toLowerCase()}%`
-    let sql = `SELECT * FROM things WHERE LOWER(data) LIKE ?`
+    // Escape LIKE wildcards (%, _, \) so they match literally
+    const q = `%${escapeLikePattern(query.toLowerCase())}%`
+    let sql = `SELECT * FROM things WHERE LOWER(data) LIKE ? ESCAPE '\\'`
     const params: unknown[] = [q]
 
     // Apply limit with safety bounds
@@ -717,7 +844,7 @@ export class NS implements DigitalObjectsProvider {
       subject ?? null,
       object ?? null,
       data ? JSON.stringify(data) : null,
-      'completed',
+      ActionStatus.COMPLETED,
       now,
       now
     )
@@ -728,7 +855,7 @@ export class NS implements DigitalObjectsProvider {
       subject,
       object,
       data,
-      status: 'completed',
+      status: ActionStatus.COMPLETED,
       createdAt: new Date(now),
       completedAt: new Date(now),
     }
@@ -747,7 +874,7 @@ export class NS implements DigitalObjectsProvider {
       subject: row.subject as string | undefined,
       object: row.object as string | undefined,
       data: row.data ? (JSON.parse(row.data as string) as T) : undefined,
-      status: row.status as ActionStatus,
+      status: row.status as ActionStatusType,
       createdAt: new Date(row.created_at as number),
       completedAt: row.completed_at ? new Date(row.completed_at as number) : undefined,
     }
@@ -794,7 +921,7 @@ export class NS implements DigitalObjectsProvider {
         subject: r.subject as string | undefined,
         object: r.object as string | undefined,
         data: r.data ? (JSON.parse(r.data as string) as T) : undefined,
-        status: r.status as ActionStatus,
+        status: r.status as ActionStatusType,
         createdAt: new Date(r.created_at as number),
         completedAt: r.completed_at ? new Date(r.completed_at as number) : undefined,
       }
@@ -833,11 +960,8 @@ export class NS implements DigitalObjectsProvider {
       }
     }
 
-    let results: Thing<T>[] = []
-    for (const relatedId of relatedIds) {
-      const thing = await this.get<T>(relatedId)
-      if (thing) results.push(thing)
-    }
+    // Use batch query instead of N individual get() calls (fixes N+1 pattern)
+    let results = await this.getMany<T>([...relatedIds])
 
     // Apply limit with safety bounds
     const limit = effectiveLimit(options?.limit)
@@ -888,7 +1012,7 @@ export class NS implements DigitalObjectsProvider {
         subject: r.subject as string | undefined,
         object: r.object as string | undefined,
         data: r.data ? (JSON.parse(r.data as string) as T) : undefined,
-        status: r.status as ActionStatus,
+        status: r.status as ActionStatusType,
         createdAt: new Date(r.created_at as number),
         completedAt: r.completed_at ? new Date(r.completed_at as number) : undefined,
       }
@@ -898,6 +1022,12 @@ export class NS implements DigitalObjectsProvider {
   // ==================== Batch Operations ====================
 
   async createMany<T>(noun: string, items: T[]): Promise<Thing<T>[]> {
+    if (items.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(`Batch size ${items.length} exceeds maximum of ${MAX_BATCH_SIZE}`, [
+        { field: 'items', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` },
+      ])
+    }
+
     await this.ensureInitialized()
 
     const now = Date.now()
@@ -935,6 +1065,13 @@ export class NS implements DigitalObjectsProvider {
   }
 
   async updateMany<T>(updates: Array<{ id: string; data: Partial<T> }>): Promise<Thing<T>[]> {
+    if (updates.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(
+        `Batch size ${updates.length} exceeds maximum of ${MAX_BATCH_SIZE}`,
+        [{ field: 'items', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` }]
+      )
+    }
+
     await this.ensureInitialized()
 
     const now = Date.now()
@@ -970,6 +1107,12 @@ export class NS implements DigitalObjectsProvider {
   }
 
   async deleteMany(ids: string[]): Promise<boolean[]> {
+    if (ids.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(`Batch size ${ids.length} exceeds maximum of ${MAX_BATCH_SIZE}`, [
+        { field: 'ids', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` },
+      ])
+    }
+
     await this.ensureInitialized()
 
     const results: boolean[] = []
@@ -993,6 +1136,13 @@ export class NS implements DigitalObjectsProvider {
   async performMany<T>(
     actions: Array<{ verb: string; subject?: string; object?: string; data?: T }>
   ): Promise<Action<T>[]> {
+    if (actions.length > MAX_BATCH_SIZE) {
+      throw new ValidationError(
+        `Batch size ${actions.length} exceeds maximum of ${MAX_BATCH_SIZE}`,
+        [{ field: 'actions', message: `Batch size exceeds maximum of ${MAX_BATCH_SIZE}` }]
+      )
+    }
+
     await this.ensureInitialized()
 
     const now = Date.now()
@@ -1011,7 +1161,7 @@ export class NS implements DigitalObjectsProvider {
           action.subject ?? null,
           action.object ?? null,
           action.data ? JSON.stringify(action.data) : null,
-          'completed',
+          ActionStatus.COMPLETED,
           now,
           now
         )
@@ -1021,7 +1171,7 @@ export class NS implements DigitalObjectsProvider {
           subject: action.subject,
           object: action.object,
           data: action.data,
-          status: 'completed',
+          status: ActionStatus.COMPLETED,
           createdAt: new Date(now),
           completedAt: new Date(now),
         })
@@ -1044,6 +1194,18 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     const namespaceId = url.searchParams.get('ns') ?? 'default'
+
+    // Validate namespace ID format
+    if (!validateNamespaceId(namespaceId)) {
+      return Response.json(
+        {
+          error: 'INVALID_NAMESPACE',
+          message:
+            'Invalid namespace ID. Must be 1-64 characters, alphanumeric with hyphens and underscores only.',
+        },
+        { status: 400 }
+      )
+    }
 
     const id = env.NS.idFromName(namespaceId)
     const stub = env.NS.get(id)

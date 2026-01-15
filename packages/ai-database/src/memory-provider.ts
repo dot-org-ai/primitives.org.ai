@@ -20,7 +20,7 @@ import {
   extractEmbeddableText,
   generateContentHash,
 } from './semantic.js'
-import { EMBEDDING_DIMENSIONS } from './constants.js'
+import { DEFAULT_EMBEDDING_DIMENSIONS, EMBEDDING_DIMENSIONS } from './constants.js'
 import {
   validateTypeName,
   validateEntityId,
@@ -251,6 +251,22 @@ export interface MemoryProviderOptions {
    * Takes precedence over useAiFunctions when provided.
    */
   embeddingProvider?: EmbeddingProvider
+  /**
+   * The number of dimensions for embeddings when using the built-in mock provider.
+   *
+   * Common values:
+   * - 384: sentence-transformers (default)
+   * - 1536: OpenAI ada-002, text-embedding-3-small
+   * - 3072: OpenAI text-embedding-3-large
+   * - 1024: Cohere embed-english-v3.0
+   * - 4096: Voyage AI large models
+   *
+   * Note: This option is ignored when using a custom embeddingProvider,
+   * as the provider determines its own dimensions.
+   *
+   * @default 384
+   */
+  embeddingDimensions?: number
 }
 
 // =============================================================================
@@ -465,11 +481,15 @@ export class MemoryProvider implements DBProvider {
   // Custom embedding provider (for testing or alternative services)
   private embeddingProvider?: EmbeddingProvider
 
+  // Embedding dimensions for mock provider
+  private embeddingDimensions: number
+
   constructor(options: MemoryProviderOptions = {}) {
     this.semaphore = new Semaphore(options.concurrency ?? 10)
     this.embeddingsConfig = options.embeddings ?? {}
     this.useAiFunctions = options.useAiFunctions ?? false
     this.embeddingProvider = options.embeddingProvider
+    this.embeddingDimensions = options.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS
   }
 
   /**
@@ -859,7 +879,7 @@ export class MemoryProvider implements DBProvider {
       .filter((w) => w.length > 0)
 
     if (words.length === 0) {
-      return Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => seededRandom(0, i) * 0.01)
+      return Array.from({ length: this.embeddingDimensions }, (_, i) => seededRandom(0, i) * 0.01)
     }
 
     // Aggregate word vectors
@@ -880,9 +900,9 @@ export class MemoryProvider implements DBProvider {
 
     // Expand to full dimensions
     const textHash = simpleHash(text)
-    const embedding = new Array(EMBEDDING_DIMENSIONS)
+    const embedding = new Array(this.embeddingDimensions)
 
-    for (let i = 0; i < EMBEDDING_DIMENSIONS; i++) {
+    for (let i = 0; i < this.embeddingDimensions; i++) {
       const baseIndex = i % 4
       const base = normalized[baseIndex]!
       const noise = seededRandom(textHash, i) * 0.1 - 0.05
@@ -946,7 +966,7 @@ export class MemoryProvider implements DBProvider {
     if (!text.trim()) return
 
     let embedding: number[]
-    let dimensions: number = EMBEDDING_DIMENSIONS
+    let dimensions: number = this.embeddingDimensions
     let source: string = 'mock'
 
     // Priority: embeddingProvider > useAiFunctions > mock

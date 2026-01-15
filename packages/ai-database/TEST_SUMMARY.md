@@ -2,174 +2,87 @@
 
 ## Overview
 
-Comprehensive test suite for the ai-database package with **174 tests** across **5 test files**, all passing.
+Comprehensive test suite for the ai-database package with **1,409 tests** across **50 test files**, all passing.
 
-## Test Files
+*Last updated: 2026-01-15*
 
-### 1. `src/schema.test.ts` (22 tests)
-**Purpose**: Schema parsing and bi-directional relationship validation
-
-**Coverage**:
-- Primitive field types (string, number, boolean, date, datetime, json, markdown, url)
-- Optional fields with `?` modifier
-- Array fields with `[]` and `[type]` syntax
-- Simple relations and bi-directional relationships
-- Automatic backref generation (e.g., `Post.author: 'Author.posts'` auto-creates `Author.posts`)
-- Complex multi-entity schemas
-- Self-referential relations
-- Edge cases (empty schemas, missing entities, etc.)
-- TypeScript type inference validation
-
-**Key Tests**:
-- ✅ Parses all primitive types correctly
-- ✅ Handles optional and array modifiers
-- ✅ Creates automatic backrefs for one-to-many relations
-- ✅ Creates automatic backrefs for many-to-many relations
-- ✅ Validates DB factory creates typed database
-
----
-
-### 2. `src/memory-provider.test.ts` (40 tests)
-**Purpose**: In-memory database provider implementation
-
-**Coverage**:
-- **CRUD Operations**: Create, get, update, delete
-- **Querying**: List with filtering, sorting, pagination
-- **Search**: Full-text search with scoring and field filtering
-- **Relationships**: Create, query, and remove relations between entities
-- **Utility Methods**: `clear()` and `stats()`
-- **Concurrency**: Multiple simultaneous operations
-- **Special Cases**: UUID generation, timestamp tracking, error handling
-
-**Key Tests**:
-- ✅ Creates entities with auto-generated or explicit IDs
-- ✅ Lists with where clauses, ordering, limits, and offsets
-- ✅ Searches with relevance scoring and min score filtering
-- ✅ Creates and queries many-to-many relationships
-- ✅ Cleans up relations when entities are deleted
-- ✅ Tracks entity and relation counts
-
----
-
-### 3. `src/index.test.ts` (31 tests)
-**Purpose**: Integration tests for the full DB API
-
-**Coverage**:
-- **DB Factory**: Creating typed database instances from schemas
-- **Entity Operations**: All CRUD methods on typed entities
-- **List & Query**: Filtering, sorting, pagination
-- **Search**: Entity-specific and global search
-- **Relationships**: Managing relations through both DB API and provider
-- **Global Methods**: `db.get()` by URL, `db.search()` across all types
-- **Type Safety**: Verifying TypeScript inference works correctly
-- **Complex Scenarios**: Multi-entity operations, self-referential relations
-
-**Key Tests**:
-- ✅ Creates, reads, updates, deletes entities via typed API
-- ✅ Upserts work for both create and update scenarios
-- ✅ Lists with various query options and pagination
-- ✅ Searches within entity type and globally
-- ✅ Iterates over entities with `forEach()`
-- ✅ Gets entities by URL (multiple formats supported)
-- ✅ Handles complex multi-entity schemas
-
----
-
-### 4. `test/provider-resolution.test.ts` (38 tests)
-**Purpose**: DATABASE_URL parsing and provider resolution
-
-**Coverage**:
-- **URL Format Detection**: All supported DATABASE_URL formats
-  - `:memory:` → In-memory provider
-  - `./content` → Filesystem provider
-  - `sqlite://./content` → Local SQLite provider
-  - `libsql://db.turso.io` → Remote Turso provider
-  - `chdb://./content` → Local ClickHouse (chDB)
-  - `clickhouse://host:8123` → Remote ClickHouse
-- **Provider Selection**: Environment variable handling
-- **URL Parsing**: Extracting provider type, paths, and remote URLs
-- **Provider Initialization**: Memory provider setup and isolation
-- **Interface Compliance**: Ensuring all providers implement required methods
-- **Documentation Examples**: Verifying all README examples work
-
-**Key Tests**:
-- ✅ Detects all provider types from URL format
-- ✅ Generates correct .db folder paths for local providers
-- ✅ Handles query parameters and database names in URLs
-- ✅ Memory provider implements all required methods
-- ✅ Provider instances are properly isolated
-- ✅ All README URL examples are valid
-
----
-
-### 5. `test/edge-cases.test.ts` (43 tests)
-**Purpose**: Edge cases, boundary conditions, and error scenarios
-
-**Coverage**:
-- **Empty/Minimal Schemas**: Handling edge case configurations
-- **Special Characters**: IDs and data with unicode, symbols, paths
-- **Large Data**: 100KB strings, 1000+ entities, bulk operations
-- **Concurrent Operations**: Parallel creates, updates, queries
-- **Optional Fields**: Missing, undefined, and null values
-- **Array Fields**: Empty arrays, array mutations
-- **URL Parsing**: Various URL formats, query params, hashes
-- **Search Edge Cases**: Empty queries, special regex chars, extreme scores
-- **Pagination**: Out-of-bounds offsets, zero/negative limits
-- **Type Coercion**: Handling different value types
-
-**Key Tests**:
-- ✅ Handles empty schemas and entities with no fields
-- ✅ Supports IDs with hyphens, underscores, dots, slashes, UUIDs
-- ✅ Stores unicode characters and emojis correctly
-- ✅ Handles 100KB strings and 1000+ entities
-- ✅ Concurrent operations don't interfere with each other
-- ✅ Optional fields can be set, unset, and omitted
-- ✅ Parses full HTTPS URLs, HTTP URLs, and type/id paths
-- ✅ Search handles empty strings and special regex characters
-- ✅ Pagination handles out-of-bounds offsets gracefully
-
----
-
-## Test Execution
-
-```bash
-# Run all tests
-pnpm test
-
-# Run tests once (non-watch mode)
-pnpm test run
-
-# Run specific test file
-pnpm test src/schema.test.ts
-
-# Build package (verifies no TypeScript errors)
-pnpm build
-```
-
-## Test Results
+## Test Results Summary
 
 ```
-✓ src/index.test.ts (31 tests) 7ms
-✓ test/edge-cases.test.ts (43 tests) 6ms
-✓ src/memory-provider.test.ts (40 tests) 14ms
-✓ src/schema.test.ts (22 tests) 2ms
-✓ test/provider-resolution.test.ts (38 tests) 2ms
-
-Test Files  5 passed (5)
-Tests       174 passed (174)
-Duration    215ms
+Test Files  50 passed (50)
+Tests       1409 passed (1409)
+Duration    ~50s tests (~5 min with transform/collect)
 ```
 
-## Coverage Areas
+## Test Files by Count
 
-| Area | Test File | Tests | Status |
-|------|-----------|-------|--------|
-| Schema Parsing | `src/schema.test.ts` | 22 | ✅ 100% |
-| Memory Provider | `src/memory-provider.test.ts` | 40 | ✅ 100% |
-| Integration | `src/index.test.ts` | 31 | ✅ 100% |
-| Provider Resolution | `test/provider-resolution.test.ts` | 38 | ✅ 100% |
-| Edge Cases | `test/edge-cases.test.ts` | 43 | ✅ 100% |
-| **TOTAL** | | **174** | **✅ 100%** |
+| Test File | Tests | Time |
+|-----------|-------|------|
+| `test/regex-bypass.test.ts` | 89 | 14ms |
+| `src/schema.test.ts` | 89 | 2260ms |
+| `src/memory-provider.test.ts` | 81 | 207ms |
+| `test/security.test.ts` | 64 | 8ms |
+| `test/verb-derivation.test.ts` | 63 | 2ms |
+| `src/__tests__/schema-validation.test.ts` | 57 | 5ms |
+| `src/index.test.ts` | 47 | 12ms |
+| `test/value-generator.test.ts` | 44 | 14ms |
+| `test/edge-cases.test.ts` | 43 | 82ms |
+| `test/digital-objects-integration.test.ts` | 42 | 6ms |
+| `test/generation-context.test.ts` | 40 | 4ms |
+| `test/provider-resolution.test.ts` | 38 | 4ms |
+| `src/actions.test.ts` | 37 | 36ms |
+| `test/union-fallback-integration.test.ts` | 35 | 6ms |
+| `test/wrapEntityOperations-types.test.ts` | 34 | 7ms |
+| `test/schema/dependency-graph.test.ts` | 34 | 3ms |
+| `test/type-safety.test.ts` | 33 | 4ms |
+| `test/schema/union-fallback.test.ts` | 32 | 5ms |
+| `test/modules/nl-query.test.ts` | 32 | 4ms |
+| `test/instructions-resolution.test.ts` | 29 | 4389ms |
+| `test/modules/entity-operations.test.ts` | 26 | 9ms |
+| `src/__tests__/nl-queries.test.ts` | 24 | 7ms |
+| `test/seed-loading.test.ts` | 20 | 14ms |
+| `test/two-phase.test.ts` | 19 | 16691ms |
+| `test/semantic-search.test.ts` | 19 | 13ms |
+| `test/integration-e2e.test.ts` | 19 | 13909ms |
+| `test/union-types.test.ts` | 18 | 681ms |
+| `test/search-utils.test.ts` | 18 | 4ms |
+| `test/nl-queries-integration.test.ts` | 18 | 1991ms |
+| `src/events.test.ts` | 18 | 453ms |
+| `test/schema-operators.test.ts` | 17 | 162ms |
+| `test/cascade.test.ts` | 17 | 11ms |
+| `test/edge-direction.test.ts` | 16 | 5ms |
+| `test/backward-fuzzy.test.ts` | 16 | 11ms |
+| `test/validation-error.test.ts` | 15 | 1ms |
+| `test/forward-fuzzy.test.ts` | 15 | 1622ms |
+| `test/forward-exact.test.ts` | 14 | 1480ms |
+| `test/backward-exact.test.ts` | 14 | 7ms |
+| `test/batch-loading.test.ts` | 13 | 24ms |
+| `test/backward-fuzzy-integration.test.ts` | 13 | 3ms |
+| `test/forward-fuzzy-integration.test.ts` | 12 | 919ms |
+| `test/embeddings-integration.test.ts` | 12 | 27ms |
+| `test/context.test.ts` | 11 | 1498ms |
+| `test/cascade-integration.test.ts` | 11 | 556ms |
+| `test/cascade-errors.test.ts` | 11 | 6ms |
+| `test/relation-operators.test.ts` | 9 | 1ms |
+| `test/generation-integration.test.ts` | 9 | 1380ms |
+| `test/embedding-config.test.ts` | 9 | 4ms |
+| `test/error-handling.test.ts` | 8 | 3ms |
+| `test/blog-cascade-pattern.test.ts` | 5 | 849ms |
+
+## Coverage Areas by Category
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| Core Unit Tests | 353 | 100% |
+| Schema & Type Tests | 230 | 100% |
+| Security Tests | 64 | 100% |
+| AI Generation Tests | 154 | 100% |
+| Cascade & Relationship Tests | 103 | 100% |
+| Union Type Tests | 85 | 100% |
+| Search & Query Tests | 132 | 100% |
+| System & Edge Case Tests | 131 | 100% |
+| Other Tests | 157 | 100% |
+| **TOTAL** | **1,409** | **100%** |
 
 ## Key Features Tested
 
@@ -238,13 +151,19 @@ Potential areas for expansion once additional providers are implemented:
 
 ## Conclusion
 
-The ai-database package has **comprehensive test coverage** with **174 passing tests** covering:
-- ✅ All core functionality
-- ✅ Schema parsing and validation
-- ✅ Complete CRUD operations
-- ✅ Advanced querying and search
-- ✅ Relationship management
-- ✅ Provider resolution and initialization
-- ✅ Edge cases and error scenarios
+The ai-database package has **comprehensive test coverage** with **1,409 passing tests** across **50 test files** covering:
+- All core functionality
+- Schema parsing and validation
+- Complete CRUD operations
+- Advanced querying and search
+- Relationship management
+- Provider resolution and initialization
+- AI generation (forward/backward, exact/fuzzy)
+- Cascade operations
+- Union types and fallbacks
+- Security scenarios
+- Edge cases and error scenarios
 
 The test suite provides a **solid foundation** for the package and ensures reliability as new providers and features are added.
+
+*Last updated: 2026-01-15*

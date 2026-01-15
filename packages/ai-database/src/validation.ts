@@ -11,6 +11,8 @@
  * @packageDocumentation
  */
 
+import { ValidationError } from './errors.js'
+
 // =============================================================================
 // Validation Constants
 // =============================================================================
@@ -55,29 +57,13 @@ const ALLOWED_DIGITS = new Set('0123456789')
 const ALLOWED_LETTERS = new Set([...ALLOWED_UPPERCASE, ...ALLOWED_LOWERCASE])
 
 /** Allowed identifier characters (letters, digits, underscore) */
-const ALLOWED_IDENTIFIER_CHARS = new Set([
-  ...ALLOWED_LETTERS,
-  ...ALLOWED_DIGITS,
-  '_',
-])
+const ALLOWED_IDENTIFIER_CHARS = new Set([...ALLOWED_LETTERS, ...ALLOWED_DIGITS, '_'])
 
 /** Allowed ID characters (letters, digits, underscore, hyphen, dot, forward slash for path-like IDs) */
-const ALLOWED_ID_CHARS = new Set([
-  ...ALLOWED_LETTERS,
-  ...ALLOWED_DIGITS,
-  '_',
-  '-',
-  '.',
-  '/',
-])
+const ALLOWED_ID_CHARS = new Set([...ALLOWED_LETTERS, ...ALLOWED_DIGITS, '_', '-', '.', '/'])
 
 /** Allowed action type characters (letters, digits, underscore, hyphen) */
-const ALLOWED_ACTION_CHARS = new Set([
-  ...ALLOWED_LETTERS,
-  ...ALLOWED_DIGITS,
-  '_',
-  '-',
-])
+const ALLOWED_ACTION_CHARS = new Set([...ALLOWED_LETTERS, ...ALLOWED_DIGITS, '_', '-'])
 
 /**
  * Check if a character is in the allowlist
@@ -190,7 +176,8 @@ function isValidActionTypeFormat(name: string): boolean {
  * This is kept as regex because it needs to validate pattern syntax,
  * but the underlying type names are validated with allowlist
  */
-const EVENT_PATTERN_REGEX = /^(\*|\*\.[A-Za-z_]+|[A-Za-z_]+\.\*|[A-Za-z_]+\.[A-Za-z_:]+|[A-Za-z_]+:[A-Za-z_]+)$/
+const EVENT_PATTERN_REGEX =
+  /^(\*|\*\.[A-Za-z_]+|[A-Za-z_]+\.\*|[A-Za-z_]+\.[A-Za-z_:]+|[A-Za-z_]+:[A-Za-z_]+)$/
 
 // =============================================================================
 // SQL Injection Patterns
@@ -247,26 +234,13 @@ const CONTROL_CHARACTERS = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/
 /**
  * Prototype pollution property names to reject
  */
-const DANGEROUS_PROPERTIES = new Set([
-  '__proto__',
-  'constructor',
-  'prototype',
-])
+const DANGEROUS_PROPERTIES = new Set(['__proto__', 'constructor', 'prototype'])
 
 // =============================================================================
-// Validation Errors
+// Re-export ValidationError from errors.ts for backwards compatibility
 // =============================================================================
 
-export class ValidationError extends Error {
-  constructor(
-    message: string,
-    public readonly field: string,
-    public readonly value?: unknown
-  ) {
-    super(message)
-    this.name = 'ValidationError'
-  }
-}
+export { ValidationError }
 
 // =============================================================================
 // Validation Functions
@@ -318,6 +292,7 @@ export function validateTypeName(type: unknown): asserts type is string {
   if (typeof type !== 'string') {
     throw new ValidationError(
       `Invalid type: must be a string, got ${type === null ? 'null' : typeof type}`,
+      'Input',
       'type',
       type
     )
@@ -325,13 +300,14 @@ export function validateTypeName(type: unknown): asserts type is string {
 
   // Check empty
   if (type.length === 0) {
-    throw new ValidationError('Invalid type: must not be empty', 'type', type)
+    throw new ValidationError('Invalid type: must not be empty', 'Input', 'type', type)
   }
 
   // Check length
   if (type.length > MAX_TYPE_LENGTH) {
     throw new ValidationError(
       `Invalid type: exceeds maximum length of ${MAX_TYPE_LENGTH}`,
+      'Input',
       'type',
       type
     )
@@ -341,6 +317,7 @@ export function validateTypeName(type: unknown): asserts type is string {
   if (containsControlCharacters(type)) {
     throw new ValidationError(
       'Invalid type: contains special characters that are not allowed',
+      'Input',
       'type',
       type
     )
@@ -350,6 +327,7 @@ export function validateTypeName(type: unknown): asserts type is string {
   if (containsSqlInjection(type)) {
     throw new ValidationError(
       'Invalid type: contains injection patterns that are not allowed',
+      'Input',
       'type',
       type
     )
@@ -359,6 +337,7 @@ export function validateTypeName(type: unknown): asserts type is string {
   if (!isValidTypeNameFormat(type)) {
     throw new ValidationError(
       'Invalid type: must be alphanumeric with underscores, starting with a letter',
+      'Input',
       'type',
       type
     )
@@ -384,6 +363,7 @@ export function validateEntityId(id: unknown): asserts id is string {
   if (typeof id !== 'string') {
     throw new ValidationError(
       `Invalid id: must be a string, got ${id === null ? 'null' : typeof id}`,
+      'Input',
       'id',
       id
     )
@@ -391,13 +371,14 @@ export function validateEntityId(id: unknown): asserts id is string {
 
   // Check empty
   if (id.length === 0) {
-    throw new ValidationError('Invalid id: must not be empty', 'id', id)
+    throw new ValidationError('Invalid id: must not be empty', 'Input', 'id', id)
   }
 
   // Check length
   if (id.length > MAX_ID_LENGTH) {
     throw new ValidationError(
       `Invalid id: exceeds maximum length of ${MAX_ID_LENGTH}`,
+      'Input',
       'id',
       id
     )
@@ -407,6 +388,7 @@ export function validateEntityId(id: unknown): asserts id is string {
   if (containsControlCharacters(id)) {
     throw new ValidationError(
       'Invalid id: contains special characters that are not allowed',
+      'Input',
       'id',
       id
     )
@@ -416,6 +398,7 @@ export function validateEntityId(id: unknown): asserts id is string {
   if (containsSqlInjection(id)) {
     throw new ValidationError(
       'Invalid id: contains injection patterns that are not allowed',
+      'Input',
       'id',
       id
     )
@@ -425,6 +408,7 @@ export function validateEntityId(id: unknown): asserts id is string {
   if (containsPathTraversal(id)) {
     throw new ValidationError(
       'Invalid id: contains path traversal patterns that are not allowed',
+      'Input',
       'id',
       id
     )
@@ -434,6 +418,7 @@ export function validateEntityId(id: unknown): asserts id is string {
   if (!isValidEntityIdFormat(id)) {
     throw new ValidationError(
       'Invalid id: must contain only alphanumeric characters, underscores, and hyphens',
+      'Input',
       'id',
       id
     )
@@ -456,6 +441,7 @@ export function validateSearchQuery(query: unknown): asserts query is string {
   if (typeof query !== 'string') {
     throw new ValidationError(
       `Invalid query: must be a string, got ${query === null ? 'null' : typeof query}`,
+      'Input',
       'query',
       query
     )
@@ -464,6 +450,7 @@ export function validateSearchQuery(query: unknown): asserts query is string {
   if (query.length > MAX_QUERY_LENGTH) {
     throw new ValidationError(
       `Invalid query: exceeds maximum length of ${MAX_QUERY_LENGTH}`,
+      'Input',
       'query',
       query
     )
@@ -535,11 +522,7 @@ function containsPrototypePollution(obj: unknown): boolean {
  */
 export function validateEntityData(data: unknown): asserts data is Record<string, unknown> {
   if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-    throw new ValidationError(
-      'Invalid data: must be an object',
-      'data',
-      data
-    )
+    throw new ValidationError('Invalid data: must be an object', 'Input', 'data', data)
   }
 
   // Check depth
@@ -547,6 +530,7 @@ export function validateEntityData(data: unknown): asserts data is Record<string
   if (depth > MAX_OBJECT_DEPTH) {
     throw new ValidationError(
       `Invalid data: nested too deep, maximum depth is ${MAX_OBJECT_DEPTH}`,
+      'Input',
       'data'
     )
   }
@@ -555,10 +539,7 @@ export function validateEntityData(data: unknown): asserts data is Record<string
   // __proto__ is harmless in JSON.parse'd objects
   const record = data as Record<string, unknown>
   if ('constructor' in record && typeof record['constructor'] === 'object') {
-    throw new ValidationError(
-      'Invalid data: constructor property not allowed',
-      'data'
-    )
+    throw new ValidationError('Invalid data: constructor property not allowed', 'Input', 'data')
   }
 }
 
@@ -578,18 +559,20 @@ export function validateRelationName(relation: unknown): asserts relation is str
   if (typeof relation !== 'string') {
     throw new ValidationError(
       `Invalid relation: must be a string, got ${relation === null ? 'null' : typeof relation}`,
+      'Input',
       'relation',
       relation
     )
   }
 
   if (relation.length === 0) {
-    throw new ValidationError('Invalid relation: must not be empty', 'relation', relation)
+    throw new ValidationError('Invalid relation: must not be empty', 'Input', 'relation', relation)
   }
 
   if (relation.length > MAX_RELATION_LENGTH) {
     throw new ValidationError(
       `Invalid relation: exceeds maximum length of ${MAX_RELATION_LENGTH}`,
+      'Input',
       'relation',
       relation
     )
@@ -598,6 +581,7 @@ export function validateRelationName(relation: unknown): asserts relation is str
   if (containsSqlInjection(relation)) {
     throw new ValidationError(
       'Invalid relation: contains injection patterns that are not allowed',
+      'Input',
       'relation',
       relation
     )
@@ -607,6 +591,7 @@ export function validateRelationName(relation: unknown): asserts relation is str
   if (!isValidRelationNameFormat(relation)) {
     throw new ValidationError(
       'Invalid relation: must be alphanumeric with underscores, starting with a letter',
+      'Input',
       'relation',
       relation
     )
@@ -627,6 +612,7 @@ export function validateEventPattern(pattern: unknown): asserts pattern is strin
   if (typeof pattern !== 'string') {
     throw new ValidationError(
       `Invalid pattern: must be a string, got ${pattern === null ? 'null' : typeof pattern}`,
+      'Input',
       'pattern',
       pattern
     )
@@ -635,6 +621,7 @@ export function validateEventPattern(pattern: unknown): asserts pattern is strin
   if (containsSqlInjection(pattern)) {
     throw new ValidationError(
       'Invalid pattern: contains injection patterns that are not allowed',
+      'Input',
       'pattern',
       pattern
     )
@@ -643,6 +630,7 @@ export function validateEventPattern(pattern: unknown): asserts pattern is strin
   if (!EVENT_PATTERN_REGEX.test(pattern)) {
     throw new ValidationError(
       'Invalid pattern: must be a valid event pattern (Type.action, *.action, Type.*, or *)',
+      'Input',
       'pattern',
       pattern
     )
@@ -663,6 +651,7 @@ export function validateActionType(actionType: unknown): asserts actionType is s
   if (typeof actionType !== 'string') {
     throw new ValidationError(
       `Invalid type: must be a string, got ${actionType === null ? 'null' : typeof actionType}`,
+      'Input',
       'type',
       actionType
     )
@@ -671,6 +660,7 @@ export function validateActionType(actionType: unknown): asserts actionType is s
   if (containsSqlInjection(actionType)) {
     throw new ValidationError(
       'Invalid type: contains injection patterns that are not allowed',
+      'Input',
       'type',
       actionType
     )
@@ -680,6 +670,7 @@ export function validateActionType(actionType: unknown): asserts actionType is s
   if (!isValidActionTypeFormat(actionType)) {
     throw new ValidationError(
       'Invalid type: must be alphanumeric with underscores, starting with a letter',
+      'Input',
       'type',
       actionType
     )
@@ -700,25 +691,18 @@ export function validateArtifactUrl(url: unknown): asserts url is string {
   if (typeof url !== 'string') {
     throw new ValidationError(
       `Invalid url: must be a string, got ${url === null ? 'null' : typeof url}`,
+      'Input',
       'url',
       url
     )
   }
 
   if (containsPathTraversal(url)) {
-    throw new ValidationError(
-      'Invalid url: path traversal not allowed',
-      'url',
-      url
-    )
+    throw new ValidationError('Invalid url: path traversal not allowed', 'Input', 'url', url)
   }
 
   if (containsProtocolInjection(url)) {
-    throw new ValidationError(
-      'Invalid url: protocol not allowed',
-      'url',
-      url
-    )
+    throw new ValidationError('Invalid url: protocol not allowed', 'Input', 'url', url)
   }
 }
 
@@ -737,6 +721,7 @@ export function validateFieldName(field: unknown): asserts field is string {
   if (typeof field !== 'string') {
     throw new ValidationError(
       `Invalid field: must be a string, got ${field === null ? 'null' : typeof field}`,
+      'Input',
       'field',
       field
     )
@@ -750,6 +735,7 @@ export function validateFieldName(field: unknown): asserts field is string {
   if (containsSqlInjection(field)) {
     throw new ValidationError(
       'Invalid field: contains injection patterns that are not allowed',
+      'Input',
       'field',
       field
     )
@@ -758,6 +744,7 @@ export function validateFieldName(field: unknown): asserts field is string {
   if (field.length > MAX_FIELD_LENGTH) {
     throw new ValidationError(
       `Invalid field: exceeds maximum length of ${MAX_FIELD_LENGTH}`,
+      'Input',
       'field',
       field
     )
@@ -767,6 +754,7 @@ export function validateFieldName(field: unknown): asserts field is string {
   if (!isValidFieldNameFormat(field)) {
     throw new ValidationError(
       'Invalid field: must be alphanumeric with underscores',
+      'Input',
       'field',
       field
     )
@@ -796,7 +784,7 @@ export function validateListOptions(options: unknown): void {
   }
 
   if (typeof options !== 'object') {
-    throw new ValidationError('Invalid options: must be an object', 'options', options)
+    throw new ValidationError('Invalid options: must be an object', 'Input', 'options', options)
   }
 
   const opts = options as Record<string, unknown>
@@ -806,6 +794,7 @@ export function validateListOptions(options: unknown): void {
     if (typeof opts.limit !== 'number') {
       throw new ValidationError(
         `Invalid limit: must be a number, got ${typeof opts.limit}`,
+        'Input',
         'limit',
         opts.limit
       )
@@ -813,6 +802,7 @@ export function validateListOptions(options: unknown): void {
     if (opts.limit < 0) {
       throw new ValidationError(
         'Invalid limit: must be positive or zero',
+        'Input',
         'limit',
         opts.limit
       )
@@ -824,6 +814,7 @@ export function validateListOptions(options: unknown): void {
     if (typeof opts.offset !== 'number') {
       throw new ValidationError(
         `Invalid offset: must be a number, got ${typeof opts.offset}`,
+        'Input',
         'offset',
         opts.offset
       )
@@ -831,6 +822,7 @@ export function validateListOptions(options: unknown): void {
     if (opts.offset < 0) {
       throw new ValidationError(
         'Invalid offset: must be positive or zero',
+        'Input',
         'offset',
         opts.offset
       )
@@ -842,6 +834,7 @@ export function validateListOptions(options: unknown): void {
     if (typeof opts.orderBy !== 'string') {
       throw new ValidationError(
         `Invalid orderBy: must be a string, got ${typeof opts.orderBy}`,
+        'Input',
         'orderBy',
         opts.orderBy
       )
@@ -850,6 +843,7 @@ export function validateListOptions(options: unknown): void {
     if (containsSqlInjection(opts.orderBy)) {
       throw new ValidationError(
         'Invalid orderBy: contains injection patterns that are not allowed',
+        'Input',
         'orderBy',
         opts.orderBy
       )
@@ -859,6 +853,7 @@ export function validateListOptions(options: unknown): void {
     if (!isValidFieldNameFormat(opts.orderBy)) {
       throw new ValidationError(
         'Invalid orderBy field: must be alphanumeric with underscores',
+        'Input',
         'orderBy',
         opts.orderBy
       )
@@ -884,11 +879,7 @@ export function validateSearchOptions(options: unknown): void {
   // Validate fields array
   if (opts.fields !== undefined) {
     if (!Array.isArray(opts.fields)) {
-      throw new ValidationError(
-        'Invalid fields: must be an array',
-        'fields',
-        opts.fields
-      )
+      throw new ValidationError('Invalid fields: must be an array', 'Input', 'fields', opts.fields)
     }
 
     for (const field of opts.fields) {
