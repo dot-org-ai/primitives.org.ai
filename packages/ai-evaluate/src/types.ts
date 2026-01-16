@@ -113,10 +113,7 @@ export interface TestResult {
  * Worker loader binding type (Cloudflare)
  */
 export interface WorkerLoader {
-  get(
-    id: string,
-    loader: () => Promise<WorkerCode>
-  ): WorkerStub
+  get(id: string, loader: () => Promise<WorkerCode>): WorkerStub
 }
 
 /**
@@ -176,6 +173,7 @@ export interface TestServiceBinding {
  * Environment with worker loader binding
  */
 export interface SandboxEnv {
-  LOADER?: WorkerLoader
+  loader?: WorkerLoader
+  LOADER?: WorkerLoader // Legacy - prefer lowercase
   TEST?: TestServiceBinding
 }

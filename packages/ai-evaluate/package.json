@@ -1,6 +1,6 @@
 {
   "name": "ai-evaluate",
-  "version": "2.1.4",
+  "version": "2.1.6",
   "description": "Secure code execution in sandboxed environments",
   "type": "module",
   "main": "dist/index.js",
@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./node": {
+      "import": "./dist/node.js",
+      "types": "./dist/node.d.ts"
     }
   },
   "scripts": {

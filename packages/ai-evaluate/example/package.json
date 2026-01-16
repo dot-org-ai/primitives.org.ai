@@ -1,0 +1,16 @@
+{
+  "name": "ai-evaluate-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "ai-evaluate": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251011.0",
+    "wrangler": "^4.43.0"
+  }
+}

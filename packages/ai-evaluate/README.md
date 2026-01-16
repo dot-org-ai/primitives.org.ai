@@ -17,13 +17,23 @@ const result = eval(userCode) // Could do ANYTHING
 // After: Sandboxed execution
 import { evaluate } from 'ai-evaluate'
 
-const result = await evaluate({
-  script: userCode
-})
+const result = await evaluate({ script: userCode }, env)
 // Runs in isolated V8 context - your system is protected
 ```
 
 ## Quick Start
+
+### Ready-to-Deploy Example
+
+```bash
+cd example
+pnpm install
+pnpm deploy
+```
+
+See [`example/`](./example) for a complete working Worker.
+
+### Cloudflare Workers (Production)
 
 **1. Install**
 
@@ -31,46 +41,57 @@ const result = await evaluate({
 pnpm add ai-evaluate
 ```
 
-**2. Evaluate code safely**
+**2. Configure wrangler.jsonc**
+
+> **Important**: Requires wrangler v4+ (`pnpm add -D wrangler@4`)
+
+```jsonc
+{
+  "name": "my-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "worker_loaders": [
+    { "binding": "loader" }
+  ]
+}
+```
+
+**3. Use in your Worker**
 
 ```typescript
 import { evaluate } from 'ai-evaluate'
 
-const result = await evaluate({
-  script: '1 + 1'
-})
-// { success: true, value: 2, logs: [], duration: 5 }
+export default {
+  async fetch(request: Request, env: Env) {
+    const result = await evaluate({ script: '1 + 1' }, env)
+    return Response.json(result)
+    // { success: true, value: 2, logs: [], duration: 5 }
+  }
+}
+
+interface Env {
+  loader: unknown
+}
 ```
 
-**3. Run tests on user code**
+### Node.js / Local Development
+
+For local development, import from the `/node` subpath which uses Miniflare:
+
+```bash
+pnpm add ai-evaluate miniflare
+```
 
 ```typescript
-const result = await evaluate({
-  module: `
-    export const add = (a, b) => a + b
-  `,
-  tests: `
-    describe('add', () => {
-      it('adds numbers', () => {
-        expect(add(2, 3)).toBe(5)
-      })
-    })
-  `
-})
-// result.testResults.passed === 1
+import { evaluate } from 'ai-evaluate/node'
+
+const result = await evaluate({ script: '1 + 1' })
+// { success: true, value: 2, logs: [], duration: 50 }
 ```
-
-## What You Get
-
-- **Complete isolation** - Code runs in sandboxed V8 isolates
-- **Built-in testing** - Vitest-compatible `describe`, `it`, `expect`
-- **Module support** - Define exports and use them in scripts/tests
-- **Production-ready** - Cloudflare Workers in production, Miniflare locally
-- **Network blocked** - External access disabled by default
 
 ## API Reference
 
-### evaluate(options)
+### evaluate(options, env?)
 
 ```typescript
 interface EvaluateOptions {
@@ -94,7 +115,7 @@ interface EvaluateResult {
 
 ### createEvaluator(env)
 
-Bind to a Cloudflare Workers environment.
+Bind to a Cloudflare Workers environment for cleaner syntax:
 
 ```typescript
 import { createEvaluator } from 'ai-evaluate'
@@ -119,7 +140,7 @@ const result = await evaluate({
     const y = 20
     return x + y
   `
-})
+}, env)
 // result.value === 30
 ```
 
@@ -128,14 +149,14 @@ const result = await evaluate({
 ```typescript
 const result = await evaluate({
   module: `
-    exports.greet = (name) => \`Hello, \${name}!\`
-    exports.sum = (...nums) => nums.reduce((a, b) => a + b, 0)
+    export const greet = (name) => \`Hello, \${name}!\`
+    export const sum = (...nums) => nums.reduce((a, b) => a + b, 0)
   `,
   script: `
     console.log(greet('World'))
     return sum(1, 2, 3, 4, 5)
   `
-})
+}, env)
 // result.value === 15
 // result.logs[0].message === 'Hello, World!'
 ```
@@ -145,7 +166,7 @@ const result = await evaluate({
 ```typescript
 const result = await evaluate({
   module: `
-    exports.isPrime = (n) => {
+    export const isPrime = (n) => {
       if (n < 2) return false
       for (let i = 2; i <= Math.sqrt(n); i++) {
         if (n % i === 0) return false
@@ -171,7 +192,7 @@ const result = await evaluate({
       })
     })
   `
-})
+}, env)
 
 // result.testResults = { total: 3, passed: 3, failed: 0, ... }
 ```
@@ -257,59 +278,12 @@ await expect(promise).resolves.toBe(value)
 await expect(promise).rejects.toThrow('error')
 ```
 
-## Cloudflare Workers Setup
+## Requirements
 
-### wrangler.toml
-
-```toml
-name = "my-worker"
-main = "src/index.ts"
-
-[[worker_loaders]]
-binding = "LOADER"
-```
-
-### Worker
-
-```typescript
-import { createEvaluator } from 'ai-evaluate'
-
-export interface Env {
-  LOADER: unknown
-}
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const sandbox = createEvaluator(env)
-    const { code, tests } = await request.json()
-
-    const result = await sandbox({
-      module: code,
-      tests: tests
-    })
-
-    return Response.json(result)
-  }
-}
-```
-
-## Local Development
-
-In Node.js, Miniflare is used automatically:
-
-```typescript
-import { evaluate } from 'ai-evaluate'
-
-const result = await evaluate({
-  script: 'return "Hello from Node!"'
-})
-```
-
-Ensure Miniflare is installed:
-
-```bash
-pnpm add miniflare
-```
+| Environment | Requirement |
+|-------------|-------------|
+| Cloudflare Workers | wrangler v4+, `worker_loaders` binding |
+| Node.js | miniflare (peer dependency) |
 
 ## Security Model
 
@@ -320,6 +294,33 @@ pnpm add miniflare
 | No File System | Zero filesystem access |
 | Memory Limits | Standard Worker limits apply |
 | CPU Limits | Execution time bounded |
+
+## Troubleshooting
+
+### "Unexpected fields found in top-level field: worker_loaders"
+
+Upgrade wrangler to v4+:
+```bash
+pnpm add -D wrangler@4
+```
+
+### "Code generation from strings disallowed"
+
+User code must be embedded at build time, not evaluated with `new Function()` or `eval()`. This is handled automatically by ai-evaluate - just pass your code as strings to `evaluate()`.
+
+### "No loader binding"
+
+Ensure your wrangler.jsonc has the worker_loaders config and you're passing `env` to `evaluate()`:
+
+```jsonc
+{
+  "worker_loaders": [{ "binding": "loader" }]
+}
+```
+
+```typescript
+await evaluate({ script: code }, env)  // Don't forget env!
+```
 
 ## Types
 
