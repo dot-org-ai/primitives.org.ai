@@ -55,7 +55,7 @@ describe('cloudflareEmbedding', () => {
   describe('model properties', () => {
     it('has correct specification version', () => {
       const model = cloudflareEmbedding()
-      expect(model.specificationVersion).toBe('v1')
+      expect(model.specificationVersion).toBe('v2')
     })
 
     it('has correct provider', () => {
@@ -556,7 +556,7 @@ describe('type safety', () => {
 
   it('returns EmbeddingModel interface', () => {
     const model = cloudflareEmbedding()
-    expect(model.specificationVersion).toBe('v1')
+    expect(model.specificationVersion).toBe('v2')
     expect(typeof model.doEmbed).toBe('function')
   })
 })
