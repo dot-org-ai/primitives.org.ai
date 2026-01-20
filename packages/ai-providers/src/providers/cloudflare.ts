@@ -19,13 +19,13 @@ export const DEFAULT_CF_EMBEDDING_MODEL = '@cf/baai/bge-m3'
  */
 export interface CloudflareConfig {
   /** Cloudflare Account ID */
-  accountId?: string
+  accountId?: string | undefined
   /** Cloudflare API Token */
-  apiToken?: string
+  apiToken?: string | undefined
   /** AI Gateway (optional) */
-  gateway?: string
+  gateway?: string | undefined
   /** Base URL override */
-  baseUrl?: string
+  baseUrl?: string | undefined
 }
 
 /**
@@ -33,9 +33,9 @@ export interface CloudflareConfig {
  */
 function getCloudflareConfig(): CloudflareConfig {
   return {
-    accountId: typeof process !== 'undefined' ? process.env?.CLOUDFLARE_ACCOUNT_ID : undefined,
-    apiToken: typeof process !== 'undefined' ? process.env?.CLOUDFLARE_API_TOKEN : undefined,
-    gateway: typeof process !== 'undefined' ? process.env?.CLOUDFLARE_AI_GATEWAY : undefined
+    accountId: typeof process !== 'undefined' ? process.env?.['CLOUDFLARE_ACCOUNT_ID'] : undefined,
+    apiToken: typeof process !== 'undefined' ? process.env?.['CLOUDFLARE_API_TOKEN'] : undefined,
+    gateway: typeof process !== 'undefined' ? process.env?.['CLOUDFLARE_AI_GATEWAY'] : undefined
   }
 }
 
@@ -50,12 +50,12 @@ class CloudflareEmbeddingModel {
   readonly supportsParallelCalls = true
 
   private config: CloudflareConfig
-  private ai?: Ai // Cloudflare AI binding (when running in Workers)
+  private ai: Ai | undefined // Cloudflare AI binding (when running in Workers)
 
   constructor(
     modelId: string = DEFAULT_CF_EMBEDDING_MODEL,
     config: CloudflareConfig = {},
-    ai?: Ai
+    ai?: Ai | undefined
   ) {
     this.modelId = modelId
     this.config = { ...getCloudflareConfig(), ...config }
@@ -64,12 +64,12 @@ class CloudflareEmbeddingModel {
 
   async doEmbed(options: {
     values: string[]
-    abortSignal?: AbortSignal
-    headers?: Record<string, string>
+    abortSignal?: AbortSignal | undefined
+    headers?: Record<string, string> | undefined
   }): Promise<{
     embeddings: number[][]
-    usage?: { tokens: number }
-    response?: { headers?: Record<string, string>; body?: unknown }
+    usage?: { tokens: number } | undefined
+    response?: { headers?: Record<string, string> | undefined; body?: unknown } | undefined
   }> {
     const { values, abortSignal, headers } = options
 
@@ -84,7 +84,7 @@ class CloudflareEmbeddingModel {
 
   private async embedWithBinding(values: string[]): Promise<{
     embeddings: number[][]
-    usage?: { tokens: number }
+    usage?: { tokens: number } | undefined
   }> {
     const embeddings: number[][] = []
 
@@ -104,12 +104,12 @@ class CloudflareEmbeddingModel {
 
   private async embedWithRest(
     values: string[],
-    abortSignal?: AbortSignal,
-    headers?: Record<string, string>
+    abortSignal?: AbortSignal | undefined,
+    headers?: Record<string, string> | undefined
   ): Promise<{
     embeddings: number[][]
-    usage?: { tokens: number }
-    response?: { headers?: Record<string, string>; body?: unknown }
+    usage?: { tokens: number } | undefined
+    response?: { headers?: Record<string, string> | undefined; body?: unknown } | undefined
   }> {
     const { accountId, apiToken, gateway, baseUrl } = this.config
 
@@ -136,7 +136,7 @@ class CloudflareEmbeddingModel {
           ...headers
         },
         body: JSON.stringify({ text }),
-        signal: abortSignal
+        signal: abortSignal ?? null
       })
 
       if (!response.ok) {
@@ -179,7 +179,7 @@ class CloudflareEmbeddingModel {
 export function cloudflareEmbedding(
   modelId: string = DEFAULT_CF_EMBEDDING_MODEL,
   config: CloudflareConfig = {},
-  ai?: Ai
+  ai?: Ai | undefined
 ): EmbeddingModel<string> {
   return new CloudflareEmbeddingModel(modelId, config, ai) as unknown as EmbeddingModel<string>
 }

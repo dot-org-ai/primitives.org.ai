@@ -33,30 +33,30 @@ export { DIRECT_PROVIDERS, type DirectProvider } from 'language-models'
  */
 export interface ProviderConfig {
   /** Cloudflare AI Gateway URL (e.g., https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_name}) */
-  gatewayUrl?: string
+  gatewayUrl?: string | undefined
   /** AI Gateway auth token */
-  gatewayToken?: string
+  gatewayToken?: string | undefined
 
   /** Use llm.do WebSocket transport instead of HTTP (persistent connection) */
-  useWebSocket?: boolean
+  useWebSocket?: boolean | undefined
   /** llm.do WebSocket URL (default: wss://llm.do/ws) */
-  llmUrl?: string
+  llmUrl?: string | undefined
 
   /** OpenAI API key (fallback if no gateway) */
-  openaiApiKey?: string
+  openaiApiKey?: string | undefined
   /** Anthropic API key (fallback if no gateway) */
-  anthropicApiKey?: string
+  anthropicApiKey?: string | undefined
   /** Google AI API key (fallback if no gateway) */
-  googleApiKey?: string
+  googleApiKey?: string | undefined
   /** OpenRouter API key (fallback if no gateway) */
-  openrouterApiKey?: string
+  openrouterApiKey?: string | undefined
   /** Cloudflare Account ID */
-  cloudflareAccountId?: string
+  cloudflareAccountId?: string | undefined
   /** Cloudflare API Token (fallback if no gateway) */
-  cloudflareApiToken?: string
+  cloudflareApiToken?: string | undefined
 
   /** Custom base URLs (overrides gateway) */
-  baseUrls?: Partial<Record<ProviderId, string>>
+  baseUrls?: Partial<Record<ProviderId, string>> | undefined
 }
 
 /**
@@ -79,20 +79,20 @@ function getEnvConfig(): ProviderConfig {
 
   return {
     // Cloudflare AI Gateway
-    gatewayUrl: process.env.AI_GATEWAY_URL,
-    gatewayToken: process.env.AI_GATEWAY_TOKEN || process.env.DO_TOKEN,
+    gatewayUrl: process.env['AI_GATEWAY_URL'],
+    gatewayToken: process.env['AI_GATEWAY_TOKEN'] || process.env['DO_TOKEN'],
 
     // llm.do WebSocket transport
-    useWebSocket: process.env.LLM_WEBSOCKET === 'true' || process.env.USE_LLM_WEBSOCKET === 'true',
-    llmUrl: process.env.LLM_URL,
+    useWebSocket: process.env['LLM_WEBSOCKET'] === 'true' || process.env['USE_LLM_WEBSOCKET'] === 'true',
+    llmUrl: process.env['LLM_URL'],
 
     // Individual provider keys (fallbacks)
-    openaiApiKey: process.env.OPENAI_API_KEY,
-    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-    googleApiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_AI_API_KEY,
-    openrouterApiKey: process.env.OPENROUTER_API_KEY,
-    cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-    cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN
+    openaiApiKey: process.env['OPENAI_API_KEY'],
+    anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
+    googleApiKey: process.env['GOOGLE_GENERATIVE_AI_API_KEY'] || process.env['GOOGLE_AI_API_KEY'],
+    openrouterApiKey: process.env['OPENROUTER_API_KEY'],
+    cloudflareAccountId: process.env['CLOUDFLARE_ACCOUNT_ID'],
+    cloudflareApiToken: process.env['CLOUDFLARE_API_TOKEN']
   }
 }
 
@@ -133,7 +133,7 @@ function createGatewayFetch(config: ProviderConfig): typeof fetch | undefined {
       if (!llmFetchInstance) {
         const { createLLMFetch } = await import('./llm.do.js')
         llmFetchInstance = createLLMFetch({
-          url: config.llmUrl,
+          url: config.llmUrl ?? 'wss://llm.do/ws',
           token: config.gatewayToken!
         })
       }
@@ -176,15 +176,30 @@ function getApiKey(config: ProviderConfig, providerApiKey?: string): string | un
 }
 
 /**
+ * Build provider options, only including defined values
+ */
+function buildProviderOptions(
+  apiKey: string | undefined,
+  baseURL: string | undefined,
+  customFetch: typeof fetch | undefined
+): { apiKey?: string; baseURL?: string; fetch?: typeof fetch } {
+  const options: { apiKey?: string; baseURL?: string; fetch?: typeof fetch } = {}
+  if (apiKey !== undefined) options.apiKey = apiKey
+  if (baseURL !== undefined) options.baseURL = baseURL
+  if (customFetch !== undefined) options.fetch = customFetch
+  return options
+}
+
+/**
  * Create OpenAI provider
  */
 async function createOpenAIProvider(config: ProviderConfig): Promise<unknown> {
   const { createOpenAI } = await import('@ai-sdk/openai')
-  return createOpenAI({
-    apiKey: getApiKey(config, config.openaiApiKey),
-    baseURL: getBaseUrl('openai', config),
-    fetch: createGatewayFetch(config),
-  })
+  return createOpenAI(buildProviderOptions(
+    getApiKey(config, config.openaiApiKey),
+    getBaseUrl('openai', config),
+    createGatewayFetch(config),
+  ))
 }
 
 /**
@@ -192,11 +207,11 @@ async function createOpenAIProvider(config: ProviderConfig): Promise<unknown> {
  */
 async function createAnthropicProvider(config: ProviderConfig): Promise<unknown> {
   const { createAnthropic } = await import('@ai-sdk/anthropic')
-  return createAnthropic({
-    apiKey: getApiKey(config, config.anthropicApiKey),
-    baseURL: getBaseUrl('anthropic', config),
-    fetch: createGatewayFetch(config),
-  })
+  return createAnthropic(buildProviderOptions(
+    getApiKey(config, config.anthropicApiKey),
+    getBaseUrl('anthropic', config),
+    createGatewayFetch(config),
+  ))
 }
 
 /**
@@ -204,11 +219,11 @@ async function createAnthropicProvider(config: ProviderConfig): Promise<unknown>
  */
 async function createGoogleProvider(config: ProviderConfig): Promise<unknown> {
   const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
-  return createGoogleGenerativeAI({
-    apiKey: getApiKey(config, config.googleApiKey),
-    baseURL: getBaseUrl('google', config),
-    fetch: createGatewayFetch(config),
-  })
+  return createGoogleGenerativeAI(buildProviderOptions(
+    getApiKey(config, config.googleApiKey),
+    getBaseUrl('google', config),
+    createGatewayFetch(config),
+  ))
 }
 
 /**
@@ -216,11 +231,11 @@ async function createGoogleProvider(config: ProviderConfig): Promise<unknown> {
  */
 async function createOpenRouterProvider(config: ProviderConfig): Promise<unknown> {
   const { createOpenAI } = await import('@ai-sdk/openai')
-  return createOpenAI({
-    apiKey: getApiKey(config, config.openrouterApiKey),
-    baseURL: getBaseUrl('openrouter', config, 'https://openrouter.ai/api/v1'),
-    fetch: createGatewayFetch(config),
-  })
+  return createOpenAI(buildProviderOptions(
+    getApiKey(config, config.openrouterApiKey),
+    getBaseUrl('openrouter', config, 'https://openrouter.ai/api/v1'),
+    createGatewayFetch(config),
+  ))
 }
 
 /**
@@ -232,13 +247,14 @@ async function createOpenRouterProvider(config: ProviderConfig): Promise<unknown
 async function createBedrockProvider(config: ProviderConfig): Promise<unknown> {
   const { createAmazonBedrock } = await import('@ai-sdk/amazon-bedrock')
 
-  const bearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK
+  const bearerToken = process.env['AWS_BEARER_TOKEN_BEDROCK']
+  const region = process.env['AWS_REGION'] || 'us-east-1'
 
   // When using bearer token, go directly to AWS (skip gateway)
   // Gateway doesn't support bearer token auth for Bedrock
   if (bearerToken) {
     return createAmazonBedrock({
-      region: process.env.AWS_REGION || 'us-east-1',
+      region,
       apiKey: bearerToken,
     })
   }
@@ -247,7 +263,7 @@ async function createBedrockProvider(config: ProviderConfig): Promise<unknown> {
   const baseURL = getBaseUrl('bedrock', config)
   return createAmazonBedrock({
     ...(baseURL && { baseURL }),
-    region: process.env.AWS_REGION || 'us-east-1',
+    region,
   })
 }
 
@@ -329,7 +345,7 @@ export async function createRegistry(
         providers[id] = await providerFactories[id](mergedConfig)
       } catch (error) {
         // Provider SDK not installed - skip silently
-        if (process.env.DEBUG) {
+        if (process.env['DEBUG']) {
           console.warn(`Provider ${id} not available:`, error)
         }
       }

@@ -93,15 +93,15 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'closed'
  */
 export interface LLMConfig {
   /** llm.do WebSocket URL (default: wss://llm.do/ws) */
-  url?: string
+  url: string
   /** Authentication token (DO_TOKEN) */
   token: string
   /** Auto-reconnect on disconnect (default: true) */
-  autoReconnect?: boolean
+  autoReconnect?: boolean | undefined
   /** Max reconnect attempts (default: 5) */
-  maxReconnectAttempts?: number
+  maxReconnectAttempts?: number | undefined
   /** Reconnect delay in ms (default: 1000) */
-  reconnectDelay?: number
+  reconnectDelay?: number | undefined
 }
 
 /**
@@ -131,15 +131,15 @@ export class LLM {
   private reconnectAttempts = 0
   private eventIdCounter = 0
 
-  readonly config: Required<LLMConfig>
+  readonly config: Required<Omit<LLMConfig, 'autoReconnect' | 'maxReconnectAttempts' | 'reconnectDelay'>> & { autoReconnect: boolean; maxReconnectAttempts: number; reconnectDelay: number }
 
   constructor(config: LLMConfig) {
     this.config = {
-      url: 'wss://llm.do/ws',
-      autoReconnect: true,
-      maxReconnectAttempts: 5,
-      reconnectDelay: 1000,
-      ...config
+      autoReconnect: config.autoReconnect ?? true,
+      maxReconnectAttempts: config.maxReconnectAttempts ?? 5,
+      reconnectDelay: config.reconnectDelay ?? 1000,
+      url: config.url,
+      token: config.token
     }
   }
 
@@ -229,11 +229,12 @@ export class LLM {
     // Auto-reconnect if enabled
     if (wasConnected && this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
       this.reconnectAttempts++
+      const delay = this.config.reconnectDelay * this.reconnectAttempts
       setTimeout(() => {
         this.connect().catch(() => {
           // Reconnect failed, will retry
         })
-      }, this.config.reconnectDelay * this.reconnectAttempts)
+      }, delay)
     }
   }
 
@@ -259,7 +260,7 @@ export class LLM {
           this.pendingRequests.delete(message.eventId)
           const response = new Response(JSON.stringify(message.response.body), {
             status: message.response.status,
-            headers: message.response.headers
+            ...(message.response.headers && { headers: message.response.headers })
           })
           pending.resolve(response)
         }
@@ -391,7 +392,7 @@ export class LLM {
     }
 
     // Check if this is a streaming request
-    const isStreaming = query.stream === true
+    const isStreaming = query['stream'] === true
 
     // Create the WebSocket message
     const message: UniversalRequest = {
@@ -497,8 +498,8 @@ export function getLLM(config?: LLMConfig): LLM {
   }
 
   // Get config from environment
-  const url = process.env.LLM_URL || 'wss://llm.do/ws'
-  const token = process.env.DO_TOKEN
+  const url = process.env['LLM_URL'] || 'wss://llm.do/ws'
+  const token = process.env['DO_TOKEN']
 
   if (!token) {
     throw new Error('llm.do requires DO_TOKEN environment variable')
