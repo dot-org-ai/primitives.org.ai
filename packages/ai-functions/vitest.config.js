@@ -17,6 +17,12 @@ for (const envPath of envPaths) {
 }
 export default defineConfig({
     test: {
+    // CRITICAL: Limit concurrency to prevent resource exhaustion
+    maxConcurrency: 1,
+    maxWorkers: 1,
+    minWorkers: 1,
+    fileParallelism: false,
+
         globals: false,
         environment: 'node',
         include: ['test/**/*.test.ts'],

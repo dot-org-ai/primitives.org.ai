@@ -15,7 +15,9 @@
     "sourceMap": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
