@@ -113,16 +113,18 @@ export class Barrier<T = unknown> {
   private _timeoutId: ReturnType<typeof setTimeout> | null = null
   private _cancelled = false
   private _cancelError: Error | null = null
+  private _abortHandler: (() => void) | null = null
 
   constructor(expectedCount: number, options: BarrierOptions<T> = {}) {
     this._expected = expectedCount
     this._options = options
 
-    // Set up abort signal listener
+    // Set up abort signal listener with proper cleanup tracking
     if (options.signal) {
-      options.signal.addEventListener('abort', () => {
+      this._abortHandler = () => {
         this.cancel(new Error('Operation aborted'))
-      })
+      }
+      options.signal.addEventListener('abort', this._abortHandler, { once: true })
     }
   }
 
@@ -210,6 +212,7 @@ export class Barrier<T = unknown> {
    */
   reset(): void {
     this._clearTimeout()
+    this._clearAbortHandler()
     this._arrived = []
     this._waitResolve = null
     this._waitReject = null
@@ -224,12 +227,23 @@ export class Barrier<T = unknown> {
     this._cancelled = true
     this._cancelError = error
     this._clearTimeout()
+    this._clearAbortHandler()
 
     if (this._waitReject) {
       this._waitReject(error)
       this._waitResolve = null
       this._waitReject = null
     }
+  }
+
+  /**
+   * Dispose of the barrier and cleanup all resources
+   */
+  dispose(): void {
+    this._clearTimeout()
+    this._clearAbortHandler()
+    this._waitResolve = null
+    this._waitReject = null
   }
 
   /**
@@ -248,6 +262,13 @@ export class Barrier<T = unknown> {
     if (this._timeoutId) {
       clearTimeout(this._timeoutId)
       this._timeoutId = null
+    }
+  }
+
+  private _clearAbortHandler(): void {
+    if (this._abortHandler && this._options.signal) {
+      this._options.signal.removeEventListener('abort', this._abortHandler)
+      this._abortHandler = null
     }
   }
 }
@@ -277,13 +298,28 @@ export async function waitForAll<T>(
 
   const { timeout, signal } = options
 
+  // Track cleanup handlers
+  let abortHandler: (() => void) | null = null
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+  const cleanup = () => {
+    if (abortHandler && signal) {
+      signal.removeEventListener('abort', abortHandler)
+      abortHandler = null
+    }
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+  }
+
   // Build array of promises to race against
   const racers: Promise<T[]>[] = [Promise.all(promises)]
 
   // Add abort signal handling
   if (signal) {
     const abortPromise = new Promise<never>((_, reject) => {
-      const abortHandler = () => {
+      abortHandler = () => {
         reject(new Error('Operation aborted'))
       }
       if (signal.aborted) {
@@ -298,14 +334,18 @@ export async function waitForAll<T>(
   // Add timeout if specified
   if (timeout) {
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         reject(new BarrierTimeoutError(timeout, 0, promises.length))
       }, timeout)
     })
     racers.push(timeoutPromise)
   }
 
-  return await Promise.race(racers)
+  try {
+    return await Promise.race(racers)
+  } finally {
+    cleanup()
+  }
 }
 
 /**
