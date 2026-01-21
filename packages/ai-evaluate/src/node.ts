@@ -137,10 +137,20 @@ async function evaluateWithMiniflare(
     fetch: options.fetch, // Pass fetch option to worker template
   })
 
+  // Block outbound network requests at Miniflare level when fetch: null
+  // This complements the globalThis.fetch override in the worker template
+  const blockNetwork = options.fetch === null
+
   const mf = new Miniflare({
     modules: true,
     script: workerCode,
     compatibilityDate: '2026-01-01',
+    // Block all outbound fetch/connect when network is disabled
+    ...(blockNetwork && {
+      outboundService: () => {
+        throw new Error('Network access blocked: fetch is disabled in this sandbox')
+      },
+    }),
   })
 
   try {
