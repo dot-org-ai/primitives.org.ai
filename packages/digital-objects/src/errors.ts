@@ -59,7 +59,7 @@ export class ServerError extends DigitalObjectsError {
  * Thrown when a network error occurs (connection refused, timeout, etc.)
  */
 export class NetworkError extends DigitalObjectsError {
-  constructor(message: string, public cause?: Error) {
+  constructor(message: string, public override cause?: Error) {
     super(message, 'NETWORK_ERROR', 503)
     this.name = 'NetworkError'
   }

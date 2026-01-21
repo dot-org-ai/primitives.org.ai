@@ -6,20 +6,7 @@
  */
 
 import type { FieldDefinition, ExtendedFieldDefinition, ValidationOptions } from './types.js'
-
-// Inline validation error class to avoid TS6307 when this file is imported
-// by parent projects that exclude the errors.ts file
-class SchemaValidationFailedError extends Error {
-  public readonly errors: Array<{ field: string; message: string }>
-  public readonly code = 'VALIDATION_ERROR'
-  public readonly statusCode = 400
-
-  constructor(message: string, errors: Array<{ field: string; message: string }>) {
-    super(message)
-    this.name = 'ValidationError'
-    this.errors = errors
-  }
-}
+import { ValidationError } from './errors.js'
 
 /**
  * Schema validation error with detailed context
@@ -332,7 +319,7 @@ export function validateData(
 
   if (errors.length > 0) {
     const errorCount = errors.length === 1 ? '1 error' : `${errors.length} errors`
-    throw new SchemaValidationFailedError(
+    throw new ValidationError(
       `Validation failed (${errorCount})`,
       errors.map((e) => ({ field: e.field, message: e.message }))
     )

@@ -44,17 +44,17 @@ export interface Noun {
   singular: string // 'post', 'author'
   plural: string // 'posts', 'authors'
   slug: string // URL-safe: 'post', 'author'
-  description?: string
-  schema?: Record<string, FieldDefinition>
+  description?: string | undefined
+  schema?: Record<string, FieldDefinition> | undefined
   createdAt: Date
 }
 
 export interface NounDefinition {
   name: string
-  singular?: string // Auto-derived if not provided
-  plural?: string // Auto-derived if not provided
-  description?: string
-  schema?: Record<string, FieldDefinition>
+  singular?: string | undefined // Auto-derived if not provided
+  plural?: string | undefined // Auto-derived if not provided
+  description?: string | undefined
+  schema?: Record<string, FieldDefinition> | undefined
 }
 
 /**
@@ -66,26 +66,26 @@ export interface Verb {
   act: string // 'creates' (3rd person)
   activity: string // 'creating' (gerund)
   event: string // 'created' (past participle)
-  reverseBy?: string // 'createdBy'
-  reverseAt?: string // 'createdAt'
-  reverseIn?: string // 'createdIn'
-  inverse?: string // 'delete'
-  description?: string
+  reverseBy?: string | undefined // 'createdBy'
+  reverseAt?: string | undefined // 'createdAt'
+  reverseIn?: string | undefined // 'createdIn'
+  inverse?: string | undefined // 'delete'
+  description?: string | undefined
   createdAt: Date
 }
 
 export interface VerbDefinition {
   name: string
   // All forms auto-derived if not provided
-  action?: string
-  act?: string
-  activity?: string
-  event?: string
-  reverseBy?: string
-  reverseAt?: string
-  reverseIn?: string
-  inverse?: string
-  description?: string
+  action?: string | undefined
+  act?: string | undefined
+  activity?: string | undefined
+  event?: string | undefined
+  reverseBy?: string | undefined
+  reverseAt?: string | undefined
+  reverseIn?: string | undefined
+  inverse?: string | undefined
+  description?: string | undefined
 }
 
 /**
@@ -110,12 +110,12 @@ export interface Thing<T = Record<string, unknown>> {
 export interface Action<T = Record<string, unknown>> {
   id: string
   verb: string // References verb.name
-  subject?: string // Thing ID (actor/from)
-  object?: string // Thing ID (target/to)
-  data?: T // Payload/metadata
+  subject?: string | undefined // Thing ID (actor/from)
+  object?: string | undefined // Thing ID (target/to)
+  data?: T | undefined // Payload/metadata
   status: ActionStatusType
   createdAt: Date
-  completedAt?: Date
+  completedAt?: Date | undefined
 }
 
 /**

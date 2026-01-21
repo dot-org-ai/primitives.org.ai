@@ -436,7 +436,7 @@ export class NS implements DigitalObjectsProvider {
       if (path === '/batch/actions' && method === 'POST') {
         const rawBody = await request.json()
         const { actions } = BatchPerformActionsSchema.parse(rawBody)
-        const results = await this.performMany(actions)
+        const results = await this.performMany(actions as Array<{ verb: string; subject?: string; object?: string; data?: unknown }>)
         return Response.json(results)
       }
 
@@ -497,13 +497,13 @@ export class NS implements DigitalObjectsProvider {
 
     const row = rows[0] as Record<string, unknown>
     const noun: Noun = {
-      name: row.name as string,
-      singular: row.singular as string,
-      plural: row.plural as string,
-      slug: row.slug as string,
-      description: row.description as string | undefined,
-      schema: row.schema ? JSON.parse(row.schema as string) : undefined,
-      createdAt: new Date(row.created_at as number),
+      name: row['name'] as string,
+      singular: row['singular'] as string,
+      plural: row['plural'] as string,
+      slug: row['slug'] as string,
+      description: row['description'] as string | undefined,
+      schema: row['schema'] ? JSON.parse(row['schema'] as string) : undefined,
+      createdAt: new Date(row['created_at'] as number),
     }
 
     // Populate cache
@@ -519,13 +519,13 @@ export class NS implements DigitalObjectsProvider {
     return rows.map((row) => {
       const r = row as Record<string, unknown>
       return {
-        name: r.name as string,
-        singular: r.singular as string,
-        plural: r.plural as string,
-        slug: r.slug as string,
-        description: r.description as string | undefined,
-        schema: r.schema ? JSON.parse(r.schema as string) : undefined,
-        createdAt: new Date(r.created_at as number),
+        name: r['name'] as string,
+        singular: r['singular'] as string,
+        plural: r['plural'] as string,
+        slug: r['slug'] as string,
+        description: r['description'] as string | undefined,
+        schema: r['schema'] ? JSON.parse(r['schema'] as string) : undefined,
+        createdAt: new Date(r['created_at'] as number),
       }
     })
   }
@@ -587,17 +587,17 @@ export class NS implements DigitalObjectsProvider {
 
     const row = rows[0] as Record<string, unknown>
     const verb: Verb = {
-      name: row.name as string,
-      action: row.action as string,
-      act: row.act as string,
-      activity: row.activity as string,
-      event: row.event as string,
-      reverseBy: row.reverse_by as string | undefined,
-      reverseAt: row.reverse_at as string | undefined,
-      reverseIn: row.reverse_in as string | undefined,
-      inverse: row.inverse as string | undefined,
-      description: row.description as string | undefined,
-      createdAt: new Date(row.created_at as number),
+      name: row['name'] as string,
+      action: row['action'] as string,
+      act: row['act'] as string,
+      activity: row['activity'] as string,
+      event: row['event'] as string,
+      reverseBy: row['reverse_by'] as string | undefined,
+      reverseAt: row['reverse_at'] as string | undefined,
+      reverseIn: row['reverse_in'] as string | undefined,
+      inverse: row['inverse'] as string | undefined,
+      description: row['description'] as string | undefined,
+      createdAt: new Date(row['created_at'] as number),
     }
 
     // Populate cache
@@ -613,17 +613,17 @@ export class NS implements DigitalObjectsProvider {
     return rows.map((row) => {
       const r = row as Record<string, unknown>
       return {
-        name: r.name as string,
-        action: r.action as string,
-        act: r.act as string,
-        activity: r.activity as string,
-        event: r.event as string,
-        reverseBy: r.reverse_by as string | undefined,
-        reverseAt: r.reverse_at as string | undefined,
-        reverseIn: r.reverse_in as string | undefined,
-        inverse: r.inverse as string | undefined,
-        description: r.description as string | undefined,
-        createdAt: new Date(r.created_at as number),
+        name: r['name'] as string,
+        action: r['action'] as string,
+        act: r['act'] as string,
+        activity: r['activity'] as string,
+        event: r['event'] as string,
+        reverseBy: r['reverse_by'] as string | undefined,
+        reverseAt: r['reverse_at'] as string | undefined,
+        reverseIn: r['reverse_in'] as string | undefined,
+        inverse: r['inverse'] as string | undefined,
+        description: r['description'] as string | undefined,
+        createdAt: new Date(r['created_at'] as number),
       }
     })
   }
@@ -674,11 +674,11 @@ export class NS implements DigitalObjectsProvider {
 
     const row = rows[0] as Record<string, unknown>
     return {
-      id: row.id as string,
-      noun: row.noun as string,
-      data: JSON.parse(row.data as string) as T,
-      createdAt: new Date(row.created_at as number),
-      updatedAt: new Date(row.updated_at as number),
+      id: row['id'] as string,
+      noun: row['noun'] as string,
+      data: JSON.parse(row['data'] as string) as T,
+      createdAt: new Date(row['created_at'] as number),
+      updatedAt: new Date(row['updated_at'] as number),
     }
   }
 
@@ -698,11 +698,11 @@ export class NS implements DigitalObjectsProvider {
     return rows.map((row) => {
       const r = row as Record<string, unknown>
       return {
-        id: r.id as string,
-        noun: r.noun as string,
-        data: JSON.parse(r.data as string) as T,
-        createdAt: new Date(r.created_at as number),
-        updatedAt: new Date(r.updated_at as number),
+        id: r['id'] as string,
+        noun: r['noun'] as string,
+        data: JSON.parse(r['data'] as string) as T,
+        createdAt: new Date(r['created_at'] as number),
+        updatedAt: new Date(r['updated_at'] as number),
       }
     })
   }
@@ -750,11 +750,11 @@ export class NS implements DigitalObjectsProvider {
     const results = rows.map((row) => {
       const r = row as Record<string, unknown>
       return {
-        id: r.id as string,
-        noun: r.noun as string,
-        data: JSON.parse(r.data as string) as T,
-        createdAt: new Date(r.created_at as number),
-        updatedAt: new Date(r.updated_at as number),
+        id: r['id'] as string,
+        noun: r['noun'] as string,
+        data: JSON.parse(r['data'] as string) as T,
+        createdAt: new Date(r['created_at'] as number),
+        updatedAt: new Date(r['updated_at'] as number),
       }
     })
 
@@ -819,11 +819,11 @@ export class NS implements DigitalObjectsProvider {
     return rows.map((row) => {
       const r = row as Record<string, unknown>
       return {
-        id: r.id as string,
-        noun: r.noun as string,
-        data: JSON.parse(r.data as string) as T,
-        createdAt: new Date(r.created_at as number),
-        updatedAt: new Date(r.updated_at as number),
+        id: r['id'] as string,
+        noun: r['noun'] as string,
+        data: JSON.parse(r['data'] as string) as T,
+        createdAt: new Date(r['created_at'] as number),
+        updatedAt: new Date(r['updated_at'] as number),
       }
     })
   }
@@ -869,14 +869,14 @@ export class NS implements DigitalObjectsProvider {
 
     const row = rows[0] as Record<string, unknown>
     return {
-      id: row.id as string,
-      verb: row.verb as string,
-      subject: row.subject as string | undefined,
-      object: row.object as string | undefined,
-      data: row.data ? (JSON.parse(row.data as string) as T) : undefined,
-      status: row.status as ActionStatusType,
-      createdAt: new Date(row.created_at as number),
-      completedAt: row.completed_at ? new Date(row.completed_at as number) : undefined,
+      id: row['id'] as string,
+      verb: row['verb'] as string,
+      subject: row['subject'] as string | undefined,
+      object: row['object'] as string | undefined,
+      data: row['data'] ? (JSON.parse(row['data'] as string) as T) : undefined,
+      status: row['status'] as ActionStatusType,
+      createdAt: new Date(row['created_at'] as number),
+      completedAt: row['completed_at'] ? new Date(row['completed_at'] as number) : undefined,
     }
   }
 
@@ -916,14 +916,14 @@ export class NS implements DigitalObjectsProvider {
     return rows.map((row) => {
       const r = row as Record<string, unknown>
       return {
-        id: r.id as string,
-        verb: r.verb as string,
-        subject: r.subject as string | undefined,
-        object: r.object as string | undefined,
-        data: r.data ? (JSON.parse(r.data as string) as T) : undefined,
-        status: r.status as ActionStatusType,
-        createdAt: new Date(r.created_at as number),
-        completedAt: r.completed_at ? new Date(r.completed_at as number) : undefined,
+        id: r['id'] as string,
+        verb: r['verb'] as string,
+        subject: r['subject'] as string | undefined,
+        object: r['object'] as string | undefined,
+        data: r['data'] ? (JSON.parse(r['data'] as string) as T) : undefined,
+        status: r['status'] as ActionStatusType,
+        createdAt: new Date(r['created_at'] as number),
+        completedAt: r['completed_at'] ? new Date(r['completed_at'] as number) : undefined,
       }
     })
   }
@@ -1007,14 +1007,14 @@ export class NS implements DigitalObjectsProvider {
     return rows.map((row) => {
       const r = row as Record<string, unknown>
       return {
-        id: r.id as string,
-        verb: r.verb as string,
-        subject: r.subject as string | undefined,
-        object: r.object as string | undefined,
-        data: r.data ? (JSON.parse(r.data as string) as T) : undefined,
-        status: r.status as ActionStatusType,
-        createdAt: new Date(r.created_at as number),
-        completedAt: r.completed_at ? new Date(r.completed_at as number) : undefined,
+        id: r['id'] as string,
+        verb: r['verb'] as string,
+        subject: r['subject'] as string | undefined,
+        object: r['object'] as string | undefined,
+        data: r['data'] ? (JSON.parse(r['data'] as string) as T) : undefined,
+        status: r['status'] as ActionStatusType,
+        createdAt: new Date(r['created_at'] as number),
+        completedAt: r['completed_at'] ? new Date(r['completed_at'] as number) : undefined,
       }
     })
   }

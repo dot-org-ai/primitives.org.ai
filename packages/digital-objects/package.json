@@ -6,9 +6,21 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
-    "./ns": { "import": "./dist/ns-exports.js", "types": "./dist/ns-exports.d.ts" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./ns": {
+      "types": "./dist/ns-exports.d.ts",
+      "import": "./dist/ns-exports.js"
+    }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "keywords": [
     "digital-objects",
     "durable-objects",
@@ -20,8 +32,20 @@
     "verbs",
     "things",
     "actions",
-    "linguistics"
+    "linguistics",
+    "ai-primitives"
   ],
+  "author": ".org.ai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/org-ai/primitives.git",
+    "directory": "packages/digital-objects"
+  },
+  "homepage": "https://primitives.org.ai/digital-objects",
+  "bugs": {
+    "url": "https://github.com/org-ai/primitives/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
@@ -30,7 +54,6 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "@org.ai/types": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {
@@ -38,10 +61,7 @@
     "wrangler": "^3.79.0",
     "vitest": "^2.0.0"
   },
-  "peerDependencies": {
-    "vitest": "^2.0.0"
-  },
-  "peerDependenciesMeta": {
-    "vitest": { "optional": true }
+  "publishConfig": {
+    "access": "public"
   }
 }
