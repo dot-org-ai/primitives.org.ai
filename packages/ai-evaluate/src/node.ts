@@ -134,6 +134,7 @@ async function evaluateWithMiniflare(
     script: options.script,
     sdk: options.sdk,
     imports: options.imports,
+    fetch: options.fetch, // Pass fetch option to worker template
   })
 
   const mf = new Miniflare({
@@ -143,12 +144,32 @@ async function evaluateWithMiniflare(
   })
 
   try {
-    const response = await mf.dispatchFetch('http://sandbox/execute')
-    const result = (await response.json()) as EvaluateResult
+    const timeout = options.timeout || 5000
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-    return {
-      ...result,
-      duration: Date.now() - start,
+    try {
+      const response = await mf.dispatchFetch('http://sandbox/execute', {
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      const result = (await response.json()) as EvaluateResult
+
+      return {
+        ...result,
+        duration: Date.now() - start,
+      }
+    } catch (err) {
+      clearTimeout(timeoutId)
+      if ((err as Error).name === 'AbortError') {
+        return {
+          success: false,
+          logs: [],
+          error: `Timeout: Script execution exceeded ${timeout}ms`,
+          duration: Date.now() - start,
+        }
+      }
+      throw err
     }
   } finally {
     await mf.dispose()

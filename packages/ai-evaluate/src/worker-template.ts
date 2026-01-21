@@ -400,8 +400,29 @@ const __db_core__ = {
       __indexThing__(thing);
       return thing;
     }
-    // Options syntax: create({ ns, type, data })
+
     const options = urlOrOptions;
+
+    // Data-first syntax with $type: create({ $type: 'User', name: 'Alice', ... })
+    // Detect by presence of $type or @type and absence of 'data' property
+    if ((__extractType__(options) && !('data' in options)) || ('$type' in options) || ('@type' in options)) {
+      const type = __extractType__(options) || 'Thing';
+      const id = __extractId__(options) || __generateId__();
+      const context = __extractContext__(options);
+      const ns = __SDK_CONFIG__.ns;
+      const cleanData = { ...options };
+      delete cleanData.$type; delete cleanData.$id; delete cleanData.$context;
+      delete cleanData['@type']; delete cleanData['@id']; delete cleanData['@context'];
+      const thingUrl = 'https://' + ns + '/' + type + '/' + id;
+      if (__db_byUrl__.has(thingUrl)) throw new Error('Thing already exists: ' + thingUrl);
+      const thing = { ns, type, id, url: thingUrl, createdAt: new Date(), updatedAt: new Date(), data: cleanData };
+      if (context) thing['@context'] = context;
+      __db_things__.set(thingUrl, thing);
+      __indexThing__(thing);
+      return thing;
+    }
+
+    // Options syntax: create({ ns, type, data })
     const id = options.id || __generateId__();
     const thingUrl = options.url || 'https://' + options.ns + '/' + options.type + '/' + id;
     if (__db_byUrl__.has(thingUrl)) throw new Error('Thing already exists: ' + thingUrl);
@@ -615,11 +636,43 @@ const db = new Proxy(__db_core__, {
 });
 
 // AI Gateway client - makes real API calls through Cloudflare AI Gateway
+// When not configured, returns mock data for testing
 const __aiGateway__ = {
   async fetch(provider, endpoint, body, extraHeaders = {}) {
+    // Mock mode when AI Gateway not configured (for testing)
     if (!__SDK_CONFIG__.aiGatewayUrl) {
-      throw new Error('AI Gateway not configured. Set AI_GATEWAY_URL environment variable.');
+      // Extract prompt from various request formats
+      let prompt = '';
+      if (body?.messages?.[0]?.content?.[0]?.text) {
+        prompt = body.messages[0].content[0].text;
+      } else if (body?.content?.parts?.[0]?.text) {
+        prompt = body.content.parts[0].text;
+      }
+
+      // Return mock responses based on endpoint type
+      if (endpoint.includes('converse')) {
+        // Mock text generation response
+        return {
+          output: {
+            message: {
+              content: [{ text: 'Mock AI response to: ' + prompt.slice(0, 50) }]
+            }
+          },
+          usage: { inputTokens: 10, outputTokens: 20 }
+        };
+      }
+      if (endpoint.includes('embed')) {
+        // Mock embedding response
+        return {
+          embedding: {
+            values: new Array(body.outputDimensionality || 768).fill(0).map(() => Math.random())
+          }
+        };
+      }
+      // Default mock response
+      return { mock: true, prompt };
     }
+
     const url = __SDK_CONFIG__.aiGatewayUrl + '/' + provider + endpoint;
     const headers = {
       'Content-Type': 'application/json',
@@ -642,8 +695,9 @@ const __aiGateway__ = {
   }
 };
 
-// AI implementation - uses AI Gateway for real API calls (AWS Bedrock for Anthropic models)
-const ai = {
+// AI implementation - callable as function or via methods
+// Supports: ai('prompt'), ai\`template\`, ai.generate(), ai.embed(), etc.
+const __aiMethods__ = {
   async generate(prompt, options = {}) {
     // Default to Claude 4.5 Opus via AWS Bedrock
     const model = options.model || 'anthropic.claude-opus-4-5-20251101-v1:0';
@@ -811,6 +865,25 @@ const ai = {
     ];
   }
 };
+
+// Create callable ai function that also has methods as properties
+// Supports: ai('prompt'), ai\`template\`, ai.generate(), ai.embed(), etc.
+const ai = Object.assign(
+  async function ai(promptOrStrings, ...values) {
+    // Handle template literal: ai\`Hello \${name}\`
+    if (Array.isArray(promptOrStrings) && 'raw' in promptOrStrings) {
+      const prompt = promptOrStrings.reduce((acc, str, i) => acc + str + (values[i] ?? ''), '');
+      const result = await __aiMethods__.generate(prompt);
+      return result.text || result;
+    }
+    // Handle direct call: ai('prompt') or ai('prompt', options)
+    const prompt = promptOrStrings;
+    const options = values[0] || {};
+    const result = await __aiMethods__.generate(prompt, options);
+    return result.text || result;
+  },
+  __aiMethods__
+);
 
 // Add references method to db_core
 __db_core__.references = async function(url, direction = 'both') {
@@ -2789,8 +2862,8 @@ function getExportNames(moduleCode: string): string {
     if (match[1]) names.add(match[1])
   }
 
-  // Match export function name(...) or export async function name(...)
-  const esFunctionPattern = /export\s+(?:async\s+)?function\s+(\w+)\s*\(/g
+  // Match export function name(...) or export async function name(...) or export async function* name(...)
+  const esFunctionPattern = /export\s+(?:async\s+)?function\*?\s+(\w+)\s*\(/g
   while ((match = esFunctionPattern.exec(moduleCode)) !== null) {
     if (match[1]) names.add(match[1])
   }
@@ -2818,12 +2891,13 @@ function transformModuleCode(moduleCode: string): string {
   )
 
   // Transform: export function foo(...) → function foo(...) exports.foo = foo;
+  // Also handles async generators: export async function* foo
   code = code.replace(
-    /export\s+(async\s+)?function\s+(\w+)/g,
-    '$1function $2'
+    /export\s+(async\s+)?function(\*?)\s+(\w+)/g,
+    '$1function$2 $3'
   )
   // Add exports for functions after their definition
-  const funcNames = [...moduleCode.matchAll(/export\s+(?:async\s+)?function\s+(\w+)/g)]
+  const funcNames = [...moduleCode.matchAll(/export\s+(?:async\s+)?function\*?\s+(\w+)/g)]
   for (const [, name] of funcNames) {
     code += `\nexports.${name} = ${name};`
   }
@@ -3141,12 +3215,14 @@ export function generateDevWorkerCode(options: {
   script?: string | undefined
   sdk?: SDKConfig | boolean | undefined
   imports?: string[] | undefined
+  fetch?: null | undefined
 }): string {
-  const { module: rawModule = '', tests = '', script: rawScript = '', sdk, imports = [] } = options
+  const { module: rawModule = '', tests = '', script: rawScript = '', sdk, imports = [], fetch: fetchOption } = options
   const sdkConfig = sdk === true ? {} : (sdk || null)
   const module = rawModule ? transformModuleCode(rawModule) : ''
   const script = rawScript ? wrapScriptForReturn(rawScript) : ''
   const exportNames = getExportNames(rawModule)
+  const blockFetch = fetchOption === null
 
   // Hoisted imports (from MDX test files) - placed at true module top level
   const hoistedImports = imports.length > 0 ? imports.join('\n') + '\n' : ''
@@ -3157,6 +3233,14 @@ ${hoistedImports}
 const logs = [];
 const testResults = { total: 0, passed: 0, failed: 0, skipped: 0, tests: [], duration: 0 };
 const pendingTests = [];
+
+${blockFetch ? `
+// Block fetch when fetch: null is specified
+const __originalFetch__ = globalThis.fetch;
+globalThis.fetch = async (...args) => {
+  throw new Error('Network access blocked: fetch is disabled in this sandbox');
+};
+` : ''}
 
 ${sdkConfig ? generateShouldCode() : ''}
 
@@ -3592,13 +3676,9 @@ export default {
     // Execute user script
     ${script ? `
     try {
-      scriptResult = (() => {
+      scriptResult = await (async () => {
 ${script}
       })();
-      // Support async scripts
-      if (scriptResult && typeof scriptResult.then === 'function') {
-        scriptResult = await scriptResult;
-      }
     } catch (e) {
       console.error('Script error:', e.message);
       scriptError = e.message;
