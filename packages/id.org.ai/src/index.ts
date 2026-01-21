@@ -191,7 +191,7 @@ export interface User extends Omit<Identity, '$type'> {
   /** User's display name */
   name: string
   /** Optional profile data for additional user information */
-  profile?: Record<string, unknown>
+  profile?: Record<string, unknown> | undefined
 }
 
 /**
@@ -486,9 +486,9 @@ export interface Credential {
   /** The type of credential (password, oauth, api_key, sso) */
   credentialType: CredentialType
   /** OAuth/SSO provider name (e.g., 'google', 'github', 'okta') */
-  provider?: string
+  provider?: string | undefined
   /** ISO 8601 timestamp when the credential expires (if applicable) */
-  expiresAt?: string
+  expiresAt?: string | undefined
 }
 
 /**
@@ -628,7 +628,7 @@ export interface Session {
   /** ISO 8601 timestamp when the session expires */
   expiresAt: string
   /** Optional metadata about the session (user agent, IP, etc.) */
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown> | undefined
 }
 
 /**

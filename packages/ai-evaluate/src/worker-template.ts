@@ -2774,31 +2774,31 @@ function getExportNames(moduleCode: string): string {
   const dotPattern = /exports\.(\w+)\s*=/g
   let match
   while ((match = dotPattern.exec(moduleCode)) !== null) {
-    names.add(match[1])
+    if (match[1]) names.add(match[1])
   }
 
   // Match exports['name'] = ... or exports["name"] = ...
   const bracketPattern = /exports\[['"](\w+)['"]\]\s*=/g
   while ((match = bracketPattern.exec(moduleCode)) !== null) {
-    names.add(match[1])
+    if (match[1]) names.add(match[1])
   }
 
   // Match export const name = ... or export let name = ... or export var name = ...
   const esConstPattern = /export\s+(?:const|let|var)\s+(\w+)\s*=/g
   while ((match = esConstPattern.exec(moduleCode)) !== null) {
-    names.add(match[1])
+    if (match[1]) names.add(match[1])
   }
 
   // Match export function name(...) or export async function name(...)
   const esFunctionPattern = /export\s+(?:async\s+)?function\s+(\w+)\s*\(/g
   while ((match = esFunctionPattern.exec(moduleCode)) !== null) {
-    names.add(match[1])
+    if (match[1]) names.add(match[1])
   }
 
   // Match export class name
   const esClassPattern = /export\s+class\s+(\w+)/g
   while ((match = esClassPattern.exec(moduleCode)) !== null) {
-    names.add(match[1])
+    if (match[1]) names.add(match[1])
   }
 
   return Array.from(names).join(', ') || '_unused'
@@ -2865,7 +2865,9 @@ function wrapScriptForReturn(script: string): string {
 
   // For multi-statement scripts, try to return the last expression
   const lines = trimmed.split('\n')
-  const lastLine = lines[lines.length - 1].trim()
+  const lastLineRaw = lines[lines.length - 1]
+  if (!lastLineRaw) return script
+  const lastLine = lastLineRaw.trim()
 
   // If last line is an expression (not a declaration, control flow, or throw)
   if (lastLine && !/^\s*(const|let|var|if|for|while|switch|try|class|function|return|throw)\b/.test(lastLine)) {
@@ -2880,11 +2882,11 @@ function wrapScriptForReturn(script: string): string {
  * Generate worker code for production (uses RPC to ai-tests)
  */
 export function generateWorkerCode(options: {
-  module?: string
-  tests?: string
-  script?: string
-  sdk?: SDKConfig | boolean
-  imports?: string[]
+  module?: string | undefined
+  tests?: string | undefined
+  script?: string | undefined
+  sdk?: SDKConfig | boolean | undefined
+  imports?: string[] | undefined
 }): string {
   const { module: rawModule = '', tests = '', script: rawScript = '', sdk, imports = [] } = options
   const sdkConfig = sdk === true ? {} : (sdk || null)
@@ -3134,11 +3136,11 @@ ${script}
  * avoiding the need for RPC service bindings in local development.
  */
 export function generateDevWorkerCode(options: {
-  module?: string
-  tests?: string
-  script?: string
-  sdk?: SDKConfig | boolean
-  imports?: string[]
+  module?: string | undefined
+  tests?: string | undefined
+  script?: string | undefined
+  sdk?: SDKConfig | boolean | undefined
+  imports?: string[] | undefined
 }): string {
   const { module: rawModule = '', tests = '', script: rawScript = '', sdk, imports = [] } = options
   const sdkConfig = sdk === true ? {} : (sdk || null)

@@ -29,25 +29,25 @@ export interface SDKConfig {
  */
 export interface EvaluateOptions {
   /** Module code with exports */
-  module?: string
+  module?: string | undefined
   /** Test code using vitest (describe, expect, it in global scope) */
-  tests?: string
+  tests?: string | undefined
   /** Script code to run immediately (module exports in scope) */
-  script?: string
+  script?: string | undefined
   /** Timeout in milliseconds (default: 5000) */
-  timeout?: number
+  timeout?: number | undefined
   /** Environment variables to pass to the sandbox */
-  env?: Record<string, string>
+  env?: Record<string, string> | undefined
   /** Fetch configuration. Set to null to block network access. Default: allowed */
-  fetch?: null
+  fetch?: null | undefined
   /** RPC services to expose via capnweb (URL -> handler) */
-  rpc?: Record<string, unknown>
+  rpc?: Record<string, unknown> | undefined
   /** Outbound RPC interceptor - intercepts fetch calls to RPC URLs */
-  outboundRpc?: (url: string, request: Request) => Promise<Response> | Response | null
+  outboundRpc?: ((url: string, request: Request) => Promise<Response> | Response | null) | undefined
   /** SDK configuration - enables $, db, ai, api, on, send globals */
-  sdk?: SDKConfig | boolean
+  sdk?: SDKConfig | boolean | undefined
   /** Top-level imports to hoist (for MDX test files with external imports) */
-  imports?: string[]
+  imports?: string[] | undefined
 }
 
 /**

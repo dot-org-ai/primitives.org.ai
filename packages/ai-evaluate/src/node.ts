@@ -51,11 +51,15 @@ export async function evaluate(
 
   try {
     // Transform JSX in module, tests, and script before evaluation
+    const transformedModule = options.module ? await transformJSX(options.module) : undefined
+    const transformedTests = options.tests ? await transformJSX(options.tests) : undefined
+    const transformedScript = options.script ? await transformJSX(options.script) : undefined
+
     const transformedOptions: EvaluateOptions = {
       ...options,
-      module: options.module ? await transformJSX(options.module) : options.module,
-      tests: options.tests ? await transformJSX(options.tests) : options.tests,
-      script: options.script ? await transformJSX(options.script) : options.script,
+      module: transformedModule,
+      tests: transformedTests,
+      script: transformedScript,
     }
 
     // Use worker_loaders if available (Cloudflare Workers)

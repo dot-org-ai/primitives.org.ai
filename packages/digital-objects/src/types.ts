@@ -170,18 +170,18 @@ export type PrimitiveType =
  * Validation options for create/update operations
  */
 export interface ValidationOptions {
-  validate?: boolean
+  validate?: boolean | undefined
 }
 
 /**
  * List options for queries
  */
 export interface ListOptions {
-  limit?: number
-  offset?: number
-  where?: Record<string, unknown>
-  orderBy?: string
-  order?: 'asc' | 'desc'
+  limit?: number | undefined
+  offset?: number | undefined
+  where?: Record<string, unknown> | undefined
+  orderBy?: string | undefined
+  order?: 'asc' | 'desc' | undefined
 }
 
 /**
