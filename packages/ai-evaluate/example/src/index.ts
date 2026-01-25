@@ -45,38 +45,80 @@ export default {
       )
     }
 
-    // Info endpoint
+    // GET with query params - execute code
+    // e.g., GET /?script=return+1+%2B+1
+    // e.g., GET /?script=return+_.chunk([1,2,3],2)&imports=https://esm.sh/lodash
     if (request.method === 'GET' && url.pathname === '/') {
+      const script = url.searchParams.get('script') || url.searchParams.get('code')
+      const module = url.searchParams.get('module')
+      const importsParam = url.searchParams.get('imports')
+
+      // If script or module provided, execute code
+      if (script || module) {
+        try {
+          // Parse imports - can be comma-separated or multiple params
+          let imports: string[] | undefined
+          if (importsParam) {
+            imports = importsParam.includes(',')
+              ? importsParam.split(',').map((s) => s.trim())
+              : [importsParam]
+          }
+
+          const options: EvaluateOptions = {
+            script: script || undefined,
+            module: module || undefined,
+            imports,
+          }
+
+          const result = await evaluate(options, env)
+          return Response.json(result, {
+            status: result.success ? 200 : 400,
+            headers: corsHeaders,
+          })
+        } catch (error) {
+          return Response.json(
+            {
+              success: false,
+              error: error instanceof Error ? error.message : 'Invalid request',
+              logs: [],
+              duration: 0,
+            } as EvaluateResult,
+            { status: 400, headers: corsHeaders }
+          )
+        }
+      }
+
+      // No script - return API info with clickable examples
+      const baseUrl = url.origin
       return Response.json(
         {
           name: 'ai-evaluate',
           version: '2.1.6',
           description: 'Secure code execution in sandboxed Cloudflare Workers',
           endpoints: {
-            'POST /': 'Execute code',
+            'GET /?script=...': 'Execute code via query params',
+            'POST /': 'Execute code via JSON body',
             'GET /health': 'Health check',
           },
-          example: {
-            simple: { script: 'return 1 + 1' },
-            module: {
-              module: 'export const add = (a, b) => a + b',
-              script: 'return add(2, 3)',
-            },
-            withTests: {
-              module: 'export const add = (a, b) => a + b',
-              tests: `
-                describe('add', () => {
-                  it('adds two numbers', () => {
-                    expect(add(1, 2)).toBe(3)
-                  })
-                })
-              `,
-              sdk: true,
-            },
-            withImports: {
-              script: 'return _.chunk([1, 2, 3, 4, 5], 2)',
-              imports: ['https://esm.sh/lodash@4.17.21'],
-            },
+          tryIt: {
+            math: `${baseUrl}/?script=return+1+%2B+1`,
+            variables: `${baseUrl}/?script=const+x+%3D+10%3B+const+y+%3D+20%3B+return+x+*+y`,
+            arrays: `${baseUrl}/?script=return+[1,2,3,4,5].map(n+%3D%3E+n+*+2)`,
+            objects: `${baseUrl}/?script=return+%7B+name%3A+'eval'%2C+version%3A+'2.1.6'+%7D`,
+            functions: `${baseUrl}/?script=const+add+%3D+(a%2Cb)+%3D%3E+a%2Bb%3B+return+add(5%2C3)`,
+            async: `${baseUrl}/?script=return+await+Promise.resolve(42)`,
+            console: `${baseUrl}/?script=console.log('Hello')%3B+return+'check+logs'`,
+            json: `${baseUrl}/?script=return+JSON.parse('%7B%22a%22%3A1%7D')`,
+            date: `${baseUrl}/?script=return+new+Date().toISOString()`,
+            lodash: `${baseUrl}/?script=return+_.chunk([1,2,3,4,5,6],2)&imports=https://esm.sh/lodash@4.17.21`,
+            lodashMap: `${baseUrl}/?script=return+_.map([1,2,3],n%3D%3En*10)&imports=https://esm.sh/lodash@4.17.21`,
+            dayjs: `${baseUrl}/?script=return+dayjs().format('YYYY-MM-DD')&imports=https://esm.sh/dayjs@1.11.10`,
+            uuid: `${baseUrl}/?script=return+uuid.v4()&imports=https://esm.sh/uuid@9.0.0`,
+          },
+          curl: {
+            get: `curl '${baseUrl}/?script=return+1+%2B+1'`,
+            post: `curl -X POST ${baseUrl} -H 'Content-Type: application/json' -d '{"script":"return 1 + 1"}'`,
+            withImports: `curl -X POST ${baseUrl} -H 'Content-Type: application/json' -d '{"script":"return _.chunk([1,2,3,4,5,6],2)","imports":["https://esm.sh/lodash@4.17.21"]}'`,
           },
         },
         { headers: corsHeaders }
