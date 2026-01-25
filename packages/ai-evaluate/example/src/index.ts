@@ -1,67 +1,139 @@
 /**
- * ai-evaluate Example Worker
+ * ai-evaluate REST API Worker
  *
- * Deploy: npx wrangler deploy
- * Test: curl -X POST https://your-worker.workers.dev -d '{"code":"1+1"}'
+ * Deploy: wrangler deploy
+ * Domain: eval.workers.do
+ *
+ * Endpoints:
+ * - POST / - Execute code (accepts { script?, module?, tests?, imports? })
+ * - GET /health - Health check
  */
 
-import { evaluate, createEvaluator } from 'ai-evaluate'
+import { evaluate, type SandboxEnv, type EvaluateOptions, type EvaluateResult } from 'ai-evaluate'
 
-interface Env {
+interface Env extends SandboxEnv {
   loader: unknown
+}
+
+// CORS headers for cross-origin requests
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json',
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // CORS headers
-    const headers = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-      'Content-Type': 'application/json',
-    }
+    const url = new URL(request.url)
 
+    // Handle CORS preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers })
+      return new Response(null, { headers: corsHeaders })
     }
 
-    if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'POST required' }), {
-        status: 405,
-        headers,
-      })
-    }
-
-    try {
-      const body = (await request.json()) as {
-        code?: string
-        module?: string
-        tests?: string
-        script?: string
-      }
-
-      // Support both simple { code } and full { module, tests, script }
-      const result = await evaluate(
+    // Health check endpoint
+    if (url.pathname === '/health' || url.pathname === '/healthz') {
+      return Response.json(
         {
+          status: 'ok',
+          service: 'ai-evaluate',
+          version: '2.1.6',
+          timestamp: new Date().toISOString(),
+        },
+        { headers: corsHeaders }
+      )
+    }
+
+    // Info endpoint
+    if (request.method === 'GET' && url.pathname === '/') {
+      return Response.json(
+        {
+          name: 'ai-evaluate',
+          version: '2.1.6',
+          description: 'Secure code execution in sandboxed Cloudflare Workers',
+          endpoints: {
+            'POST /': 'Execute code',
+            'GET /health': 'Health check',
+          },
+          example: {
+            simple: { script: 'return 1 + 1' },
+            module: {
+              module: 'export const add = (a, b) => a + b',
+              script: 'return add(2, 3)',
+            },
+            withTests: {
+              module: 'export const add = (a, b) => a + b',
+              tests: `
+                describe('add', () => {
+                  it('adds two numbers', () => {
+                    expect(add(1, 2)).toBe(3)
+                  })
+                })
+              `,
+              sdk: true,
+            },
+            withImports: {
+              script: 'return _.chunk([1, 2, 3, 4, 5], 2)',
+              imports: ['https://esm.sh/lodash@4.17.21'],
+            },
+          },
+        },
+        { headers: corsHeaders }
+      )
+    }
+
+    // Execute code endpoint
+    if (request.method === 'POST') {
+      try {
+        const body = (await request.json()) as Partial<EvaluateOptions> & { code?: string }
+
+        // Support both simple { code } and full { module, tests, script }
+        const options: EvaluateOptions = {
           module: body.module,
           tests: body.tests,
           script: body.script || body.code,
-        },
-        env
-      )
-
-      return new Response(JSON.stringify(result, null, 2), { headers })
-    } catch (error) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: error instanceof Error ? error.message : 'Invalid request',
-        }),
-        {
-          status: 400,
-          headers,
+          timeout: body.timeout,
+          imports: body.imports,
+          sdk: body.sdk,
+          fetch: body.fetch,
         }
-      )
+
+        // Validate that at least one of script/module/tests is provided
+        if (!options.script && !options.module && !options.tests) {
+          return Response.json(
+            {
+              success: false,
+              error: 'At least one of script, module, or tests is required',
+              logs: [],
+              duration: 0,
+            } as EvaluateResult,
+            { status: 400, headers: corsHeaders }
+          )
+        }
+
+        const result = await evaluate(options, env)
+        return Response.json(result, {
+          status: result.success ? 200 : 400,
+          headers: corsHeaders,
+        })
+      } catch (error) {
+        return Response.json(
+          {
+            success: false,
+            error: error instanceof Error ? error.message : 'Invalid request',
+            logs: [],
+            duration: 0,
+          } as EvaluateResult,
+          { status: 400, headers: corsHeaders }
+        )
+      }
     }
+
+    // 404 for unknown routes
+    return Response.json(
+      { error: 'Not found', path: url.pathname },
+      { status: 404, headers: corsHeaders }
+    )
   },
 }

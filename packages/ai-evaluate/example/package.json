@@ -1,16 +1,20 @@
 {
-  "name": "ai-evaluate-example",
+  "name": "eval-workers-do",
+  "version": "0.0.1",
   "private": true,
+  "description": "ai-evaluate REST API Worker for eval.workers.do",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "ai-evaluate": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20251011.0",
-    "wrangler": "^4.43.0"
+    "typescript": "^5.7.0",
+    "wrangler": "^4.60.0"
   }
 }

@@ -23,7 +23,31 @@ const result = await evaluate({ script: userCode }, env)
 
 ## Quick Start
 
-### Ready-to-Deploy Example
+### REST API (eval.workers.do)
+
+Try it now with curl:
+
+```bash
+# Simple script execution
+curl -X POST https://eval-workers-do.dotdo.workers.dev \
+  -H "Content-Type: application/json" \
+  -d '{"script": "return 1 + 1"}'
+# {"success":true,"value":2,"logs":[],"duration":2}
+
+# With module exports
+curl -X POST https://eval-workers-do.dotdo.workers.dev \
+  -H "Content-Type: application/json" \
+  -d '{"module": "export const add = (a, b) => a + b", "script": "return add(2, 3)"}'
+# {"success":true,"value":5,"logs":[],"duration":2}
+
+# With console output
+curl -X POST https://eval-workers-do.dotdo.workers.dev \
+  -H "Content-Type: application/json" \
+  -d '{"script": "console.log(42); return 42"}'
+# {"success":true,"value":42,"logs":[{"level":"log","message":"42",...}],"duration":2}
+```
+
+### Deploy Your Own
 
 ```bash
 cd example

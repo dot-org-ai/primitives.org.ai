@@ -2885,17 +2885,11 @@ function transformModuleCode(moduleCode: string): string {
   let code = moduleCode
 
   // Transform: export const foo = ... → const foo = ...; exports.foo = foo;
-  code = code.replace(
-    /export\s+(const|let|var)\s+(\w+)\s*=/g,
-    '$1 $2 = exports.$2 ='
-  )
+  code = code.replace(/export\s+(const|let|var)\s+(\w+)\s*=/g, '$1 $2 = exports.$2 =')
 
   // Transform: export function foo(...) → function foo(...) exports.foo = foo;
   // Also handles async generators: export async function* foo
-  code = code.replace(
-    /export\s+(async\s+)?function(\*?)\s+(\w+)/g,
-    '$1function$2 $3'
-  )
+  code = code.replace(/export\s+(async\s+)?function(\*?)\s+(\w+)/g, '$1function$2 $3')
   // Add exports for functions after their definition
   const funcNames = [...moduleCode.matchAll(/export\s+(?:async\s+)?function\*?\s+(\w+)/g)]
   for (const [, name] of funcNames) {
@@ -2931,7 +2925,10 @@ function wrapScriptForReturn(script: string): string {
   const isSingleLine = !withoutTrailingSemi.includes('\n')
 
   // Check if it looks like a single expression (no control flow, no declarations)
-  const startsWithKeyword = /^\s*(const|let|var|if|for|while|switch|try|class|function|async\s+function)\b/.test(withoutTrailingSemi)
+  const startsWithKeyword =
+    /^\s*(const|let|var|if|for|while|switch|try|class|function|async\s+function)\b/.test(
+      withoutTrailingSemi
+    )
 
   if (isSingleLine && !startsWithKeyword) {
     return `return ${withoutTrailingSemi}`
@@ -2944,7 +2941,10 @@ function wrapScriptForReturn(script: string): string {
   const lastLine = lastLineRaw.trim()
 
   // If last line is an expression (not a declaration, control flow, or throw)
-  if (lastLine && !/^\s*(const|let|var|if|for|while|switch|try|class|function|return|throw)\b/.test(lastLine)) {
+  if (
+    lastLine &&
+    !/^\s*(const|let|var|if|for|while|switch|try|class|function|return|throw)\b/.test(lastLine)
+  ) {
     lines[lines.length - 1] = `return ${lastLine.replace(/;?\s*$/, '')}`
     return lines.join('\n')
   }
@@ -2963,7 +2963,7 @@ export function generateWorkerCode(options: {
   imports?: string[] | undefined
 }): string {
   const { module: rawModule = '', tests = '', script: rawScript = '', sdk, imports = [] } = options
-  const sdkConfig = sdk === true ? {} : (sdk || null)
+  const sdkConfig = sdk === true ? {} : sdk || null
   const module = rawModule ? transformModuleCode(rawModule) : ''
   const script = rawScript ? wrapScriptForReturn(rawScript) : ''
   const exportNames = getExportNames(rawModule)
@@ -2973,7 +2973,7 @@ export function generateWorkerCode(options: {
 
   return `
 // Sandbox Worker Entry Point
-import { RpcTarget, newWorkersRpcResponse } from 'capnweb';
+import { RpcTarget, newWorkersRpcResponse } from 'capnweb.js';
 ${hoistedImports}
 const logs = [];
 
@@ -3003,20 +3003,28 @@ console.debug = captureConsole('debug');
 // Module exports object - exports become top-level variables
 const exports = {};
 
-${module ? `
+${
+  module
+    ? `
 // Execute module code
 try {
 ${module}
 } catch (e) {
   console.error('Module error:', e.message);
 }
-` : '// No module code provided'}
+`
+    : '// No module code provided'
+}
 
 // Expose all exports as top-level variables for tests and scripts
 // This allows: export const add = (a, b) => a + b; then later: add(1, 2)
-${rawModule ? `
+${
+  rawModule
+    ? `
 const { ${exportNames} } = exports;
-`.trim() : ''}
+`.trim()
+    : ''
+}
 
 // ============================================================
 // RPC SERVER - Expose exports via capnweb
@@ -3156,17 +3164,23 @@ export default {
     // USER TEST CODE (embedded at generation time)
     // ============================================================
 
-    ${tests ? `
+    ${
+      tests
+        ? `
     // Register tests
     try {
 ${tests}
     } catch (e) {
       console.error('Test registration error:', e.message);
     }
-    ` : '// No test code provided'}
+    `
+        : '// No test code provided'
+    }
 
     // Execute user script
-    ${script ? `
+    ${
+      script
+        ? `
     try {
       scriptResult = await (async () => {
 ${script}
@@ -3175,17 +3189,23 @@ ${script}
       console.error('Script error:', e.message);
       scriptError = e.message;
     }
-    ` : '// No script code provided'}
+    `
+        : '// No script code provided'
+    }
 
     // Run tests if any were registered
-    ${tests ? `
+    ${
+      tests
+        ? `
     try {
       testResults = await testService.run();
     } catch (e) {
       console.error('Test run error:', e.message);
       testResults = { total: 0, passed: 0, failed: 1, skipped: 0, tests: [], duration: 0, error: e.message };
     }
-    ` : ''}
+    `
+        : ''
+    }
 
     const hasTests = ${tests ? 'true' : 'false'};
     const success = scriptError === null && (!hasTests || (testResults && testResults.failed === 0));
@@ -3217,8 +3237,15 @@ export function generateDevWorkerCode(options: {
   imports?: string[] | undefined
   fetch?: null | undefined
 }): string {
-  const { module: rawModule = '', tests = '', script: rawScript = '', sdk, imports = [], fetch: fetchOption } = options
-  const sdkConfig = sdk === true ? {} : (sdk || null)
+  const {
+    module: rawModule = '',
+    tests = '',
+    script: rawScript = '',
+    sdk,
+    imports = [],
+    fetch: fetchOption,
+  } = options
+  const sdkConfig = sdk === true ? {} : sdk || null
   const module = rawModule ? transformModuleCode(rawModule) : ''
   const script = rawScript ? wrapScriptForReturn(rawScript) : ''
   const exportNames = getExportNames(rawModule)
@@ -3234,13 +3261,17 @@ const logs = [];
 const testResults = { total: 0, passed: 0, failed: 0, skipped: 0, tests: [], duration: 0 };
 const pendingTests = [];
 
-${blockFetch ? `
+${
+  blockFetch
+    ? `
 // Block fetch when fetch: null is specified
 const __originalFetch__ = globalThis.fetch;
 globalThis.fetch = async (...args) => {
   throw new Error('Network access blocked: fetch is disabled in this sandbox');
 };
-` : ''}
+`
+    : ''
+}
 
 ${sdkConfig ? generateShouldCode() : ''}
 
@@ -3548,32 +3579,44 @@ const expect = (actual) => {
 // Module exports object - exports become top-level variables
 const exports = {};
 
-${module ? `
+${
+  module
+    ? `
 // Execute module code
 try {
 ${module}
 } catch (e) {
   console.error('Module error:', e.message);
 }
-` : '// No module code provided'}
+`
+    : '// No module code provided'
+}
 
 // Expose all exports as top-level variables for tests and scripts
 // This allows: export const add = (a, b) => a + b; then later: add(1, 2)
-${rawModule ? `
+${
+  rawModule
+    ? `
 const { ${exportNames} } = exports;
-`.trim() : ''}
+`.trim()
+    : ''
+}
 
 // ============================================================
 // USER TEST CODE (embedded at generation time)
 // ============================================================
-${tests ? `
+${
+  tests
+    ? `
 // Register tests
 try {
 ${tests}
 } catch (e) {
   console.error('Test registration error:', e.message);
 }
-` : '// No test code provided'}
+`
+    : '// No test code provided'
+}
 
 // ============================================================
 // SIMPLE RPC HANDLER (dev mode - no capnweb dependency)
@@ -3674,7 +3717,9 @@ export default {
     let scriptError = null;
 
     // Execute user script
-    ${script ? `
+    ${
+      script
+        ? `
     try {
       scriptResult = await (async () => {
 ${script}
@@ -3683,7 +3728,9 @@ ${script}
       console.error('Script error:', e.message);
       scriptError = e.message;
     }
-    ` : '// No script code provided'}
+    `
+        : '// No script code provided'
+    }
 
     // Run all pending tests
     const testStart = Date.now();

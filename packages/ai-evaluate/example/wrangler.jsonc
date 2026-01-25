@@ -1,9 +1,25 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "ai-evaluate-example",
+  "name": "eval-workers-do",
   "main": "src/index.ts",
   "compatibility_date": "2026-01-01",
+  "account_id": "b6641681fe423910342b9ffa1364c76d",
+
+  // Custom domain
+  "routes": [
+    { "pattern": "eval.workers.do", "custom_domain": true }
+  ],
+
+  // Keep workers.dev enabled for testing
+  "workers_dev": true,
+
+  // Worker loader for dynamic sandbox execution
   "worker_loaders": [
     { "binding": "loader" }
-  ]
+  ],
+
+  // Bundle configuration to resolve workspace package
+  "alias": {
+    "ai-evaluate": "../dist/index.js"
+  }
 }
