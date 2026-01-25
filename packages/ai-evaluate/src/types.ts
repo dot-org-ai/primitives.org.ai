@@ -25,6 +25,17 @@ export interface SDKConfig {
 }
 
 /**
+ * Network access configuration
+ *
+ * @example
+ * fetch: true           // allow all (default)
+ * fetch: false          // block all
+ * fetch: null           // block all (backwards compat)
+ * fetch: ['api.example.com', '*.trusted.com']  // allowlist with wildcards
+ */
+export type FetchConfig = boolean | null | string[]
+
+/**
  * Options for evaluate()
  */
 export interface EvaluateOptions {
@@ -38,8 +49,13 @@ export interface EvaluateOptions {
   timeout?: number | undefined
   /** Environment variables to pass to the sandbox */
   env?: Record<string, string> | undefined
-  /** Fetch configuration. Set to null to block network access. Default: allowed */
-  fetch?: null | undefined
+  /**
+   * Network access control
+   * - true: allow all (default)
+   * - false/null: block all
+   * - string[]: allowlist of domains (wildcards: '*.example.com')
+   */
+  fetch?: FetchConfig
   /** RPC services to expose via capnweb (URL -> handler) */
   rpc?: Record<string, unknown> | undefined
   /** Outbound RPC interceptor - intercepts fetch calls to RPC URLs */

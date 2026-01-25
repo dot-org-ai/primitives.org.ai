@@ -10,13 +10,9 @@
  */
 
 import type { EvaluateOptions, EvaluateResult, WorkerLoader, SandboxEnv } from './types.js'
-import { generateWorkerCode } from './worker-template.js'
+import { generateWorkerCode } from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
-
-/**
- * Compatibility date for dynamic workers (2026)
- */
-const COMPATIBILITY_DATE = '2026-01-01'
+import { COMPATIBILITY_DATE, normalizeImport, extractPackageName } from './shared.js'
 
 /**
  * Generate a minimal worker for simple script execution
@@ -37,10 +33,8 @@ function generateSimpleWorkerCode(options: {
 
   // Make imports available as globals
   const importGlobals = imports
-    .map((url, i) => {
-      // Extract package name from URL for variable naming
-      const match = url.match(/esm\.sh\/([^@/]+)/)
-      const pkgName = match ? match[1].replace(/-/g, '_') : `pkg${i}`
+    .map((specifier, i) => {
+      const pkgName = extractPackageName(specifier, i)
       const varName = pkgName === 'lodash' ? '_' : pkgName
       return `globalThis.${varName} = __import${i}__.default || __import${i}__;
 globalThis.pkg = __import${i}__.default || __import${i}__;`
@@ -157,8 +151,12 @@ export async function evaluate(
 }
 
 /**
- * Pre-fetch external modules from URLs (e.g., esm.sh)
+ * Pre-fetch external modules from URLs or package names
  * Returns a map of module name to source code
+ *
+ * Supports:
+ * - Full URLs: https://esm.sh/lodash@4.17.21
+ * - Bare package names: lodash, lodash@4.17.21, @scope/pkg
  *
  * Handles esm.sh's redirect-style modules by following the internal import paths.
  */
@@ -166,8 +164,11 @@ async function prefetchModules(imports: string[]): Promise<Record<string, string
   const modules: Record<string, string> = {}
 
   await Promise.all(
-    imports.map(async (url, i) => {
+    imports.map(async (specifier, i) => {
       try {
+        // Normalize bare package names to esm.sh URLs
+        const url = normalizeImport(specifier)
+
         // For esm.sh URLs, try to get the bundled version directly
         let fetchUrl = url
         if (url.includes('esm.sh/') && !url.includes('.mjs') && !url.includes('.js')) {
@@ -197,7 +198,9 @@ async function prefetchModules(imports: string[]): Promise<Record<string, string
         modules[moduleName] = source
       } catch (error) {
         throw new Error(
-          `Failed to fetch import ${url}: ${error instanceof Error ? error.message : String(error)}`
+          `Failed to fetch import ${specifier}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
         )
       }
     })
@@ -244,8 +247,8 @@ async function evaluateSimple(
       ...externalModules,
     },
     compatibilityDate: COMPATIBILITY_DATE,
-    // Block network access only if fetch: null
-    globalOutbound: options.fetch === null ? null : undefined,
+    // Block network if fetch is false or null
+    globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
   }))
 
   // Get the entrypoint and call fetch
@@ -274,6 +277,7 @@ async function evaluateWithWorkerLoader(
     script: options.script,
     sdk: options.sdk,
     imports: options.imports,
+    fetch: options.fetch,
   })
   const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
@@ -285,8 +289,8 @@ async function evaluateWithWorkerLoader(
       'capnweb.js': CAPNWEB_SOURCE,
     },
     compatibilityDate: COMPATIBILITY_DATE,
-    // Block network access only if fetch: null
-    globalOutbound: options.fetch === null ? null : undefined,
+    // Block network if fetch is false or null
+    globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
     bindings: {
       TEST: testService,
     },

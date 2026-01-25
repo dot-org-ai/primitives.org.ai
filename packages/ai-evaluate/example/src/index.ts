@@ -115,6 +115,7 @@ export default {
             'GET /health': 'Health check',
           },
           tryIt: {
+            // Basic JavaScript
             math: `${baseUrl}/?script=return+1+%2B+1`,
             variables: `${baseUrl}/?script=const+x+%3D+10%3B+const+y+%3D+20%3B+return+x+*+y`,
             arrays: `${baseUrl}/?script=return+[1,2,3,4,5].map(n+%3D%3E+n+*+2)`,
@@ -124,15 +125,21 @@ export default {
             console: `${baseUrl}/?script=console.log('Hello')%3B+return+'check+logs'`,
             json: `${baseUrl}/?script=return+JSON.parse('%7B%22a%22%3A1%7D')`,
             date: `${baseUrl}/?script=return+new+Date().toISOString()`,
-            lodash: `${baseUrl}/?script=return+_.chunk([1,2,3,4,5,6],2)&imports=https://esm.sh/lodash@4.17.21`,
-            lodashMap: `${baseUrl}/?script=return+_.map([1,2,3],n%3D%3En*10)&imports=https://esm.sh/lodash@4.17.21`,
-            dayjs: `${baseUrl}/?script=return+dayjs().format('YYYY-MM-DD')&imports=https://esm.sh/dayjs@1.11.10`,
-            uuid: `${baseUrl}/?script=return+uuid.v4()&imports=https://esm.sh/uuid@9.0.0`,
+            // npm packages (bare names auto-resolve via esm.sh)
+            lodash: `${baseUrl}/?script=return+_.chunk([1,2,3,4,5,6],2)&imports=lodash`,
+            lodashMap: `${baseUrl}/?script=return+_.map([1,2,3],n%3D%3En*10)&imports=lodash`,
+            dayjs: `${baseUrl}/?script=return+dayjs().format('YYYY-MM-DD')&imports=dayjs`,
+            uuid: `${baseUrl}/?script=return+uuid.v4()&imports=uuid`,
+            // Versioned packages
+            lodashVersioned: `${baseUrl}/?script=return+_.VERSION&imports=lodash@4.17.21`,
+            chalk: `${baseUrl}/?script=return+chalk.blue('Hello')&imports=chalk@5`,
+            zod: `${baseUrl}/?script=const+schema+%3D+z.string()%3B+return+schema.parse('hello')&imports=zod`,
           },
           curl: {
             get: `curl '${baseUrl}/?script=return+1+%2B+1'`,
             post: `curl -X POST ${baseUrl} -H 'Content-Type: application/json' -d '{"script":"return 1 + 1"}'`,
-            withImports: `curl -X POST ${baseUrl} -H 'Content-Type: application/json' -d '{"script":"return _.chunk([1,2,3,4,5,6],2)","imports":["https://esm.sh/lodash@4.17.21"]}'`,
+            withImports: `curl -X POST ${baseUrl} -H 'Content-Type: application/json' -d '{"script":"return _.chunk([1,2,3,4,5,6],2)","imports":["lodash"]}'`,
+            multipleImports: `curl -X POST ${baseUrl} -H 'Content-Type: application/json' -d '{"script":"return { chunks: _.chunk([1,2,3,4],2), date: dayjs().format() }","imports":["lodash","dayjs"]}'`,
           },
         },
         { headers: corsHeaders }

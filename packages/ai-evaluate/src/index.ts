@@ -9,6 +9,7 @@
  */
 
 export { evaluate, createEvaluator } from './evaluate.js'
+export { normalizeImport, normalizeImports } from './shared.js'
 
 export type {
   EvaluateOptions,
@@ -17,5 +18,6 @@ export type {
   TestResults,
   TestResult,
   SandboxEnv,
-  SDKConfig
+  SDKConfig,
+  FetchConfig,
 } from './types.js'

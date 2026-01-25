@@ -1,6 +1,6 @@
 {
   "name": "ai-evaluate",
-  "version": "2.1.6",
+  "version": "2.1.8",
   "description": "Secure code execution in sandboxed environments",
   "type": "module",
   "main": "dist/index.js",
@@ -28,8 +28,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*",
-    "ai-tests": "workspace:*",
     "capnweb": "^0.2.0"
   },
   "devDependencies": {

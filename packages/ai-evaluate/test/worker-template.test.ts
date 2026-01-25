@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateWorkerCode, generateDevWorkerCode } from '../src/worker-template.js'
+import { generateWorkerCode, generateDevWorkerCode } from '../src/worker-template/index.js'
 
 describe('generateWorkerCode (production)', () => {
   describe('basic structure', () => {
@@ -27,21 +27,21 @@ describe('generateWorkerCode (production)', () => {
   describe('module embedding', () => {
     it('embeds module code when provided', () => {
       const code = generateWorkerCode({
-        module: 'exports.foo = 42;'
+        module: 'exports.foo = 42;',
       })
       expect(code).toContain('exports.foo = 42;')
     })
 
     it('extracts export names from exports.name pattern', () => {
       const code = generateWorkerCode({
-        module: 'exports.add = (a, b) => a + b; exports.sub = (a, b) => a - b;'
+        module: 'exports.add = (a, b) => a + b; exports.sub = (a, b) => a - b;',
       })
       expect(code).toContain('const { add, sub } = exports')
     })
 
     it('extracts export names from exports["name"] pattern', () => {
       const code = generateWorkerCode({
-        module: 'exports["myFunc"] = () => {};'
+        module: 'exports["myFunc"] = () => {};',
       })
       expect(code).toContain('myFunc')
     })
@@ -55,7 +55,7 @@ describe('generateWorkerCode (production)', () => {
   describe('test embedding', () => {
     it('embeds test code when provided', () => {
       const code = generateWorkerCode({
-        tests: 'describe("test", () => {});'
+        tests: 'describe("test", () => {});',
       })
       expect(code).toContain('describe("test", () => {});')
     })
@@ -69,7 +69,7 @@ describe('generateWorkerCode (production)', () => {
   describe('script embedding', () => {
     it('embeds script code when provided', () => {
       const code = generateWorkerCode({
-        script: 'return 42;'
+        script: 'return 42;',
       })
       expect(code).toContain('return 42;')
     })
@@ -91,7 +91,9 @@ describe('generateWorkerCode (production)', () => {
       const code = generateWorkerCode({})
       expect(code).toContain('const describe = (name, fn) => testService.describe(name, fn)')
       expect(code).toContain('const it = (name, fn) => testService.it(name, fn)')
-      expect(code).toContain('const expect = (value, message) => testService.expect(value, message)')
+      expect(code).toContain(
+        'const expect = (value, message) => testService.expect(value, message)'
+      )
     })
 
     it('includes skip and only modifiers', () => {
@@ -106,7 +108,7 @@ describe('generateWorkerCode (production)', () => {
   describe('capnweb RPC', () => {
     it('imports capnweb', () => {
       const code = generateWorkerCode({})
-      expect(code).toContain("import { RpcTarget, newWorkersRpcResponse } from 'capnweb'")
+      expect(code).toContain("import { RpcTarget, newWorkersRpcResponse } from 'capnweb.js'")
     })
 
     it('creates ExportsRpcTarget class', () => {
@@ -123,7 +125,7 @@ describe('generateWorkerCode (production)', () => {
     it('handles GET / route for info', () => {
       const code = generateWorkerCode({})
       expect(code).toContain("url.pathname === '/'")
-      expect(code).toContain("exports: Object.keys(exports)")
+      expect(code).toContain('exports: Object.keys(exports)')
     })
   })
 
@@ -162,7 +164,7 @@ describe('generateWorkerCode (production)', () => {
   describe('ES module syntax support', () => {
     it('transforms export const to CommonJS', () => {
       const code = generateWorkerCode({
-        module: 'export const add = (a, b) => a + b'
+        module: 'export const add = (a, b) => a + b',
       })
       expect(code).toContain('const add = exports.add =')
       expect(code).toContain('const { add } = exports')
@@ -170,7 +172,7 @@ describe('generateWorkerCode (production)', () => {
 
     it('transforms export function to CommonJS', () => {
       const code = generateWorkerCode({
-        module: 'export function multiply(a, b) { return a * b }'
+        module: 'export function multiply(a, b) { return a * b }',
       })
       expect(code).toContain('function multiply')
       expect(code).toContain('exports.multiply = multiply')
@@ -182,7 +184,7 @@ describe('generateWorkerCode (production)', () => {
         module: `
           export const foo = 1
           exports.bar = 2
-        `
+        `,
       })
       expect(code).toContain('const foo = exports.foo =')
       expect(code).toContain('exports.bar = 2')
@@ -194,14 +196,14 @@ describe('generateWorkerCode (production)', () => {
   describe('script auto-return', () => {
     it('auto-returns single expressions', () => {
       const code = generateWorkerCode({
-        script: 'add(1, 2)'
+        script: 'add(1, 2)',
       })
       expect(code).toContain('return add(1, 2)')
     })
 
     it('does not modify scripts with return', () => {
       const code = generateWorkerCode({
-        script: 'return add(1, 2)'
+        script: 'return add(1, 2)',
       })
       expect(code).toContain('return add(1, 2)')
       expect(code).not.toContain('return return')
@@ -209,7 +211,7 @@ describe('generateWorkerCode (production)', () => {
 
     it('does not modify throw statements', () => {
       const code = generateWorkerCode({
-        script: 'throw new Error("test")'
+        script: 'throw new Error("test")',
       })
       expect(code).toContain('throw new Error("test")')
       expect(code).not.toContain('return throw')
@@ -220,7 +222,7 @@ describe('generateWorkerCode (production)', () => {
         script: `
           const x = 1
           x + 1
-        `
+        `,
       })
       expect(code).toContain('return x + 1')
     })
@@ -404,7 +406,7 @@ describe('generateDevWorkerCode (development)', () => {
   describe('module embedding', () => {
     it('embeds module code when provided', () => {
       const code = generateDevWorkerCode({
-        module: 'exports.foo = 42;'
+        module: 'exports.foo = 42;',
       })
       expect(code).toContain('exports.foo = 42;')
     })
@@ -413,7 +415,7 @@ describe('generateDevWorkerCode (development)', () => {
   describe('test embedding', () => {
     it('embeds test code when provided', () => {
       const code = generateDevWorkerCode({
-        tests: 'describe("test", () => {});'
+        tests: 'describe("test", () => {});',
       })
       expect(code).toContain('describe("test", () => {});')
     })
@@ -422,7 +424,7 @@ describe('generateDevWorkerCode (development)', () => {
   describe('script embedding', () => {
     it('embeds script code when provided', () => {
       const code = generateDevWorkerCode({
-        script: 'return 42;'
+        script: 'return 42;',
       })
       expect(code).toContain('return 42;')
     })

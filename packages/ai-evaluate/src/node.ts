@@ -5,8 +5,15 @@
  * For Workers-only builds, import from 'ai-evaluate' instead.
  */
 
-import type { EvaluateOptions, EvaluateResult, WorkerLoader, SandboxEnv } from './types.js'
-import { generateWorkerCode, generateDevWorkerCode } from './worker-template.js'
+import type {
+  EvaluateOptions,
+  EvaluateResult,
+  WorkerLoader,
+  SandboxEnv,
+  FetchConfig,
+} from './types.js'
+import { generateWorkerCode, generateDevWorkerCode } from './worker-template/index.js'
+import { isDomainAllowed, normalizeImports } from './shared.js'
 
 /**
  * Check if code contains JSX syntax that needs transformation
@@ -60,6 +67,7 @@ export async function evaluate(
       module: transformedModule,
       tests: transformedTests,
       script: transformedScript,
+      imports: normalizeImports(options.imports),
     }
 
     // Use worker_loaders if available (Cloudflare Workers)
@@ -123,6 +131,25 @@ async function evaluateWithWorkerLoader(
 }
 
 /**
+ * Determine if network access should be blocked based on fetch options
+ * fetch: false | null -> block
+ */
+function shouldBlockNetwork(options: EvaluateOptions): boolean {
+  return options.fetch === false || options.fetch === null
+}
+
+/**
+ * Get allowlist domains if fetch is an array
+ * fetch: string[] -> allowlist
+ */
+function getAllowlistDomains(options: EvaluateOptions): string[] | null {
+  if (Array.isArray(options.fetch)) {
+    return options.fetch
+  }
+  return null
+}
+
+/**
  * Evaluate using Miniflare (for Node.js/development)
  */
 async function evaluateWithMiniflare(
@@ -140,20 +167,38 @@ async function evaluateWithMiniflare(
     fetch: options.fetch, // Pass fetch option to worker template
   })
 
-  // Block outbound network requests at Miniflare level when fetch: null
-  // This complements the globalThis.fetch override in the worker template
-  const blockNetwork = options.fetch === null
+  // Determine outbound service configuration based on fetch option
+  const blockNetwork = shouldBlockNetwork(options)
+  const allowlistDomains = getAllowlistDomains(options)
+
+  // Build outboundService based on mode:
+  // - block: throw error for all requests
+  // - allowlist: check domain against allowlist
+  // - allow (default): no outboundService (allow all)
+  type OutboundServiceFn = (() => never) | ((request: Request) => Response | Promise<Response>)
+  let outboundService: OutboundServiceFn | undefined
+  if (blockNetwork) {
+    outboundService = () => {
+      throw new Error('Network access blocked: fetch is disabled in this sandbox')
+    }
+  } else if (allowlistDomains) {
+    outboundService = (request: Request) => {
+      const url = request.url
+      if (!isDomainAllowed(url, allowlistDomains)) {
+        const hostname = new URL(url).hostname
+        throw new Error(`Network access blocked: domain not in allowlist. Attempted: ${hostname}`)
+      }
+      // Allow the request by returning a fetched response
+      return fetch(request)
+    }
+  }
 
   const mf = new Miniflare({
     modules: true,
     script: workerCode,
     compatibilityDate: '2026-01-01',
-    // Block all outbound fetch/connect when network is disabled
-    ...(blockNetwork && {
-      outboundService: () => {
-        throw new Error('Network access blocked: fetch is disabled in this sandbox')
-      },
-    }),
+    // Configure outbound service based on fetch mode
+    ...(outboundService && { outboundService }),
   })
 
   try {
