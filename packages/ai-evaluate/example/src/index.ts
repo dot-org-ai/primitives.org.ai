@@ -71,10 +71,22 @@ export default {
           }
 
           const result = await evaluate(options, env)
-          return Response.json(result, {
-            status: result.success ? 200 : 400,
-            headers: corsHeaders,
-          })
+          return Response.json(
+            {
+              ...result,
+              $id: request.url,
+              $context: url.origin,
+              input: {
+                script: script || undefined,
+                module: module || undefined,
+                imports: imports || undefined,
+              },
+            },
+            {
+              status: result.success ? 200 : 400,
+              headers: corsHeaders,
+            }
+          )
         } catch (error) {
           return Response.json(
             {
@@ -82,7 +94,9 @@ export default {
               error: error instanceof Error ? error.message : 'Invalid request',
               logs: [],
               duration: 0,
-            } as EvaluateResult,
+              $id: request.url,
+              $context: url.origin,
+            },
             { status: 400, headers: corsHeaders }
           )
         }
@@ -125,7 +139,7 @@ export default {
       )
     }
 
-    // Execute code endpoint
+    // Execute code endpoint (POST)
     if (request.method === 'POST') {
       try {
         const body = (await request.json()) as Partial<EvaluateOptions> & { code?: string }
@@ -149,16 +163,33 @@ export default {
               error: 'At least one of script, module, or tests is required',
               logs: [],
               duration: 0,
-            } as EvaluateResult,
+              $id: request.url,
+              $context: url.origin,
+            },
             { status: 400, headers: corsHeaders }
           )
         }
 
         const result = await evaluate(options, env)
-        return Response.json(result, {
-          status: result.success ? 200 : 400,
-          headers: corsHeaders,
-        })
+        return Response.json(
+          {
+            ...result,
+            $id: request.url,
+            $context: url.origin,
+            input: {
+              script: options.script || undefined,
+              module: options.module || undefined,
+              tests: options.tests || undefined,
+              imports: options.imports || undefined,
+              timeout: options.timeout || undefined,
+              sdk: options.sdk || undefined,
+            },
+          },
+          {
+            status: result.success ? 200 : 400,
+            headers: corsHeaders,
+          }
+        )
       } catch (error) {
         return Response.json(
           {
@@ -166,7 +197,9 @@ export default {
             error: error instanceof Error ? error.message : 'Invalid request',
             logs: [],
             duration: 0,
-          } as EvaluateResult,
+            $id: request.url,
+            $context: url.origin,
+          },
           { status: 400, headers: corsHeaders }
         )
       }
