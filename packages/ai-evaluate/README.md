@@ -29,22 +29,28 @@ Try it now with curl:
 
 ```bash
 # Simple script execution
-curl -X POST https://eval-workers-do.dotdo.workers.dev \
+curl -X POST https://eval.workers.do \
   -H "Content-Type: application/json" \
   -d '{"script": "return 1 + 1"}'
 # {"success":true,"value":2,"logs":[],"duration":2}
 
 # With module exports
-curl -X POST https://eval-workers-do.dotdo.workers.dev \
+curl -X POST https://eval.workers.do \
   -H "Content-Type: application/json" \
   -d '{"module": "export const add = (a, b) => a + b", "script": "return add(2, 3)"}'
 # {"success":true,"value":5,"logs":[],"duration":2}
 
 # With console output
-curl -X POST https://eval-workers-do.dotdo.workers.dev \
+curl -X POST https://eval.workers.do \
   -H "Content-Type: application/json" \
   -d '{"script": "console.log(42); return 42"}'
 # {"success":true,"value":42,"logs":[{"level":"log","message":"42",...}],"duration":2}
+
+# With external imports (lodash from esm.sh)
+curl -X POST https://eval.workers.do \
+  -H "Content-Type: application/json" \
+  -d '{"script": "return _.chunk([1, 2, 3, 4, 5, 6], 2)", "imports": ["https://esm.sh/lodash@4.17.21"]}'
+# {"success":true,"value":[[1,2],[3,4],[5,6]],"logs":[],"duration":42}
 ```
 
 ### Deploy Your Own

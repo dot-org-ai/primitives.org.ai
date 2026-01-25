@@ -5,9 +5,9 @@
   "compatibility_date": "2026-01-01",
   "account_id": "b6641681fe423910342b9ffa1364c76d",
 
-  // Custom domain
+  // Routes - zone route for workers.do domain
   "routes": [
-    { "pattern": "eval.workers.do", "custom_domain": true }
+    { "pattern": "eval.workers.do/*", "zone_name": "workers.do" }
   ],
 
   // Keep workers.dev enabled for testing
