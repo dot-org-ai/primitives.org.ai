@@ -29,9 +29,10 @@ function generateSimpleWorkerCode(options: {
 }): string {
   const { module = '', script = '', imports = [] } = options
 
-  // Build import statements for ESM imports (e.g., from esm.sh)
+  // Build import statements for pre-fetched external modules
+  // Modules are fetched by the host worker and included in the worker definition
   const importStatements = imports
-    .map((url, i) => `import __import${i}__ from '${url}';`)
+    .map((url, i) => `import * as __import${i}__ from './__external_${i}__.js';`)
     .join('\n')
 
   // Make imports available as globals
@@ -41,8 +42,8 @@ function generateSimpleWorkerCode(options: {
       const match = url.match(/esm\.sh\/([^@/]+)/)
       const pkgName = match ? match[1].replace(/-/g, '_') : `pkg${i}`
       const varName = pkgName === 'lodash' ? '_' : pkgName
-      return `globalThis.${varName} = __import${i}__;
-globalThis.pkg = __import${i}__;`
+      return `globalThis.${varName} = __import${i}__.default || __import${i}__;
+globalThis.pkg = __import${i}__.default || __import${i}__;`
     })
     .join('\n')
 
@@ -156,6 +157,56 @@ export async function evaluate(
 }
 
 /**
+ * Pre-fetch external modules from URLs (e.g., esm.sh)
+ * Returns a map of module name to source code
+ *
+ * Handles esm.sh's redirect-style modules by following the internal import paths.
+ */
+async function prefetchModules(imports: string[]): Promise<Record<string, string>> {
+  const modules: Record<string, string> = {}
+
+  await Promise.all(
+    imports.map(async (url, i) => {
+      try {
+        // For esm.sh URLs, try to get the bundled version directly
+        let fetchUrl = url
+        if (url.includes('esm.sh/') && !url.includes('.mjs') && !url.includes('.js')) {
+          // Parse the esm.sh URL to construct the bundle path
+          // e.g., https://esm.sh/lodash@4.17.21 -> https://esm.sh/lodash@4.17.21/es2022/lodash.bundle.mjs
+          const urlObj = new URL(url)
+          const pathParts = urlObj.pathname.slice(1).split('/')
+          const pkgSpec = pathParts[0] // e.g., "lodash@4.17.21"
+          const pkgName = pkgSpec.split('@')[0]
+          fetchUrl = `${urlObj.origin}/${pkgSpec}/es2022/${pkgName}.bundle.mjs`
+        }
+
+        const response = await fetch(fetchUrl, { redirect: 'follow' })
+        if (!response.ok) {
+          // Fallback to original URL if bundle URL fails
+          const fallbackResponse = await fetch(url, { redirect: 'follow' })
+          if (!fallbackResponse.ok) {
+            throw new Error(`Failed to fetch ${url}: ${fallbackResponse.status}`)
+          }
+          const source = await fallbackResponse.text()
+          modules[`__external_${i}__.js`] = source
+          return
+        }
+        const source = await response.text()
+        // Use a simple module name that can be imported
+        const moduleName = `__external_${i}__.js`
+        modules[moduleName] = source
+      } catch (error) {
+        throw new Error(
+          `Failed to fetch import ${url}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    })
+  )
+
+  return modules
+}
+
+/**
  * Simple evaluation without capnweb/TEST dependencies
  */
 async function evaluateSimple(
@@ -163,6 +214,21 @@ async function evaluateSimple(
   loader: WorkerLoader,
   start: number
 ): Promise<EvaluateResult> {
+  // Pre-fetch any external modules
+  let externalModules: Record<string, string> = {}
+  if (options.imports && options.imports.length > 0) {
+    try {
+      externalModules = await prefetchModules(options.imports)
+    } catch (error) {
+      return {
+        success: false,
+        logs: [],
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - start,
+      }
+    }
+  }
+
   const workerCode = generateSimpleWorkerCode({
     module: options.module,
     script: options.script,
@@ -175,6 +241,7 @@ async function evaluateSimple(
     mainModule: 'worker.js',
     modules: {
       'worker.js': workerCode,
+      ...externalModules,
     },
     compatibilityDate: COMPATIBILITY_DATE,
     // Block network access only if fetch: null
