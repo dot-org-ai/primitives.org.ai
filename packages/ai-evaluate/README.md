@@ -278,6 +278,54 @@ await expect(promise).resolves.toBe(value)
 await expect(promise).rejects.toThrow('error')
 ```
 
+## REPL Sessions
+
+For interactive or multi-step evaluations, use the `/repl` export:
+
+```typescript
+import { createReplSession } from 'ai-evaluate/repl'
+
+// Create a persistent session
+const session = await createReplSession({ local: true })
+
+// Evaluate multiple expressions with shared context
+await session.eval('const sum = (a, b) => a + b')
+const result = await session.eval('sum(1, 2)')
+console.log(result.value) // 3
+
+// Context persists across evaluations
+await session.eval('const x = 10')
+const result2 = await session.eval('sum(x, 5)')
+console.log(result2.value) // 15
+
+// Clean up
+await session.close()
+```
+
+### REPL Configuration
+
+```typescript
+interface ReplSessionConfig {
+  local?: boolean           // Use Miniflare (default: false, uses remote)
+  auth?: string             // Auth token for remote execution
+  sdk?: SDKConfig | boolean // Enable platform primitives ($, db, ai)
+  prelude?: string          // Code to run at session start
+  timeout?: number          // Eval timeout in ms (default: 5000)
+  allowNetwork?: boolean    // Allow fetch (default: true)
+}
+```
+
+### Quick Eval
+
+For one-off evaluations without session management:
+
+```typescript
+import { quickEval } from 'ai-evaluate/repl'
+
+const result = await quickEval('1 + 2 * 3')
+console.log(result.value) // 7
+```
+
 ## Requirements
 
 | Environment | Requirement |
