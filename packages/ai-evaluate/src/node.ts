@@ -63,8 +63,11 @@ export async function evaluate(
     }
 
     // Use worker_loaders if available (Cloudflare Workers)
-    if (env?.LOADER && env?.TEST) {
-      return await evaluateWithWorkerLoader(transformedOptions, env.LOADER, env.TEST, start)
+    // Check lowercase first (preferred), then legacy uppercase
+    const loader = env?.loader || env?.LOADER
+    const testService = env?.test || env?.TEST
+    if (loader && testService) {
+      return await evaluateWithWorkerLoader(transformedOptions, loader, testService, start)
     }
 
     // Fall back to Miniflare (Node.js/local development)

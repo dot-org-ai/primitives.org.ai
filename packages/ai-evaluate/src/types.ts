@@ -175,5 +175,6 @@ export interface TestServiceBinding {
 export interface SandboxEnv {
   loader?: WorkerLoader
   LOADER?: WorkerLoader // Legacy - prefer lowercase
-  TEST?: TestServiceBinding
+  test?: TestServiceBinding
+  TEST?: TestServiceBinding // Legacy - prefer lowercase
 }
