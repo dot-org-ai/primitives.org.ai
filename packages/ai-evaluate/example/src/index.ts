@@ -73,7 +73,6 @@ export default {
           const result = await evaluate(options, env)
           return Response.json(
             {
-              ...result,
               $id: request.url,
               $context: url.origin,
               input: {
@@ -81,6 +80,7 @@ export default {
                 module: module || undefined,
                 imports: imports || undefined,
               },
+              ...result,
             },
             {
               status: result.success ? 200 : 400,
@@ -90,12 +90,12 @@ export default {
         } catch (error) {
           return Response.json(
             {
+              $id: request.url,
+              $context: url.origin,
               success: false,
               error: error instanceof Error ? error.message : 'Invalid request',
               logs: [],
               duration: 0,
-              $id: request.url,
-              $context: url.origin,
             },
             { status: 400, headers: corsHeaders }
           )
@@ -159,12 +159,12 @@ export default {
         if (!options.script && !options.module && !options.tests) {
           return Response.json(
             {
+              $id: request.url,
+              $context: url.origin,
               success: false,
               error: 'At least one of script, module, or tests is required',
               logs: [],
               duration: 0,
-              $id: request.url,
-              $context: url.origin,
             },
             { status: 400, headers: corsHeaders }
           )
@@ -173,7 +173,6 @@ export default {
         const result = await evaluate(options, env)
         return Response.json(
           {
-            ...result,
             $id: request.url,
             $context: url.origin,
             input: {
@@ -184,6 +183,7 @@ export default {
               timeout: options.timeout || undefined,
               sdk: options.sdk || undefined,
             },
+            ...result,
           },
           {
             status: result.success ? 200 : 400,
@@ -193,12 +193,12 @@ export default {
       } catch (error) {
         return Response.json(
           {
+            $id: request.url,
+            $context: url.origin,
             success: false,
             error: error instanceof Error ? error.message : 'Invalid request',
             logs: [],
             duration: 0,
-            $id: request.url,
-            $context: url.origin,
           },
           { status: 400, headers: corsHeaders }
         )
