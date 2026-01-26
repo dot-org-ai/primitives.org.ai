@@ -17,21 +17,34 @@
     "./repl": {
       "import": "./dist/repl.js",
       "types": "./dist/repl.d.ts"
-    }
+    },
+    "./static": {
+      "import": "./dist/static/index.js",
+      "types": "./dist/static/index.d.ts"
+    },
+    "./static/index.mjs": "./public/index.mjs",
+    "./static/capnweb.mjs": "./public/capnweb.mjs",
+    "./static/scaffold.mjs": "./public/scaffold.mjs"
   },
+  "files": [
+    "dist",
+    "public"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build:static",
+    "build:static": "npx tsx scripts/build-static.ts",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist public"
   },
   "dependencies": {
     "capnweb": "^0.2.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^2.1.0",
+    "tsx": "^4.7.0",
     "vitest": "^2.1.0"
   },
   "optionalDependencies": {
