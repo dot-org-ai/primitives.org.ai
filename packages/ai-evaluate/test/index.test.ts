@@ -2,24 +2,24 @@ import { describe, it, expect } from 'vitest'
 
 describe('index exports', () => {
   it('exports evaluate function', async () => {
-    const { evaluate } = await import('../src/index.js')
+    const { evaluate } = await import('../src/node.js')
     expect(typeof evaluate).toBe('function')
   })
 
   it('exports createEvaluator function', async () => {
-    const { createEvaluator } = await import('../src/index.js')
+    const { createEvaluator } = await import('../src/node.js')
     expect(typeof createEvaluator).toBe('function')
   })
 
   it('exports types', async () => {
     // Types are compile-time only, so we just check the module loads
-    await import('../src/index.js')
+    await import('../src/node.js')
   })
 })
 
 describe('types', () => {
   it('EvaluateOptions interface is usable', async () => {
-    const { evaluate } = await import('../src/index.js')
+    const { evaluate } = await import('../src/node.js')
 
     // Test that options conform to EvaluateOptions
     const options = {
@@ -28,7 +28,7 @@ describe('types', () => {
       script: 'return 1;',
       timeout: 5000,
       env: { FOO: 'bar' },
-      fetch: null as null
+      fetch: null as null,
     }
 
     const result = await evaluate(options)
@@ -36,7 +36,7 @@ describe('types', () => {
   })
 
   it('EvaluateResult has correct shape', async () => {
-    const { evaluate } = await import('../src/index.js')
+    const { evaluate } = await import('../src/node.js')
 
     const result = await evaluate({ script: 'return 42;' })
 
@@ -49,10 +49,10 @@ describe('types', () => {
   })
 
   it('LogEntry has correct shape', async () => {
-    const { evaluate } = await import('../src/index.js')
+    const { evaluate } = await import('../src/node.js')
 
     const result = await evaluate({
-      script: 'console.log("test"); return true;'
+      script: 'console.log("test"); return true;',
     })
 
     const log = result.logs[0]
@@ -63,10 +63,10 @@ describe('types', () => {
   })
 
   it('TestResults has correct shape when tests provided', async () => {
-    const { evaluate } = await import('../src/index.js')
+    const { evaluate } = await import('../src/node.js')
 
     const result = await evaluate({
-      tests: 'it("test", () => { expect(1).toBe(1); });'
+      tests: 'it("test", () => { expect(1).toBe(1); });',
     })
 
     expect(result.testResults).toBeDefined()
@@ -79,10 +79,10 @@ describe('types', () => {
   })
 
   it('TestResult has correct shape', async () => {
-    const { evaluate } = await import('../src/index.js')
+    const { evaluate } = await import('../src/node.js')
 
     const result = await evaluate({
-      tests: 'it("my test", () => {});'
+      tests: 'it("my test", () => {});',
     })
 
     const test = result.testResults?.tests[0]

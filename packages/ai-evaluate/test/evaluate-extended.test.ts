@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { evaluate, createEvaluator } from '../src/index.js'
+import { evaluate, createEvaluator } from '../src/node.js'
 
 describe('evaluate - extended tests', () => {
   describe('edge cases', () => {
@@ -11,7 +11,7 @@ describe('evaluate - extended tests', () => {
 
     it('handles undefined return', async () => {
       const result = await evaluate({
-        script: 'const x = 1;'
+        script: 'const x = 1;',
       })
       expect(result.success).toBe(true)
       expect(result.value).toBeUndefined()
@@ -19,7 +19,7 @@ describe('evaluate - extended tests', () => {
 
     it('handles null return', async () => {
       const result = await evaluate({
-        script: 'return null;'
+        script: 'return null;',
       })
       expect(result.success).toBe(true)
       expect(result.value).toBeNull()
@@ -27,7 +27,7 @@ describe('evaluate - extended tests', () => {
 
     it('handles complex object return', async () => {
       const result = await evaluate({
-        script: 'return { nested: { value: [1, 2, { a: 3 }] } };'
+        script: 'return { nested: { value: [1, 2, { a: 3 }] } };',
       })
       expect(result.success).toBe(true)
       expect(result.value).toEqual({ nested: { value: [1, 2, { a: 3 }] } })
@@ -35,7 +35,7 @@ describe('evaluate - extended tests', () => {
 
     it('handles array return', async () => {
       const result = await evaluate({
-        script: 'return [1, "two", true, null];'
+        script: 'return [1, "two", true, null];',
       })
       expect(result.success).toBe(true)
       expect(result.value).toEqual([1, 'two', true, null])
@@ -45,7 +45,7 @@ describe('evaluate - extended tests', () => {
   describe('module errors', () => {
     it('fails on module syntax errors', async () => {
       const result = await evaluate({
-        module: 'exports.foo = {;'
+        module: 'exports.foo = {;',
       })
       // Syntax errors cause the entire worker to fail to parse
       expect(result.success).toBe(false)
@@ -54,43 +54,47 @@ describe('evaluate - extended tests', () => {
 
     it('captures module runtime errors', async () => {
       const result = await evaluate({
-        module: 'throw new Error("module error");'
+        module: 'throw new Error("module error");',
       })
-      expect(result.logs.some(l => l.message.includes('Module error'))).toBe(true)
+      expect(result.logs.some((l) => l.message.includes('Module error'))).toBe(true)
     })
   })
 
   describe('console methods', () => {
     it('captures console.info', async () => {
       const result = await evaluate({
-        script: 'console.info("info message"); return true;'
+        script: 'console.info("info message"); return true;',
       })
-      expect(result.logs).toContainEqual(expect.objectContaining({
-        level: 'info',
-        message: 'info message'
-      }))
+      expect(result.logs).toContainEqual(
+        expect.objectContaining({
+          level: 'info',
+          message: 'info message',
+        })
+      )
     })
 
     it('captures console.debug', async () => {
       const result = await evaluate({
-        script: 'console.debug("debug message"); return true;'
+        script: 'console.debug("debug message"); return true;',
       })
-      expect(result.logs).toContainEqual(expect.objectContaining({
-        level: 'debug',
-        message: 'debug message'
-      }))
+      expect(result.logs).toContainEqual(
+        expect.objectContaining({
+          level: 'debug',
+          message: 'debug message',
+        })
+      )
     })
 
     it('stringifies objects in console output', async () => {
       const result = await evaluate({
-        script: 'console.log({ a: 1 }); return true;'
+        script: 'console.log({ a: 1 }); return true;',
       })
       expect(result.logs[0].message).toBe('{"a":1}')
     })
 
     it('joins multiple console arguments', async () => {
       const result = await evaluate({
-        script: 'console.log("a", "b", "c"); return true;'
+        script: 'console.log("a", "b", "c"); return true;',
       })
       expect(result.logs[0].message).toBe('a b c')
     })
@@ -101,7 +105,7 @@ describe('evaluate - extended tests', () => {
       const result = await evaluate({
         script: `
           return Promise.resolve(42).then(v => v * 2);
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.value).toBe(84)
@@ -109,7 +113,7 @@ describe('evaluate - extended tests', () => {
 
     it('handles Promise rejection in script', async () => {
       const result = await evaluate({
-        script: 'return Promise.reject(new Error("async error"));'
+        script: 'return Promise.reject(new Error("async error"));',
       })
       expect(result.success).toBe(false)
       expect(result.error).toContain('async error')
@@ -122,7 +126,7 @@ describe('evaluate - extended tests', () => {
             const value = await Promise.resolve(42);
             return value * 2;
           })();
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.value).toBe(84)
@@ -139,7 +143,7 @@ describe('evaluate - extended tests', () => {
             expect({}).toBeTruthy();
             expect([]).toBeTruthy();
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -153,7 +157,7 @@ describe('evaluate - extended tests', () => {
             expect(null).toBeFalsy();
             expect(undefined).toBeFalsy();
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -164,7 +168,7 @@ describe('evaluate - extended tests', () => {
           it('null check', () => {
             expect(null).toBeNull();
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -175,7 +179,7 @@ describe('evaluate - extended tests', () => {
           it('undefined check', () => {
             expect(undefined).toBeUndefined();
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -188,7 +192,7 @@ describe('evaluate - extended tests', () => {
             expect("").toBeDefined();
             expect(null).toBeDefined();
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -199,7 +203,7 @@ describe('evaluate - extended tests', () => {
           it('NaN check', () => {
             expect(NaN).toBeNaN();
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -210,7 +214,7 @@ describe('evaluate - extended tests', () => {
           it('containEqual check', () => {
             expect([{ a: 1 }, { b: 2 }]).toContainEqual({ a: 1 });
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -221,7 +225,7 @@ describe('evaluate - extended tests', () => {
           it('strict equal check', () => {
             expect({ a: 1, b: 2 }).toStrictEqual({ a: 1, b: 2 });
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -232,7 +236,7 @@ describe('evaluate - extended tests', () => {
           it('greater than check', () => {
             expect(10).toBeGreaterThan(5);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -243,7 +247,7 @@ describe('evaluate - extended tests', () => {
           it('less than check', () => {
             expect(5).toBeLessThan(10);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -255,7 +259,7 @@ describe('evaluate - extended tests', () => {
             expect(10).toBeGreaterThanOrEqual(10);
             expect(10).toBeGreaterThanOrEqual(5);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -267,7 +271,7 @@ describe('evaluate - extended tests', () => {
             expect(10).toBeLessThanOrEqual(10);
             expect(5).toBeLessThanOrEqual(10);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -279,7 +283,7 @@ describe('evaluate - extended tests', () => {
             expect("hello world").toMatch("world");
             expect("hello world").toMatch(/world/);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -291,7 +295,7 @@ describe('evaluate - extended tests', () => {
             expect(new Error()).toBeInstanceOf(Error);
             expect([]).toBeInstanceOf(Array);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -306,7 +310,7 @@ describe('evaluate - extended tests', () => {
             expect({}).toBeTypeOf("object");
             expect(() => {}).toBeTypeOf("function");
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -326,7 +330,7 @@ describe('evaluate - extended tests', () => {
           it('second', () => {
             expect(cleanupCount).toBe(1);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.passed).toBe(2)
@@ -351,7 +355,7 @@ describe('evaluate - extended tests', () => {
               });
             });
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.passed).toBe(2)
@@ -368,7 +372,7 @@ describe('evaluate - extended tests', () => {
           it.only('should run', () => {
             expect(1).toBe(1);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.total).toBe(1)
@@ -383,7 +387,7 @@ describe('evaluate - extended tests', () => {
           test.only('should run', () => {
             expect(1).toBe(1);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.total).toBe(1)
@@ -397,7 +401,7 @@ describe('evaluate - extended tests', () => {
           it('resolves', async () => {
             await expect(Promise.resolve(42)).resolves.toBe(42);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -408,7 +412,7 @@ describe('evaluate - extended tests', () => {
           it('rejects', async () => {
             await expect(Promise.reject(new Error('fail'))).rejects.toBeInstanceOf(Error);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -421,7 +425,7 @@ describe('evaluate - extended tests', () => {
           it('fails', () => {
             expect(1).toBe(2);
           });
-        `
+        `,
       })
       expect(result.success).toBe(false)
       expect(result.testResults?.tests[0].error).toContain('Expected')
@@ -434,7 +438,7 @@ describe('evaluate - extended tests', () => {
           it('fails', () => {
             expect({ a: 1 }).toEqual({ a: 2 });
           });
-        `
+        `,
       })
       expect(result.success).toBe(false)
       expect(result.testResults?.tests[0].error).toBeDefined()
@@ -446,7 +450,7 @@ describe('evaluate - extended tests', () => {
           it('fails', () => {
             expect([1, 2, 3]).toContain(4);
           });
-        `
+        `,
       })
       expect(result.success).toBe(false)
       expect(result.testResults?.tests[0].error).toContain('contain')

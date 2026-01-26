@@ -412,7 +412,7 @@ describe('security', () => {
               }
             })();
           `,
-          fetch: { mode: 'block' },
+          fetch: false,
           timeout: 5000,
         })
         if (result.success && typeof result.value === 'object') {
@@ -437,7 +437,7 @@ describe('security', () => {
               }
             })();
           `,
-          fetch: { mode: 'allowlist', allowedDomains: ['api.example.com'] },
+          fetch: ['api.example.com'],
           timeout: 5000,
         })
         if (result.success && typeof result.value === 'object') {
@@ -463,7 +463,7 @@ describe('security', () => {
               }
             })();
           `,
-          fetch: { mode: 'allowlist', allowedDomains: ['api.example.com'] },
+          fetch: ['api.example.com'],
           timeout: 5000,
         })
         if (result.success && typeof result.value === 'object') {
@@ -486,7 +486,7 @@ describe('security', () => {
               }
             })();
           `,
-          fetch: { mode: 'allowlist', allowedDomains: ['*.example.com'] },
+          fetch: ['*.example.com'],
           timeout: 5000,
         })
         if (result.success && typeof result.value === 'object') {
@@ -509,7 +509,7 @@ describe('security', () => {
               }
             })();
           `,
-          fetch: { mode: 'allowlist', allowedDomains: ['*.example.com'] },
+          fetch: ['*.example.com'],
           timeout: 5000,
         })
         if (result.success && typeof result.value === 'object') {
@@ -532,7 +532,7 @@ describe('security', () => {
               }
             })();
           `,
-          fetch: { mode: 'allowlist', allowedDomains: ['api.example.com'] },
+          fetch: ['api.example.com'],
           timeout: 5000,
         })
         if (result.success && typeof result.value === 'object') {
@@ -581,7 +581,7 @@ describe('security', () => {
               }
             })();
           `,
-          fetch: { mode: 'allow' },
+          fetch: true,
           timeout: 5000,
         })
         if (result.success && typeof result.value === 'object') {

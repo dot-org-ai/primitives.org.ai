@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { evaluate } from '../src/index.js'
+import { evaluate } from '../src/node.js'
 
 describe('evaluate', () => {
   describe('script execution', () => {
     it('executes simple expressions', async () => {
       const result = await evaluate({
-        script: 'return 1 + 1'
+        script: 'return 1 + 1',
       })
       expect(result.success).toBe(true)
       expect(result.value).toBe(2)
@@ -18,7 +18,7 @@ describe('evaluate', () => {
           console.warn('warning');
           console.error('error');
           return 'done';
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.value).toBe('done')
@@ -31,7 +31,7 @@ describe('evaluate', () => {
 
     it('handles script errors', async () => {
       const result = await evaluate({
-        script: 'throw new Error("test error")'
+        script: 'throw new Error("test error")',
       })
       expect(result.success).toBe(false)
       expect(result.error).toContain('test error')
@@ -45,7 +45,7 @@ describe('evaluate', () => {
           exports.add = (a, b) => a + b;
           exports.multiply = (a, b) => a * b;
         `,
-        script: 'return add(2, 3) + multiply(4, 5)'
+        script: 'return add(2, 3) + multiply(4, 5)',
       })
       expect(result.success).toBe(true)
       expect(result.value).toBe(25) // 5 + 20
@@ -62,7 +62,7 @@ describe('evaluate', () => {
               expect(double(5)).toBe(10);
             });
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.total).toBe(1)
@@ -82,7 +82,7 @@ describe('evaluate', () => {
               expect(5 - 3).toBe(2);
             });
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.total).toBe(2)
@@ -96,7 +96,7 @@ describe('evaluate', () => {
           it('fails', () => {
             expect(1).toBe(2);
           });
-        `
+        `,
       })
       expect(result.success).toBe(false)
       expect(result.testResults?.total).toBe(1)
@@ -113,7 +113,7 @@ describe('evaluate', () => {
           it('runs', () => {
             expect(1).toBe(1);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.total).toBe(2)
@@ -134,7 +134,7 @@ describe('evaluate', () => {
           it('second', () => {
             expect(count).toBe(2);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.passed).toBe(2)
@@ -147,7 +147,7 @@ describe('evaluate', () => {
             const value = await Promise.resolve(42);
             expect(value).toBe(42);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.passed).toBe(1)
@@ -162,7 +162,7 @@ describe('evaluate', () => {
             expect(1).toBe(1);
             expect('a').toBe('a');
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -174,7 +174,7 @@ describe('evaluate', () => {
             expect({ a: 1 }).toEqual({ a: 1 });
             expect([1, 2]).toEqual([1, 2]);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -186,7 +186,7 @@ describe('evaluate', () => {
             expect([1, 2, 3]).toContain(2);
             expect('hello').toContain('ell');
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -198,7 +198,7 @@ describe('evaluate', () => {
             expect(() => { throw new Error('boom'); }).toThrow('boom');
             expect(() => { throw new Error('boom'); }).toThrow(/boom/);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -210,7 +210,7 @@ describe('evaluate', () => {
             expect({ a: { b: 1 } }).toHaveProperty('a.b');
             expect({ a: { b: 1 } }).toHaveProperty('a.b', 1);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -221,7 +221,7 @@ describe('evaluate', () => {
           it('works', () => {
             expect({ a: 1, b: 2 }).toMatchObject({ a: 1 });
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -234,7 +234,7 @@ describe('evaluate', () => {
             expect({ a: 1 }).not.toEqual({ a: 2 });
             expect([1, 2]).not.toContain(3);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
@@ -245,7 +245,7 @@ describe('evaluate', () => {
           it('works', () => {
             expect(0.1 + 0.2).toBeCloseTo(0.3);
           });
-        `
+        `,
       })
       expect(result.success).toBe(true)
     })
