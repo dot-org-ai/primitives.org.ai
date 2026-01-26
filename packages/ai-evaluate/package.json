@@ -1,6 +1,6 @@
 {
   "name": "ai-evaluate",
-  "version": "2.1.8",
+  "version": "2.2.0",
   "description": "Secure code execution in sandboxed environments",
   "type": "module",
   "main": "dist/index.js",
