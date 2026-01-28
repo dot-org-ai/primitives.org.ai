@@ -53,8 +53,9 @@ export interface Organization {
 // $ helper placeholder
 const $ = {
   format: (n: number) => `$${n.toLocaleString()}`,
-  growth: (current: number, previous: number) => ((current - previous) / previous * 100).toFixed(1),
-  margin: (revenue: number, cost: number) => ((revenue - cost) / revenue * 100).toFixed(1),
+  growth: (current: number, previous: number) =>
+    (((current - previous) / previous) * 100).toFixed(1),
+  margin: (revenue: number, cost: number) => (((revenue - cost) / revenue) * 100).toFixed(1),
 }
 
 // =============================================================================
@@ -275,7 +276,13 @@ export const PricingTiers = {
     pricingModel: 'subscription',
     price: 999, // /month
     billingPeriod: 'monthly',
-    features: ['Unlimited dashboards', 'Unlimited data sources', 'SSO', 'Dedicated success manager', '99.9% SLA'],
+    features: [
+      'Unlimited dashboards',
+      'Unlimited data sources',
+      'SSO',
+      'Dedicated success manager',
+      '99.9% SLA',
+    ],
     targetMarket: 'Enterprise',
     cogs: 200,
   }),
@@ -315,17 +322,42 @@ export const CloudMetricsOrg: Organization = {
           id: 'platform',
           name: 'Platform',
           positions: [
-            { id: 'platform-lead', title: 'Platform Lead', roleId: 'senior-engineer', reportsTo: 'eng-vp' },
-            { id: 'platform-eng-1', title: 'Senior Platform Engineer', roleId: 'senior-engineer', reportsTo: 'platform-lead' },
-            { id: 'platform-eng-2', title: 'Platform Engineer', roleId: 'engineer', reportsTo: 'platform-lead' },
+            {
+              id: 'platform-lead',
+              title: 'Platform Lead',
+              roleId: 'senior-engineer',
+              reportsTo: 'eng-vp',
+            },
+            {
+              id: 'platform-eng-1',
+              title: 'Senior Platform Engineer',
+              roleId: 'senior-engineer',
+              reportsTo: 'platform-lead',
+            },
+            {
+              id: 'platform-eng-2',
+              title: 'Platform Engineer',
+              roleId: 'engineer',
+              reportsTo: 'platform-lead',
+            },
           ],
         },
         {
           id: 'frontend',
           name: 'Frontend',
           positions: [
-            { id: 'frontend-lead', title: 'Frontend Lead', roleId: 'senior-engineer', reportsTo: 'eng-vp' },
-            { id: 'frontend-eng-1', title: 'Senior Frontend Engineer', roleId: 'senior-engineer', reportsTo: 'frontend-lead' },
+            {
+              id: 'frontend-lead',
+              title: 'Frontend Lead',
+              roleId: 'senior-engineer',
+              reportsTo: 'eng-vp',
+            },
+            {
+              id: 'frontend-eng-1',
+              title: 'Senior Frontend Engineer',
+              roleId: 'senior-engineer',
+              reportsTo: 'frontend-lead',
+            },
           ],
         },
       ],
@@ -360,12 +392,12 @@ export const CloudMetricsOrg: Organization = {
     createBusinessRole({
       id: 'ceo',
       name: 'CEO',
-      ...StandardBusinessRoles.ceo,
+      ...StandardBusinessRoles['ceo'],
     }),
     createBusinessRole({
       id: 'cfo',
       name: 'CFO',
-      ...StandardBusinessRoles.cfo,
+      ...StandardBusinessRoles['cfo'],
     }),
     createBusinessRole({
       id: 'senior-engineer',
@@ -1135,7 +1167,8 @@ export function getBusinessSummary() {
  * Calculate runway based on current metrics
  */
 export function calculateRunway() {
-  const monthlyBurn = (CloudMetricsFinancials.operatingExpenses - CloudMetricsFinancials.revenue) / 12
+  const monthlyBurn =
+    (CloudMetricsFinancials.operatingExpenses - CloudMetricsFinancials.revenue) / 12
   const cashOnHand = 5000000 // Assume $5M in bank
   return monthlyBurn > 0 ? cashOnHand / monthlyBurn : Infinity
 }
