@@ -63,7 +63,7 @@ export function list(): ModelInfo[] {
  * Get a model by exact ID
  */
 export function get(id: string): ModelInfo | undefined {
-  return loadModels().find(m => m.id === id)
+  return loadModels().find((m) => m.id === id)
 }
 
 /**
@@ -72,9 +72,8 @@ export function get(id: string): ModelInfo | undefined {
  */
 export function search(query: string): ModelInfo[] {
   const q = query.toLowerCase()
-  return loadModels().filter(m =>
-    m.id.toLowerCase().includes(q) ||
-    m.name.toLowerCase().includes(q)
+  return loadModels().filter(
+    (m) => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
   )
 }
 
@@ -123,7 +122,7 @@ export function resolve(input: string): string {
  * These providers have special capabilities like MCP, extended thinking, etc.
  */
 export const DIRECT_PROVIDERS = ['openai', 'anthropic', 'google'] as const
-export type DirectProvider = typeof DIRECT_PROVIDERS[number]
+export type DirectProvider = (typeof DIRECT_PROVIDERS)[number]
 
 /**
  * Result of resolving a model with provider routing info
@@ -164,11 +163,8 @@ export function resolveWithProvider(input: string): ResolvedModel {
 
   const supportsDirectRouting = (DIRECT_PROVIDERS as readonly string[]).includes(provider)
 
-  return {
-    id,
-    provider,
-    providerModelId: model?.provider_model_id,
-    supportsDirectRouting,
-    model
-  }
+  const result: ResolvedModel = { id, provider, supportsDirectRouting }
+  if (model) result.model = model
+  if (model?.provider_model_id) result.providerModelId = model.provider_model_id
+  return result
 }
