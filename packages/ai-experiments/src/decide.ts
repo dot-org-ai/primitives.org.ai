@@ -52,9 +52,7 @@ import { track } from './tracking.js'
  * // ]
  * ```
  */
-export async function decide<T>(
-  options: DecideOptions<T>
-): Promise<DecisionResult<T>> {
+export async function decide<T>(options: DecideOptions<T>): Promise<DecisionResult<T>> {
   const { options: choices, score, context, returnAll = false } = options
 
   if (choices.length === 0) {
@@ -117,9 +115,7 @@ export async function decide<T>(
  * console.log(result) // Most likely 'A', but could be B or C
  * ```
  */
-export function decideWeighted<T>(
-  options: Array<{ value: T; weight: number }>
-): T {
+export function decideWeighted<T>(options: Array<{ value: T; weight: number }>): T {
   if (options.length === 0) {
     throw new Error('Cannot decide with empty options')
   }
@@ -197,7 +193,11 @@ export async function decideEpsilonGreedy<T>(
   }
 
   // Exploitation: best option
-  const result = await decide({ options: choices, score, context })
+  const result = await decide({
+    options: choices,
+    score,
+    ...(context !== undefined && { context }),
+  })
 
   track({
     type: 'decision.made',
@@ -252,9 +252,7 @@ export function decideThompsonSampling<T extends string>(
   })
 
   // Select option with highest sample
-  const best = samples.reduce((prev, current) =>
-    current.sample > prev.sample ? current : prev
-  )
+  const best = samples.reduce((prev, current) => (current.sample > prev.sample ? current : prev))
 
   track({
     type: 'decision.made',

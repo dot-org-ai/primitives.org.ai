@@ -82,9 +82,9 @@ export async function Experiment<TConfig = unknown, TResult = unknown>(
       variant: ExperimentVariant<TConfig>
     ): Promise<ExperimentResult<TResult>> => {
       return runVariant(config, variant, contextData, {
-        onVariantStart,
-        onVariantComplete,
-        onVariantError,
+        ...(onVariantStart !== undefined && { onVariantStart }),
+        ...(onVariantComplete !== undefined && { onVariantComplete }),
+        ...(onVariantError !== undefined && { onVariantError }),
       })
     }
 
@@ -109,9 +109,9 @@ export async function Experiment<TConfig = unknown, TResult = unknown>(
     // Sequential execution
     for (const variant of config.variants) {
       const result = await runVariant(config, variant, contextData, {
-        onVariantStart,
-        onVariantComplete,
-        onVariantError,
+        ...(onVariantStart !== undefined && { onVariantStart }),
+        ...(onVariantComplete !== undefined && { onVariantComplete }),
+        ...(onVariantError !== undefined && { onVariantError }),
       })
       results.push(result)
 
@@ -143,7 +143,7 @@ export async function Experiment<TConfig = unknown, TResult = unknown>(
     experimentId: config.id,
     experimentName: config.name,
     results,
-    bestVariant,
+    ...(bestVariant !== undefined && { bestVariant }),
     totalDuration,
     successCount: results.filter((r) => r.success).length,
     failureCount: results.filter((r) => !r.success).length,
@@ -190,7 +190,7 @@ async function runVariant<TConfig, TResult>(
     variantId: variant.id,
     runId,
     startedAt: startTime,
-    data: contextData,
+    ...(contextData !== undefined && { data: contextData }),
   }
 
   // Track variant start
@@ -236,7 +236,7 @@ async function runVariant<TConfig, TResult>(
       variantName: variant.name,
       runId,
       result,
-      metricValue,
+      ...(metricValue !== undefined && { metricValue }),
       duration,
       startedAt: startTime,
       completedAt: endTime,
@@ -332,9 +332,9 @@ export function createVariantsFromGrid<T extends Record<string, unknown[]>>(
   const combinations = cartesianProduct(values)
 
   return combinations.map((combo, index) => {
-    const config = Object.fromEntries(
-      keys.map((key, i) => [key, combo[i]])
-    ) as { [K in keyof T]: T[K][number] }
+    const config = Object.fromEntries(keys.map((key, i) => [key, combo[i]])) as {
+      [K in keyof T]: T[K][number]
+    }
 
     return {
       id: `variant-${index}`,

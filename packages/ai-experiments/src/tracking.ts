@@ -325,9 +325,9 @@ export function createFileBackend(options: {
  */
 function extractKey(event: TrackingEvent): string {
   const data = event.data
-  if ('experimentId' in data) return `exp=${data.experimentId}`
-  if ('variantId' in data) return `variant=${data.variantId}`
-  if ('runId' in data) return `run=${data.runId}`
+  if ('experimentId' in data) return `exp=${data['experimentId']}`
+  if ('variantId' in data) return `variant=${data['variantId']}`
+  if ('runId' in data) return `run=${data['runId']}`
   return ''
 }
 

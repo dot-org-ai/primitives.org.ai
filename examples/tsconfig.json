@@ -5,7 +5,8 @@
     "rootDir": ".",
     "skipLibCheck": true,
     "noImplicitAny": false,
-    "strictNullChecks": false
+    "strictNullChecks": false,
+    "exactOptionalPropertyTypes": false
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"]

@@ -108,22 +108,23 @@ export class ChdbStorage implements TrackingBackend {
     const data = event.data
 
     // Extract standard fields from event data
-    const experimentId = String(data.experimentId ?? '')
-    const experimentName = String(data.experimentName ?? '')
-    const variantId = String(data.variantId ?? '')
-    const variantName = String(data.variantName ?? '')
-    const runId = String(data.runId ?? '')
-    const success = data.success !== false ? 1 : 0
-    const durationMs = Number(data.duration ?? data.durationMs ?? 0)
-    const metricName = String(data.metricName ?? '')
-    const metricValue = Number(data.metricValue ?? 0)
-    const errorMessage = data.error instanceof Error ? data.error.message : String(data.errorMessage ?? '')
-    const errorStack = data.error instanceof Error ? (data.error.stack ?? '') : ''
+    const experimentId = String(data['experimentId'] ?? '')
+    const experimentName = String(data['experimentName'] ?? '')
+    const variantId = String(data['variantId'] ?? '')
+    const variantName = String(data['variantName'] ?? '')
+    const runId = String(data['runId'] ?? '')
+    const success = data['success'] !== false ? 1 : 0
+    const durationMs = Number(data['duration'] ?? data['durationMs'] ?? 0)
+    const metricName = String(data['metricName'] ?? '')
+    const metricValue = Number(data['metricValue'] ?? 0)
+    const errorMessage =
+      data['error'] instanceof Error ? data['error'].message : String(data['errorMessage'] ?? '')
+    const errorStack = data['error'] instanceof Error ? data['error'].stack ?? '' : ''
 
     // Extract dimensions (for cartesian product tracking)
-    const dimensions = data.dimensions ?? data.config ?? {}
-    const result = data.result ?? {}
-    const metadata = data.metadata ?? {}
+    const dimensions = data['dimensions'] ?? data['config'] ?? {}
+    const result = data['result'] ?? {}
+    const metadata = data['metadata'] ?? {}
 
     this.session.query(`
       INSERT INTO experiments (
@@ -187,17 +188,20 @@ export class ChdbStorage implements TrackingBackend {
   /**
    * Get all experiments
    */
-  async getExperiments(): Promise<Array<{
-    experimentId: string
-    experimentName: string
-    variantCount: number
-    runCount: number
-    firstRun: string
-    lastRun: string
-  }>> {
+  async getExperiments(): Promise<
+    Array<{
+      experimentId: string
+      experimentName: string
+      variantCount: number
+      runCount: number
+      firstRun: string
+      lastRun: string
+    }>
+  > {
     await this.init()
 
-    const result = this.session.query(`
+    const result = this.session.query(
+      `
       SELECT
         experimentId,
         any(experimentName) AS experimentName,
@@ -209,32 +213,39 @@ export class ChdbStorage implements TrackingBackend {
       WHERE experimentId != '' AND eventType = 'variant.complete'
       GROUP BY experimentId
       ORDER BY lastRun DESC
-    `, 'JSONEachRow')
+    `,
+      'JSONEachRow'
+    )
 
     if (!result.trim()) return []
 
-    return result.trim().split('\n')
+    return result
+      .trim()
+      .split('\n')
       .filter(Boolean)
-      .map(line => JSON.parse(line))
+      .map((line) => JSON.parse(line))
   }
 
   /**
    * Get variant performance for an experiment
    */
-  async getVariantStats(experimentId: string): Promise<Array<{
-    variantId: string
-    variantName: string
-    runCount: number
-    successCount: number
-    successRate: number
-    avgDuration: number
-    avgMetric: number
-    minMetric: number
-    maxMetric: number
-  }>> {
+  async getVariantStats(experimentId: string): Promise<
+    Array<{
+      variantId: string
+      variantName: string
+      runCount: number
+      successCount: number
+      successRate: number
+      avgDuration: number
+      avgMetric: number
+      minMetric: number
+      maxMetric: number
+    }>
+  > {
     await this.init()
 
-    const result = this.session.query(`
+    const result = this.session.query(
+      `
       SELECT
         variantId,
         any(variantName) AS variantName,
@@ -250,13 +261,17 @@ export class ChdbStorage implements TrackingBackend {
         AND eventType = 'variant.complete'
       GROUP BY variantId
       ORDER BY avgMetric DESC
-    `, 'JSONEachRow')
+    `,
+      'JSONEachRow'
+    )
 
     if (!result.trim()) return []
 
-    return result.trim().split('\n')
+    return result
+      .trim()
+      .split('\n')
       .filter(Boolean)
-      .map(line => {
+      .map((line) => {
         const row = JSON.parse(line)
         return {
           ...row,
@@ -274,10 +289,13 @@ export class ChdbStorage implements TrackingBackend {
   /**
    * Get the best performing variant for an experiment
    */
-  async getBestVariant(experimentId: string, options: {
-    metric?: 'avgMetric' | 'successRate' | 'avgDuration'
-    minimumRuns?: number
-  } = {}): Promise<{
+  async getBestVariant(
+    experimentId: string,
+    options: {
+      metric?: 'avgMetric' | 'successRate' | 'avgDuration'
+      minimumRuns?: number
+    } = {}
+  ): Promise<{
     variantId: string
     variantName: string
     metricValue: number
@@ -287,13 +305,15 @@ export class ChdbStorage implements TrackingBackend {
     await this.init()
 
     const orderBy = metric === 'avgDuration' ? 'ASC' : 'DESC'
-    const metricExpr = metric === 'successRate'
-      ? 'countIf(success = 1) / count()'
-      : metric === 'avgDuration'
+    const metricExpr =
+      metric === 'successRate'
+        ? 'countIf(success = 1) / count()'
+        : metric === 'avgDuration'
         ? 'avg(durationMs)'
         : 'avg(metricValue)'
 
-    const result = this.session.query(`
+    const result = this.session.query(
+      `
       SELECT
         variantId,
         any(variantName) AS variantName,
@@ -306,7 +326,9 @@ export class ChdbStorage implements TrackingBackend {
       HAVING runCount >= ${minimumRuns}
       ORDER BY metricValue ${orderBy}
       LIMIT 1
-    `, 'JSONEachRow')
+    `,
+      'JSONEachRow'
+    )
 
     if (!result.trim()) return null
 
@@ -324,15 +346,21 @@ export class ChdbStorage implements TrackingBackend {
   /**
    * Get cartesian product analysis - performance by dimension values
    */
-  async getCartesianAnalysis(experimentId: string, dimension: string): Promise<Array<{
-    dimensionValue: string
-    runCount: number
-    avgMetric: number
-    successRate: number
-  }>> {
+  async getCartesianAnalysis(
+    experimentId: string,
+    dimension: string
+  ): Promise<
+    Array<{
+      dimensionValue: string
+      runCount: number
+      avgMetric: number
+      successRate: number
+    }>
+  > {
     await this.init()
 
-    const result = this.session.query(`
+    const result = this.session.query(
+      `
       SELECT
         JSONExtractString(dimensions, '${this.escapeString(dimension)}') AS dimensionValue,
         count() AS runCount,
@@ -344,13 +372,17 @@ export class ChdbStorage implements TrackingBackend {
         AND dimensionValue != ''
       GROUP BY dimensionValue
       ORDER BY avgMetric DESC
-    `, 'JSONEachRow')
+    `,
+      'JSONEachRow'
+    )
 
     if (!result.trim()) return []
 
-    return result.trim().split('\n')
+    return result
+      .trim()
+      .split('\n')
       .filter(Boolean)
-      .map(line => {
+      .map((line) => {
         const row = JSON.parse(line)
         return {
           dimensionValue: row.dimensionValue,
@@ -364,21 +396,27 @@ export class ChdbStorage implements TrackingBackend {
   /**
    * Get multi-dimensional cartesian analysis
    */
-  async getCartesianGrid(experimentId: string, dimensions: string[]): Promise<Array<{
-    dimensions: Record<string, string>
-    runCount: number
-    avgMetric: number
-    successRate: number
-  }>> {
+  async getCartesianGrid(
+    experimentId: string,
+    dimensions: string[]
+  ): Promise<
+    Array<{
+      dimensions: Record<string, string>
+      runCount: number
+      avgMetric: number
+      successRate: number
+    }>
+  > {
     await this.init()
 
-    const dimExtracts = dimensions.map(d =>
-      `JSONExtractString(dimensions, '${this.escapeString(d)}') AS dim_${d}`
-    ).join(', ')
+    const dimExtracts = dimensions
+      .map((d) => `JSONExtractString(dimensions, '${this.escapeString(d)}') AS dim_${d}`)
+      .join(', ')
 
-    const dimGroupBy = dimensions.map(d => `dim_${d}`).join(', ')
+    const dimGroupBy = dimensions.map((d) => `dim_${d}`).join(', ')
 
-    const result = this.session.query(`
+    const result = this.session.query(
+      `
       SELECT
         ${dimExtracts},
         count() AS runCount,
@@ -389,13 +427,17 @@ export class ChdbStorage implements TrackingBackend {
         AND eventType = 'variant.complete'
       GROUP BY ${dimGroupBy}
       ORDER BY avgMetric DESC
-    `, 'JSONEachRow')
+    `,
+      'JSONEachRow'
+    )
 
     if (!result.trim()) return []
 
-    return result.trim().split('\n')
+    return result
+      .trim()
+      .split('\n')
       .filter(Boolean)
-      .map(line => {
+      .map((line) => {
         const row = JSON.parse(line)
         const dims: Record<string, string> = {}
         for (const d of dimensions) {
@@ -413,29 +455,34 @@ export class ChdbStorage implements TrackingBackend {
   /**
    * Get time series of experiment metrics
    */
-  async getTimeSeries(experimentId: string, options: {
-    interval?: 'hour' | 'day' | 'week'
-    variantId?: string
-  } = {}): Promise<Array<{
-    period: string
-    runCount: number
-    avgMetric: number
-    successRate: number
-  }>> {
+  async getTimeSeries(
+    experimentId: string,
+    options: {
+      interval?: 'hour' | 'day' | 'week'
+      variantId?: string
+    } = {}
+  ): Promise<
+    Array<{
+      period: string
+      runCount: number
+      avgMetric: number
+      successRate: number
+    }>
+  > {
     const { interval = 'day', variantId } = options
     await this.init()
 
-    const dateFunc = interval === 'hour'
-      ? 'toStartOfHour(timestamp)'
-      : interval === 'week'
+    const dateFunc =
+      interval === 'hour'
+        ? 'toStartOfHour(timestamp)'
+        : interval === 'week'
         ? 'toStartOfWeek(timestamp)'
         : 'toStartOfDay(timestamp)'
 
-    const variantFilter = variantId
-      ? `AND variantId = '${this.escapeString(variantId)}'`
-      : ''
+    const variantFilter = variantId ? `AND variantId = '${this.escapeString(variantId)}'` : ''
 
-    const result = this.session.query(`
+    const result = this.session.query(
+      `
       SELECT
         ${dateFunc} AS period,
         count() AS runCount,
@@ -447,13 +494,17 @@ export class ChdbStorage implements TrackingBackend {
         ${variantFilter}
       GROUP BY period
       ORDER BY period ASC
-    `, 'JSONEachRow')
+    `,
+      'JSONEachRow'
+    )
 
     if (!result.trim()) return []
 
-    return result.trim().split('\n')
+    return result
+      .trim()
+      .split('\n')
       .filter(Boolean)
-      .map(line => {
+      .map((line) => {
         const row = JSON.parse(line)
         return {
           period: row.period,
@@ -467,11 +518,14 @@ export class ChdbStorage implements TrackingBackend {
   /**
    * Get raw events for an experiment
    */
-  async getEvents(experimentId: string, options: {
-    eventType?: string
-    variantId?: string
-    limit?: number
-  } = {}): Promise<TrackingEvent[]> {
+  async getEvents(
+    experimentId: string,
+    options: {
+      eventType?: string
+      variantId?: string
+      limit?: number
+    } = {}
+  ): Promise<TrackingEvent[]> {
     const { eventType, variantId, limit = 100 } = options
     await this.init()
 
@@ -479,7 +533,8 @@ export class ChdbStorage implements TrackingBackend {
     if (eventType) filters.push(`eventType = '${this.escapeString(eventType)}'`)
     if (variantId) filters.push(`variantId = '${this.escapeString(variantId)}'`)
 
-    const result = this.session.query(`
+    const result = this.session.query(
+      `
       SELECT
         eventType,
         timestamp,
@@ -500,13 +555,17 @@ export class ChdbStorage implements TrackingBackend {
       WHERE ${filters.join(' AND ')}
       ORDER BY timestamp DESC
       LIMIT ${limit}
-    `, 'JSONEachRow')
+    `,
+      'JSONEachRow'
+    )
 
     if (!result.trim()) return []
 
-    return result.trim().split('\n')
+    return result
+      .trim()
+      .split('\n')
       .filter(Boolean)
-      .map(line => {
+      .map((line) => {
         const row = JSON.parse(line)
         return {
           type: row.eventType,
