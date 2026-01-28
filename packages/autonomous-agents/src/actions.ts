@@ -35,12 +35,13 @@ export async function doAction<TResult = unknown>(
   const result = await generateObject({
     model: options?.model || 'sonnet',
     schema: options?.schema || { result: 'The result of the task' },
-    system: options?.system || 'You are a helpful AI assistant. Execute tasks accurately and thoroughly.',
+    system:
+      options?.system || 'You are a helpful AI assistant. Execute tasks accurately and thoroughly.',
     prompt: `Task: ${task}\n\nContext: ${JSON.stringify(context || {})}`,
     temperature: options?.temperature ?? 0.7,
   })
 
-  return (result.object as { result: TResult }).result || result.object as TResult
+  return (result.object as { result: TResult }).result || (result.object as TResult)
 }
 
 /**
@@ -67,7 +68,8 @@ export async function ask<TResult = unknown>(
       answer: 'The answer to the question',
       reasoning: 'Supporting reasoning',
     },
-    system: options?.system || 'You are a knowledgeable AI assistant. Provide clear, accurate answers.',
+    system:
+      options?.system || 'You are a knowledgeable AI assistant. Provide clear, accurate answers.',
     prompt: `Question: ${question}\n\nContext: ${JSON.stringify(context || {})}`,
     temperature: options?.temperature ?? 0.7,
   })
@@ -101,8 +103,12 @@ export async function decide<T extends string>(
       reasoning: 'Reasoning for this decision',
       confidence: 'Confidence level 0-100 (number)',
     } as SimpleSchema,
-    system: settings?.system || 'You are a strategic decision-maker. Evaluate options carefully and provide clear reasoning.',
-    prompt: `Make a decision between these options:\n${options.map((o, i) => `${i + 1}. ${o}`).join('\n')}\n\nContext: ${context || 'No additional context'}`,
+    system:
+      settings?.system ||
+      'You are a strategic decision-maker. Evaluate options carefully and provide clear reasoning.',
+    prompt: `Make a decision between these options:\n${options
+      .map((o, i) => `${i + 1}. ${o}`)
+      .join('\n')}\n\nContext: ${context || 'No additional context'}`,
     temperature: settings?.temperature ?? 0.7,
   })
 
@@ -164,7 +170,11 @@ ${JSON.stringify(request.data, null, 2)}
 Priority: ${request.priority || 'medium'}
 Approver: ${request.approver || 'any authorized approver'}
 
-${request.responseSchema ? `Expected response format:\n${JSON.stringify(request.responseSchema)}` : ''}
+${
+  request.responseSchema
+    ? `Expected response format:\n${JSON.stringify(request.responseSchema)}`
+    : ''
+}
 
 Generate the appropriate UI/content to collect approval or rejection with optional notes.`,
   })
@@ -210,7 +220,7 @@ function getApprovalUISchema(channel: string): SimpleSchema {
     },
   }
 
-  return schemas[channel] || schemas.custom!
+  return schemas[channel] || schemas['custom']!
 }
 
 /**
@@ -231,9 +241,7 @@ function getApprovalUISchema(channel: string): SimpleSchema {
  * })
  * ```
  */
-export async function generate<TResult = unknown>(
-  options: AIGenerateOptions
-): Promise<TResult> {
+export async function generate<TResult = unknown>(options: AIGenerateOptions): Promise<TResult> {
   const result = await generateObject({
     model: options.model || 'sonnet',
     schema: (options.schema || { result: 'Generated content' }) as SimpleSchema,
@@ -263,19 +271,19 @@ export async function generate<TResult = unknown>(
  * )
  * ```
  */
-export async function is(
-  value: unknown,
-  type: string | SimpleSchema
-): Promise<boolean> {
-  const schema = typeof type === 'string'
-    ? { isValid: `Is this value a valid ${type}? (boolean)`, reason: 'Explanation' }
-    : { isValid: 'Does this value match the schema? (boolean)', reason: 'Explanation' }
+export async function is(value: unknown, type: string | SimpleSchema): Promise<boolean> {
+  const schema =
+    typeof type === 'string'
+      ? { isValid: `Is this value a valid ${type}? (boolean)`, reason: 'Explanation' }
+      : { isValid: 'Does this value match the schema? (boolean)', reason: 'Explanation' }
 
   const result = await generateObject({
     model: 'sonnet',
     schema,
     system: 'You are a type validator. Determine if the value matches the expected type or schema.',
-    prompt: `Value: ${JSON.stringify(value)}\n\nExpected type: ${typeof type === 'string' ? type : JSON.stringify(type)}`,
+    prompt: `Value: ${JSON.stringify(value)}\n\nExpected type: ${
+      typeof type === 'string' ? type : JSON.stringify(type)
+    }`,
     temperature: 0,
   })
 
@@ -299,13 +307,7 @@ export async function is(
  * ```
  */
 export async function notify(options: NotificationOptions): Promise<void> {
-  const {
-    message,
-    channel = 'web',
-    recipients = [],
-    priority = 'medium',
-    data = {},
-  } = options
+  const { message, channel = 'web', recipients = [], priority = 'medium', data = {} } = options
 
   // Generate channel-specific notification format
   const notificationSchema = getNotificationSchema(channel)
@@ -357,7 +359,7 @@ function getNotificationSchema(channel: string): SimpleSchema {
     },
   }
 
-  return schemas[channel] || schemas.custom!
+  return schemas[channel] || schemas['custom']!
 }
 
 /**

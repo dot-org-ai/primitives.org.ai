@@ -62,8 +62,8 @@ import type { Goal, GoalsConfig, Priority } from './types.js'
 export function Goals(config: GoalsConfig): GoalsInstance {
   const state = {
     goals: config.goals,
-    strategy: config.strategy,
-    timeHorizon: config.timeHorizon,
+    ...(config.strategy !== undefined && { strategy: config.strategy }),
+    ...(config.timeHorizon !== undefined && { timeHorizon: config.timeHorizon }),
   }
 
   return {
@@ -345,7 +345,7 @@ export function createGoal(config: {
     description: config.description,
     target: config.target,
     priority: config.priority || 'medium',
-    deadline: config.deadline,
+    ...(config.deadline !== undefined && { deadline: config.deadline }),
     status: 'active',
   }
 }
@@ -367,7 +367,7 @@ export function createGoalWithSubgoals(config: {
     target: config.target,
     subgoals: config.subgoals,
     priority: config.priority || 'medium',
-    deadline: config.deadline,
+    ...(config.deadline !== undefined && { deadline: config.deadline }),
     status: 'active',
   }
 }

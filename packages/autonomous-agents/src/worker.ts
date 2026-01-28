@@ -10,16 +10,20 @@
  * @packageDocumentation
  */
 
+// @ts-expect-error - cloudflare:workers is a Cloudflare Workers-specific module
 import { WorkerEntrypoint, RpcTarget } from 'cloudflare:workers'
 
 // ==================== Types ====================
+
+// Type declarations for Cloudflare Workers (when @cloudflare/workers-types is not available)
+declare const DurableObjectNamespace: unknown
 
 /**
  * Environment bindings for the AgentService worker
  */
 export interface Env {
   AI: Ai
-  AGENT_STATE: DurableObjectNamespace
+  AGENT_STATE: typeof DurableObjectNamespace
 }
 
 /**
@@ -251,9 +255,9 @@ export class AgentServiceCore extends RpcTarget {
       description: goal.description,
       priority: goal.priority,
       status: 'pending',
-      deadline: goal.deadline,
-      progress: goal.progress,
-      subgoals: goal.subgoals,
+      ...(goal.deadline !== undefined && { deadline: goal.deadline }),
+      ...(goal.progress !== undefined && { progress: goal.progress }),
+      ...(goal.subgoals !== undefined && { subgoals: goal.subgoals }),
     }
 
     agent.goals.push(newGoal)
@@ -516,7 +520,7 @@ Only output the JSON, nothing else.`,
       action,
       status,
       result,
-      error,
+      ...(error !== undefined && { error }),
       duration: Math.max(1, Date.now() - startTime),
       timestamp: new Date(),
     }
@@ -698,7 +702,7 @@ Only output the JSON, nothing else.`,
       )
     } else if (pattern.type === 'hierarchical') {
       // Lead agent coordinates others
-      const leadId = (pattern.config?.lead as string) || pattern.agents[0]
+      const leadId = (pattern.config?.['lead'] as string) || pattern.agents[0]
       const subordinates = pattern.agents.filter((id) => id !== leadId)
 
       // Lead first
@@ -767,14 +771,14 @@ Only output the JSON, nothing else.`,
     if (!toAgent) throw new Error(`Agent not found: ${toAgentId}`)
 
     // Record delegation in delegator's memory
-    const delegatedTasks = (fromAgent.memory.context.delegatedTasks || []) as unknown[]
+    const delegatedTasks = (fromAgent.memory.context['delegatedTasks'] || []) as unknown[]
     delegatedTasks.push({ to: toAgentId, task, timestamp: new Date() })
-    fromAgent.memory.context.delegatedTasks = delegatedTasks
+    fromAgent.memory.context['delegatedTasks'] = delegatedTasks
 
     // Record received task in delegate's memory
-    const receivedTasks = (toAgent.memory.context.receivedTasks || []) as unknown[]
+    const receivedTasks = (toAgent.memory.context['receivedTasks'] || []) as unknown[]
     receivedTasks.push({ from: fromAgentId, task, timestamp: new Date() })
-    toAgent.memory.context.receivedTasks = receivedTasks
+    toAgent.memory.context['receivedTasks'] = receivedTasks
 
     // Execute the task
     const result = await this.execute(toAgentId, 'think', { about: task })
@@ -802,6 +806,9 @@ Only output the JSON, nothing else.`,
  * ```
  */
 export class AgentService extends WorkerEntrypoint<Env> {
+  // Declare env property for TypeScript (provided by WorkerEntrypoint at runtime)
+  declare env: Env
+
   /**
    * Returns an RpcTarget that provides agent service methods
    */

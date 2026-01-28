@@ -84,11 +84,11 @@ export function Team(config: {
   const team: TeamType = {
     id: generateTeamId(config.name),
     name: config.name,
-    description: config.description,
+    ...(config.description !== undefined && { description: config.description }),
     members: config.members || [],
-    goals: config.goals,
-    context: config.context,
-    channels: config.channels,
+    ...(config.goals !== undefined && { goals: config.goals }),
+    ...(config.context !== undefined && { context: config.context }),
+    ...(config.channels !== undefined && { channels: config.channels }),
   }
 
   return {
@@ -117,7 +117,7 @@ export function Team(config: {
    * Add a member to the team
    */
   function addMember(member: TeamMember): void {
-    const existing = team.members.find(m => m.id === member.id)
+    const existing = team.members.find((m) => m.id === member.id)
     if (existing) {
       throw new Error(`Member with id ${member.id} already exists`)
     }
@@ -128,7 +128,7 @@ export function Team(config: {
    * Remove a member from the team
    */
   function removeMember(memberId: string): boolean {
-    const index = team.members.findIndex(m => m.id === memberId)
+    const index = team.members.findIndex((m) => m.id === memberId)
     if (index === -1) return false
     team.members.splice(index, 1)
     return true
@@ -138,7 +138,7 @@ export function Team(config: {
    * Get a specific member
    */
   function getMember(memberId: string): TeamMember | undefined {
-    return team.members.find(m => m.id === memberId)
+    return team.members.find((m) => m.id === memberId)
   }
 
   /**
@@ -152,33 +152,28 @@ export function Team(config: {
    * Get available members
    */
   function getAvailableMembers(): TeamMember[] {
-    return team.members.filter(
-      m => m.status === 'active' && m.availability === 'available'
-    )
+    return team.members.filter((m) => m.status === 'active' && m.availability === 'available')
   }
 
   /**
    * Get members by role
    */
   function getMembersByRole(roleId: string): TeamMember[] {
-    return team.members.filter(m => m.role.id === roleId)
+    return team.members.filter((m) => m.role.id === roleId)
   }
 
   /**
    * Get members by type
    */
   function getMembersByType(type: 'agent' | 'human'): TeamMember[] {
-    return team.members.filter(m => m.type === type)
+    return team.members.filter((m) => m.type === type)
   }
 
   /**
    * Update a member
    */
-  function updateMember(
-    memberId: string,
-    updates: Partial<Omit<TeamMember, 'id'>>
-  ): void {
-    const member = team.members.find(m => m.id === memberId)
+  function updateMember(memberId: string, updates: Partial<Omit<TeamMember, 'id'>>): void {
+    const member = team.members.find((m) => m.id === memberId)
     if (!member) {
       throw new Error(`Member with id ${memberId} not found`)
     }
@@ -199,7 +194,7 @@ export function Team(config: {
    * Update a goal
    */
   function updateGoal(goalId: string, updates: Partial<Omit<Goal, 'id'>>): void {
-    const goal = team.goals?.find(g => g.id === goalId)
+    const goal = team.goals?.find((g) => g.id === goalId)
     if (!goal) {
       throw new Error(`Goal with id ${goalId} not found`)
     }
@@ -211,7 +206,7 @@ export function Team(config: {
    */
   function removeGoal(goalId: string): boolean {
     if (!team.goals) return false
-    const index = team.goals.findIndex(g => g.id === goalId)
+    const index = team.goals.findIndex((g) => g.id === goalId)
     if (index === -1) return false
     team.goals.splice(index, 1)
     return true
@@ -239,7 +234,7 @@ export function Team(config: {
    */
   function removeChannel(channelId: string): boolean {
     if (!team.channels) return false
-    const index = team.channels.findIndex(c => c.id === channelId)
+    const index = team.channels.findIndex((c) => c.id === channelId)
     if (index === -1) return false
     team.channels.splice(index, 1)
     return true
@@ -250,7 +245,7 @@ export function Team(config: {
    */
   async function broadcast(message: string, channelType?: string): Promise<void> {
     const channels = channelType
-      ? team.channels?.filter(c => c.type === channelType)
+      ? team.channels?.filter((c) => c.type === channelType)
       : team.channels
 
     if (!channels || channels.length === 0) {
@@ -260,21 +255,15 @@ export function Team(config: {
 
     // In a real implementation, this would send via the specified channels
     for (const channel of channels) {
-      console.log(
-        `[Team: ${team.name}] [${channel.type}:${channel.id}] ${message}`
-      )
+      console.log(`[Team: ${team.name}] [${channel.type}:${channel.id}] ${message}`)
     }
   }
 
   /**
    * Send message to specific team members
    */
-  async function sendTo(
-    memberIds: string[],
-    message: string,
-    channelType?: string
-  ): Promise<void> {
-    const members = team.members.filter(m => memberIds.includes(m.id))
+  async function sendTo(memberIds: string[], message: string, channelType?: string): Promise<void> {
+    const members = team.members.filter((m) => memberIds.includes(m.id))
 
     if (members.length === 0) {
       throw new Error('No valid members found')
@@ -400,9 +389,9 @@ export function calculateTeamCapacity(team: TeamInstance): {
   offline: number
 } {
   const members = team.getMembers()
-  const available = members.filter(m => m.availability === 'available').length
-  const busy = members.filter(m => m.availability === 'busy').length
-  const offline = members.filter(m => m.availability === 'offline').length
+  const available = members.filter((m) => m.availability === 'available').length
+  const busy = members.filter((m) => m.availability === 'busy').length
+  const offline = members.filter((m) => m.availability === 'offline').length
 
   return {
     total: members.length,
@@ -417,8 +406,8 @@ export function calculateTeamCapacity(team: TeamInstance): {
  */
 export function getTeamSkills(team: TeamInstance): string[] {
   const skills = new Set<string>()
-  team.getMembers().forEach(member => {
-    member.role.skills.forEach(skill => skills.add(skill))
+  team.getMembers().forEach((member) => {
+    member.role.skills.forEach((skill) => skills.add(skill))
   })
   return Array.from(skills)
 }
@@ -427,12 +416,14 @@ export function getTeamSkills(team: TeamInstance): string[] {
  * Check if team has a specific skill
  */
 export function teamHasSkill(team: TeamInstance, skill: string): boolean {
-  return team.getMembers().some(member =>
-    member.role.skills.some(s =>
-      s.toLowerCase() === skill.toLowerCase() ||
-      s.toLowerCase().includes(skill.toLowerCase())
+  return team
+    .getMembers()
+    .some((member) =>
+      member.role.skills.some(
+        (s) =>
+          s.toLowerCase() === skill.toLowerCase() || s.toLowerCase().includes(skill.toLowerCase())
+      )
     )
-  )
 }
 
 /**
@@ -447,11 +438,9 @@ export function findBestMemberForTask(
   if (availableMembers.length === 0) return null
 
   // Score each member based on skill matches
-  const scored = availableMembers.map(member => {
-    const matchingSkills = requiredSkills.filter(skill =>
-      member.role.skills.some(s =>
-        s.toLowerCase().includes(skill.toLowerCase())
-      )
+  const scored = availableMembers.map((member) => {
+    const matchingSkills = requiredSkills.filter((skill) =>
+      member.role.skills.some((s) => s.toLowerCase().includes(skill.toLowerCase()))
     )
     return {
       member,

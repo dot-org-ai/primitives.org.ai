@@ -64,9 +64,9 @@ export function Role(config: {
     name: config.name,
     description: config.description,
     skills: config.skills,
-    permissions: config.permissions,
-    tools: config.tools,
-    outputs: config.outputs,
+    ...(config.permissions !== undefined && { permissions: config.permissions }),
+    ...(config.tools !== undefined && { tools: config.tools }),
+    ...(config.outputs !== undefined && { outputs: config.outputs }),
   }
 }
 
@@ -79,7 +79,8 @@ export const Roles = {
    */
   ProductManager: Role({
     name: 'Product Manager',
-    description: 'Owns product vision, strategy, and roadmap. Prioritizes features based on user needs and business goals.',
+    description:
+      'Owns product vision, strategy, and roadmap. Prioritizes features based on user needs and business goals.',
     skills: [
       'product strategy',
       'user research',
@@ -89,12 +90,7 @@ export const Roles = {
       'data analysis',
       'market research',
     ],
-    permissions: [
-      'create:feature',
-      'update:roadmap',
-      'approve:requirements',
-      'view:analytics',
-    ],
+    permissions: ['create:feature', 'update:roadmap', 'approve:requirements', 'view:analytics'],
     outputs: [
       'product briefs',
       'roadmaps',
@@ -109,7 +105,8 @@ export const Roles = {
    */
   SoftwareEngineer: Role({
     name: 'Software Engineer',
-    description: 'Designs, develops, tests, and maintains software systems following best practices.',
+    description:
+      'Designs, develops, tests, and maintains software systems following best practices.',
     skills: [
       'software design',
       'programming',
@@ -119,19 +116,8 @@ export const Roles = {
       'system architecture',
       'version control',
     ],
-    permissions: [
-      'read:code',
-      'write:code',
-      'review:pr',
-      'deploy:staging',
-    ],
-    outputs: [
-      'code',
-      'tests',
-      'documentation',
-      'technical designs',
-      'pull requests',
-    ],
+    permissions: ['read:code', 'write:code', 'review:pr', 'deploy:staging'],
+    outputs: ['code', 'tests', 'documentation', 'technical designs', 'pull requests'],
   }),
 
   /**
@@ -139,7 +125,8 @@ export const Roles = {
    */
   Designer: Role({
     name: 'Designer',
-    description: 'Creates user interfaces, experiences, and visual designs that are intuitive and engaging.',
+    description:
+      'Creates user interfaces, experiences, and visual designs that are intuitive and engaging.',
     skills: [
       'UI design',
       'UX design',
@@ -149,18 +136,8 @@ export const Roles = {
       'accessibility',
       'design systems',
     ],
-    permissions: [
-      'create:design',
-      'update:design-system',
-      'approve:mockups',
-    ],
-    outputs: [
-      'mockups',
-      'prototypes',
-      'design systems',
-      'style guides',
-      'user flows',
-    ],
+    permissions: ['create:design', 'update:design-system', 'approve:mockups'],
+    outputs: ['mockups', 'prototypes', 'design systems', 'style guides', 'user flows'],
   }),
 
   /**
@@ -177,18 +154,8 @@ export const Roles = {
       'A/B testing',
       'reporting',
     ],
-    permissions: [
-      'read:analytics',
-      'query:database',
-      'create:report',
-    ],
-    outputs: [
-      'reports',
-      'dashboards',
-      'insights',
-      'recommendations',
-      'metrics',
-    ],
+    permissions: ['read:analytics', 'query:database', 'create:report'],
+    outputs: ['reports', 'dashboards', 'insights', 'recommendations', 'metrics'],
   }),
 
   /**
@@ -197,26 +164,9 @@ export const Roles = {
   ContentWriter: Role({
     name: 'Content Writer',
     description: 'Creates compelling written content for various channels and audiences.',
-    skills: [
-      'writing',
-      'editing',
-      'SEO',
-      'content strategy',
-      'storytelling',
-      'brand voice',
-    ],
-    permissions: [
-      'create:content',
-      'publish:blog',
-      'update:docs',
-    ],
-    outputs: [
-      'blog posts',
-      'documentation',
-      'marketing copy',
-      'social media content',
-      'emails',
-    ],
+    skills: ['writing', 'editing', 'SEO', 'content strategy', 'storytelling', 'brand voice'],
+    permissions: ['create:content', 'publish:blog', 'update:docs'],
+    outputs: ['blog posts', 'documentation', 'marketing copy', 'social media content', 'emails'],
   }),
 
   /**
@@ -224,7 +174,8 @@ export const Roles = {
    */
   CustomerSupport: Role({
     name: 'Customer Support',
-    description: 'Provides help and assistance to customers, resolving issues and answering questions.',
+    description:
+      'Provides help and assistance to customers, resolving issues and answering questions.',
     skills: [
       'customer service',
       'problem solving',
@@ -233,17 +184,8 @@ export const Roles = {
       'product knowledge',
       'troubleshooting',
     ],
-    permissions: [
-      'read:tickets',
-      'update:ticket',
-      'access:customer-data',
-    ],
-    outputs: [
-      'ticket responses',
-      'knowledge base articles',
-      'customer feedback',
-      'issue reports',
-    ],
+    permissions: ['read:tickets', 'update:ticket', 'access:customer-data'],
+    outputs: ['ticket responses', 'knowledge base articles', 'customer feedback', 'issue reports'],
   }),
 
   /**
@@ -260,19 +202,8 @@ export const Roles = {
       'resource allocation',
       'agile methodologies',
     ],
-    permissions: [
-      'create:project',
-      'assign:task',
-      'update:timeline',
-      'view:resources',
-    ],
-    outputs: [
-      'project plans',
-      'status reports',
-      'timelines',
-      'risk assessments',
-      'retrospectives',
-    ],
+    permissions: ['create:project', 'assign:task', 'update:timeline', 'view:resources'],
+    outputs: ['project plans', 'status reports', 'timelines', 'risk assessments', 'retrospectives'],
   }),
 
   /**
@@ -280,7 +211,8 @@ export const Roles = {
    */
   QAEngineer: Role({
     name: 'QA Engineer',
-    description: 'Ensures software quality through testing, automation, and quality assurance processes.',
+    description:
+      'Ensures software quality through testing, automation, and quality assurance processes.',
     skills: [
       'manual testing',
       'test automation',
@@ -289,18 +221,8 @@ export const Roles = {
       'quality assurance',
       'regression testing',
     ],
-    permissions: [
-      'run:tests',
-      'create:bug-report',
-      'approve:release',
-    ],
-    outputs: [
-      'test plans',
-      'test cases',
-      'bug reports',
-      'automation scripts',
-      'quality reports',
-    ],
+    permissions: ['run:tests', 'create:bug-report', 'approve:release'],
+    outputs: ['test plans', 'test cases', 'bug reports', 'automation scripts', 'quality reports'],
   }),
 
   /**
@@ -317,12 +239,7 @@ export const Roles = {
       'brand management',
       'content marketing',
     ],
-    permissions: [
-      'create:campaign',
-      'approve:content',
-      'view:analytics',
-      'manage:budget',
-    ],
+    permissions: ['create:campaign', 'approve:content', 'view:analytics', 'manage:budget'],
     outputs: [
       'marketing plans',
       'campaigns',
@@ -373,9 +290,8 @@ export function hasPermission(role: RoleType, permission: string): boolean {
  * Check if a role has a specific skill
  */
 export function hasSkill(role: RoleType, skill: string): boolean {
-  return role.skills.some(s =>
-    s.toLowerCase() === skill.toLowerCase() ||
-    s.toLowerCase().includes(skill.toLowerCase())
+  return role.skills.some(
+    (s) => s.toLowerCase() === skill.toLowerCase() || s.toLowerCase().includes(skill.toLowerCase())
   )
 }
 
@@ -403,11 +319,11 @@ export function mergeRoles(name: string, ...roles: RoleType[]): RoleType {
   const allOutputs = new Set<string>()
   const descriptions: string[] = []
 
-  roles.forEach(role => {
-    role.skills.forEach(skill => allSkills.add(skill))
-    role.permissions?.forEach(permission => allPermissions.add(permission))
-    role.tools?.forEach(tool => allTools.push(tool))
-    role.outputs?.forEach(output => allOutputs.add(output))
+  roles.forEach((role) => {
+    role.skills.forEach((skill) => allSkills.add(skill))
+    role.permissions?.forEach((permission) => allPermissions.add(permission))
+    role.tools?.forEach((tool) => allTools.push(tool))
+    role.outputs?.forEach((output) => allOutputs.add(output))
     descriptions.push(role.description)
   })
 

@@ -187,7 +187,7 @@ export function Agent(config: AgentConfig): Agent {
           title: `Task: ${task}`,
           description: response.reasoning,
           data: response.result,
-          approver: config.supervisor,
+          ...(config.supervisor !== undefined && { approver: config.supervisor }),
           channel: 'web',
         })
 

@@ -17,7 +17,7 @@
  * @packageDocumentation
  */
 
-import { RPC } from 'rpc.do'
+import { RPC, http } from 'rpc.do'
 
 import type {
   AgentConfig,
@@ -137,7 +137,7 @@ const DEFAULT_URL = 'https://autonomous-agents.workers.dev'
  * ```
  */
 export function createAgentClient(url: string = DEFAULT_URL, options?: AgentClientOptions) {
-  return RPC<AgentServiceAPI>(url, options)
+  return RPC<AgentServiceAPI>(http(url, options?.token))
 }
 
 /**

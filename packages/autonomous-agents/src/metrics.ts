@@ -48,11 +48,11 @@ export function kpi(config: {
   const state: KPI = {
     id: generateKPIId(config.name),
     name: config.name,
-    description: config.description,
+    ...(config.description !== undefined && { description: config.description }),
     value: config.value,
     target: config.target,
     unit: config.unit,
-    frequency: config.frequency,
+    ...(config.frequency !== undefined && { frequency: config.frequency }),
     history: [],
   }
 
@@ -327,10 +327,10 @@ export function okr(config: {
   const state: OKR = {
     id: generateOKRId(config.objective),
     objective: config.objective,
-    description: config.description,
+    ...(config.description !== undefined && { description: config.description }),
     keyResults: config.keyResults,
-    period: config.period,
-    owner: config.owner,
+    ...(config.period !== undefined && { period: config.period }),
+    ...(config.owner !== undefined && { owner: config.owner }),
     status: 'active',
   }
 
@@ -574,7 +574,7 @@ export function createKeyResult(config: {
     description: config.description,
     current: config.current,
     target: config.target,
-    unit: config.unit,
+    ...(config.unit !== undefined && { unit: config.unit }),
     progress: calculateKeyResultProgress({
       id: config.id,
       description: config.description,
