@@ -89,7 +89,7 @@ export function getStepsByAutomationLevel(
   process: ProcessDefinition,
   level: ProcessStep['automationLevel']
 ): ProcessStep[] {
-  return process.steps?.filter(step => step.automationLevel === level) || []
+  return process.steps?.filter((step) => step.automationLevel === level) || []
 }
 
 /**
@@ -160,7 +160,7 @@ export function calculateAutomationPercentage(process: ProcessDefinition): numbe
   if (!process.steps || process.steps.length === 0) return 0
 
   const automatedSteps = process.steps.filter(
-    step => step.automationLevel === 'automated' || step.automationLevel === 'semi-automated'
+    (step) => step.automationLevel === 'automated' || step.automationLevel === 'semi-automated'
   ).length
 
   return (automatedSteps / process.steps.length) * 100
@@ -170,7 +170,7 @@ export function calculateAutomationPercentage(process: ProcessDefinition): numbe
  * Get metric by name
  */
 export function getMetric(process: ProcessDefinition, name: string): ProcessMetric | undefined {
-  return process.metrics?.find(m => m.name === name)
+  return process.metrics?.find((m) => m.name === name)
 }
 
 /**
@@ -198,14 +198,13 @@ export function updateMetric(
   metricName: string,
   currentValue: number
 ): ProcessDefinition {
-  const metrics = process.metrics?.map(m =>
+  const metrics = process.metrics?.map((m) =>
     m.name === metricName ? { ...m, current: currentValue } : m
   )
 
-  return {
-    ...process,
-    metrics,
-  }
+  const result: ProcessDefinition = { ...process }
+  if (metrics !== undefined) result.metrics = metrics
+  return result
 }
 
 /**
@@ -222,10 +221,10 @@ export function addStep(process: ProcessDefinition, step: ProcessStep): ProcessD
  * Remove step from process
  */
 export function removeStep(process: ProcessDefinition, stepOrder: number): ProcessDefinition {
-  return {
-    ...process,
-    steps: process.steps?.filter(s => s.order !== stepOrder),
-  }
+  const steps = process.steps?.filter((s) => s.order !== stepOrder)
+  const result: ProcessDefinition = { ...process }
+  if (steps !== undefined) result.steps = steps
+  return result
 }
 
 /**

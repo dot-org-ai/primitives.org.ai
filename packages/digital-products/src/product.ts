@@ -24,9 +24,9 @@ export function Product(config: Omit<DigitalProduct, 'type'>): DigitalProduct {
     name: config.name,
     description: config.description,
     version: config.version,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return product

@@ -23,6 +23,88 @@ import type {
   TransportHandler,
 } from '../transports.js'
 import { registerTransport } from '../transports.js'
+import type { Logger } from '../logger.js'
+import { noopLogger } from '../logger.js'
+import { generateRequestId } from '../utils/id.js'
+
+// =============================================================================
+// Crypto Functions for Signature Verification
+// =============================================================================
+
+/**
+ * Compute HMAC-SHA256 and return the result as a hex string.
+ * Uses the Web Crypto API which works in both Node.js and Cloudflare Workers.
+ *
+ * @param data - The data to sign
+ * @param secret - The signing secret
+ * @returns A hex-encoded HMAC-SHA256 hash
+ */
+export async function computeHmacSha256Hex(data: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder()
+
+  // Import the secret as a crypto key
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+
+  // Sign the data
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data))
+
+  // Convert to hex string
+  return Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/**
+ * Verify a Slack request signature using HMAC-SHA256.
+ * Uses the Web Crypto API which works in both Node.js and Cloudflare Workers.
+ *
+ * @param signature - The x-slack-signature header value (v0=...)
+ * @param timestamp - The x-slack-request-timestamp header value
+ * @param body - The raw request body
+ * @param signingSecret - The Slack signing secret
+ * @returns true if the signature is valid, false otherwise
+ */
+export async function verifySlackSignature(
+  signature: string,
+  timestamp: string,
+  body: string,
+  signingSecret: string
+): Promise<boolean> {
+  // Slack signatures have the format "v0=<hex>"
+  if (!signature.startsWith('v0=')) {
+    return false
+  }
+
+  // Compute the expected signature
+  const baseString = `v0:${timestamp}:${body}`
+  const expectedHmac = await computeHmacSha256Hex(baseString, signingSecret)
+  const expectedSignature = `v0=${expectedHmac}`
+
+  // Constant-time comparison to prevent timing attacks
+  return secureCompare(signature, expectedSignature)
+}
+
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Returns true if both strings are equal, false otherwise.
+ */
+function secureCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+
+  let result = 0
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return result === 0
+}
 
 // =============================================================================
 // Slack API Types
@@ -43,6 +125,8 @@ export interface SlackTransportConfig extends TransportConfig {
   defaultChannel?: string
   /** API base URL (for testing/enterprise) */
   apiUrl?: string
+  /** Optional logger for error logging */
+  logger?: Logger
 }
 
 /**
@@ -348,6 +432,7 @@ export interface WebhookHandlerResult {
 export class SlackTransport {
   private config: SlackTransportConfig
   private apiBaseUrl: string
+  private logger: Logger
 
   constructor(config: Omit<SlackTransportConfig, 'transport'>) {
     this.config = {
@@ -355,6 +440,7 @@ export class SlackTransport {
       transport: 'slack',
     }
     this.apiBaseUrl = config.apiUrl || 'https://slack.com/api'
+    this.logger = config.logger ?? noopLogger
   }
 
   // ===========================================================================
@@ -541,9 +627,10 @@ export class SlackTransport {
    * @param request - Webhook request with headers and body
    */
   async handleWebhook(request: SlackWebhookRequest): Promise<WebhookHandlerResult> {
-    // Verify signature
+    // Verify signature using async Web Crypto API
     try {
-      if (!this.verifySignature(request)) {
+      const isValid = await this.verifySignatureAsync(request)
+      if (!isValid) {
         return {
           success: false,
           error: 'Invalid request signature',
@@ -652,8 +739,12 @@ export class SlackTransport {
       }
 
       return response.user?.id || null
-    } catch {
-      // User not found or other API error
+    } catch (error) {
+      // User not found or other API error - log for debugging
+      this.logger.error('lookupUserByEmail failed', error instanceof Error ? error : undefined, {
+        email,
+        operation: 'lookupUserByEmail',
+      })
       return null
     }
   }
@@ -989,9 +1080,10 @@ export class SlackTransport {
   }
 
   /**
-   * Verify Slack request signature
+   * Verify Slack request signature using Web Crypto API.
+   * Works in both Node.js and Cloudflare Workers environments.
    */
-  private verifySignature(request: SlackWebhookRequest): boolean {
+  private async verifySignatureAsync(request: SlackWebhookRequest): Promise<boolean> {
     const signature = request.headers['x-slack-signature']
     const timestamp = request.headers['x-slack-request-timestamp']
 
@@ -1011,49 +1103,8 @@ export class SlackTransport {
       request.rawBody ||
       (typeof request.body === 'string' ? request.body : JSON.stringify(request.body))
 
-    // Compute expected signature
-    const baseString = `v0:${timestamp}:${rawBody}`
-    const expectedSignature = `v0=${this.computeHmacSha256(baseString)}`
-
-    // Constant-time comparison
-    return this.secureCompare(signature, expectedSignature)
-  }
-
-  /**
-   * Compute HMAC-SHA256 synchronously
-   * Uses Node.js crypto module when available
-   */
-  private computeHmacSha256(data: string): string {
-    // Use globalThis.require to avoid TypeScript errors without @types/node
-    // This is safe because this code only runs in Node.js environments
-    const requireFn = (globalThis as unknown as { require?: (id: string) => unknown }).require
-    if (!requireFn) {
-      throw new Error('crypto module requires Node.js environment')
-    }
-    const crypto = requireFn('crypto') as {
-      createHmac: (
-        algorithm: string,
-        key: string
-      ) => {
-        update: (data: string) => { digest: (encoding: string) => string }
-      }
-    }
-    return crypto.createHmac('sha256', this.config.signingSecret).update(data).digest('hex')
-  }
-
-  /**
-   * Constant-time string comparison to prevent timing attacks
-   */
-  private secureCompare(a: string, b: string): boolean {
-    if (a.length !== b.length) {
-      return false
-    }
-
-    let result = 0
-    for (let i = 0; i < a.length; i++) {
-      result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-    }
-    return result === 0
+    // Use the exported async signature verification function
+    return verifySlackSignature(signature, timestamp, rawBody, this.config.signingSecret)
   }
 
   /**
@@ -1071,7 +1122,13 @@ export class SlackTransport {
         return JSON.parse(request.body) as SlackInteractionPayload
       }
       return request.body as SlackInteractionPayload
-    } catch {
+    } catch (error) {
+      // Parse error - log for debugging
+      this.logger.error('parseWebhookPayload failed', error instanceof Error ? error : undefined, {
+        operation: 'parseWebhookPayload',
+        bodyType: typeof request.body,
+        bodyPreview: typeof request.body === 'string' ? request.body.slice(0, 100) : '[object]',
+      })
       return null
     }
   }
@@ -1083,6 +1140,11 @@ export class SlackTransport {
     try {
       return JSON.parse(value)
     } catch {
+      // Non-JSON value - this is expected for string values, log at debug level
+      this.logger.debug('parseActionValue: value is not JSON, returning as string', {
+        operation: 'parseActionValue',
+        valuePreview: value.slice(0, 50),
+      })
       return value
     }
   }
@@ -1091,7 +1153,27 @@ export class SlackTransport {
    * Generate unique request ID
    */
   private generateRequestId(): string {
-    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    return generateRequestId('req')
+  }
+
+  // ===========================================================================
+  // Testing Utilities
+  // ===========================================================================
+
+  /**
+   * Expose parseWebhookPayload for testing
+   * @internal
+   */
+  parseWebhookPayloadForTesting(request: SlackWebhookRequest): SlackInteractionPayload | null {
+    return this.parseWebhookPayload(request)
+  }
+
+  /**
+   * Expose parseActionValue for testing
+   * @internal
+   */
+  parseActionValueForTesting(value: string): unknown {
+    return this.parseActionValue(value)
   }
 }
 

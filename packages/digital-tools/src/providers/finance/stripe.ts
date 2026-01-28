@@ -162,7 +162,7 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
     const response = await fetch(url.toString(), {
       method,
       headers,
-      body: requestBody,
+      ...(requestBody !== undefined && { body: requestBody }),
     })
 
     if (!response.ok) {

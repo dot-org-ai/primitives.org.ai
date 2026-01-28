@@ -88,20 +88,23 @@ export function getActionsByType(
   workflow: WorkflowDefinition,
   type: WorkflowAction['type']
 ): WorkflowAction[] {
-  return workflow.actions?.filter(action => action.type === type) || []
+  return workflow.actions?.filter((action) => action.type === type) || []
 }
 
 /**
  * Get conditional actions
  */
 export function getConditionalActions(workflow: WorkflowDefinition): WorkflowAction[] {
-  return workflow.actions?.filter(action => action.condition) || []
+  return workflow.actions?.filter((action) => action.condition) || []
 }
 
 /**
  * Add action to workflow
  */
-export function addAction(workflow: WorkflowDefinition, action: WorkflowAction): WorkflowDefinition {
+export function addAction(
+  workflow: WorkflowDefinition,
+  action: WorkflowAction
+): WorkflowDefinition {
   return {
     ...workflow,
     actions: [...(workflow.actions || []), action],
@@ -112,10 +115,10 @@ export function addAction(workflow: WorkflowDefinition, action: WorkflowAction):
  * Remove action from workflow
  */
 export function removeAction(workflow: WorkflowDefinition, order: number): WorkflowDefinition {
-  return {
-    ...workflow,
-    actions: workflow.actions?.filter(a => a.order !== order),
-  }
+  const actions = workflow.actions?.filter((a) => a.order !== order)
+  const result: WorkflowDefinition = { ...workflow }
+  if (actions !== undefined) result.actions = actions
+  return result
 }
 
 /**
@@ -126,14 +129,13 @@ export function updateAction(
   order: number,
   updates: Partial<WorkflowAction>
 ): WorkflowDefinition {
-  const actions = workflow.actions?.map(action =>
+  const actions = workflow.actions?.map((action) =>
     action.order === order ? { ...action, ...updates } : action
   )
 
-  return {
-    ...workflow,
-    actions,
-  }
+  const result: WorkflowDefinition = { ...workflow }
+  if (actions !== undefined) result.actions = actions
+  return result
 }
 
 /**
@@ -161,7 +163,9 @@ export function isWebhookTrigger(trigger: WorkflowTrigger): boolean {
  * Parse wait duration to milliseconds
  */
 export function parseWaitDuration(duration: string): number {
-  const match = duration.match(/(\d+)\s*(ms|millisecond|milliseconds|s|second|seconds|m|minute|minutes|h|hour|hours|d|day|days)/)
+  const match = duration.match(
+    /(\d+)\s*(ms|millisecond|milliseconds|s|second|seconds|m|minute|minutes|h|hour|hours|d|day|days)/
+  )
   if (!match) return 0
 
   const value = parseInt(match[1] || '0', 10)
@@ -234,7 +238,10 @@ function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
 /**
  * Validate workflow definition
  */
-export function validateWorkflow(workflow: WorkflowDefinition): { valid: boolean; errors: string[] } {
+export function validateWorkflow(workflow: WorkflowDefinition): {
+  valid: boolean
+  errors: string[]
+} {
   const errors: string[] = []
 
   if (!workflow.name) {
@@ -267,7 +274,7 @@ export function validateWorkflow(workflow: WorkflowDefinition): { valid: boolean
       orders.add(action.order)
 
       // Validate action-specific requirements
-      if (action.type === 'wait' && !action.params?.duration) {
+      if (action.type === 'wait' && !action.params?.['duration']) {
         errors.push(`Wait action at order ${action.order} must specify duration`)
       }
     }

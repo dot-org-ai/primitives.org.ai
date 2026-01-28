@@ -94,9 +94,10 @@ export class ToolServiceCore extends RpcTarget {
           return { rows: [], headers: [], rowCount: 0 }
         }
 
+        const firstLine = lines[0]!
         const headers = hasHeaders
-          ? lines[0].split(delimiter).map((h) => h.trim())
-          : lines[0].split(delimiter).map((_, i) => `column${i + 1}`)
+          ? firstLine.split(delimiter).map((h) => h.trim())
+          : firstLine.split(delimiter).map((_, i) => `column${i + 1}`)
 
         const dataLines = hasHeaders ? lines.slice(1) : lines
 
@@ -320,8 +321,8 @@ export class ToolServiceCore extends RpcTarget {
       name: mcpTool.name,
       description: mcpTool.description,
       category: options?.category || 'integration',
-      subcategory: options?.subcategory,
-      tags: options?.tags,
+      ...(options?.subcategory !== undefined && { subcategory: options.subcategory }),
+      ...(options?.tags !== undefined && { tags: options.tags }),
       parameters,
       handler,
     }

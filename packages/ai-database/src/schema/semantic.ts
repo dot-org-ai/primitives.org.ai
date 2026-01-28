@@ -20,6 +20,62 @@ import {
 } from './union-fallback.js'
 import { findBestMatchAcrossTypes } from './search-utils.js'
 
+// =============================================================================
+// Text Search Fallback
+// =============================================================================
+
+/**
+ * Result from text search fallback with type information
+ */
+interface TextSearchResult {
+  $id: string
+  $type: string
+  [key: string]: unknown
+}
+
+/**
+ * Perform basic text search across multiple types as fallback when semantic search unavailable
+ *
+ * This provides graceful degradation for providers that don't support semantic search
+ * (e.g., RDB, DigitalObjectsProvider). It uses the provider's basic search() method
+ * which typically performs case-insensitive substring matching.
+ *
+ * @param provider - The database provider
+ * @param types - Types to search across
+ * @param query - The search query
+ * @param limit - Maximum results to return
+ * @returns Array of matched entities with $id and $type
+ */
+async function textSearchFallback(
+  provider: DBProvider,
+  types: string[],
+  query: string,
+  limit: number
+): Promise<TextSearchResult[]> {
+  const results: TextSearchResult[] = []
+
+  for (const type of types) {
+    if (results.length >= limit) break
+
+    try {
+      const searchResults = await provider.search(type, query, { limit: limit - results.length })
+      for (const result of searchResults) {
+        if (results.length >= limit) break
+        results.push({
+          ...result,
+          $id: (result['$id'] ?? result['id']) as string,
+          $type: type,
+        })
+      }
+    } catch {
+      // Ignore search errors for individual types, continue with others
+      continue
+    }
+  }
+
+  return results
+}
+
 /**
  * Safely extract the fuzzy threshold from entity schema
  *
@@ -32,7 +88,7 @@ import { findBestMatchAcrossTypes } from './search-utils.js'
 export function getFuzzyThreshold(entity: ParsedEntity): number {
   const schema = entity.schema as EntitySchema | undefined
   if (schema && '$fuzzyThreshold' in schema) {
-    const threshold = schema.$fuzzyThreshold
+    const threshold = schema['$fuzzyThreshold']
     if (typeof threshold === 'number') {
       return threshold
     }
@@ -102,12 +158,12 @@ export async function resolveBackwardFuzzy(
       const typesToSearch =
         field.unionTypes && field.unionTypes.length > 0 ? field.unionTypes : [field.relatedType!]
 
+      // Filter to only types that exist in the schema
+      const validTypes = typesToSearch.filter((t) => schema.entities.has(t))
+      if (validTypes.length === 0) continue
+
       // Check if provider supports semantic search
       if (hasSemanticSearch(provider)) {
-        // Filter to only types that exist in the schema
-        const validTypes = typesToSearch.filter((t) => schema.entities.has(t))
-        if (validTypes.length === 0) continue
-
         // Create a searcher from the provider
         const searcher = createProviderSearcher(provider)
 
@@ -147,6 +203,30 @@ export async function resolveBackwardFuzzy(
               resolved[`${fieldName}$fallbackUsed`] = true
               resolved[`${fieldName}$searchOrder`] = searchResult.searchOrder
             }
+          }
+        }
+      } else {
+        // Fallback to basic text search when semantic search is unavailable
+        // This provides graceful degradation for providers like RDB
+        const textSearchResults = await textSearchFallback(
+          provider,
+          validTypes,
+          searchQuery,
+          field.isArray ? 10 : 1
+        )
+
+        if (field.isArray) {
+          if (textSearchResults.length > 0) {
+            resolved[fieldName] = textSearchResults.map((r) => r.$id)
+            resolved[`${fieldName}$searchedTypes`] = validTypes
+            resolved[`${fieldName}$textFallback`] = true
+          }
+        } else {
+          if (textSearchResults.length > 0) {
+            const bestMatch = textSearchResults[0]!
+            resolved[fieldName] = bestMatch.$id
+            resolved[`${fieldName}$matchedType`] = bestMatch.$type
+            resolved[`${fieldName}$textFallback`] = true
           }
         }
       }
@@ -220,23 +300,37 @@ export async function resolveForwardFuzzy(
         if (field.isArray && Array.isArray(resolved[fieldName])) {
           const ids = resolved[fieldName] as string[]
           for (const targetId of ids) {
-            pendingRelations.push({
+            const relation: {
+              fieldName: string
+              targetType: string
+              targetId: string
+              similarity?: number
+              matchedType?: string
+            } = {
               fieldName,
               targetType: matchedType,
               targetId,
-              similarity,
               matchedType,
-            })
+            }
+            if (similarity !== undefined) relation.similarity = similarity
+            pendingRelations.push(relation)
           }
         } else if (typeof resolved[fieldName] === 'string') {
           // Single fuzzy field with value already set - add to pendingRelations for edge creation
-          pendingRelations.push({
+          const relation: {
+            fieldName: string
+            targetType: string
+            targetId: string
+            similarity?: number
+            matchedType?: string
+          } = {
             fieldName,
             targetType: matchedType,
             targetId: resolved[fieldName] as string,
-            similarity,
             matchedType,
-          })
+          }
+          if (similarity !== undefined) relation.similarity = similarity
+          pendingRelations.push(relation)
         }
         continue
       }
@@ -295,6 +389,28 @@ export async function resolveForwardFuzzy(
               })
               matched = true
             }
+          } else {
+            // Fallback to text search when semantic search unavailable
+            const textResults = await textSearchFallback(provider, typesToSearch, hintStr, 10)
+            // Filter out already used IDs
+            const availableResults = textResults.filter((r) => !usedEntityIds.has(r.$id))
+            if (availableResults.length > 0) {
+              const bestMatch = availableResults[0]!
+              matchedType = bestMatch.$type
+              resultIds.push(bestMatch.$id)
+              usedEntityIds.add(bestMatch.$id)
+              pendingRelations.push({
+                fieldName,
+                targetType: matchedType,
+                targetId: bestMatch.$id,
+                matchedType,
+              })
+              await provider.update(matchedType, bestMatch.$id, {
+                $generated: false,
+                $matchedType: matchedType,
+              })
+              matched = true
+            }
           }
 
           // Generate if no match found (or all matches were already used)
@@ -324,11 +440,11 @@ export async function resolveForwardFuzzy(
                 $sourceField: fieldName,
                 $matchedType: generateType,
               })
-              resultIds.push(created.$id as string)
+              resultIds.push(created['$id'] as string)
               pendingRelations.push({
                 fieldName,
                 targetType: generateType,
-                targetId: created.$id as string,
+                targetId: created['$id'] as string,
                 matchedType: generateType,
               })
             }
@@ -376,6 +492,28 @@ export async function resolveForwardFuzzy(
             })
             matched = true
           }
+        } else {
+          // Fallback to text search when semantic search unavailable
+          const textResults = await textSearchFallback(provider, typesToSearch, searchQuery, 5)
+          if (textResults.length > 0) {
+            const bestMatch = textResults[0]!
+            matchedType = bestMatch.$type
+            resolved[fieldName] = bestMatch.$id
+            resolved[`${fieldName}$matched`] = true
+            resolved[`${fieldName}$matchedType`] = matchedType
+            resolved[`${fieldName}$textFallback`] = true
+            pendingRelations.push({
+              fieldName,
+              targetType: matchedType,
+              targetId: bestMatch.$id,
+              matchedType,
+            })
+            await provider.update(matchedType, bestMatch.$id, {
+              $generated: false,
+              $matchedType: matchedType,
+            })
+            matched = true
+          }
         }
 
         // Generate if no match found
@@ -405,12 +543,12 @@ export async function resolveForwardFuzzy(
               $sourceField: fieldName,
               $matchedType: generateType,
             })
-            resolved[fieldName] = created.$id
+            resolved[fieldName] = created['$id']
             resolved[`${fieldName}$matchedType`] = generateType
             pendingRelations.push({
               fieldName,
               targetType: generateType,
-              targetId: created.$id as string,
+              targetId: created['$id'] as string,
               matchedType: generateType,
             })
           }

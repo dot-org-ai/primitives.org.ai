@@ -58,12 +58,12 @@ export interface TimeSeries<T = number> {
  */
 export interface MRR {
   total: number
-  newMRR: number           // From new customers
-  expansionMRR: number     // From upgrades
-  contractionMRR: number   // From downgrades
-  churnedMRR: number       // From cancellations
-  reactivationMRR: number  // From reactivations
-  netNewMRR: number        // newMRR + expansionMRR - contractionMRR - churnedMRR + reactivationMRR
+  newMRR: number // From new customers
+  expansionMRR: number // From upgrades
+  contractionMRR: number // From downgrades
+  churnedMRR: number // From cancellations
+  reactivationMRR: number // From reactivations
+  netNewMRR: number // newMRR + expansionMRR - contractionMRR - churnedMRR + reactivationMRR
   currency: Currency
   period: MetricPeriod
 }
@@ -73,8 +73,8 @@ export interface MRR {
  */
 export interface ARR {
   total: number
-  fromMRR?: number         // MRR * 12
-  contracted?: number      // From annual contracts
+  fromMRR?: number // MRR * 12
+  contracted?: number // From annual contracts
   currency: Currency
   asOf: Date
 }
@@ -83,7 +83,7 @@ export interface ARR {
  * Net Revenue Retention (NRR) / Dollar-based Net Retention (DBNR)
  */
 export interface NRR {
-  rate: number             // Percentage (e.g., 115 = 115%)
+  rate: number // Percentage (e.g., 115 = 115%)
   startingMRR: number
   endingMRR: number
   expansion: number
@@ -96,7 +96,7 @@ export interface NRR {
  * Gross Revenue Retention (GRR)
  */
 export interface GRR {
-  rate: number             // Percentage (max 100%)
+  rate: number // Percentage (max 100%)
   startingMRR: number
   endingMRR: number
   contraction: number
@@ -113,7 +113,7 @@ export interface ARPU {
   totalUsers: number
   currency: Currency
   period: MetricPeriod
-  segment?: string         // Optional segment (e.g., "enterprise", "smb")
+  segment?: string // Optional segment (e.g., "enterprise", "smb")
 }
 
 /**
@@ -125,7 +125,7 @@ export interface RevenueSegment {
   arr: number
   customers: number
   arpu: number
-  growth: number           // MoM or YoY growth rate
+  growth: number // MoM or YoY growth rate
   currency: Currency
 }
 
@@ -151,8 +151,8 @@ export interface CAC {
 export interface LTV {
   value: number
   arpu: number
-  grossMargin: number      // Percentage
-  churnRate: number        // Monthly churn rate
+  grossMargin: number // Percentage
+  churnRate: number // Monthly churn rate
   averageLifetimeMonths: number
   currency: Currency
 }
@@ -164,8 +164,8 @@ export interface LTVtoCAC {
   ratio: number
   ltv: number
   cac: number
-  paybackMonths: number    // CAC / (ARPU * Gross Margin)
-  healthy: boolean         // > 3 is generally healthy
+  paybackMonths: number // CAC / (ARPU * Gross Margin)
+  healthy: boolean // > 3 is generally healthy
 }
 
 /**
@@ -173,12 +173,12 @@ export interface LTVtoCAC {
  */
 export interface Churn {
   // Customer churn (logo churn)
-  customerChurnRate: number    // Percentage
+  customerChurnRate: number // Percentage
   customersLost: number
   customersStart: number
 
   // Revenue churn
-  revenueChurnRate: number     // Percentage (gross churn)
+  revenueChurnRate: number // Percentage (gross churn)
   mrrChurned: number
 
   // Net revenue churn (can be negative with good expansion)
@@ -192,11 +192,11 @@ export interface Churn {
  */
 export interface RetentionCohort {
   cohortDate: Date
-  cohortLabel: string          // e.g., "Jan 2024"
+  cohortLabel: string // e.g., "Jan 2024"
   initialCustomers: number
   initialMRR: number
-  retentionByMonth: number[]   // Array of retention rates by month
-  revenueByMonth: number[]     // Array of MRR by month
+  retentionByMonth: number[] // Array of retention rates by month
+  revenueByMonth: number[] // Array of MRR by month
 }
 
 // =============================================================================
@@ -207,11 +207,11 @@ export interface RetentionCohort {
  * Growth rate metrics
  */
 export interface GrowthRate {
-  mom: number              // Month-over-month
-  qoq: number              // Quarter-over-quarter
-  yoy: number              // Year-over-year
-  cagr?: number            // Compound annual growth rate
-  metric: string           // What metric this growth rate is for
+  mom: number // Month-over-month
+  qoq: number // Quarter-over-quarter
+  yoy: number // Year-over-year
+  cagr?: number // Compound annual growth rate
+  metric: string // What metric this growth rate is for
   period: MetricPeriod
 }
 
@@ -225,7 +225,7 @@ export interface QuickRatio {
   expansionMRR: number
   churnedMRR: number
   contractionMRR: number
-  healthy: boolean         // > 4 is good, > 1 means growing
+  healthy: boolean // > 4 is good, > 1 means growing
   period: MetricPeriod
 }
 
@@ -241,7 +241,7 @@ export interface MagicNumber {
   value: number
   netNewARR: number
   salesMarketingSpend: number
-  efficient: boolean       // > 0.75 is efficient
+  efficient: boolean // > 0.75 is efficient
   period: MetricPeriod
 }
 
@@ -253,7 +253,7 @@ export interface BurnMultiple {
   value: number
   netBurn: number
   netNewARR: number
-  efficient: boolean       // < 1.5 is good
+  efficient: boolean // < 1.5 is good
   period: MetricPeriod
 }
 
@@ -264,8 +264,8 @@ export interface BurnMultiple {
 export interface RuleOf40 {
   score: number
   revenueGrowthRate: number
-  profitMargin: number     // Or EBITDA margin
-  passing: boolean         // >= 40 is passing
+  profitMargin: number // Or EBITDA margin
+  passing: boolean // >= 40 is passing
   period: MetricPeriod
 }
 
@@ -274,7 +274,7 @@ export interface RuleOf40 {
  * Combines multiple efficiency metrics
  */
 export interface EfficiencyScore {
-  overall: number          // 0-100 score
+  overall: number // 0-100 score
   components: {
     ltvCacRatio: number
     magicNumber: number
@@ -294,10 +294,10 @@ export interface EfficiencyScore {
  */
 export interface Pipeline {
   totalValue: number
-  weightedValue: number    // Probability-adjusted
+  weightedValue: number // Probability-adjusted
   stages: PipelineStage[]
-  velocity: number         // Average days to close
-  conversionRate: number   // Win rate
+  velocity: number // Average days to close
+  conversionRate: number // Win rate
   currency: Currency
   asOf: Date
 }
@@ -318,7 +318,7 @@ export interface PipelineStage {
  * (Opportunities * Win Rate * Average Deal Size) / Sales Cycle Length
  */
 export interface SalesVelocity {
-  value: number            // Revenue per day
+  value: number // Revenue per day
   opportunities: number
   winRate: number
   averageDealSize: number
@@ -335,10 +335,10 @@ export interface SalesVelocity {
  * Net Promoter Score
  */
 export interface NPS {
-  score: number            // -100 to 100
-  promoters: number        // 9-10
-  passives: number         // 7-8
-  detractors: number       // 0-6
+  score: number // -100 to 100
+  promoters: number // 9-10
+  passives: number // 7-8
+  detractors: number // 0-6
   responses: number
   responseRate?: number
   asOf: Date
@@ -348,10 +348,10 @@ export interface NPS {
  * Customer health score
  */
 export interface CustomerHealth {
-  averageScore: number     // 0-100
-  healthy: number          // Count
-  atRisk: number           // Count
-  critical: number         // Count
+  averageScore: number // 0-100
+  healthy: number // Count
+  atRisk: number // Count
+  critical: number // Count
   factors: HealthFactor[]
   asOf: Date
 }
@@ -422,7 +422,8 @@ export function calculateMRR(input: {
   period: MetricPeriod
 }): MRR {
   const reactivationMRR = input.reactivationMRR || 0
-  const netNewMRR = input.newMRR + input.expansionMRR - input.contractionMRR - input.churnedMRR + reactivationMRR
+  const netNewMRR =
+    input.newMRR + input.expansionMRR - input.contractionMRR - input.churnedMRR + reactivationMRR
   const total = input.previousMRR + netNewMRR
 
   return {
@@ -508,22 +509,23 @@ export function calculateCACMetric(input: {
 }): CAC {
   const value = input.newCustomers > 0 ? input.salesMarketingSpend / input.newCustomers : 0
 
-  let byChannel: Record<string, number> | undefined
-  if (input.byChannel) {
-    byChannel = {}
-    for (const [channel, data] of Object.entries(input.byChannel)) {
-      byChannel[channel] = data.customers > 0 ? data.spend / data.customers : 0
-    }
-  }
-
-  return {
+  const result: CAC = {
     value,
     totalSalesMarketingSpend: input.salesMarketingSpend,
     newCustomersAcquired: input.newCustomers,
     currency: input.currency || 'USD',
     period: input.period,
-    byChannel,
   }
+
+  if (input.byChannel) {
+    const byChannel: Record<string, number> = {}
+    for (const [channel, data] of Object.entries(input.byChannel)) {
+      byChannel[channel] = data.customers > 0 ? data.spend / data.customers : 0
+    }
+    result.byChannel = byChannel
+  }
+
+  return result
 }
 
 /**
@@ -537,7 +539,7 @@ export function calculateLTVMetric(input: {
 }): LTV {
   // LTV = (ARPU * Gross Margin) / Churn Rate
   const averageLifetimeMonths = input.churnRate > 0 ? 1 / input.churnRate : 0
-  const value = input.churnRate > 0 ? (input.arpu * input.grossMargin / 100) / input.churnRate : 0
+  const value = input.churnRate > 0 ? (input.arpu * input.grossMargin) / 100 / input.churnRate : 0
 
   return {
     value,
@@ -554,9 +556,8 @@ export function calculateLTVMetric(input: {
  */
 export function calculateLTVtoCACRatio(ltv: LTV, cac: CAC): LTVtoCAC {
   const ratio = cac.value > 0 ? ltv.value / cac.value : 0
-  const paybackMonths = ltv.arpu > 0 && ltv.grossMargin > 0
-    ? cac.value / (ltv.arpu * ltv.grossMargin / 100)
-    : 0
+  const paybackMonths =
+    ltv.arpu > 0 && ltv.grossMargin > 0 ? cac.value / ((ltv.arpu * ltv.grossMargin) / 100) : 0
 
   return {
     ratio,
@@ -654,15 +655,18 @@ export function calculateGrowthRates(input: {
   metric: string
   period: MetricPeriod
 }): GrowthRate {
-  const mom = input.previousMonth && input.previousMonth > 0
-    ? ((input.current - input.previousMonth) / input.previousMonth) * 100
-    : 0
-  const qoq = input.previousQuarter && input.previousQuarter > 0
-    ? ((input.current - input.previousQuarter) / input.previousQuarter) * 100
-    : 0
-  const yoy = input.previousYear && input.previousYear > 0
-    ? ((input.current - input.previousYear) / input.previousYear) * 100
-    : 0
+  const mom =
+    input.previousMonth && input.previousMonth > 0
+      ? ((input.current - input.previousMonth) / input.previousMonth) * 100
+      : 0
+  const qoq =
+    input.previousQuarter && input.previousQuarter > 0
+      ? ((input.current - input.previousQuarter) / input.previousQuarter) * 100
+      : 0
+  const yoy =
+    input.previousYear && input.previousYear > 0
+      ? ((input.current - input.previousYear) / input.previousYear) * 100
+      : 0
 
   return {
     mom,
@@ -684,15 +688,11 @@ export function calculateChurnMetrics(input: {
   expansionMRR: number
   period: MetricPeriod
 }): Churn {
-  const customerChurnRate = input.customersStart > 0
-    ? (input.customersLost / input.customersStart) * 100
-    : 0
-  const revenueChurnRate = input.mrrStart > 0
-    ? (input.mrrChurned / input.mrrStart) * 100
-    : 0
-  const netRevenueChurnRate = input.mrrStart > 0
-    ? ((input.mrrChurned - input.expansionMRR) / input.mrrStart) * 100
-    : 0
+  const customerChurnRate =
+    input.customersStart > 0 ? (input.customersLost / input.customersStart) * 100 : 0
+  const revenueChurnRate = input.mrrStart > 0 ? (input.mrrChurned / input.mrrStart) * 100 : 0
+  const netRevenueChurnRate =
+    input.mrrStart > 0 ? ((input.mrrChurned - input.expansionMRR) / input.mrrStart) * 100 : 0
 
   return {
     customerChurnRate,
@@ -728,7 +728,7 @@ export function aggregateTimeSeries<T extends number>(
   const aggregation = series.aggregation || 'sum'
 
   for (const [key, points] of buckets) {
-    const values = points.map(p => p.value as number)
+    const values = points.map((p) => p.value as number)
     let aggregatedValue: number
 
     switch (aggregation) {
@@ -809,7 +809,20 @@ export function createMetricPeriod(
  * Format period label
  */
 function formatPeriodLabel(period: TimePeriod, start: Date, end: Date): string {
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
 
   switch (period) {
     case 'monthly':

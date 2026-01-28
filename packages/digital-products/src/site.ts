@@ -52,14 +52,14 @@ export function Site(config: Omit<SiteDefinition, 'type'>): SiteDefinition {
     description: config.description,
     version: config.version,
     generator: config.generator || 'next',
-    structure: config.structure,
-    navigation: config.navigation,
-    seo: config.seo,
-    analytics: config.analytics,
-    deployment: config.deployment,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.structure !== undefined && { structure: config.structure }),
+    ...(config.navigation !== undefined && { navigation: config.navigation }),
+    ...(config.seo !== undefined && { seo: config.seo }),
+    ...(config.analytics !== undefined && { analytics: config.analytics }),
+    ...(config.deployment !== undefined && { deployment: config.deployment }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(site)
@@ -123,5 +123,9 @@ export function Analytics(
   id: string,
   config?: Record<string, unknown>
 ): AnalyticsConfig {
-  return { provider, id, config }
+  return {
+    provider,
+    id,
+    ...(config !== undefined && { config }),
+  }
 }

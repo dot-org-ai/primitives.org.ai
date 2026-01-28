@@ -197,6 +197,16 @@ export interface ListOptions {
   order?: 'asc' | 'desc'
   limit?: number
   offset?: number
+  /**
+   * Suppress errors and return empty array instead of throwing.
+   * Useful for graceful degradation when the database is unavailable.
+   */
+  suppressErrors?: boolean
+  /**
+   * Error handler callback. If provided, errors are passed to this callback
+   * instead of being thrown. The callback can return a fallback value.
+   */
+  onError?: (error: Error) => unknown[] | void
 }
 
 export interface SearchOptions extends ListOptions {

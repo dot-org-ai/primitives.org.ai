@@ -44,13 +44,13 @@ export function App(config: Omit<AppDefinition, 'type'>): AppDefinition {
     version: config.version,
     framework: config.framework || 'react',
     routes: config.routes || [],
-    config: config.config,
-    state: config.state,
-    auth: config.auth,
-    deployments: config.deployments,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.config !== undefined && { config: config.config }),
+    ...(config.state !== undefined && { state: config.state }),
+    ...(config.auth !== undefined && { auth: config.auth }),
+    ...(config.deployments !== undefined && { deployments: config.deployments }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(app)

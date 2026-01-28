@@ -162,19 +162,29 @@ export function createDefaultNLQueryGenerator(): NLQueryGenerator {
     // Convert to NLQueryPlan with proper Date objects
     const plan: NLQueryPlan = {
       types: normalizedTypes,
-      filters: rawPlan.filters,
-      search: rawPlan.search,
-      include: rawPlan.include,
       interpretation: rawPlan.interpretation ?? `Query: "${query}"`,
       confidence,
+    }
+    if (rawPlan.filters !== undefined) {
+      plan.filters = rawPlan.filters
+    }
+    if (rawPlan.search !== undefined) {
+      plan.search = rawPlan.search
+    }
+    if (rawPlan.include !== undefined) {
+      plan.include = rawPlan.include
     }
 
     // Convert ISO date strings to Date objects if present
     if (rawPlan.timeRange) {
-      plan.timeRange = {
-        since: rawPlan.timeRange.since ? new Date(rawPlan.timeRange.since) : undefined,
-        until: rawPlan.timeRange.until ? new Date(rawPlan.timeRange.until) : undefined,
+      const timeRange: { since?: Date; until?: Date } = {}
+      if (rawPlan.timeRange.since) {
+        timeRange.since = new Date(rawPlan.timeRange.since)
       }
+      if (rawPlan.timeRange.until) {
+        timeRange.until = new Date(rawPlan.timeRange.until)
+      }
+      plan.timeRange = timeRange
     }
 
     // Ensure types array is populated (fallback if AI didn't return valid types)

@@ -213,27 +213,24 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         params.append('page', options.cursor)
       }
 
-      const response = await fetch(
-        `${baseUrl}/user/repos?${params.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        }
-      )
+      const response = await fetch(`${baseUrl}/user/repos?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      })
 
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubRepository[]
+      const data = (await response.json()) as GitHubRepository[]
       const repos: RepoData[] = data.map((repo) => ({
         id: String(repo.id),
         owner: repo.owner.login,
         name: repo.name,
         fullName: repo.full_name,
-        description: repo.description ?? undefined,
+        ...(repo.description !== null && { description: repo.description }),
         private: repo.private,
         defaultBranch: repo.default_branch,
         url: repo.html_url,
@@ -252,8 +249,7 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
       return {
         items: repos,
         hasMore,
-        nextCursor,
-        total: undefined,
+        ...(nextCursor !== undefined && { nextCursor }),
       }
     },
 
@@ -273,13 +269,13 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubRepository
+      const data = (await response.json()) as GitHubRepository
       return {
         id: String(data.id),
         owner: data.owner.login,
         name: data.name,
         fullName: data.full_name,
-        description: data.description ?? undefined,
+        ...(data.description !== null && { description: data.description }),
         private: data.private,
         defaultBranch: data.default_branch,
         url: data.html_url,
@@ -319,12 +315,12 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubIssue
+      const data = (await response.json()) as GitHubIssue
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body ?? undefined,
+        ...(data.body !== null && { body: data.body }),
         state: data.state,
         labels: data.labels.map((l) => l.name),
         assignees: data.assignees.map((a) => a.login),
@@ -332,24 +328,17 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         url: data.html_url,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
-        closedAt: data.closed_at ? new Date(data.closed_at) : undefined,
+        ...(data.closed_at !== null && { closedAt: new Date(data.closed_at) }),
       }
     },
 
-    async getIssue(
-      owner: string,
-      repo: string,
-      issueNumber: number
-    ): Promise<DevIssueData | null> {
-      const response = await fetch(
-        `${baseUrl}/repos/${owner}/${repo}/issues/${issueNumber}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        }
-      )
+    async getIssue(owner: string, repo: string, issueNumber: number): Promise<DevIssueData | null> {
+      const response = await fetch(`${baseUrl}/repos/${owner}/${repo}/issues/${issueNumber}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      })
 
       if (response.status === 404) {
         return null
@@ -359,12 +348,12 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubIssue
+      const data = (await response.json()) as GitHubIssue
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body ?? undefined,
+        ...(data.body !== null && { body: data.body }),
         state: data.state,
         labels: data.labels.map((l) => l.name),
         assignees: data.assignees.map((a) => a.login),
@@ -372,7 +361,7 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         url: data.html_url,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
-        closedAt: data.closed_at ? new Date(data.closed_at) : undefined,
+        ...(data.closed_at !== null && { closedAt: new Date(data.closed_at) }),
       }
     },
 
@@ -384,35 +373,32 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
     ): Promise<DevIssueData> {
       const body: Record<string, unknown> = {}
 
-      if (updates.title !== undefined) body.title = updates.title
-      if (updates.body !== undefined) body.body = updates.body
-      if (updates.labels !== undefined) body.labels = updates.labels
-      if (updates.assignees !== undefined) body.assignees = updates.assignees
-      if (updates.milestone !== undefined) body.milestone = updates.milestone
+      if (updates.title !== undefined) body['title'] = updates.title
+      if (updates.body !== undefined) body['body'] = updates.body
+      if (updates.labels !== undefined) body['labels'] = updates.labels
+      if (updates.assignees !== undefined) body['assignees'] = updates.assignees
+      if (updates.milestone !== undefined) body['milestone'] = updates.milestone
 
-      const response = await fetch(
-        `${baseUrl}/repos/${owner}/${repo}/issues/${issueNumber}`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        }
-      )
+      const response = await fetch(`${baseUrl}/repos/${owner}/${repo}/issues/${issueNumber}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
 
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubIssue
+      const data = (await response.json()) as GitHubIssue
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body ?? undefined,
+        ...(data.body !== null && { body: data.body }),
         state: data.state,
         labels: data.labels.map((l) => l.name),
         assignees: data.assignees.map((a) => a.login),
@@ -420,7 +406,7 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         url: data.html_url,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
-        closedAt: data.closed_at ? new Date(data.closed_at) : undefined,
+        ...(data.closed_at !== null && { closedAt: new Date(data.closed_at) }),
       }
     },
 
@@ -464,14 +450,14 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubIssue[]
+      const data = (await response.json()) as GitHubIssue[]
       const issues: DevIssueData[] = data
         .filter((item) => !item.pull_request) // Filter out PRs
         .map((issue) => ({
           id: String(issue.id),
           number: issue.number,
           title: issue.title,
-          body: issue.body ?? undefined,
+          ...(issue.body !== null && { body: issue.body }),
           state: issue.state,
           labels: issue.labels.map((l) => l.name),
           assignees: issue.assignees.map((a) => a.login),
@@ -479,7 +465,7 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
           url: issue.html_url,
           createdAt: new Date(issue.created_at),
           updatedAt: new Date(issue.updated_at),
-          closedAt: issue.closed_at ? new Date(issue.closed_at) : undefined,
+          ...(issue.closed_at !== null && { closedAt: new Date(issue.closed_at) }),
         }))
 
       const linkHeader = response.headers.get('Link')
@@ -489,16 +475,11 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
       return {
         items: issues,
         hasMore,
-        nextCursor,
-        total: undefined,
+        ...(nextCursor !== undefined && { nextCursor }),
       }
     },
 
-    async createPullRequest(
-      owner: string,
-      repo: string,
-      pr: CreatePROptions
-    ): Promise<PRData> {
+    async createPullRequest(owner: string, repo: string, pr: CreatePROptions): Promise<PRData> {
       const body = {
         title: pr.title,
         body: pr.body,
@@ -521,40 +502,33 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubPullRequest
+      const data = (await response.json()) as GitHubPullRequest
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body ?? undefined,
+        ...(data.body !== null && { body: data.body }),
         state: data.merged_at ? 'merged' : data.state,
         head: data.head.ref,
         base: data.base.ref,
         authorId: data.user.login,
         draft: data.draft,
-        mergeable: data.mergeable ?? undefined,
+        ...(data.mergeable !== null && { mergeable: data.mergeable }),
         url: data.html_url,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
-        mergedAt: data.merged_at ? new Date(data.merged_at) : undefined,
-        closedAt: data.closed_at ? new Date(data.closed_at) : undefined,
+        ...(data.merged_at !== null && { mergedAt: new Date(data.merged_at) }),
+        ...(data.closed_at !== null && { closedAt: new Date(data.closed_at) }),
       }
     },
 
-    async getPullRequest(
-      owner: string,
-      repo: string,
-      prNumber: number
-    ): Promise<PRData | null> {
-      const response = await fetch(
-        `${baseUrl}/repos/${owner}/${repo}/pulls/${prNumber}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        }
-      )
+    async getPullRequest(owner: string, repo: string, prNumber: number): Promise<PRData | null> {
+      const response = await fetch(`${baseUrl}/repos/${owner}/${repo}/pulls/${prNumber}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      })
 
       if (response.status === 404) {
         return null
@@ -564,23 +538,23 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubPullRequest
+      const data = (await response.json()) as GitHubPullRequest
       return {
         id: String(data.id),
         number: data.number,
         title: data.title,
-        body: data.body ?? undefined,
+        ...(data.body !== null && { body: data.body }),
         state: data.merged_at ? 'merged' : data.state,
         head: data.head.ref,
         base: data.base.ref,
         authorId: data.user.login,
         draft: data.draft,
-        mergeable: data.mergeable ?? undefined,
+        ...(data.mergeable !== null && { mergeable: data.mergeable }),
         url: data.html_url,
         createdAt: new Date(data.created_at),
         updatedAt: new Date(data.updated_at),
-        mergedAt: data.merged_at ? new Date(data.merged_at) : undefined,
-        closedAt: data.closed_at ? new Date(data.closed_at) : undefined,
+        ...(data.merged_at !== null && { mergedAt: new Date(data.merged_at) }),
+        ...(data.closed_at !== null && { closedAt: new Date(data.closed_at) }),
       }
     },
 
@@ -607,37 +581,34 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         params.append('page', options.cursor)
       }
 
-      const response = await fetch(
-        `${baseUrl}/repos/${owner}/${repo}/pulls?${params.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-          },
-        }
-      )
+      const response = await fetch(`${baseUrl}/repos/${owner}/${repo}/pulls?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
+      })
 
       if (!response.ok) {
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubPullRequest[]
+      const data = (await response.json()) as GitHubPullRequest[]
       const prs: PRData[] = data.map((pr) => ({
         id: String(pr.id),
         number: pr.number,
         title: pr.title,
-        body: pr.body ?? undefined,
+        ...(pr.body !== null && { body: pr.body }),
         state: pr.merged_at ? 'merged' : pr.state,
         head: pr.head.ref,
         base: pr.base.ref,
         authorId: pr.user.login,
         draft: pr.draft,
-        mergeable: pr.mergeable ?? undefined,
+        ...(pr.mergeable !== null && { mergeable: pr.mergeable }),
         url: pr.html_url,
         createdAt: new Date(pr.created_at),
         updatedAt: new Date(pr.updated_at),
-        mergedAt: pr.merged_at ? new Date(pr.merged_at) : undefined,
-        closedAt: pr.closed_at ? new Date(pr.closed_at) : undefined,
+        ...(pr.merged_at !== null && { mergedAt: new Date(pr.merged_at) }),
+        ...(pr.closed_at !== null && { closedAt: new Date(pr.closed_at) }),
       }))
 
       const linkHeader = response.headers.get('Link')
@@ -647,28 +618,20 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
       return {
         items: prs,
         hasMore,
-        nextCursor,
-        total: undefined,
+        ...(nextCursor !== undefined && { nextCursor }),
       }
     },
 
-    async mergePullRequest(
-      owner: string,
-      repo: string,
-      prNumber: number
-    ): Promise<boolean> {
-      const response = await fetch(
-        `${baseUrl}/repos/${owner}/${repo}/pulls/${prNumber}/merge`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        }
-      )
+    async mergePullRequest(owner: string, repo: string, prNumber: number): Promise<boolean> {
+      const response = await fetch(`${baseUrl}/repos/${owner}/${repo}/pulls/${prNumber}/merge`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      })
 
       return response.ok
     },
@@ -696,7 +659,7 @@ export function createGitHubProvider(config: ProviderConfig): DevelopmentProvide
         throw new Error(`GitHub API error: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json() as GitHubComment
+      const data = (await response.json()) as GitHubComment
       return {
         id: String(data.id),
         body: data.body,

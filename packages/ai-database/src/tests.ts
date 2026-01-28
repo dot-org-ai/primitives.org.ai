@@ -163,8 +163,8 @@ export function createTests<T extends DBClient>(
         expect(thing.ns).toBe(ns)
         expect(thing.type).toBe('TestEntity')
         expect(thing.id).toBe('crud-test-1')
-        expect(thing.data.name).toBe('Test')
-        expect(thing.data.value).toBe(42)
+        expect(thing.data['name']).toBe('Test')
+        expect(thing.data['value']).toBe(42)
         expect(thing.createdAt).toBeInstanceOf(Date)
         expect(thing.updatedAt).toBeInstanceOf(Date)
       })
@@ -173,14 +173,14 @@ export function createTests<T extends DBClient>(
         const thing = await client.get(`https://${ns}/TestEntity/crud-test-1`)
 
         expect(thing).not.toBeNull()
-        expect(thing?.data.name).toBe('Test')
+        expect(thing?.data['name']).toBe('Test')
       })
 
       it('gets a thing by ID components', async () => {
         const thing = await client.getById(ns, 'TestEntity', 'crud-test-1')
 
         expect(thing).not.toBeNull()
-        expect(thing?.data.name).toBe('Test')
+        expect(thing?.data['name']).toBe('Test')
       })
 
       it('returns null for non-existent thing', async () => {
@@ -194,8 +194,8 @@ export function createTests<T extends DBClient>(
           data: { name: 'Updated', value: 100 },
         })
 
-        expect(updated.data.name).toBe('Updated')
-        expect(updated.data.value).toBe(100)
+        expect(updated.data['name']).toBe('Updated')
+        expect(updated.data['value']).toBe(100)
         expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(updated.createdAt.getTime())
       })
 
@@ -208,7 +208,7 @@ export function createTests<T extends DBClient>(
         })
 
         expect(thing.id).toBe('crud-test-2')
-        expect(thing.data.name).toBe('Upserted')
+        expect(thing.data['name']).toBe('Upserted')
       })
 
       it('upserts an existing thing', async () => {
@@ -219,8 +219,8 @@ export function createTests<T extends DBClient>(
           data: { name: 'Upserted Again', value: 300 },
         })
 
-        expect(thing.data.name).toBe('Upserted Again')
-        expect(thing.data.value).toBe(300)
+        expect(thing.data['name']).toBe('Upserted Again')
+        expect(thing.data['value']).toBe(300)
       })
 
       it('deletes a thing', async () => {
@@ -273,10 +273,18 @@ export function createTests<T extends DBClient>(
       afterAll(async () => {
         // Cleanup
         for (const user of fixtures.users) {
-          try { await client.delete(`https://${ns}/User/${user.id}`) } catch { /* ignore */ }
+          try {
+            await client.delete(`https://${ns}/User/${user.id}`)
+          } catch {
+            /* ignore */
+          }
         }
         for (const post of fixtures.posts) {
-          try { await client.delete(`https://${ns}/Post/${post.id}`) } catch { /* ignore */ }
+          try {
+            await client.delete(`https://${ns}/Post/${post.id}`)
+          } catch {
+            /* ignore */
+          }
         }
       })
 
@@ -290,7 +298,7 @@ export function createTests<T extends DBClient>(
         const users = await client.list({ ns, type: 'User' })
 
         expect(users.length).toBe(fixtures.users.length)
-        expect(users.every(u => u.type === 'User')).toBe(true)
+        expect(users.every((u) => u.type === 'User')).toBe(true)
       })
 
       it('finds things with where clause', async () => {
@@ -301,7 +309,7 @@ export function createTests<T extends DBClient>(
         })
 
         expect(admins.length).toBe(1)
-        expect(admins[0]?.data.name).toBe('Alice')
+        expect(admins[0]?.data['name']).toBe('Alice')
       })
 
       it('lists with limit', async () => {
@@ -363,7 +371,7 @@ export function createTests<T extends DBClient>(
           })
 
           expect(results.length).toBeGreaterThanOrEqual(1)
-          expect(results.some(r => r.data.title === 'Hello World')).toBe(true)
+          expect(results.some((r) => r.data['title'] === 'Hello World')).toBe(true)
         })
 
         it('searches across fields', async () => {
@@ -373,7 +381,7 @@ export function createTests<T extends DBClient>(
             query: 'Bob',
           })
 
-          expect(results.some(r => r.data.title === 'Bobs Post')).toBe(true)
+          expect(results.some((r) => r.data['title'] === 'Bobs Post')).toBe(true)
         })
       })
     }
@@ -394,7 +402,11 @@ export function createTests<T extends DBClient>(
         })
 
         afterAll(async () => {
-          try { await client.unrelate(postUrl, 'author', authorUrl) } catch { /* ignore */ }
+          try {
+            await client.unrelate(postUrl, 'author', authorUrl)
+          } catch {
+            /* ignore */
+          }
         })
 
         it('creates a relationship', async () => {
@@ -421,7 +433,7 @@ export function createTests<T extends DBClient>(
           const posts = await client.references(authorUrl, 'author')
 
           expect(posts.length).toBeGreaterThanOrEqual(1)
-          expect(posts.some(p => p.id === 'post-1')).toBe(true)
+          expect(posts.some((p) => p.id === 'post-1')).toBe(true)
         })
 
         it('lists relationships', async () => {
@@ -517,7 +529,7 @@ export function createExtendedTests<T extends DBClientExtended>(
           const events = await client.queryEvents({ type: 'User.created' })
 
           expect(events.length).toBeGreaterThanOrEqual(1)
-          expect(events.every(e => e.type === 'User.created')).toBe(true)
+          expect(events.every((e) => e.type === 'User.created')).toBe(true)
         })
 
         it('queries events by source', async () => {
@@ -537,7 +549,7 @@ export function createExtendedTests<T extends DBClientExtended>(
           expect(event.correlationId).toBe('session-123')
 
           const related = await client.queryEvents({ correlationId: 'session-123' })
-          expect(related.some(e => e.id === event.id)).toBe(true)
+          expect(related.some((e) => e.id === event.id)).toBe(true)
         })
       })
     }
@@ -626,13 +638,13 @@ export function createExtendedTests<T extends DBClientExtended>(
         it('queries actions by status', async () => {
           const completed = await client.queryActions({ status: 'completed' })
 
-          expect(completed.every(a => a.status === 'completed')).toBe(true)
+          expect(completed.every((a) => a.status === 'completed')).toBe(true)
         })
 
         it('queries actions by actor', async () => {
           const actions = await client.queryActions({ actor: 'user:test-user' })
 
-          expect(actions.every(a => a.actor === 'user:test-user')).toBe(true)
+          expect(actions.every((a) => a.actor === 'user:test-user')).toBe(true)
         })
       })
     }
@@ -646,7 +658,11 @@ export function createExtendedTests<T extends DBClientExtended>(
         const artifactKey = 'test-artifact-1'
 
         afterAll(async () => {
-          try { await client.deleteArtifact(artifactKey) } catch { /* ignore */ }
+          try {
+            await client.deleteArtifact(artifactKey)
+          } catch {
+            /* ignore */
+          }
         })
 
         it('stores an artifact', async () => {
@@ -672,10 +688,7 @@ export function createExtendedTests<T extends DBClientExtended>(
         })
 
         it('gets artifact by source', async () => {
-          const artifact = await client.getArtifactBySource(
-            `https://${ns}/Module/module-1`,
-            'esm'
-          )
+          const artifact = await client.getArtifactBySource(`https://${ns}/Module/module-1`, 'esm')
 
           expect(artifact).not.toBeNull()
           expect(artifact?.key).toBe(artifactKey)

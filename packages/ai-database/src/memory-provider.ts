@@ -194,6 +194,8 @@ export interface Action {
   meta?: Record<string, unknown>
   /** Created timestamp */
   createdAt: Date
+  /** Updated timestamp */
+  updatedAt?: Date
   /** Started timestamp */
   startedAt?: Date
   /** Completed timestamp */
@@ -213,6 +215,7 @@ export interface Artifact {
   content: unknown
   metadata?: Record<string, unknown>
   createdAt: Date
+  updatedAt?: Date
 }
 
 /**
@@ -488,7 +491,9 @@ export class MemoryProvider implements DBProvider {
     this.semaphore = new Semaphore(options.concurrency ?? 10)
     this.embeddingsConfig = options.embeddings ?? {}
     this.useAiFunctions = options.useAiFunctions ?? false
-    this.embeddingProvider = options.embeddingProvider
+    if (options.embeddingProvider !== undefined) {
+      this.embeddingProvider = options.embeddingProvider
+    }
     this.embeddingDimensions = options.embeddingDimensions ?? DEFAULT_EMBEDDING_DIMENSIONS
   }
 
@@ -503,7 +508,11 @@ export class MemoryProvider implements DBProvider {
    * Set a custom embedding provider
    */
   setEmbeddingProvider(provider: EmbeddingProvider | undefined): void {
-    this.embeddingProvider = provider
+    if (provider !== undefined) {
+      this.embeddingProvider = provider
+    } else {
+      this.embeddingProvider = undefined as unknown as EmbeddingProvider
+    }
   }
 
   /**
@@ -1628,27 +1637,27 @@ export class MemoryProvider implements DBProvider {
         id: generateId(),
         actor: 'system',
         event: eventOrType,
-        objectData: data as Record<string, unknown> | undefined,
         timestamp: new Date(),
         // Legacy fields
         type: eventOrType,
         data,
+        ...(data !== undefined && { objectData: data as Record<string, unknown> }),
       }
     } else {
       // New pattern: emit({ actor, event, object, ... })
       event = {
         id: generateId(),
         actor: eventOrType.actor ?? 'system',
-        actorData: eventOrType.actorData,
         event: eventOrType.event,
-        object: eventOrType.object,
-        objectData: eventOrType.objectData,
-        result: eventOrType.result,
-        resultData: eventOrType.resultData,
-        meta: eventOrType.meta,
         timestamp: new Date(),
         // Legacy fields
         type: eventOrType.event,
+        ...(eventOrType.actorData !== undefined && { actorData: eventOrType.actorData }),
+        ...(eventOrType.object !== undefined && { object: eventOrType.object }),
+        ...(eventOrType.objectData !== undefined && { objectData: eventOrType.objectData }),
+        ...(eventOrType.result !== undefined && { result: eventOrType.result }),
+        ...(eventOrType.resultData !== undefined && { resultData: eventOrType.resultData }),
+        ...(eventOrType.meta !== undefined && { meta: eventOrType.meta }),
       }
     }
 
@@ -1776,10 +1785,11 @@ export class MemoryProvider implements DBProvider {
     /** @deprecated Use 'event' instead */
     type?: string
   }): Promise<void> {
+    const eventPattern = options.event ?? options.type
     const events = await this.listEvents({
-      event: options.event ?? options.type,
-      actor: options.actor,
-      since: options.since,
+      ...(eventPattern !== undefined && { event: eventPattern }),
+      ...(options.actor !== undefined && { actor: options.actor }),
+      ...(options.since !== undefined && { since: options.since }),
     })
 
     for (const event of events) {
@@ -1834,33 +1844,37 @@ export class MemoryProvider implements DBProvider {
     // Auto-conjugate verb forms
     const conjugated = conjugateVerb(baseVerb)
 
+    const objectData = data.objectData ?? (data.data as Record<string, unknown> | undefined)
     const action: Action = {
       id: generateId(),
       actor: data.actor ?? 'system',
-      actorData: data.actorData,
       act: conjugated.act,
       action: conjugated.action,
       activity: conjugated.activity,
-      object: data.object,
-      objectData: data.objectData ?? (data.data as Record<string, unknown> | undefined),
       status: 'pending',
       progress: 0,
-      total: data.total,
-      meta: data.meta,
       createdAt: new Date(),
       // Legacy fields
       type: baseVerb,
       data: data.data,
+      ...(data.actorData !== undefined && { actorData: data.actorData }),
+      ...(data.object !== undefined && { object: data.object }),
+      ...(objectData !== undefined && { objectData }),
+      ...(data.total !== undefined && { total: data.total }),
+      ...(data.meta !== undefined && { meta: data.meta }),
     }
 
     this.actions.set(action.id, action)
 
     await this.emit({
       actor: action.actor,
-      actorData: action.actorData,
       event: 'Action.created',
       object: action.id,
-      objectData: { action: action.action, object: action.object },
+      objectData: {
+        action: action.action,
+        ...(action.object !== undefined && { object: action.object }),
+      },
+      ...(action.actorData !== undefined && { actorData: action.actorData }),
     })
 
     return action
@@ -1898,8 +1912,8 @@ export class MemoryProvider implements DBProvider {
         event: 'Action.completed',
         object: action.id,
         objectData: { action: action.action },
-        result: action.object,
-        resultData: action.result,
+        ...(action.object !== undefined && { result: action.object }),
+        ...(action.result !== undefined && { resultData: action.result }),
       })
     }
 
@@ -1976,9 +1990,9 @@ export class MemoryProvider implements DBProvider {
     }
 
     action.status = 'pending'
-    action.error = undefined
-    action.startedAt = undefined
-    action.completedAt = undefined
+    delete action.error
+    delete action.startedAt
+    delete action.completedAt
 
     await this.emit({
       actor: action.actor,
@@ -2050,8 +2064,8 @@ export class MemoryProvider implements DBProvider {
       type,
       sourceHash: data.sourceHash,
       content: data.content,
-      metadata: data.metadata,
       createdAt: new Date(),
+      ...(data.metadata !== undefined && { metadata: data.metadata }),
     }
 
     this.artifacts.set(this.artifactKey(url, type), artifact)

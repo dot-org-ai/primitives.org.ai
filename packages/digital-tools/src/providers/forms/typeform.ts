@@ -47,8 +47,8 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
     info: typeformInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      accessToken = cfg.accessToken as string
-      workspaceId = cfg.workspaceId as string | undefined
+      accessToken = cfg['accessToken'] as string
+      workspaceId = cfg['workspaceId'] as string | undefined
 
       if (!accessToken) {
         throw new Error('Typeform access token is required')
@@ -91,12 +91,12 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
       }
 
       if (workspaceId) {
-        body.workspace = { href: `${TYPEFORM_API_URL}/workspaces/${workspaceId}` }
+        body['workspace'] = { href: `${TYPEFORM_API_URL}/workspaces/${workspaceId}` }
       }
 
       // Map fields to Typeform format
       if (form.fields && form.fields.length > 0) {
-        body.fields = form.fields.map((field, index) => {
+        body['fields'] = form.fields.map((field, index) => {
           const typeformField: Record<string, unknown> = {
             title: field.title,
             ref: `field_${index}`,
@@ -106,61 +106,63 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
           // Map field types
           switch (field.type) {
             case 'text':
-              typeformField.type = 'short_text'
+              typeformField['type'] = 'short_text'
               break
             case 'textarea':
-              typeformField.type = 'long_text'
+              typeformField['type'] = 'long_text'
               break
             case 'email':
-              typeformField.type = 'email'
+              typeformField['type'] = 'email'
               break
             case 'number':
-              typeformField.type = 'number'
+              typeformField['type'] = 'number'
               break
             case 'date':
-              typeformField.type = 'date'
+              typeformField['type'] = 'date'
               break
             case 'dropdown':
-              typeformField.type = 'dropdown'
+              typeformField['type'] = 'dropdown'
               if (field.choices) {
-                typeformField.properties = {
+                typeformField['properties'] = {
                   choices: field.choices.map((choice) => ({ label: choice })),
                 }
               }
               break
             case 'radio':
-              typeformField.type = 'multiple_choice'
+              typeformField['type'] = 'multiple_choice'
               if (field.choices) {
-                typeformField.properties = {
+                typeformField['properties'] = {
                   choices: field.choices.map((choice) => ({ label: choice })),
                   allow_multiple_selection: false,
                 }
               }
               break
             case 'checkbox':
-              typeformField.type = 'multiple_choice'
+              typeformField['type'] = 'multiple_choice'
               if (field.choices) {
-                typeformField.properties = {
+                typeformField['properties'] = {
                   choices: field.choices.map((choice) => ({ label: choice })),
                   allow_multiple_selection: true,
                 }
               }
               break
             case 'file':
-              typeformField.type = 'file_upload'
+              typeformField['type'] = 'file_upload'
               break
             default:
-              typeformField.type = 'short_text'
+              typeformField['type'] = 'short_text'
           }
 
           if (field.description) {
-            typeformField.properties = {
-              ...(typeof typeformField.properties === 'object' ? typeformField.properties : {}),
+            typeformField['properties'] = {
+              ...(typeof typeformField['properties'] === 'object'
+                ? typeformField['properties']
+                : {}),
               description: field.description,
             }
           }
 
-          typeformField.validations = {
+          typeformField['validations'] = {
             required: field.required || false,
           }
 
@@ -170,13 +172,13 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
 
       // Add settings
       if (form.settings) {
-        body.settings = {
+        body['settings'] = {
           is_public: form.settings.isPublic !== undefined ? form.settings.isPublic : true,
           show_progress_bar: form.settings.showProgressBar || false,
         }
 
         if (form.settings.confirmationMessage) {
-          body.thankyou_screens = [
+          body['thankyou_screens'] = [
             {
               title: 'Thank you!',
               properties: {
@@ -188,7 +190,7 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
         }
 
         if (form.settings.redirectUrl) {
-          body.thankyou_screens = [
+          body['thankyou_screens'] = [
             {
               title: 'Thank you!',
               properties: {
@@ -257,11 +259,11 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
       const body: Record<string, unknown> = {}
 
       if (updates.title) {
-        body.title = updates.title
+        body['title'] = updates.title
       }
 
       if (updates.fields) {
-        body.fields = updates.fields.map((field, index) => {
+        body['fields'] = updates.fields.map((field, index) => {
           const typeformField: Record<string, unknown> = {
             title: field.title,
             ref: `field_${index}`,
@@ -271,61 +273,63 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
           // Map field types (same as createForm)
           switch (field.type) {
             case 'text':
-              typeformField.type = 'short_text'
+              typeformField['type'] = 'short_text'
               break
             case 'textarea':
-              typeformField.type = 'long_text'
+              typeformField['type'] = 'long_text'
               break
             case 'email':
-              typeformField.type = 'email'
+              typeformField['type'] = 'email'
               break
             case 'number':
-              typeformField.type = 'number'
+              typeformField['type'] = 'number'
               break
             case 'date':
-              typeformField.type = 'date'
+              typeformField['type'] = 'date'
               break
             case 'dropdown':
-              typeformField.type = 'dropdown'
+              typeformField['type'] = 'dropdown'
               if (field.choices) {
-                typeformField.properties = {
+                typeformField['properties'] = {
                   choices: field.choices.map((choice) => ({ label: choice })),
                 }
               }
               break
             case 'radio':
-              typeformField.type = 'multiple_choice'
+              typeformField['type'] = 'multiple_choice'
               if (field.choices) {
-                typeformField.properties = {
+                typeformField['properties'] = {
                   choices: field.choices.map((choice) => ({ label: choice })),
                   allow_multiple_selection: false,
                 }
               }
               break
             case 'checkbox':
-              typeformField.type = 'multiple_choice'
+              typeformField['type'] = 'multiple_choice'
               if (field.choices) {
-                typeformField.properties = {
+                typeformField['properties'] = {
                   choices: field.choices.map((choice) => ({ label: choice })),
                   allow_multiple_selection: true,
                 }
               }
               break
             case 'file':
-              typeformField.type = 'file_upload'
+              typeformField['type'] = 'file_upload'
               break
             default:
-              typeformField.type = 'short_text'
+              typeformField['type'] = 'short_text'
           }
 
           if (field.description) {
-            typeformField.properties = {
-              ...(typeof typeformField.properties === 'object' ? typeformField.properties : {}),
+            typeformField['properties'] = {
+              ...(typeof typeformField['properties'] === 'object'
+                ? typeformField['properties']
+                : {}),
               description: field.description,
             }
           }
 
-          typeformField.validations = {
+          typeformField['validations'] = {
             required: field.required || false,
           }
 
@@ -334,7 +338,7 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
       }
 
       if (updates.settings) {
-        body.settings = {
+        body['settings'] = {
           ...(updates.settings.isPublic !== undefined && {
             is_public: updates.settings.isPublic,
           }),
@@ -415,9 +419,9 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
 
         return {
           items,
-          total: data.total_items,
+          ...(data.total_items !== undefined && { total: data.total_items }),
           hasMore: data.page_count > page,
-          nextCursor: data.page_count > page ? ((page + 1) * pageSize).toString() : undefined,
+          ...(data.page_count > page && { nextCursor: ((page + 1) * pageSize).toString() }),
         }
       } catch (error) {
         throw new Error(
@@ -469,9 +473,9 @@ export function createTypeformProvider(config: ProviderConfig): FormsProvider {
 
         return {
           items,
-          total: data.total_items,
+          ...(data.total_items !== undefined && { total: data.total_items }),
           hasMore: !!data.next_cursor,
-          nextCursor: data.next_cursor,
+          ...(data.next_cursor !== undefined && { nextCursor: data.next_cursor }),
         }
       } catch (error) {
         throw new Error(
@@ -545,19 +549,30 @@ function transformTypeformToFormData(data: any): FormData {
         break
     }
 
-    return {
+    const fieldResult: {
+      type: typeof type
+      title: string
+      required: boolean
+      description?: string
+      choices?: string[]
+    } = {
       type,
       title: field.title,
-      description: field.properties?.description,
       required: field.validations?.required || false,
-      choices: field.properties?.choices?.map((c: any) => c.label),
     }
+    if (field.properties?.description !== undefined) {
+      fieldResult.description = field.properties.description
+    }
+    if (field.properties?.choices) {
+      fieldResult.choices = field.properties.choices.map((c: any) => c.label)
+    }
+    return fieldResult
   })
 
   return {
     id: data.id,
     title: data.title,
-    description: data.description,
+    ...(data.description !== undefined && { description: data.description }),
     fields,
     responseCount: data.response_count || 0,
     url: data._links?.display || `https://form.typeform.com/to/${data.id}`,
@@ -575,19 +590,20 @@ function transformTypeformResponseToFormResponseData(formId: string, data: any):
     value: answer[answer.type] || answer.text || answer.choice || answer.choices,
   }))
 
-  return {
+  const result: FormResponseData = {
     id: data.response_id || data.token,
     formId,
     answers,
     submittedAt: new Date(data.submitted_at),
-    metadata: data.metadata
-      ? {
-          ip: data.metadata.user_agent,
-          userAgent: data.metadata.user_agent,
-          referer: data.metadata.referer,
-        }
-      : undefined,
   }
+  if (data.metadata) {
+    result.metadata = {
+      ...(data.metadata.user_agent !== undefined && { ip: data.metadata.user_agent }),
+      ...(data.metadata.user_agent !== undefined && { userAgent: data.metadata.user_agent }),
+      ...(data.metadata.referer !== undefined && { referer: data.metadata.referer }),
+    }
+  }
+  return result
 }
 
 /**

@@ -48,10 +48,7 @@ export const parseJson = defineTool<
 /**
  * Stringify object to JSON
  */
-export const stringifyJson = defineTool<
-  { data: unknown; pretty?: boolean },
-  { text: string }
->({
+export const stringifyJson = defineTool<{ data: unknown; pretty?: boolean }, { text: string }>({
   id: 'data.json.stringify',
   name: 'Stringify JSON',
   description: 'Convert an object to a JSON string',
@@ -66,9 +63,7 @@ export const stringifyJson = defineTool<
     required: ['data'],
   },
   handler: async (input) => {
-    const text = input.pretty
-      ? JSON.stringify(input.data, null, 2)
-      : JSON.stringify(input.data)
+    const text = input.pretty ? JSON.stringify(input.data, null, 2) : JSON.stringify(input.data)
     return { text }
   },
   options: {
@@ -108,9 +103,10 @@ export const parseCsv = defineTool<
       return { rows: [], headers: [], rowCount: 0 }
     }
 
+    const firstLine = lines[0]!
     const headers = hasHeaders
-      ? lines[0].split(delimiter).map((h) => h.trim())
-      : lines[0].split(delimiter).map((_, i) => `column${i + 1}`)
+      ? firstLine.split(delimiter).map((h) => h.trim())
+      : firstLine.split(delimiter).map((_, i) => `column${i + 1}`)
 
     const dataLines = hasHeaders ? lines.slice(1) : lines
 
@@ -227,10 +223,4 @@ export const filterData = defineTool<
 /**
  * All data tools
  */
-export const dataTools: AnyTool[] = [
-  parseJson,
-  stringifyJson,
-  parseCsv,
-  transformData,
-  filterData,
-]
+export const dataTools: AnyTool[] = [parseJson, stringifyJson, parseCsv, transformData, filterData]

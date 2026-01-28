@@ -23,7 +23,11 @@ export const fetchUrl = defineTool<
     type: 'object',
     properties: {
       url: { type: 'string', description: 'URL to fetch' },
-      method: { type: 'string', description: 'HTTP method (default: GET)', enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] },
+      method: {
+        type: 'string',
+        description: 'HTTP method (default: GET)',
+        enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+      },
       headers: { type: 'object', description: 'Request headers' },
       body: { type: 'string', description: 'Request body (for POST/PUT/PATCH)' },
     },
@@ -32,8 +36,8 @@ export const fetchUrl = defineTool<
   handler: async (input) => {
     const response = await fetch(input.url, {
       method: input.method || 'GET',
-      headers: input.headers,
-      body: input.body,
+      ...(input.headers !== undefined && { headers: input.headers }),
+      ...(input.body !== undefined && { body: input.body }),
     })
 
     const headers: Record<string, string> = {}
@@ -75,21 +79,26 @@ export const parseHtml = defineTool<
   },
   handler: async (input) => {
     // Basic HTML parsing without DOM (would use cheerio or jsdom in production)
-    const text = input.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+    const text = input.html
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
 
     // Extract links
     const linkRegex = /href="([^"]+)"/g
     const links: string[] = []
     let match
     while ((match = linkRegex.exec(input.html)) !== null) {
-      links.push(match[1])
+      if (match[1] !== undefined) {
+        links.push(match[1])
+      }
     }
 
     // Extract images
     const imgRegex = /src="([^"]+)"/g
     const images: string[] = []
     while ((match = imgRegex.exec(input.html)) !== null) {
-      if (match[1].match(/\.(jpg|jpeg|png|gif|webp|svg)/i)) {
+      if (match[1] !== undefined && match[1].match(/\.(jpg|jpeg|png|gif|webp|svg)/i)) {
         images.push(match[1])
       }
     }
@@ -127,12 +136,13 @@ export const readUrl = defineTool<
 
     // Extract title
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
-    const title = titleMatch ? titleMatch[1].trim() : ''
+    const title = titleMatch && titleMatch[1] ? titleMatch[1].trim() : ''
 
     // Extract body text
     const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)
-    const body = bodyMatch ? bodyMatch[1] : html
-    const text = body.replace(/<script[\s\S]*?<\/script>/gi, '')
+    const body = bodyMatch && bodyMatch[1] ? bodyMatch[1] : html
+    const text = body
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<[^>]*>/g, ' ')
       .replace(/\s+/g, ' ')
@@ -143,7 +153,9 @@ export const readUrl = defineTool<
     const links: string[] = []
     let match
     while ((match = linkRegex.exec(html)) !== null) {
-      links.push(match[1])
+      if (match[1] !== undefined) {
+        links.push(match[1])
+      }
     }
 
     return { title, text: text.slice(0, 10000), links: [...new Set(links)] }

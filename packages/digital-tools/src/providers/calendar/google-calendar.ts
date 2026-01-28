@@ -85,8 +85,8 @@ export function createGoogleCalendarProvider(config: ProviderConfig): CalendarPr
     info: googleCalendarInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      accessToken = cfg.accessToken as string
-      defaultCalendarId = cfg.calendarId as string | undefined
+      accessToken = cfg['accessToken'] as string
+      defaultCalendarId = cfg['calendarId'] as string | undefined
 
       if (!accessToken) {
         throw new Error('Google Calendar access token is required')
@@ -135,7 +135,7 @@ export function createGoogleCalendarProvider(config: ProviderConfig): CalendarPr
       return {
         items,
         hasMore: !!result.data.nextPageToken,
-        nextCursor: result.data.nextPageToken,
+        ...(result.data.nextPageToken !== undefined && { nextCursor: result.data.nextPageToken }),
       }
     },
 
@@ -183,7 +183,8 @@ export function createGoogleCalendarProvider(config: ProviderConfig): CalendarPr
               createRequest: {
                 requestId: `${Date.now()}-${Math.random()}`,
                 conferenceSolutionKey: {
-                  type: event.conferenceData.type === 'hangoutsMeet' ? 'hangoutsMeet' : 'hangoutsMeet',
+                  type:
+                    event.conferenceData.type === 'hangoutsMeet' ? 'hangoutsMeet' : 'hangoutsMeet',
                 },
               },
             }
@@ -191,10 +192,13 @@ export function createGoogleCalendarProvider(config: ProviderConfig): CalendarPr
       }
 
       const params = event.conferenceData ? '?conferenceDataVersion=1' : ''
-      const result = await apiRequest<any>(`/calendars/${encodeURIComponent(calendarId)}/events${params}`, {
-        method: 'POST',
-        body: JSON.stringify(body),
-      })
+      const result = await apiRequest<any>(
+        `/calendars/${encodeURIComponent(calendarId)}/events${params}`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      )
 
       if (!result.ok || !result.data) {
         throw new Error(result.error || 'Failed to create event')
@@ -332,7 +336,8 @@ export function createGoogleCalendarProvider(config: ProviderConfig): CalendarPr
       if (options?.cursor) params.append('pageToken', options.cursor)
       if (options?.timeMin) params.append('timeMin', options.timeMin.toISOString())
       if (options?.timeMax) params.append('timeMax', options.timeMax.toISOString())
-      if (options?.singleEvents !== undefined) params.append('singleEvents', String(options.singleEvents))
+      if (options?.singleEvents !== undefined)
+        params.append('singleEvents', String(options.singleEvents))
       if (options?.orderBy) params.append('orderBy', options.orderBy)
 
       const result = await apiRequest<{
@@ -364,7 +369,7 @@ export function createGoogleCalendarProvider(config: ProviderConfig): CalendarPr
       return {
         items,
         hasMore: !!result.data.nextPageToken,
-        nextCursor: result.data.nextPageToken,
+        ...(result.data.nextPageToken !== undefined && { nextCursor: result.data.nextPageToken }),
       }
     },
 
@@ -394,10 +399,11 @@ export function createGoogleCalendarProvider(config: ProviderConfig): CalendarPr
         const calendar = result.data!.calendars[calendarId]
         return {
           calendarId,
-          busy: calendar?.busy?.map((slot) => ({
-            start: new Date(slot.start),
-            end: new Date(slot.end),
-          })) || [],
+          busy:
+            calendar?.busy?.map((slot) => ({
+              start: new Date(slot.start),
+              end: new Date(slot.end),
+            })) || [],
         }
       })
     },

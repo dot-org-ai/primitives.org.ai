@@ -33,6 +33,13 @@ import {
   generateEntity,
 } from './cascade.js'
 import { resolveBackwardFuzzy, resolveForwardFuzzy, getFuzzyThreshold } from './semantic.js'
+import {
+  isNotFoundError,
+  isEntityExistsError,
+  wrapDatabaseError,
+  DatabaseError,
+  CapabilityNotSupportedError,
+} from '../errors.js'
 
 // =============================================================================
 // Entity Operations Configuration Type
@@ -117,9 +124,25 @@ export function createEntityOperations<T>(
     },
 
     async list(options?: ListOptions): Promise<T[]> {
-      const provider = await resolveProvider()
-      const results = await provider.list(typeName, options)
-      return Promise.all(results.map((r) => hydrateEntity(r, entity, schema, resolveProvider) as T))
+      try {
+        const provider = await resolveProvider()
+        const results = await provider.list(typeName, options)
+        return Promise.all(
+          results.map((r) => hydrateEntity(r, entity, schema, resolveProvider) as T)
+        )
+      } catch (error) {
+        // Handle error with callback if provided
+        if (options?.onError) {
+          const wrappedError = error instanceof Error ? error : new Error(String(error))
+          const fallback = options.onError(wrappedError)
+          return (fallback ?? []) as T[]
+        }
+        // Suppress errors if requested
+        if (options?.suppressErrors) {
+          return []
+        }
+        throw error
+      }
     },
 
     async find(where: Partial<T>): Promise<T[]> {
@@ -140,7 +163,6 @@ export function createEntityOperations<T>(
       idOrData: string | Omit<T, '$id' | '$type'>,
       maybeData?: Omit<T, '$id' | '$type'>
     ): Promise<T> {
-      const provider = await resolveProvider()
       const providedId = typeof idOrData === 'string' ? idOrData : undefined
       const data =
         typeof idOrData === 'string'
@@ -149,92 +171,120 @@ export function createEntityOperations<T>(
 
       const entityId = providedId || crypto.randomUUID()
 
-      const { data: resolvedData, pendingRelations } = await resolveForwardExact(
-        typeName,
-        data,
-        entity,
-        schema,
-        provider,
-        entityId
-      )
+      try {
+        const provider = await resolveProvider()
 
-      const { data: fuzzyResolvedData, pendingRelations: fuzzyPendingRelations } =
-        await resolveForwardFuzzy(typeName, resolvedData, entity, schema, provider, entityId)
+        const { data: resolvedData, pendingRelations } = await resolveForwardExact(
+          typeName,
+          data,
+          entity,
+          schema,
+          provider,
+          entityId
+        )
 
-      const backwardResolvedData = await resolveBackwardFuzzy(
-        typeName,
-        fuzzyResolvedData,
-        entity,
-        schema,
-        provider
-      )
+        const { data: fuzzyResolvedData, pendingRelations: fuzzyPendingRelations } =
+          await resolveForwardFuzzy(typeName, resolvedData, entity, schema, provider, entityId)
 
-      const finalData = await generateAIFields(
-        backwardResolvedData,
-        typeName,
-        entity,
-        schema,
-        provider
-      )
+        const backwardResolvedData = await resolveBackwardFuzzy(
+          typeName,
+          fuzzyResolvedData,
+          entity,
+          schema,
+          provider
+        )
 
-      const result = await provider.create(typeName, entityId, finalData)
+        const finalData = await generateAIFields(
+          backwardResolvedData,
+          typeName,
+          entity,
+          schema,
+          provider
+        )
+        console.log('[entity-operations.create] finalData after generateAIFields:', finalData)
 
-      for (const rel of pendingRelations) {
-        await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId)
-      }
+        const result = await provider.create(typeName, entityId, finalData)
+        console.log('[entity-operations.create] result after provider.create:', result)
 
-      const createdEdgeIds = new Set<string>()
-      for (const rel of fuzzyPendingRelations) {
-        await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId, {
-          matchMode: 'fuzzy',
-          similarity: rel.similarity,
-          matchedType: rel.matchedType,
-        })
+        for (const rel of pendingRelations) {
+          await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId)
+        }
 
-        const edgeId = `${typeName}_${rel.fieldName}_${entityId}_${rel.targetId}`
-        if (!createdEdgeIds.has(edgeId)) {
-          createdEdgeIds.add(edgeId)
-          try {
-            await provider.create('Edge', edgeId, {
-              from: typeName,
-              name: rel.fieldName,
-              to: rel.targetType,
-              direction: 'forward',
-              matchMode: 'fuzzy',
-              similarity: rel.similarity,
-              matchedType: rel.matchedType,
-              fromId: entityId,
-              toId: rel.targetId,
-            })
-          } catch {
-            // Edge already exists
+        const createdEdgeIds = new Set<string>()
+        for (const rel of fuzzyPendingRelations) {
+          await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId, {
+            matchMode: 'fuzzy',
+            ...(rel.similarity !== undefined && { similarity: rel.similarity }),
+            ...(rel.matchedType !== undefined && { matchedType: rel.matchedType }),
+          })
+
+          const edgeId = `${typeName}_${rel.fieldName}_${entityId}_${rel.targetId}`
+          if (!createdEdgeIds.has(edgeId)) {
+            createdEdgeIds.add(edgeId)
+            try {
+              await provider.create('Edge', edgeId, {
+                from: typeName,
+                name: rel.fieldName,
+                to: rel.targetType,
+                direction: 'forward',
+                matchMode: 'fuzzy',
+                similarity: rel.similarity,
+                matchedType: rel.matchedType,
+                fromId: entityId,
+                toId: rel.targetId,
+              })
+            } catch (error) {
+              // Only ignore actual duplicate key errors, propagate other errors
+              if (!isEntityExistsError(error)) {
+                throw wrapDatabaseError(error, 'create', 'Edge', edgeId)
+              }
+            }
           }
         }
-      }
 
-      return hydrateEntity(result, entity, schema, resolveProvider) as T
+        return hydrateEntity(result, entity, schema, resolveProvider) as T
+      } catch (error) {
+        // Wrap provider errors with context
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'create', typeName, entityId)
+      }
     },
 
     async update(id: string, data: Partial<Omit<T, '$id' | '$type'>>): Promise<T> {
-      const provider = await resolveProvider()
-      const result = await provider.update(typeName, id, data as Record<string, unknown>)
-      return hydrateEntity(result, entity, schema, resolveProvider) as T
+      try {
+        const provider = await resolveProvider()
+        const result = await provider.update(typeName, id, data as Record<string, unknown>)
+        return hydrateEntity(result, entity, schema, resolveProvider) as T
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'update', typeName, id)
+      }
     },
 
     async upsert(id: string, data: Omit<T, '$id' | '$type'>): Promise<T> {
-      const provider = await resolveProvider()
-      const existing = await provider.get(typeName, id)
-      if (existing) {
-        const result = await provider.update(typeName, id, data as Record<string, unknown>)
+      try {
+        const provider = await resolveProvider()
+        const existing = await provider.get(typeName, id)
+        if (existing) {
+          const result = await provider.update(typeName, id, data as Record<string, unknown>)
+          return hydrateEntity(result, entity, schema, resolveProvider) as T
+        }
+        const result = await provider.create(typeName, id, data as Record<string, unknown>)
         return hydrateEntity(result, entity, schema, resolveProvider) as T
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'upsert', typeName, id)
       }
-      const result = await provider.create(typeName, id, data as Record<string, unknown>)
-      return hydrateEntity(result, entity, schema, resolveProvider) as T
     },
 
     async delete(id: string): Promise<boolean> {
-      const provider = await resolveProvider()
-      return provider.delete(typeName, id)
+      try {
+        const provider = await resolveProvider()
+        return provider.delete(typeName, id)
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'delete', typeName, id)
+      }
     },
 
     async forEach(
@@ -255,23 +305,28 @@ export function createEntityOperations<T>(
       options?: SemanticSearchOptions
     ): Promise<Array<T & { $score: number }>> {
       const provider = await resolveProvider()
-      if (hasSemanticSearch(provider)) {
-        const results: SemanticSearchResult[] = await provider.semanticSearch(
-          typeName,
-          query,
-          options
-        )
-        return Promise.all(
-          results.map(
-            (r: SemanticSearchResult) =>
-              ({
-                ...hydrateEntity(r, entity, schema, resolveProvider),
-                $score: r.$score,
-              } as T & { $score: number })
-          )
+      if (!hasSemanticSearch(provider)) {
+        throw new CapabilityNotSupportedError(
+          'hasSemanticSearch',
+          `Semantic search is not supported by the current provider. ` +
+            `The provider does not implement the semanticSearch method required for vector similarity search.`,
+          `Use the regular search() method instead, which performs basic text matching.`
         )
       }
-      return []
+      const results: SemanticSearchResult[] = await provider.semanticSearch(
+        typeName,
+        query,
+        options
+      )
+      return Promise.all(
+        results.map(
+          (r: SemanticSearchResult) =>
+            ({
+              ...hydrateEntity(r, entity, schema, resolveProvider),
+              $score: r.$score,
+            } as T & { $score: number })
+        )
+      )
     },
 
     async hybridSearch(
@@ -281,27 +336,32 @@ export function createEntityOperations<T>(
       Array<T & { $rrfScore: number; $ftsRank: number; $semanticRank: number; $score: number }>
     > {
       const provider = await resolveProvider()
-      if (hasHybridSearch(provider)) {
-        const results: HybridSearchResult[] = await provider.hybridSearch(typeName, query, options)
-        return Promise.all(
-          results.map(
-            (r: HybridSearchResult) =>
-              ({
-                ...hydrateEntity(r, entity, schema, resolveProvider),
-                $rrfScore: r.$rrfScore,
-                $ftsRank: r.$ftsRank,
-                $semanticRank: r.$semanticRank,
-                $score: r.$score,
-              } as T & {
-                $rrfScore: number
-                $ftsRank: number
-                $semanticRank: number
-                $score: number
-              })
-          )
+      if (!hasHybridSearch(provider)) {
+        throw new CapabilityNotSupportedError(
+          'hasHybridSearch',
+          `Hybrid search is not supported by the current provider. ` +
+            `The provider does not implement the hybridSearch method required for combined FTS and vector search.`,
+          `Use the regular search() method instead, which performs basic text matching.`
         )
       }
-      return []
+      const results: HybridSearchResult[] = await provider.hybridSearch(typeName, query, options)
+      return Promise.all(
+        results.map(
+          (r: HybridSearchResult) =>
+            ({
+              ...hydrateEntity(r, entity, schema, resolveProvider),
+              $rrfScore: r.$rrfScore,
+              $ftsRank: r.$ftsRank,
+              $semanticRank: r.$semanticRank,
+              $score: r.$score,
+            } as T & {
+              $rrfScore: number
+              $ftsRank: number
+              $semanticRank: number
+              $score: number
+            })
+        )
+      )
     },
 
     async draft(
@@ -313,9 +373,9 @@ export function createEntityOperations<T>(
 
       // Get the raw schema to detect prompt fields and source instructions
       const rawSchema = entity.schema || {}
-      const sourceInstructions = rawSchema.$instructions as string | undefined
+      const sourceInstructions = rawSchema['$instructions'] as string | undefined
       const hasContextDependencies =
-        Array.isArray(rawSchema.$context) && rawSchema.$context.length > 0
+        Array.isArray(rawSchema['$context']) && rawSchema['$context'].length > 0
 
       for (const [fieldName, field] of entity.fields) {
         if (draftData[fieldName] !== undefined && draftData[fieldName] !== null) {
@@ -361,18 +421,19 @@ export function createEntityOperations<T>(
 
             const refSpecs: ReferenceSpec[] = hints.map((hint: unknown) => {
               const generatedText = String(hint)
-              return {
+              const spec: ReferenceSpec = {
                 field: fieldName,
                 operator: field.operator!,
                 type: field.relatedType!,
-                unionTypes: field.unionTypes,
                 matchMode,
                 resolved: false,
-                prompt: field.prompt,
-                generatedText,
-                sourceInstructions,
-                threshold,
+                ...(field.unionTypes !== undefined && { unionTypes: field.unionTypes }),
+                ...(field.prompt !== undefined && { prompt: field.prompt }),
+                ...(generatedText !== undefined && { generatedText }),
+                ...(sourceInstructions !== undefined && { sourceInstructions }),
+                ...(threshold !== undefined && { threshold }),
               }
+              return spec
             })
 
             // Store the combined generated text for the draft display
@@ -381,7 +442,9 @@ export function createEntityOperations<T>(
 
             if (options?.stream && options.onChunk) {
               for (const spec of refSpecs) {
-                options.onChunk(spec.generatedText!)
+                if (spec.generatedText) {
+                  options.onChunk(spec.generatedText)
+                }
               }
             }
           } else {
@@ -403,18 +466,19 @@ export function createEntityOperations<T>(
               )
             draftData[fieldName] = generatedText
 
-            refs[fieldName] = {
+            const spec: ReferenceSpec = {
               field: fieldName,
               operator: field.operator,
               type: field.relatedType,
-              unionTypes: field.unionTypes,
               matchMode,
               resolved: false,
-              prompt: field.prompt,
-              generatedText, // This now uses the hint if provided
-              sourceInstructions,
-              threshold,
+              ...(field.unionTypes !== undefined && { unionTypes: field.unionTypes }),
+              ...(field.prompt !== undefined && { prompt: field.prompt }),
+              ...(generatedText !== undefined && { generatedText }),
+              ...(sourceInstructions !== undefined && { sourceInstructions }),
+              ...(threshold !== undefined && { threshold }),
             }
+            refs[fieldName] = spec
 
             if (options?.stream && options.onChunk) {
               options.onChunk(generatedText)
@@ -446,7 +510,7 @@ export function createEntityOperations<T>(
         }
       }
 
-      draftData.$refs = refs
+      draftData['$refs'] = refs
       return draftData as Draft<T>
     },
 
@@ -460,8 +524,8 @@ export function createEntityOperations<T>(
       const resolved: Record<string, unknown> = { ...draft }
       const errors: Array<{ field: string; error: string }> = []
 
-      delete resolved.$refs
-      resolved.$phase = 'resolved'
+      delete resolved['$refs']
+      resolved['$phase'] = 'resolved'
 
       const refs = draft.$refs
 
@@ -510,7 +574,7 @@ export function createEntityOperations<T>(
 
       if (errors.length > 0 || options?.onError === 'skip') {
         // resolved is typed as Record<string, unknown>, so we can assign $errors directly
-        resolved.$errors = errors
+        resolved['$errors'] = errors
       }
 
       return resolved as Resolved<T>
@@ -547,7 +611,7 @@ export function createNounEntityOperations(
   return {
     async get(id: string) {
       // Find by name (type name)
-      return nounRecords.find((n) => n.name === id || n.$id === id) ?? null
+      return nounRecords.find((n) => n['name'] === id || n['$id'] === id) ?? null
     },
 
     async list(options?: ListOptions) {
@@ -562,7 +626,7 @@ export function createNounEntityOperations(
       }
       return results.map((n) => ({
         ...n,
-        $id: n.$id || n.name,
+        $id: n['$id'] || n['name'],
         $type: 'Noun',
       }))
     },
@@ -574,7 +638,7 @@ export function createNounEntityOperations(
       }
       return results.map((n) => ({
         ...n,
-        $id: n.$id || n.name,
+        $id: n['$id'] || n['name'],
         $type: 'Noun',
       }))
     },
@@ -584,16 +648,16 @@ export function createNounEntityOperations(
       return nounRecords
         .filter(
           (n) =>
-            String(n.name).toLowerCase().includes(queryLower) ||
-            String(n.singular).toLowerCase().includes(queryLower) ||
-            String(n.plural).toLowerCase().includes(queryLower) ||
-            String(n.description || '')
+            String(n['name']).toLowerCase().includes(queryLower) ||
+            String(n['singular']).toLowerCase().includes(queryLower) ||
+            String(n['plural']).toLowerCase().includes(queryLower) ||
+            String(n['description'] || '')
               .toLowerCase()
               .includes(queryLower)
         )
         .map((n) => ({
           ...n,
-          $id: n.$id || n.name,
+          $id: n['$id'] || n['name'],
           $type: 'Noun',
         }))
     },
@@ -651,7 +715,7 @@ export function createVerbEntityOperations(
   return {
     async get(id: string) {
       // Find by action name
-      return verbRecords.find((v) => v.action === id || v.$id === id) ?? null
+      return verbRecords.find((v) => v['action'] === id || v['$id'] === id) ?? null
     },
 
     async list(options?: ListOptions) {
@@ -666,7 +730,7 @@ export function createVerbEntityOperations(
       }
       return results.map((v) => ({
         ...v,
-        $id: v.$id || v.action,
+        $id: v['$id'] || v['action'],
         $type: 'Verb',
       }))
     },
@@ -678,7 +742,7 @@ export function createVerbEntityOperations(
       }
       return results.map((v) => ({
         ...v,
-        $id: v.$id || v.action,
+        $id: v['$id'] || v['action'],
         $type: 'Verb',
       }))
     },
@@ -688,20 +752,20 @@ export function createVerbEntityOperations(
       return verbRecords
         .filter(
           (v) =>
-            String(v.action).toLowerCase().includes(queryLower) ||
-            String(v.actor || '')
+            String(v['action']).toLowerCase().includes(queryLower) ||
+            String(v['actor'] || '')
               .toLowerCase()
               .includes(queryLower) ||
-            String(v.activity || '')
+            String(v['activity'] || '')
               .toLowerCase()
               .includes(queryLower) ||
-            String(v.description || '')
+            String(v['description'] || '')
               .toLowerCase()
               .includes(queryLower)
         )
         .map((v) => ({
           ...v,
-          $id: v.$id || v.action,
+          $id: v['$id'] || v['action'],
           $type: 'Verb',
         }))
     },
@@ -748,24 +812,44 @@ export function createEdgeEntityOperations(
   schemaEdgeRecords: Array<Record<string, unknown>>,
   getProvider: () => Promise<DBProvider>
 ): EntityOperations<Record<string, unknown>> {
-  async function getRuntimeEdges(): Promise<Array<Record<string, unknown>>> {
+  /**
+   * Get runtime edges from the provider.
+   *
+   * @param options - Options for error handling
+   * @returns Runtime edges, or empty array for not-found errors
+   * @throws DatabaseError for unexpected provider failures
+   */
+  async function getRuntimeEdges(options?: {
+    suppressErrors?: boolean
+  }): Promise<Array<Record<string, unknown>>> {
     try {
       const provider = await getProvider()
       const runtimeEdges = await provider.list('Edge')
       return runtimeEdges
-    } catch {
-      return []
+    } catch (error) {
+      // "Not found" errors are expected - Edge table may not exist yet
+      if (isNotFoundError(error)) {
+        return []
+      }
+      // If suppressErrors is set, return empty array for any error
+      if (options?.suppressErrors) {
+        return []
+      }
+      // Wrap and rethrow unexpected errors with context
+      throw wrapDatabaseError(error, 'list', 'Edge')
     }
   }
 
-  async function getAllEdges(): Promise<Array<Record<string, unknown>>> {
-    const runtimeEdges = await getRuntimeEdges()
-    const runtimeEdgeKeys = new Set(runtimeEdges.map((e) => `${e.from}:${e.name}`))
+  async function getAllEdges(options?: {
+    suppressErrors?: boolean
+  }): Promise<Array<Record<string, unknown>>> {
+    const runtimeEdges = await getRuntimeEdges(options)
+    const runtimeEdgeKeys = new Set(runtimeEdges.map((e) => `${e['from']}:${e['name']}`))
 
     const filteredSchemaEdges = schemaEdgeRecords.filter((e) => {
-      const key = `${e.from}:${e.name}`
+      const key = `${e['from']}:${e['name']}`
       const hasRuntimeVersion = runtimeEdgeKeys.has(key)
-      if (hasRuntimeVersion && e.matchMode === 'fuzzy') {
+      if (hasRuntimeVersion && e['matchMode'] === 'fuzzy') {
         return false
       }
       return !hasRuntimeVersion
@@ -777,23 +861,38 @@ export function createEdgeEntityOperations(
   return {
     async get(id: string) {
       const runtimeEdges = await getRuntimeEdges()
-      const runtimeMatch = runtimeEdges.find((e) => e.$id === id || `${e.from}:${e.name}` === id)
+      const runtimeMatch = runtimeEdges.find(
+        (e) => e['$id'] === id || `${e['from']}:${e['name']}` === id
+      )
       if (runtimeMatch) return { ...runtimeMatch, $type: 'Edge' }
-      return schemaEdgeRecords.find((e) => `${e.from}:${e.name}` === id) ?? null
+      return schemaEdgeRecords.find((e) => `${e['from']}:${e['name']}` === id) ?? null
     },
 
     async list(options?: ListOptions) {
-      let results = await getAllEdges()
-      if (options?.where) {
-        for (const [key, value] of Object.entries(options.where)) {
-          results = results.filter((e) => e[key] === value)
+      try {
+        let results = await getAllEdges({
+          ...(options?.suppressErrors !== undefined && { suppressErrors: options.suppressErrors }),
+        })
+        if (options?.where) {
+          for (const [key, value] of Object.entries(options.where)) {
+            results = results.filter((e) => e[key] === value)
+          }
         }
+        return results.map((e) => ({
+          ...e,
+          $id: e['$id'] || `${e['from']}:${e['name']}`,
+          $type: 'Edge',
+        }))
+      } catch (error) {
+        // Handle error with callback if provided
+        if (options?.onError) {
+          const fallback = options.onError(
+            error instanceof Error ? error : new Error(String(error))
+          )
+          return (fallback ?? []) as Record<string, unknown>[]
+        }
+        throw error
       }
-      return results.map((e) => ({
-        ...e,
-        $id: e.$id || `${e.from}:${e.name}`,
-        $type: 'Edge',
-      }))
     },
 
     async find(where: Record<string, unknown>) {
@@ -803,7 +902,7 @@ export function createEdgeEntityOperations(
       }
       return results.map((e) => ({
         ...e,
-        $id: e.$id || `${e.from}:${e.name}`,
+        $id: e['$id'] || `${e['from']}:${e['name']}`,
         $type: 'Edge',
       }))
     },
@@ -814,13 +913,13 @@ export function createEdgeEntityOperations(
       return allEdges
         .filter(
           (e) =>
-            String(e.from).toLowerCase().includes(queryLower) ||
-            String(e.name).toLowerCase().includes(queryLower) ||
-            String(e.to).toLowerCase().includes(queryLower)
+            String(e['from']).toLowerCase().includes(queryLower) ||
+            String(e['name']).toLowerCase().includes(queryLower) ||
+            String(e['to']).toLowerCase().includes(queryLower)
         )
         .map((e) => ({
           ...e,
-          $id: e.$id || `${e.from}:${e.name}`,
+          $id: e['$id'] || `${e['from']}:${e['name']}`,
           $type: 'Edge',
         }))
     },

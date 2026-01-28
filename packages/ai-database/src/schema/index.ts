@@ -871,35 +871,40 @@ export function DB<TSchema extends DatabaseSchema>(
       }
       throw new Error('Provider does not support actions')
     },
-    async get(id: string) {
+    async get(id: string): Promise<import('../ai-promise-db.js').ForEachActionState | null> {
       const provider = await resolveProvider()
       if (hasActionsAPI(provider)) {
         const action = await provider.getAction(id)
         if (!action) return null
         // Adapt DBAction to ForEachActionState
-        return {
+        const state: import('../ai-promise-db.js').ForEachActionState = {
           id: action.id,
           type: action.action ?? action.type ?? 'unknown',
           status: action.status,
-          progress: action.progress,
-          total: action.total,
           data: action.objectData ?? {},
-          result: action.result as import('../ai-promise-db.js').ForEachResult | undefined,
-          error: action.error,
         }
+        if (action.progress !== undefined) state.progress = action.progress
+        if (action.total !== undefined) state.total = action.total
+        if (action.result !== undefined)
+          state.result = action.result as unknown as import('../ai-promise-db.js').ForEachResult
+        if (action.error !== undefined) state.error = action.error
+        return state
       }
       return null
     },
     async update(id: string, updates: Partial<import('../ai-promise-db.js').ForEachActionState>) {
       const provider = await resolveProvider()
       if (hasActionsAPI(provider)) {
-        await provider.updateAction(id, {
-          status: updates.status,
-          progress: updates.progress,
-          // ForEachResult needs to be converted to Record<string, unknown> for DBAction.result
-          result: updates.result as Record<string, unknown> | undefined,
-          error: updates.error,
-        })
+        const updatePayload: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>> =
+          {}
+        if (updates.status !== undefined) updatePayload.status = updates.status
+        if (updates.progress !== undefined) updatePayload.progress = updates.progress
+        if (updates.error !== undefined) updatePayload.error = updates.error
+        // ForEachResult needs to be converted to Record<string, unknown> for DBAction.result
+        if (updates.result !== undefined) {
+          updatePayload.result = updates.result as unknown as Record<string, unknown>
+        }
+        await provider.updateAction(id, updatePayload)
         return
       }
       throw new Error('Provider does not support actions')
@@ -995,7 +1000,7 @@ export function DB<TSchema extends DatabaseSchema>(
           throw new Error(`Draft method not available for ${entityName}`)
         }
         const draft = await draftMethod(data as Partial<Record<string, unknown>>, options)
-        ;(draft as Record<string, unknown>).$type = entityName
+        ;(draft as Record<string, unknown>)['$type'] = entityName
         emitInternalEventForOps('draft', draft)
         return draft
       }
@@ -1007,7 +1012,7 @@ export function DB<TSchema extends DatabaseSchema>(
         }
         const resolved = await resolveMethod(draft as Draft<Record<string, unknown>>, options)
         if (resolved && typeof resolved === 'object') {
-          ;(resolved as Record<string, unknown>).$type = entityName
+          ;(resolved as Record<string, unknown>)['$type'] = entityName
         }
         emitInternalEventForOps('resolve', resolved)
         return resolved
@@ -1016,6 +1021,7 @@ export function DB<TSchema extends DatabaseSchema>(
 
       const originalCreate = wrappedOps.create
       wrappedOps.create = async (...args: unknown[]): Promise<unknown> => {
+        console.log('[schema/index.ts wrappedOps.create] CALLED for', entityName, 'args:', args)
         let id: string | undefined
         let data: Record<string, unknown>
         let options: CreateEntityOptions | undefined
@@ -1056,6 +1062,7 @@ export function DB<TSchema extends DatabaseSchema>(
             }
             return true
           })
+        console.log('[schema/index.ts] hasReferenceFields:', hasReferenceFields, 'for', entityName)
 
         // Cascade takes priority over two-phase processing when enabled
         // Cascade handles generating related entities through the graph
@@ -1067,10 +1074,10 @@ export function DB<TSchema extends DatabaseSchema>(
             const cascadeState: CascadeState = options._cascadeState ?? {
               totalEntitiesCreated: 0,
               initialMaxDepth: effectiveMaxDepth,
-              rootOnProgress: options.onProgress,
-              rootOnError: options.onError,
-              stopOnError: options.stopOnError,
-              cascadeTypes: options.cascadeTypes,
+              ...(options.onProgress !== undefined && { rootOnProgress: options.onProgress }),
+              ...(options.onError !== undefined && { rootOnError: options.onError }),
+              ...(options.stopOnError !== undefined && { stopOnError: options.stopOnError }),
+              ...(options.cascadeTypes !== undefined && { cascadeTypes: options.cascadeTypes }),
             }
             const currentDepth = cascadeState.initialMaxDepth - effectiveMaxDepth
             const cascadeData = { ...data }
@@ -1105,8 +1112,10 @@ export function DB<TSchema extends DatabaseSchema>(
                   })
 
                   const childEntityData: Record<string, unknown> = {}
-                  const parentInstructions = entityDef.schema?.$instructions as string | undefined
-                  const childInstructions = relatedEntity.schema?.$instructions as
+                  const parentInstructions = entityDef.schema?.['$instructions'] as
+                    | string
+                    | undefined
+                  const childInstructions = relatedEntity.schema?.['$instructions'] as
                     | string
                     | undefined
 
@@ -1154,7 +1163,7 @@ export function DB<TSchema extends DatabaseSchema>(
                     _cascadeState: cascadeState,
                   }
                   const relatedOps = entityOperations[field.relatedType]
-                  const createFn = relatedOps?.create as
+                  const createFn = relatedOps?.['create'] as
                     | ((
                         data: Record<string, unknown>,
                         opts?: CreateEntityOptions
@@ -1164,12 +1173,12 @@ export function DB<TSchema extends DatabaseSchema>(
                     ? await createFn(childEntityData, childOptions)
                     : undefined
 
-                  if (childEntity?.$id) {
+                  if (childEntity?.['$id']) {
                     cascadeState.totalEntitiesCreated++
                     if (field.isArray) {
-                      cascadeData[fieldName] = [childEntity.$id]
+                      cascadeData[fieldName] = [childEntity['$id']]
                     } else {
-                      cascadeData[fieldName] = childEntity.$id
+                      cascadeData[fieldName] = childEntity['$id']
                     }
                   }
                 } catch (error) {
@@ -1221,14 +1230,35 @@ export function DB<TSchema extends DatabaseSchema>(
             unknown
           >
 
+          // Phase 3: Generate AI fields for entities with $context dependencies
+          // The draft phase skips prompt fields for entities with $context because
+          // those fields need pre-fetched context data to generate properly.
+          // generateAIFields handles this context pre-fetching and field generation.
+          console.log('[schema/index.ts] Two-phase path - calling generateAIFields for', entityName)
+          const provider = await resolveProvider()
+          const entityDefForAI = parsedSchema.entities.get(entityName)
+          let finalCleanData = cleanData
+          console.log('[schema/index.ts] entityDefForAI:', entityDefForAI?.name)
+          if (entityDefForAI) {
+            console.log('[schema/index.ts] Calling generateAIFields with cleanData:', cleanData)
+            finalCleanData = await generateAIFields(
+              cleanData,
+              entityName,
+              entityDefForAI,
+              parsedSchema,
+              provider
+            )
+            console.log('[schema/index.ts] finalCleanData after generateAIFields:', finalCleanData)
+          }
+
           // Persist the resolved entity - use type assertion for internal overload dispatch
           type CreateFn = (...args: unknown[]) => Promise<unknown>
           const createFn = originalCreate as CreateFn
           let result
           if (id) {
-            result = await createFn.call(wrappedOps, id, cleanData)
+            result = await createFn.call(wrappedOps, id, finalCleanData)
           } else {
-            result = await createFn.call(wrappedOps, cleanData)
+            result = await createFn.call(wrappedOps, finalCleanData)
           }
 
           return result
@@ -1259,7 +1289,7 @@ export function DB<TSchema extends DatabaseSchema>(
       // Add seed method if entity has seed configuration
       if (entity.seedConfig) {
         const seedConfig = entity.seedConfig
-        ;(wrappedOps as Record<string, unknown>).seed = async (): Promise<{ count: number }> => {
+        ;(wrappedOps as Record<string, unknown>)['seed'] = async (): Promise<{ count: number }> => {
           const { loadSeedData } = await import('./seed.js')
           const records = await loadSeedData(seedConfig)
           const provider = await resolveProvider()
@@ -1349,7 +1379,9 @@ export function DB<TSchema extends DatabaseSchema>(
 
     async count(type: string, where?: Record<string, unknown>) {
       const provider = await resolveProvider()
-      const results = await provider.list(type, { where })
+      const listOpts: ListOptions = {}
+      if (where !== undefined) listOpts.where = where
+      const results = await provider.list(type, listOpts)
       return results.length
     },
 
@@ -1358,7 +1390,9 @@ export function DB<TSchema extends DatabaseSchema>(
       callback: (entity: unknown) => void | Promise<void>
     ) {
       const provider = await resolveProvider()
-      const results = await provider.list(options.type, { where: options.where })
+      const listOpts: ListOptions = {}
+      if (options.where !== undefined) listOpts.where = options.where
+      const results = await provider.list(options.type, listOpts)
       const concurrency = options.concurrency ?? 1
 
       if (concurrency === 1) {
@@ -1425,26 +1459,28 @@ export function DB<TSchema extends DatabaseSchema>(
       }
       const now = new Date()
       if (typeof optionsOrType === 'string') {
-        return {
+        const baseEvent: DBEvent = {
           id: crypto.randomUUID(),
           actor: 'system',
           event: optionsOrType,
-          objectData: data as Record<string, unknown> | undefined,
           timestamp: now,
         }
+        if (data !== undefined) baseEvent.objectData = data as Record<string, unknown>
+        return baseEvent
       }
-      return {
+      const baseEvent: DBEvent = {
         id: crypto.randomUUID(),
         actor: optionsOrType.actor,
-        actorData: optionsOrType.actorData,
         event: optionsOrType.event,
-        object: optionsOrType.object,
-        objectData: optionsOrType.objectData,
-        result: optionsOrType.result,
-        resultData: optionsOrType.resultData,
-        meta: optionsOrType.meta,
         timestamp: now,
       }
+      if (optionsOrType.actorData !== undefined) baseEvent.actorData = optionsOrType.actorData
+      if (optionsOrType.object !== undefined) baseEvent.object = optionsOrType.object
+      if (optionsOrType.objectData !== undefined) baseEvent.objectData = optionsOrType.objectData
+      if (optionsOrType.result !== undefined) baseEvent.result = optionsOrType.result
+      if (optionsOrType.resultData !== undefined) baseEvent.resultData = optionsOrType.resultData
+      if (optionsOrType.meta !== undefined) baseEvent.meta = optionsOrType.meta
+      return baseEvent
     },
 
     async list(options) {

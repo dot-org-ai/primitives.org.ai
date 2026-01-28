@@ -38,8 +38,8 @@ export class SchemaValidationError extends Error {
     super(message)
     this.name = 'SchemaValidationError'
     this.code = code
-    this.path = path
-    this.details = details
+    if (path !== undefined) this.path = path
+    if (details !== undefined) this.details = details
   }
 }
 
@@ -684,15 +684,16 @@ export function parseOperator(definition: string): OperatorParseResult | null {
         // with modifier parsing in parseField
       }
 
-      return {
-        prompt,
+      const result: OperatorParseResult = {
         operator: op,
         direction,
         matchMode,
         targetType,
-        unionTypes,
-        threshold,
       }
+      if (prompt !== undefined) result.prompt = prompt
+      if (unionTypes !== undefined) result.unionTypes = unionTypes
+      if (threshold !== undefined) result.threshold = threshold
+      return result
     }
   }
 
@@ -865,15 +866,15 @@ export function parseField(name: string, definition: FieldDefinition): ParsedFie
     isArray,
     isOptional,
     isRelation,
-    relatedType,
-    backref,
   }
+  if (relatedType !== undefined) result.relatedType = relatedType
+  if (backref !== undefined) result.backref = backref
 
   // Only add operator properties if an operator was found
   if (operator) {
     result.operator = operator
-    result.direction = direction
-    result.matchMode = matchMode
+    if (direction !== undefined) result.direction = direction
+    if (matchMode !== undefined) result.matchMode = matchMode
     if (prompt) {
       result.prompt = prompt
     }
@@ -965,8 +966,8 @@ export function parseSchema(schema: DatabaseSchema): ParsedSchema {
 
     // Extract seed configuration if $seed is defined
     let seedConfig: SeedConfig | undefined
-    const seedUrl = entitySchema.$seed as string | undefined
-    const seedIdField = entitySchema.$id as string | undefined
+    const seedUrl = entitySchema['$seed'] as string | undefined
+    const seedIdField = entitySchema['$id'] as string | undefined
 
     if (seedUrl) {
       // Extract the id column from $id field (e.g., '$.oNETSOCCode' -> 'oNETSOCCode')
@@ -995,7 +996,9 @@ export function parseSchema(schema: DatabaseSchema): ParsedSchema {
     }
 
     // Store raw schema for accessing metadata like $fuzzyThreshold
-    entities.set(entityName, { name: entityName, fields, schema: entitySchema, seedConfig })
+    const entityData: ParsedEntity = { name: entityName, fields, schema: entitySchema }
+    if (seedConfig !== undefined) entityData.seedConfig = seedConfig
+    entities.set(entityName, entityData)
   }
 
   // Validation pass: check that all operator-based references (->, ~>, <-, <~) point to existing types

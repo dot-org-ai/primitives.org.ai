@@ -57,7 +57,10 @@ export function createBusinessOperations(initialContext?: BusinessContext): Busi
 
   return {
     format: (amount: number, currency?: Currency) => {
-      return formatCurrency(amount, currency || context.business?.metadata?.currency as Currency || 'USD')
+      return formatCurrency(
+        amount,
+        currency || (context.business?.metadata?.['currency'] as Currency) || 'USD'
+      )
     },
 
     percent: (value: number, total: number) => {
@@ -126,7 +129,7 @@ export function getContext(): BusinessContext {
  * Reset business context
  */
 export function resetContext(): void {
-  Object.keys($.context).forEach(key => {
+  Object.keys($.context).forEach((key) => {
     delete $.context[key]
   })
 }

@@ -168,6 +168,38 @@ export interface MetricsCollector {
 }
 
 // ============================================================================
+// Safe Array Access Utilities
+// ============================================================================
+
+/**
+ * Safely get the first element of an array.
+ *
+ * Provides type-safe access to array elements without non-null assertions.
+ *
+ * @param arr - The array to access
+ * @returns The first element or undefined if array is empty
+ */
+function safeFirst<T>(arr: T[]): T | undefined {
+  return arr.length > 0 ? arr[0] : undefined
+}
+
+/**
+ * Safely get an element at a specific index.
+ *
+ * Provides type-safe access with bounds checking.
+ *
+ * @param arr - The array to access
+ * @param index - The index to access
+ * @returns The element at the index or undefined if out of bounds
+ */
+function safeAt<T>(arr: T[], index: number): T | undefined {
+  if (arr.length === 0 || index < 0 || index >= arr.length) {
+    return undefined
+  }
+  return arr[index]
+}
+
+// ============================================================================
 // MetricsCollector Implementation
 // ============================================================================
 
@@ -213,11 +245,7 @@ export function createMetricsCollector(): MetricsCollector {
   }
   let totalLatency = 0
 
-  function record(
-    result: RouteResult,
-    latencyMs: number,
-    strategy: BalancerStrategy
-  ): void {
+  function record(result: RouteResult, latencyMs: number, strategy: BalancerStrategy): void {
     metricsState.totalRouted++
     totalLatency += latencyMs
     metricsState.averageLatencyMs = totalLatency / metricsState.totalRouted
@@ -326,7 +354,7 @@ export function createRoundRobinBalancer(
   const collector = options.metricsCollector ?? defaultMetricsCollector
 
   function getAvailableAgents(): AgentInfo[] {
-    return agents.filter(a => a.status === 'available' || a.status === 'busy')
+    return agents.filter((a) => a.status === 'available' || a.status === 'busy')
   }
 
   function route(task: TaskRequest): RouteResult {
@@ -348,8 +376,12 @@ export function createRoundRobinBalancer(
     // Find the next available agent starting from current index
     let attempts = 0
     while (attempts < agents.length) {
-      const agent = agents[currentIndex % agents.length]!
+      const agent = safeAt(agents, currentIndex % agents.length)
       currentIndex++
+      if (!agent) {
+        attempts++
+        continue
+      }
 
       if (agent.status === 'available' || agent.status === 'busy') {
         const result: RouteResult = {
@@ -380,7 +412,7 @@ export function createRoundRobinBalancer(
   }
 
   function removeAgent(agentId: string): void {
-    agents = agents.filter(a => a.id !== agentId)
+    agents = agents.filter((a) => a.id !== agentId)
   }
 
   function getAgents(): AgentInfo[] {
@@ -430,10 +462,10 @@ export function createLeastBusyBalancer(
   const collector = options.metricsCollector ?? defaultMetricsCollector
 
   // Initialize load tracking
-  agents.forEach(a => loadTracking.set(a.id, a.currentLoad))
+  agents.forEach((a) => loadTracking.set(a.id, a.currentLoad))
 
   function getAvailableAgents(): AgentInfo[] {
-    return agents.filter(a => {
+    return agents.filter((a) => {
       if (a.status !== 'available' && a.status !== 'busy') return false
       const load = loadTracking.get(a.id) ?? a.currentLoad
       return load < a.maxLoad
@@ -471,7 +503,18 @@ export function createLeastBusyBalancer(
       return loadA - loadB
     })
 
-    const selected = sorted[0]!
+    const selected = safeFirst(sorted)
+    if (!selected) {
+      const result: RouteResult = {
+        agent: null,
+        task,
+        strategy: 'least-busy',
+        timestamp: new Date(),
+        reason: 'no-available-agents',
+      }
+      collector.record(result, performance.now() - start, 'least-busy')
+      return result
+    }
     lastRoutedIndex = agents.indexOf(selected)
 
     // Increment load
@@ -494,7 +537,7 @@ export function createLeastBusyBalancer(
   }
 
   function removeAgent(agentId: string): void {
-    agents = agents.filter(a => a.id !== agentId)
+    agents = agents.filter((a) => a.id !== agentId)
     loadTracking.delete(agentId)
   }
 
@@ -504,7 +547,7 @@ export function createLeastBusyBalancer(
 
   function getLoadMetrics(): Record<string, number> {
     const metrics: Record<string, number> = {}
-    agents.forEach(a => {
+    agents.forEach((a) => {
       const load = loadTracking.get(a.id) ?? a.currentLoad
       metrics[a.id] = load / a.maxLoad
     })
@@ -566,16 +609,16 @@ export function createCapabilityRouter(
   const collector = options.metricsCollector ?? defaultMetricsCollector
 
   function getAvailableAgents(): AgentInfo[] {
-    return agents.filter(a => a.status === 'available' || a.status === 'busy')
+    return agents.filter((a) => a.status === 'available' || a.status === 'busy')
   }
 
   function hasAllSkills(agent: AgentInfo, requiredSkills: string[]): boolean {
-    return requiredSkills.every(skill => agent.skills.includes(skill))
+    return requiredSkills.every((skill) => agent.skills.includes(skill))
   }
 
   function calculateMatchScore(agent: AgentInfo, requiredSkills: string[]): number {
     if (requiredSkills.length === 0) return 1
-    const matchingSkills = requiredSkills.filter(s => agent.skills.includes(s))
+    const matchingSkills = requiredSkills.filter((s) => agent.skills.includes(s))
     return matchingSkills.length / requiredSkills.length
   }
 
@@ -584,7 +627,7 @@ export function createCapabilityRouter(
     const available = getAvailableAgents()
 
     // Find agents with all required skills
-    let candidates = available.filter(a => hasAllSkills(a, task.requiredSkills))
+    let candidates = available.filter((a) => hasAllSkills(a, task.requiredSkills))
 
     if (candidates.length === 0) {
       const result: RouteResult = {
@@ -608,7 +651,18 @@ export function createCapabilityRouter(
       })
     }
 
-    const selected = candidates[0]!
+    const selected = safeFirst(candidates)
+    if (!selected) {
+      const result: RouteResult = {
+        agent: null,
+        task,
+        strategy: 'capability',
+        timestamp: new Date(),
+        reason: 'no-matching-capability',
+      }
+      collector.record(result, performance.now() - start, 'capability')
+      return result
+    }
     const matchScore = calculateMatchScore(selected, task.requiredSkills)
 
     const result: RouteResult = {
@@ -627,7 +681,7 @@ export function createCapabilityRouter(
   }
 
   function removeAgent(agentId: string): void {
-    agents = agents.filter(a => a.id !== agentId)
+    agents = agents.filter((a) => a.id !== agentId)
   }
 
   function getAgents(): AgentInfo[] {
@@ -635,13 +689,13 @@ export function createCapabilityRouter(
   }
 
   function findAgentsWithSkills(skills: string[]): AgentInfo[] {
-    return agents.filter(a => hasAllSkills(a, skills))
+    return agents.filter((a) => hasAllSkills(a, skills))
   }
 
   function getSkillCoverage(): Record<string, number> {
     const coverage: Record<string, number> = {}
-    agents.forEach(a => {
-      a.skills.forEach(skill => {
+    agents.forEach((a) => {
+      a.skills.forEach((skill) => {
         coverage[skill] = (coverage[skill] || 0) + 1
       })
     })
@@ -706,11 +760,11 @@ export function createPriorityQueueBalancer(
   const collector = options.metricsCollector ?? defaultMetricsCollector
 
   function getAvailableAgents(): AgentInfo[] {
-    return agents.filter(a => a.status === 'available' || a.status === 'busy')
+    return agents.filter((a) => a.status === 'available' || a.status === 'busy')
   }
 
   function getEffectivePriority(taskId: string): number {
-    const task = queue.find(t => t.id === taskId)
+    const task = queue.find((t) => t.id === taskId)
     if (!task) return 0
 
     let priority = task.priority
@@ -758,7 +812,8 @@ export function createPriorityQueueBalancer(
     if (queue.length === 0) return null
 
     sortQueue()
-    const task = queue.shift()!
+    const task = queue.shift()
+    if (!task) return null
     const start = performance.now()
     const available = getAvailableAgents()
 
@@ -775,7 +830,18 @@ export function createPriorityQueueBalancer(
     }
 
     // Simple round-robin among available for now
-    const agent = available[0]!
+    const agent = safeFirst(available)
+    if (!agent) {
+      const result: RouteResult = {
+        agent: null,
+        task,
+        strategy: 'priority-queue',
+        timestamp: new Date(),
+        reason: 'no-available-agents',
+      }
+      collector.record(result, performance.now() - start, 'priority-queue')
+      return result
+    }
 
     const result: RouteResult = {
       agent,
@@ -803,7 +869,18 @@ export function createPriorityQueueBalancer(
       return result
     }
 
-    const agent = available[0]!
+    const agent = safeFirst(available)
+    if (!agent) {
+      const result: RouteResult = {
+        agent: null,
+        task,
+        strategy: 'priority-queue',
+        timestamp: new Date(),
+        reason: 'no-available-agents',
+      }
+      collector.record(result, performance.now() - start, 'priority-queue')
+      return result
+    }
     const result: RouteResult = {
       agent,
       task,
@@ -819,7 +896,7 @@ export function createPriorityQueueBalancer(
   }
 
   function removeAgent(agentId: string): void {
-    agents = agents.filter(a => a.id !== agentId)
+    agents = agents.filter((a) => a.id !== agentId)
   }
 
   function getAgents(): AgentInfo[] {
@@ -903,7 +980,7 @@ export function createAgentAvailabilityTracker(
   const { heartbeatTimeout = 30000 } = options
 
   // Initialize
-  initialAgents.forEach(a => {
+  initialAgents.forEach((a) => {
     agents.set(a.id, a)
     availability.set(a.id, {
       status: a.status,
@@ -914,10 +991,12 @@ export function createAgentAvailabilityTracker(
   })
 
   function getAvailability(agentId: string): AgentAvailability {
-    return availability.get(agentId) ?? {
-      status: 'offline',
-      lastSeen: new Date(0),
-    }
+    return (
+      availability.get(agentId) ?? {
+        status: 'offline',
+        lastSeen: new Date(0),
+      }
+    )
   }
 
   function updateStatus(agentId: string, status: WorkerStatus): void {
@@ -943,12 +1022,12 @@ export function createAgentAvailabilityTracker(
         currentStatus: status,
         timestamp: new Date(),
       }
-      handlers.forEach(h => h(event))
+      handlers.forEach((h) => h(event))
     }
   }
 
   function getAvailableAgents(): AgentInfo[] {
-    return Array.from(agents.values()).filter(a => {
+    return Array.from(agents.values()).filter((a) => {
       const avail = availability.get(a.id)
       return avail?.status === 'available' || avail?.status === 'busy'
     })
@@ -1137,7 +1216,7 @@ export function createRoutingRuleEngine(
 
     // Sort rules by priority (descending)
     const sortedRules = [...rules]
-      .filter(r => r.enabled !== false)
+      .filter((r) => r.enabled !== false)
       .sort((a, b) => b.priority - a.priority)
 
     // Evaluate rules
@@ -1178,28 +1257,28 @@ export function createRoutingRuleEngine(
   }
 
   function removeRule(name: string): void {
-    const index = rules.findIndex(r => r.name === name)
+    const index = rules.findIndex((r) => r.name === name)
     if (index !== -1) {
       rules.splice(index, 1)
     }
   }
 
   function updateRule(name: string, updates: Partial<RoutingRule>): void {
-    const rule = rules.find(r => r.name === name)
+    const rule = rules.find((r) => r.name === name)
     if (rule) {
       Object.assign(rule, updates)
     }
   }
 
   function enableRule(name: string): void {
-    const rule = rules.find(r => r.name === name)
+    const rule = rules.find((r) => r.name === name)
     if (rule) {
       rule.enabled = true
     }
   }
 
   function disableRule(name: string): void {
-    const rule = rules.find(r => r.name === name)
+    const rule = rules.find((r) => r.name === name)
     if (rule) {
       rule.enabled = false
     }
@@ -1215,7 +1294,7 @@ export function createRoutingRuleEngine(
   }
 
   function removeAgent(agentId: string): void {
-    agents = agents.filter(a => a.id !== agentId)
+    agents = agents.filter((a) => a.id !== agentId)
     defaultBalancer = undefined as any // Reset default balancer
   }
 
@@ -1283,7 +1362,14 @@ export function createCompositeBalancer(
           balancers.set(strategy, createRoundRobinBalancer(agents, balancerOptions))
       }
     }
-    return balancers.get(strategy)!
+    const balancer = balancers.get(strategy)
+    if (!balancer) {
+      // Fallback to round-robin if strategy not found
+      const fallback = createRoundRobinBalancer(agents, { metricsCollector: collector })
+      balancers.set(strategy, fallback)
+      return fallback
+    }
+    return balancer
   }
 
   function route(task: TaskRequest): RouteResult {
@@ -1293,7 +1379,7 @@ export function createCompositeBalancer(
     let usedFallback = false
 
     // Handle weighted strategies
-    const weightedStrategies = config.strategies.map(s => {
+    const weightedStrategies = config.strategies.map((s) => {
       if (typeof s === 'string') {
         return { strategy: s, weight: 1 }
       }
@@ -1365,12 +1451,12 @@ export function createCompositeBalancer(
 
   function addAgent(agent: AgentInfo): void {
     agents.push(agent)
-    balancers.forEach(b => b.addAgent(agent))
+    balancers.forEach((b) => b.addAgent(agent))
   }
 
   function removeAgent(agentId: string): void {
-    agents = agents.filter(a => a.id !== agentId)
-    balancers.forEach(b => b.removeAgent(agentId))
+    agents = agents.filter((a) => a.id !== agentId)
+    balancers.forEach((b) => b.removeAgent(agentId))
   }
 
   function getAgents(): AgentInfo[] {

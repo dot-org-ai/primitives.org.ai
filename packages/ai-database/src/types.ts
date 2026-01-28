@@ -70,13 +70,16 @@ export interface ThingExpanded extends MDXLD {
  */
 export function toExpanded(flat: ThingFlat): ThingExpanded {
   const { $id, $type, $context, ...rest } = flat
-  return {
+  const result: ThingExpanded = {
     id: $id,
     type: $type,
-    context: $context,
     data: rest,
-    content: typeof rest.content === 'string' ? rest.content : '',
+    content: typeof rest['content'] === 'string' ? rest['content'] : '',
   }
+  if ($context !== undefined) {
+    result.context = $context
+  }
+  return result
 }
 
 /**
@@ -84,14 +87,17 @@ export function toExpanded(flat: ThingFlat): ThingExpanded {
  */
 export function toFlat(expanded: ThingExpanded): ThingFlat {
   const { id, type, context, data, content, ...rest } = expanded
-  return {
+  const result: ThingFlat = {
     $id: id,
     $type: type,
-    $context: context,
     ...data,
     ...rest,
     ...(content ? { content } : {}),
   }
+  if (context !== undefined) {
+    result.$context = context
+  }
+  return result
 }
 
 // =============================================================================

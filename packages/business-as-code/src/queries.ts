@@ -17,14 +17,7 @@ import type { TimePeriod } from './types.js'
 /**
  * Time granularity for aggregations
  */
-export type Granularity =
-  | 'minute'
-  | 'hour'
-  | 'day'
-  | 'week'
-  | 'month'
-  | 'quarter'
-  | 'year'
+export type Granularity = 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year'
 
 /**
  * Aggregation function
@@ -50,18 +43,18 @@ export type AggregateFunction =
  * Comparison operator
  */
 export type Operator =
-  | 'eq'      // =
-  | 'ne'      // !=
-  | 'gt'      // >
-  | 'gte'     // >=
-  | 'lt'      // <
-  | 'lte'     // <=
-  | 'in'      // IN
-  | 'notIn'   // NOT IN
-  | 'like'    // LIKE
+  | 'eq' // =
+  | 'ne' // !=
+  | 'gt' // >
+  | 'gte' // >=
+  | 'lt' // <
+  | 'lte' // <=
+  | 'in' // IN
+  | 'notIn' // NOT IN
+  | 'like' // LIKE
   | 'notLike' // NOT LIKE
   | 'between' // BETWEEN
-  | 'isNull'  // IS NULL
+  | 'isNull' // IS NULL
   | 'isNotNull' // IS NOT NULL
 
 /**
@@ -78,11 +71,11 @@ export type SortDirection = 'asc' | 'desc'
  */
 export interface Dimension {
   name: string
-  field: string              // Source field in database
+  field: string // Source field in database
   type: 'string' | 'number' | 'date' | 'boolean'
   description?: string
-  granularity?: Granularity  // For time dimensions
-  format?: string            // Display format
+  granularity?: Granularity // For time dimensions
+  format?: string // Display format
 }
 
 /**
@@ -90,7 +83,7 @@ export interface Dimension {
  */
 export interface Measure {
   name: string
-  field: string              // Source field or expression
+  field: string // Source field or expression
   aggregate: AggregateFunction
   type?: 'number' | 'currency' | 'percent'
   description?: string
@@ -103,8 +96,8 @@ export interface Measure {
  */
 export interface CalculatedMeasure {
   name: string
-  expression: string         // e.g., "revenue - cogs" or "revenue / customers"
-  measures: string[]         // Dependencies
+  expression: string // e.g., "revenue - cogs" or "revenue / customers"
+  measures: string[] // Dependencies
   type?: 'number' | 'currency' | 'percent'
   description?: string
   format?: string
@@ -137,8 +130,8 @@ export interface Sort {
  * Time range filter
  */
 export interface TimeRange {
-  field: string              // The timestamp field
-  start?: Date | string      // Absolute or relative (e.g., '-30d')
+  field: string // The timestamp field
+  start?: Date | string // Absolute or relative (e.g., '-30d')
   end?: Date | string
   granularity?: Granularity
 }
@@ -155,11 +148,11 @@ export interface Query {
   description?: string
 
   // Data source
-  source: string             // Table or view name
+  source: string // Table or view name
 
   // What to select
-  dimensions?: string[]      // Dimension names to group by
-  measures?: string[]        // Measure names to aggregate
+  dimensions?: string[] // Dimension names to group by
+  measures?: string[] // Measure names to aggregate
 
   // Filtering
   filters?: Filter[]
@@ -197,8 +190,8 @@ export interface View {
 
   // Materialization options
   materialized?: boolean
-  refreshInterval?: string   // e.g., '5m', '1h', '1d'
-  retention?: string         // How long to keep data
+  refreshInterval?: string // e.g., '5m', '1h', '1d'
+  retention?: string // How long to keep data
 
   // Access
   public?: boolean
@@ -244,16 +237,16 @@ export interface DashboardItem {
  * Visualization type
  */
 export type Visualization =
-  | 'number'      // Single big number
-  | 'trend'       // Number with sparkline
-  | 'table'       // Data table
-  | 'bar'         // Bar chart
-  | 'line'        // Line chart
-  | 'area'        // Area chart
-  | 'pie'         // Pie chart
-  | 'funnel'      // Funnel chart
-  | 'cohort'      // Cohort matrix
-  | 'heatmap'     // Heatmap
+  | 'number' // Single big number
+  | 'trend' // Number with sparkline
+  | 'table' // Data table
+  | 'bar' // Bar chart
+  | 'line' // Line chart
+  | 'area' // Area chart
+  | 'pie' // Pie chart
+  | 'funnel' // Funnel chart
+  | 'cohort' // Cohort matrix
+  | 'heatmap' // Heatmap
 
 // =============================================================================
 // Metric Definitions (Standard SaaS Metrics as Queries)
@@ -266,18 +259,39 @@ export const StandardDimensions: Record<string, Dimension> = {
   // Time
   date: { name: 'date', field: 'date', type: 'date', description: 'Event date' },
   month: { name: 'month', field: 'date', type: 'date', granularity: 'month', description: 'Month' },
-  quarter: { name: 'quarter', field: 'date', type: 'date', granularity: 'quarter', description: 'Quarter' },
+  quarter: {
+    name: 'quarter',
+    field: 'date',
+    type: 'date',
+    granularity: 'quarter',
+    description: 'Quarter',
+  },
   year: { name: 'year', field: 'date', type: 'date', granularity: 'year', description: 'Year' },
 
   // Customer
-  customerId: { name: 'customerId', field: 'customer_id', type: 'string', description: 'Customer ID' },
-  customerSegment: { name: 'customerSegment', field: 'customer_segment', type: 'string', description: 'Customer segment' },
+  customerId: {
+    name: 'customerId',
+    field: 'customer_id',
+    type: 'string',
+    description: 'Customer ID',
+  },
+  customerSegment: {
+    name: 'customerSegment',
+    field: 'customer_segment',
+    type: 'string',
+    description: 'Customer segment',
+  },
   plan: { name: 'plan', field: 'plan', type: 'string', description: 'Subscription plan' },
   cohort: { name: 'cohort', field: 'cohort', type: 'string', description: 'Customer cohort' },
 
   // Product
   productId: { name: 'productId', field: 'product_id', type: 'string', description: 'Product ID' },
-  productName: { name: 'productName', field: 'product_name', type: 'string', description: 'Product name' },
+  productName: {
+    name: 'productName',
+    field: 'product_name',
+    type: 'string',
+    description: 'Product name',
+  },
   feature: { name: 'feature', field: 'feature', type: 'string', description: 'Feature name' },
 
   // Geography
@@ -285,9 +299,19 @@ export const StandardDimensions: Record<string, Dimension> = {
   region: { name: 'region', field: 'region', type: 'string', description: 'Region' },
 
   // Channel
-  channel: { name: 'channel', field: 'channel', type: 'string', description: 'Acquisition channel' },
+  channel: {
+    name: 'channel',
+    field: 'channel',
+    type: 'string',
+    description: 'Acquisition channel',
+  },
   source: { name: 'source', field: 'source', type: 'string', description: 'Traffic source' },
-  campaign: { name: 'campaign', field: 'campaign', type: 'string', description: 'Marketing campaign' },
+  campaign: {
+    name: 'campaign',
+    field: 'campaign',
+    type: 'string',
+    description: 'Marketing campaign',
+  },
 }
 
 /**
@@ -295,27 +319,117 @@ export const StandardDimensions: Record<string, Dimension> = {
  */
 export const StandardMeasures: Record<string, Measure> = {
   // Revenue
-  revenue: { name: 'revenue', field: 'revenue', aggregate: 'sum', type: 'currency', description: 'Total revenue' },
-  mrr: { name: 'mrr', field: 'mrr', aggregate: 'sum', type: 'currency', description: 'Monthly recurring revenue' },
-  newMrr: { name: 'newMrr', field: 'new_mrr', aggregate: 'sum', type: 'currency', description: 'New MRR' },
-  expansionMrr: { name: 'expansionMrr', field: 'expansion_mrr', aggregate: 'sum', type: 'currency', description: 'Expansion MRR' },
-  contractionMrr: { name: 'contractionMrr', field: 'contraction_mrr', aggregate: 'sum', type: 'currency', description: 'Contraction MRR' },
-  churnedMrr: { name: 'churnedMrr', field: 'churned_mrr', aggregate: 'sum', type: 'currency', description: 'Churned MRR' },
+  revenue: {
+    name: 'revenue',
+    field: 'revenue',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Total revenue',
+  },
+  mrr: {
+    name: 'mrr',
+    field: 'mrr',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Monthly recurring revenue',
+  },
+  newMrr: {
+    name: 'newMrr',
+    field: 'new_mrr',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'New MRR',
+  },
+  expansionMrr: {
+    name: 'expansionMrr',
+    field: 'expansion_mrr',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Expansion MRR',
+  },
+  contractionMrr: {
+    name: 'contractionMrr',
+    field: 'contraction_mrr',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Contraction MRR',
+  },
+  churnedMrr: {
+    name: 'churnedMrr',
+    field: 'churned_mrr',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Churned MRR',
+  },
 
   // Customers
-  customers: { name: 'customers', field: 'customer_id', aggregate: 'countDistinct', type: 'number', description: 'Unique customers' },
-  newCustomers: { name: 'newCustomers', field: 'new_customer_id', aggregate: 'countDistinct', type: 'number', description: 'New customers' },
-  churnedCustomers: { name: 'churnedCustomers', field: 'churned_customer_id', aggregate: 'countDistinct', type: 'number', description: 'Churned customers' },
+  customers: {
+    name: 'customers',
+    field: 'customer_id',
+    aggregate: 'countDistinct',
+    type: 'number',
+    description: 'Unique customers',
+  },
+  newCustomers: {
+    name: 'newCustomers',
+    field: 'new_customer_id',
+    aggregate: 'countDistinct',
+    type: 'number',
+    description: 'New customers',
+  },
+  churnedCustomers: {
+    name: 'churnedCustomers',
+    field: 'churned_customer_id',
+    aggregate: 'countDistinct',
+    type: 'number',
+    description: 'Churned customers',
+  },
 
   // Usage
-  events: { name: 'events', field: 'event_id', aggregate: 'count', type: 'number', description: 'Event count' },
-  sessions: { name: 'sessions', field: 'session_id', aggregate: 'countDistinct', type: 'number', description: 'Unique sessions' },
-  activeUsers: { name: 'activeUsers', field: 'user_id', aggregate: 'countDistinct', type: 'number', description: 'Active users' },
+  events: {
+    name: 'events',
+    field: 'event_id',
+    aggregate: 'count',
+    type: 'number',
+    description: 'Event count',
+  },
+  sessions: {
+    name: 'sessions',
+    field: 'session_id',
+    aggregate: 'countDistinct',
+    type: 'number',
+    description: 'Unique sessions',
+  },
+  activeUsers: {
+    name: 'activeUsers',
+    field: 'user_id',
+    aggregate: 'countDistinct',
+    type: 'number',
+    description: 'Active users',
+  },
 
   // Costs
-  cogs: { name: 'cogs', field: 'cogs', aggregate: 'sum', type: 'currency', description: 'Cost of goods sold' },
-  salesSpend: { name: 'salesSpend', field: 'sales_spend', aggregate: 'sum', type: 'currency', description: 'Sales spend' },
-  marketingSpend: { name: 'marketingSpend', field: 'marketing_spend', aggregate: 'sum', type: 'currency', description: 'Marketing spend' },
+  cogs: {
+    name: 'cogs',
+    field: 'cogs',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Cost of goods sold',
+  },
+  salesSpend: {
+    name: 'salesSpend',
+    field: 'sales_spend',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Sales spend',
+  },
+  marketingSpend: {
+    name: 'marketingSpend',
+    field: 'marketing_spend',
+    aggregate: 'sum',
+    type: 'currency',
+    description: 'Marketing spend',
+  },
 }
 
 /**
@@ -471,8 +585,17 @@ export class QueryBuilder {
     return this
   }
 
-  timeRange(field: string, start?: Date | string, end?: Date | string, granularity?: Granularity): this {
-    this._query.timeRange = { field, start, end, granularity }
+  timeRange(
+    field: string,
+    start?: Date | string,
+    end?: Date | string,
+    granularity?: Granularity
+  ): this {
+    const timeRange: TimeRange = { field }
+    if (start !== undefined) timeRange.start = start
+    if (end !== undefined) timeRange.end = end
+    if (granularity !== undefined) timeRange.granularity = granularity
+    this._query.timeRange = timeRange
     return this
   }
 
@@ -610,8 +733,8 @@ export class ViewBuilder {
 
   materialize(refreshInterval?: string, retention?: string): this {
     this._view.materialized = true
-    this._view.refreshInterval = refreshInterval
-    this._view.retention = retention
+    if (refreshInterval !== undefined) this._view.refreshInterval = refreshInterval
+    if (retention !== undefined) this._view.retention = retention
     return this
   }
 
@@ -661,17 +784,27 @@ export class DashboardBuilder {
     return this
   }
 
-  add(viewDef: View, options?: { x?: number; y?: number; width?: number; height?: number; visualization?: Visualization }): this {
+  add(
+    viewDef: View,
+    options?: {
+      x?: number
+      y?: number
+      width?: number
+      height?: number
+      visualization?: Visualization
+    }
+  ): this {
     this._dashboard.views.push(viewDef)
     if (options && this._dashboard.layout) {
-      this._dashboard.layout.items.push({
+      const item: DashboardItem = {
         viewName: viewDef.name,
         x: options.x || 0,
         y: options.y || 0,
         width: options.width || 1,
         height: options.height || 1,
-        visualization: options.visualization,
-      })
+      }
+      if (options.visualization !== undefined) item.visualization = options.visualization
+      this._dashboard.layout.items.push(item)
     }
     return this
   }
@@ -711,11 +844,41 @@ export class DashboardBuilder {
 export const ExecutiveDashboard = dashboard('executive')
   .describe('Executive overview of key SaaS metrics')
   .layout(4, 3)
-  .add(view('mrr', MrrOverview).build(), { x: 0, y: 0, width: 2, height: 1, visualization: 'trend' })
-  .add(view('arr_segments', ArrBySegment).build(), { x: 2, y: 0, width: 2, height: 1, visualization: 'bar' })
-  .add(view('unit_econ', UnitEconomics).build(), { x: 0, y: 1, width: 2, height: 1, visualization: 'table' })
-  .add(view('growth', GrowthMetrics).build(), { x: 2, y: 1, width: 2, height: 1, visualization: 'line' })
-  .add(view('cohorts', CohortRetention).build(), { x: 0, y: 2, width: 4, height: 1, visualization: 'cohort' })
+  .add(view('mrr', MrrOverview).build(), {
+    x: 0,
+    y: 0,
+    width: 2,
+    height: 1,
+    visualization: 'trend',
+  })
+  .add(view('arr_segments', ArrBySegment).build(), {
+    x: 2,
+    y: 0,
+    width: 2,
+    height: 1,
+    visualization: 'bar',
+  })
+  .add(view('unit_econ', UnitEconomics).build(), {
+    x: 0,
+    y: 1,
+    width: 2,
+    height: 1,
+    visualization: 'table',
+  })
+  .add(view('growth', GrowthMetrics).build(), {
+    x: 2,
+    y: 1,
+    width: 2,
+    height: 1,
+    visualization: 'line',
+  })
+  .add(view('cohorts', CohortRetention).build(), {
+    x: 0,
+    y: 2,
+    width: 4,
+    height: 1,
+    visualization: 'cohort',
+  })
   .refresh('5m')
   .tags('executive', 'saas', 'metrics')
   .build()

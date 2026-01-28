@@ -30,7 +30,8 @@ const DEFAULT_BASE_URL = 'https://api.cal.com/v1'
 export const calComInfo: ProviderInfo = {
   id: 'calendar.cal-com',
   name: 'Cal.com',
-  description: 'Cal.com API for scheduling and calendar management (open-source Calendly alternative)',
+  description:
+    'Cal.com API for scheduling and calendar management (open-source Calendly alternative)',
   category: 'calendar',
   website: 'https://cal.com',
   docsUrl: 'https://cal.com/docs/api-reference',
@@ -179,7 +180,7 @@ export function createCalComProvider(config: ProviderConfig): CalendarProvider {
         .map((et) => ({
           id: String(et.id),
           name: et.title,
-          description: et.description,
+          ...(et.description !== undefined && { description: et.description }),
           timeZone: 'UTC', // Cal.com handles timezone per user
           primary: et.position === 0,
           accessRole: 'owner' as const,
@@ -204,7 +205,7 @@ export function createCalComProvider(config: ProviderConfig): CalendarProvider {
       return {
         id: String(et.id),
         name: et.title,
-        description: et.description,
+        ...(et.description !== undefined && { description: et.description }),
         timeZone: 'UTC',
         primary: et.position === 0,
         accessRole: 'owner',
@@ -244,15 +245,18 @@ export function createCalComProvider(config: ProviderConfig): CalendarProvider {
         id: booking.uid,
         calendarId,
         summary: booking.title,
-        description: booking.description,
-        location: booking.location,
+        ...(booking.description !== undefined && { description: booking.description }),
+        ...(booking.location !== undefined && { location: booking.location }),
         start: new Date(booking.startTime),
         end: new Date(booking.endTime),
         attendees: booking.attendees.map((a) => ({
           email: a.email,
           responseStatus: booking.status === 'ACCEPTED' ? 'accepted' : 'needsAction',
         })),
-        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as 'confirmed' | 'tentative' | 'cancelled',
+        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as
+          | 'confirmed'
+          | 'tentative'
+          | 'cancelled',
         htmlLink: `${baseUrl.replace('/v1', '')}/booking/${booking.uid}`,
       }
     },
@@ -271,15 +275,18 @@ export function createCalComProvider(config: ProviderConfig): CalendarProvider {
         id: booking.uid,
         calendarId: String(booking.eventTypeId),
         summary: booking.title,
-        description: booking.description,
-        location: booking.location,
+        ...(booking.description !== undefined && { description: booking.description }),
+        ...(booking.location !== undefined && { location: booking.location }),
         start: new Date(booking.startTime),
         end: new Date(booking.endTime),
         attendees: booking.attendees.map((a) => ({
           email: a.email,
           responseStatus: booking.status === 'ACCEPTED' ? 'accepted' : 'needsAction',
         })),
-        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as 'confirmed' | 'tentative' | 'cancelled',
+        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as
+          | 'confirmed'
+          | 'tentative'
+          | 'cancelled',
         htmlLink: `${baseUrl.replace('/v1', '')}/booking/${booking.uid}`,
       }
     },
@@ -321,15 +328,18 @@ export function createCalComProvider(config: ProviderConfig): CalendarProvider {
         id: booking.uid,
         calendarId: String(booking.eventTypeId),
         summary: booking.title,
-        description: booking.description,
-        location: booking.location,
+        ...(booking.description !== undefined && { description: booking.description }),
+        ...(booking.location !== undefined && { location: booking.location }),
         start: new Date(booking.startTime),
         end: new Date(booking.endTime),
         attendees: booking.attendees.map((a) => ({
           email: a.email,
           responseStatus: booking.status === 'ACCEPTED' ? 'accepted' : 'needsAction',
         })),
-        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as 'confirmed' | 'tentative' | 'cancelled',
+        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as
+          | 'confirmed'
+          | 'tentative'
+          | 'cancelled',
         htmlLink: `${baseUrl.replace('/v1', '')}/booking/${booking.uid}`,
       }
     },
@@ -370,15 +380,18 @@ export function createCalComProvider(config: ProviderConfig): CalendarProvider {
         id: booking.uid,
         calendarId: String(booking.eventTypeId),
         summary: booking.title,
-        description: booking.description,
-        location: booking.location,
+        ...(booking.description !== undefined && { description: booking.description }),
+        ...(booking.location !== undefined && { location: booking.location }),
         start: new Date(booking.startTime),
         end: new Date(booking.endTime),
         attendees: booking.attendees.map((a) => ({
           email: a.email,
           responseStatus: booking.status === 'ACCEPTED' ? 'accepted' : 'needsAction',
         })),
-        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as 'confirmed' | 'tentative' | 'cancelled',
+        status: (booking.status === 'CANCELLED' ? 'cancelled' : 'confirmed') as
+          | 'confirmed'
+          | 'tentative'
+          | 'cancelled',
         htmlLink: `${baseUrl.replace('/v1', '')}/booking/${booking.uid}`,
       }))
 
@@ -402,9 +415,7 @@ export function createCalComProvider(config: ProviderConfig): CalendarProvider {
         params.append('dateFrom', timeMin.toISOString())
         params.append('dateTo', timeMax.toISOString())
 
-        const result = await apiRequest<CalComAvailability>(
-          `/availability?${params}`
-        )
+        const result = await apiRequest<CalComAvailability>(`/availability?${params}`)
 
         if (result.ok && result.data) {
           results.push({

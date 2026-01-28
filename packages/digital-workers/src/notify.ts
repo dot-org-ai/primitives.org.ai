@@ -22,6 +22,7 @@
  * @module
  */
 
+import { generateRequestId } from './utils/id.js'
 import type {
   Worker,
   Team,
@@ -331,5 +332,5 @@ async function sendToChannel(
  * Generate a unique message ID
  */
 function generateMessageId(prefix = 'msg'): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return generateRequestId(prefix)
 }

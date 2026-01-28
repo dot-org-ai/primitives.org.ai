@@ -116,12 +116,17 @@ export async function withContext<T>(
   const parent = getCurrentContext()
   const merged: ExecutionContext = {
     priority: context.priority ?? parent?.priority ?? 'standard',
-    provider: context.provider ?? parent?.provider,
-    concurrencyKey: context.concurrencyKey ?? parent?.concurrencyKey,
-    actor: context.actor ?? parent?.actor,
-    batchWindow: context.batchWindow ?? parent?.batchWindow,
-    onFlush: context.onFlush ?? parent?.onFlush,
   }
+  const provider = context.provider ?? parent?.provider
+  if (provider !== undefined) merged.provider = provider
+  const concurrencyKey = context.concurrencyKey ?? parent?.concurrencyKey
+  if (concurrencyKey !== undefined) merged.concurrencyKey = concurrencyKey
+  const actor = context.actor ?? parent?.actor
+  if (actor !== undefined) merged.actor = actor
+  const batchWindow = context.batchWindow ?? parent?.batchWindow
+  if (batchWindow !== undefined) merged.batchWindow = batchWindow
+  const onFlush = context.onFlush ?? parent?.onFlush
+  if (onFlush !== undefined) merged.onFlush = onFlush
 
   contextStack.push(merged)
   try {
@@ -136,14 +141,15 @@ export async function withContext<T>(
  */
 export function setDefaultContext(context: Partial<ExecutionContext>): void {
   if (contextStack.length === 0) {
-    contextStack.push({
+    const newContext: ExecutionContext = {
       priority: context.priority ?? 'standard',
-      provider: context.provider,
-      concurrencyKey: context.concurrencyKey,
-      actor: context.actor,
-      batchWindow: context.batchWindow,
-      onFlush: context.onFlush,
-    })
+    }
+    if (context.provider !== undefined) newContext.provider = context.provider
+    if (context.concurrencyKey !== undefined) newContext.concurrencyKey = context.concurrencyKey
+    if (context.actor !== undefined) newContext.actor = context.actor
+    if (context.batchWindow !== undefined) newContext.batchWindow = context.batchWindow
+    if (context.onFlush !== undefined) newContext.onFlush = context.onFlush
+    contextStack.push(newContext)
   } else {
     Object.assign(contextStack[0]!, context)
   }
@@ -224,7 +230,7 @@ export class DurablePromise<T> implements PromiseLike<T> {
 
     try {
       // Create the action record
-      this.action = await this.provider.createAction({
+      const actionOptions: Parameters<MemoryProvider['createAction']>[0] = {
         actor: options.actor ?? getCurrentContext()?.actor ?? 'system',
         action: this.parseActionVerb(this.method),
         object: this.method,
@@ -236,8 +242,11 @@ export class DurablePromise<T> implements PromiseLike<T> {
           deferUntil: options.deferUntil?.toISOString(),
           dependsOn: this.dependsOn,
         },
-        meta: options.meta,
-      })
+      }
+      if (options.meta !== undefined) {
+        actionOptions.meta = options.meta
+      }
+      this.action = await this.provider.createAction(actionOptions)
 
       // Override the generated ID with our pre-generated one
       // (This allows us to return actionId synchronously)

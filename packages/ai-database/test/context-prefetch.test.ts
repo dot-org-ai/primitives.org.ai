@@ -32,7 +32,7 @@ describe('$context Dependency Pre-fetching', () => {
   // NOTE: Integration tests are skipped because field generation for entities with
   // $context dependencies requires fixes to the generation pipeline.
   // The prefetchContextPaths unit tests below verify the core pre-fetching logic works.
-  describe.skip('Basic $context array declarations', () => {
+  describe('Basic $context array declarations', () => {
     it('should pre-fetch declared context dependencies', async () => {
       const { db } = DB({
         Ad: {
@@ -106,7 +106,7 @@ describe('$context Dependency Pre-fetching', () => {
     })
   })
 
-  describe.skip('Batch fetching optimization', () => {
+  describe('Batch fetching optimization', () => {
     it('should optimize with batch fetching', async () => {
       // Multiple entities with same context requirements
       const fetchCalls: Array<{ type: string; id: string }> = []
@@ -191,7 +191,7 @@ describe('$context Dependency Pre-fetching', () => {
     })
   })
 
-  describe.skip('Context availability for template resolution', () => {
+  describe('Context availability for template resolution', () => {
     it('should make context available for $instructions template variables', async () => {
       const { db } = DB({
         Email: {
@@ -251,7 +251,7 @@ describe('$context Dependency Pre-fetching', () => {
     })
   })
 
-  describe.skip('Error handling and edge cases', () => {
+  describe('Error handling and edge cases', () => {
     it('should handle missing context dependencies gracefully', async () => {
       const { db } = DB({
         Note: {
@@ -433,7 +433,7 @@ describe('$context Dependency Pre-fetching', () => {
     })
   })
 
-  describe.skip('Integration with generation pipeline', () => {
+  describe('Integration with generation pipeline', () => {
     it('should use pre-fetched context during entity generation', async () => {
       const { db } = DB({
         Proposal: {

@@ -456,7 +456,25 @@ export {
   ValidationError,
   AIGenerationError,
   SemanticSearchError,
+  // Capability errors (re-exported from provider-capabilities)
+  CapabilityNotSupportedError,
+  isCapabilityNotSupportedError,
 } from './errors.js'
+
+// =============================================================================
+// Provider Capabilities - Runtime feature detection
+// =============================================================================
+
+export {
+  detectCapabilities,
+  requireCapability,
+  warnIfUnavailable,
+  clearCapabilityCache,
+  clearWarningHistory,
+  PROVIDER_CAPABILITY_MATRIX,
+} from './provider-capabilities.js'
+
+export type { ProviderCapabilities } from './provider-capabilities.js'
 
 // Re-export digital-objects types
 export type {
@@ -482,3 +500,9 @@ export {
   EMBEDDING_DIMENSIONS,
 } from './constants.js'
 export type { RelationOperatorType } from './constants.js'
+
+// =============================================================================
+// RDB Provider Adapter - Bridges RDB and ai-database DBProvider interfaces
+// =============================================================================
+
+export { RDBProviderAdapter, createRDBAdapter } from './rdb-provider-adapter.js'

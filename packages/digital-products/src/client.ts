@@ -16,7 +16,7 @@
  * @packageDocumentation
  */
 
-import { RPC } from 'rpc.do'
+import { RPC, http } from 'rpc.do'
 
 // ==================== Types ====================
 
@@ -174,7 +174,7 @@ export function createDigitalProductsClient(
   url: string = DEFAULT_URL,
   options?: DigitalProductsClientOptions
 ) {
-  return RPC<DigitalProductsAPI>(url, options)
+  return RPC<DigitalProductsAPI>(http(url, options?.token))
 }
 
 /**

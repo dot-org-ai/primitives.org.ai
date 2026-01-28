@@ -173,13 +173,14 @@ function validateAndNormalizeOKR(okr: OKRDefinition): OKRDefinition {
     progress: kr.progress ?? calculateKeyResultProgress(kr),
   }))
 
-  return {
+  const result: OKRDefinition = {
     ...okr,
-    keyResults,
     status: okr.status || 'not-started',
     confidence: okr.confidence ?? calculateConfidence(keyResults || []),
     metadata: okr.metadata || {},
   }
+  if (keyResults !== undefined) result.keyResults = keyResults
+  return result
 }
 
 /**
@@ -246,15 +247,18 @@ export function updateKeyResult(
   })
 
   // Recalculate overall status and confidence
-  const progress = calculateOKRProgress({ ...okr, keyResults })
+  const okrWithKeyResults: OKRDefinition = { ...okr }
+  if (keyResults !== undefined) okrWithKeyResults.keyResults = keyResults
+  const progress = calculateOKRProgress(okrWithKeyResults)
   const status = determineOKRStatus(progress, okr.confidence || 0)
 
-  return {
+  const result: OKRDefinition = {
     ...okr,
-    keyResults,
-    status,
     confidence: calculateConfidence(keyResults || []),
   }
+  if (keyResults !== undefined) result.keyResults = keyResults
+  if (status !== undefined) result.status = status
+  return result
 }
 
 /**

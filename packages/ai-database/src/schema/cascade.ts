@@ -266,8 +266,8 @@ export function generateContextAwareValue(
       fieldName,
       type,
       fullContext,
-      hint,
       parentData,
+      ...(hint !== undefined && { hint }),
     })
   }
 
@@ -278,8 +278,8 @@ export function generateContextAwareValue(
     fieldName,
     type,
     fullContext,
-    hint,
     parentData,
+    ...(hint !== undefined && { hint }),
   })
 }
 
@@ -309,8 +309,8 @@ export async function generateAIFields(
 ): Promise<Record<string, unknown>> {
   const result = { ...data }
   const entitySchema = entityDef.schema || {}
-  const instructions = entitySchema.$instructions as string | undefined
-  const contextDeps = entitySchema.$context as string[] | undefined
+  const instructions = entitySchema['$instructions'] as string | undefined
+  const contextDeps = entitySchema['$context'] as string[] | undefined
 
   // Pre-fetch context dependencies if declared
   let contextData = new Map<string, Record<string, unknown>>()
@@ -385,10 +385,14 @@ export async function generateAIFields(
 
   for (const [fieldName, field] of entityDef.fields) {
     // Skip if value already provided
-    if (result[fieldName] !== undefined && result[fieldName] !== null) continue
+    if (result[fieldName] !== undefined && result[fieldName] !== null) {
+      continue
+    }
 
     // Skip relation fields (handled separately)
-    if (field.isRelation) continue
+    if (field.isRelation) {
+      continue
+    }
 
     // Check if this is a prompt field - prompt fields have a type that contains:
     // - Spaces: 'Describe the product', 'What is the severity?'
@@ -493,14 +497,14 @@ export async function generateEntity(
   // Gather context for generation
   const parentEntity = schema.entities.get(context.parent)
   const parentSchema = parentEntity?.schema || {}
-  const instructions = parentSchema.$instructions as string | undefined
-  const schemaContext = parentSchema.$context as string | undefined
+  const instructions = parentSchema['$instructions'] as string | undefined
+  const schemaContext = parentSchema['$context'] as string | undefined
 
   // Try AI-powered generation first
   const aiGeneratedData = await generateEntityDataWithAI(type, entity, prompt, {
     parentData: context.parentData,
-    instructions,
-    schemaContext,
+    ...(instructions !== undefined && { instructions }),
+    ...(schemaContext !== undefined && { schemaContext }),
   })
 
   // If AI generation succeeded, use that data but still handle relations
@@ -714,14 +718,14 @@ export async function resolveForwardExact(
           ...resolvedGenerated,
           $matchedType: generateType,
         })
-        resolved[fieldName] = [created.$id]
+        resolved[fieldName] = [created['$id']]
         resolved[`${fieldName}$matchedType`] = generateType
 
         // Queue relationship creation for after parent entity is created
         pendingRelations.push({
           fieldName,
           targetType: generateType,
-          targetId: created.$id as string,
+          targetId: created['$id'] as string,
         })
       } else {
         // Single non-optional forward relation - generate the related entity
@@ -742,7 +746,7 @@ export async function resolveForwardExact(
             provider
           )
           const created = await provider.create(field.relatedType!, undefined, resolvedGenerated)
-          resolved[fieldName] = created.$id
+          resolved[fieldName] = created['$id']
         }
       }
     }
@@ -771,10 +775,10 @@ export function generateNaturalLanguageContent(
     // Extract key words from prompt for natural language
     const keyWords = prompt.toLowerCase()
     if (keyWords.includes('idea') || keyWords.includes('concept')) {
-      return `A innovative idea for ${context.name || targetType}`
+      return `A innovative idea for ${context['name'] || targetType}`
     }
     if (keyWords.includes('customer') || keyWords.includes('buyer') || keyWords.includes('user')) {
-      return `The target customer segment for ${context.name || targetType}`
+      return `The target customer segment for ${context['name'] || targetType}`
     }
     if (keyWords.includes('related') || keyWords.includes('similar')) {
       return `Related ${targetType.toLowerCase()} content`
@@ -787,10 +791,10 @@ export function generateNaturalLanguageContent(
   // Generate based on field name patterns
   const fieldLower = fieldName.toLowerCase()
   if (fieldLower.includes('idea')) {
-    return `A compelling idea for ${context.name || 'the project'}`
+    return `A compelling idea for ${context['name'] || 'the project'}`
   }
   if (fieldLower.includes('customer')) {
-    return `The ideal customer for ${context.name || 'the business'}`
+    return `The ideal customer for ${context['name'] || 'the business'}`
   }
   if (
     fieldLower.includes('founder') ||
@@ -805,25 +809,25 @@ export function generateNaturalLanguageContent(
     return `An experienced ${fieldName}`
   }
   if (fieldLower.includes('assignee') || fieldLower.includes('owner')) {
-    return `The right person for ${context.title || context.name || 'this task'}`
+    return `The right person for ${context['title'] || context['name'] || 'this task'}`
   }
   if (fieldLower.includes('department') || fieldLower.includes('team')) {
-    return `A department for ${context.name || 'the organization'}`
+    return `A department for ${context['name'] || 'the organization'}`
   }
   if (fieldLower.includes('client') || fieldLower.includes('sponsor')) {
-    return `A ${fieldName} for ${context.name || context.title || 'the project'}`
+    return `A ${fieldName} for ${context['name'] || context['title'] || 'the project'}`
   }
   if (fieldLower.includes('item') || fieldLower.includes('component')) {
     return `${targetType} component`
   }
   if (fieldLower.includes('member') || fieldLower.includes('project')) {
-    return `${targetType} for ${context.name || 'the team'}`
+    return `${targetType} for ${context['name'] || 'the team'}`
   }
   if (fieldLower.includes('character')) {
-    return `A character for ${context.title || context.name || 'the story'}`
+    return `A character for ${context['title'] || context['name'] || 'the story'}`
   }
   if (fieldLower.includes('setting') || fieldLower.includes('location')) {
-    return `A setting for ${context.title || context.name || 'the story'}`
+    return `A setting for ${context['title'] || context['name'] || 'the story'}`
   }
   if (fieldLower.includes('address')) {
     return `Address information`

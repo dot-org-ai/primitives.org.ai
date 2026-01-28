@@ -40,13 +40,13 @@ export function Dataset(config: Omit<DatasetDefinition, 'type'>): DatasetDefinit
     version: config.version,
     format: config.format || 'json',
     schema: config.schema,
-    source: config.source,
-    size: config.size,
-    license: config.license,
     updateFrequency: config.updateFrequency || 'static',
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.source !== undefined && { source: config.source }),
+    ...(config.size !== undefined && { size: config.size }),
+    ...(config.license !== undefined && { license: config.license }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(dataset)

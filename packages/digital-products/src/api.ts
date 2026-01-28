@@ -55,15 +55,15 @@ export function API(config: Omit<APIDefinition, 'type'>): APIDefinition {
     description: config.description,
     version: config.version,
     style: config.style || 'rest',
-    baseUrl: config.baseUrl,
     endpoints: config.endpoints || [],
-    auth: config.auth,
-    rateLimit: config.rateLimit,
-    docsUrl: config.docsUrl,
-    openapi: config.openapi,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.baseUrl !== undefined && { baseUrl: config.baseUrl }),
+    ...(config.auth !== undefined && { auth: config.auth }),
+    ...(config.rateLimit !== undefined && { rateLimit: config.rateLimit }),
+    ...(config.docsUrl !== undefined && { docsUrl: config.docsUrl }),
+    ...(config.openapi !== undefined && { openapi: config.openapi }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(api)

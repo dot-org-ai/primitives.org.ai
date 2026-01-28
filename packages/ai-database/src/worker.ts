@@ -26,16 +26,318 @@
  * @packageDocumentation
  */
 
+// ===========================================================================
+// Type Interfaces for Cloudflare Workers Runtime
+// ===========================================================================
+
+/**
+ * ExecutionContext interface - matches @cloudflare/workers-types
+ */
+export interface MockExecutionContext {
+  waitUntil(promise: Promise<unknown>): void
+  passThroughOnException(): void
+}
+
+/**
+ * SqlStorage interface - matches DurableObjectStorage.sql from @cloudflare/workers-types
+ */
+export interface SqlStorage {
+  exec(query: string, ...params: unknown[]): SqlStorageResult
+}
+
+/**
+ * SqlStorageResult interface
+ */
+export interface SqlStorageResult {
+  toArray(): unknown[]
+}
+
+/**
+ * DurableObjectStorage interface - subset needed for our use
+ */
+export interface MockDurableObjectStorage {
+  sql: SqlStorage
+}
+
+/**
+ * DurableObjectId interface
+ */
+export interface MockDurableObjectId {
+  toString(): string
+  equals(other: MockDurableObjectId): boolean
+  readonly name?: string
+}
+
+/**
+ * DurableObjectState interface - matches @cloudflare/workers-types
+ */
+export interface MockDurableObjectState {
+  waitUntil(promise: Promise<unknown>): void
+  readonly id: MockDurableObjectId
+  readonly storage: MockDurableObjectStorage
+}
+
+/**
+ * Database row interfaces for type-safe SQL operations
+ */
+export interface DataRow {
+  id: string
+  type: string
+  data: string
+  created_at: string
+  updated_at: string
+}
+
+export interface RelRow {
+  from_id: string
+  relation: string
+  to_id: string
+  metadata: string | null
+  created_at: string
+}
+
+export interface EventRow {
+  id: string
+  event: string
+  actor: string | null
+  object: string | null
+  data: string | null
+  result: string | null
+  previous_data: string | null
+  timestamp: string
+}
+
+export interface EmbeddingRow {
+  id: string
+  entity_type: string
+  entity_id: string
+  model: string
+  vector: string
+  content_hash: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SubscriptionRow {
+  id: string
+  pattern: string
+  webhook: string
+  created_at: string
+}
+
+export interface MetaRow {
+  key: string
+  value: string
+}
+
+export interface CountRow {
+  count: number
+}
+
+/**
+ * Environment with AI binding for Cloudflare AI
+ */
+export interface EnvWithAI {
+  AI?: {
+    run(model: string, options: { text: string[] }): Promise<{ data: number[][] }>
+  }
+}
+
+/**
+ * Deserialized entity types
+ */
+export interface DeserializedDataRow {
+  id: string
+  type: string
+  data: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface DeserializedRelRow {
+  from_id: string
+  relation: string
+  to_id: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface DeserializedEventRow {
+  id: string
+  event: string
+  actor: string | null
+  object: string | null
+  data: unknown
+  result: string | null
+  previousData: unknown
+  timestamp: string
+}
+
+/**
+ * Event handler type
+ */
+export type DatabaseEventHandler = (event: DeserializedEventRow) => void | Promise<void>
+
+/**
+ * Action status type
+ */
+export type ActionStatus = 'pending' | 'in_progress' | 'completed' | 'failed'
+
+/**
+ * Action interface
+ */
+export interface Action {
+  id: string
+  action: string
+  actor: string
+  object?: string
+  status: ActionStatus
+  progress?: number
+  total?: number
+  data?: unknown
+  result?: unknown
+  error?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Artifact interface
+ */
+export interface Artifact {
+  url: string
+  type: string
+  content: unknown
+  sourceHash: string
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Request body types
+ */
+export interface CreateDataBody {
+  id?: string
+  type: string
+  data: Record<string, unknown>
+}
+
+export interface UpdateDataBody {
+  data: Record<string, unknown>
+}
+
+export interface CreateRelBody {
+  from_id: string
+  relation: string
+  to_id: string
+  metadata?: Record<string, unknown>
+}
+
+export interface CreateEventBody {
+  event: string
+  actor?: string
+  object?: string
+  data?: unknown
+}
+
+export interface SearchBody {
+  type?: string
+  query: string
+  limit?: number
+  fields?: string[]
+  minScore?: number
+}
+
+export interface SemanticSearchBody {
+  type: string
+  query: string
+  limit?: number
+  threshold?: number
+}
+
+export interface HybridSearchBody {
+  type: string
+  query: string
+  limit?: number
+  ftsWeight?: number
+  semanticWeight?: number
+}
+
+export interface TraverseFilterBody {
+  from_id: string
+  relation: string
+  direction?: 'outgoing' | 'incoming'
+  maxDepth?: number
+  filter?: Record<string, unknown>
+}
+
+export interface ReplayEventsBody {
+  object: string
+  until?: string
+}
+
+export interface SubscribeBody {
+  pattern: string
+  webhook: string
+}
+
+export interface EmbeddingsConfigBody {
+  model?: string
+}
+
+export interface EmbeddingsGenerateBody {
+  type: string
+}
+
+export interface EmbeddingsBatchBody {
+  type: string
+  batchSize?: number
+}
+
+export interface UpdateRelMetadataBody {
+  from_id: string
+  relation: string
+  to_id: string
+  metadata: Record<string, unknown>
+}
+
+export interface QueryListBody {
+  type: string
+  where?: Record<string, unknown>
+  orderBy?: string
+  order?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}
+
+export interface QueryFindBody {
+  type: string
+  where?: Record<string, unknown>
+}
+
+export interface PipelineConfigBody {
+  retryEnabled?: boolean
+  batchSize?: number
+}
+
+export interface PipelineTestErrorBody {
+  simulateError?: boolean
+}
+
+// ===========================================================================
 // Mock classes for non-Cloudflare environments
+// ===========================================================================
+
 class MockRpcTarget {}
 class MockWorkerEntrypoint<T = unknown> {
   protected env!: T
-  protected ctx!: unknown
+  protected ctx!: MockExecutionContext
 }
 class MockDurableObject {
-  protected ctx!: any
-  protected env!: any
-  constructor(_state: any, _env: any) {}
+  protected ctx!: MockDurableObjectState
+  protected env!: unknown
+  constructor(_state: MockDurableObjectState, _env: unknown) {}
 }
 
 // Try to import from cloudflare:workers, fall back to mocks
@@ -324,10 +626,14 @@ export class DatabaseServiceCore extends RpcTarget {
    * Subscribe to events matching a pattern
    * @returns Unsubscribe function ID (use unsubscribe() to remove)
    */
-  on(pattern: string, handler: (event: any) => void | Promise<void>): string {
+  on(pattern: string, handler: DatabaseEventHandler): string {
     // Store handler and return ID for later unsubscription
+    type ProviderWithOn = MemoryProvider & {
+      on(pattern: string, handler: DatabaseEventHandler): () => void
+    }
     if ('on' in this.provider) {
-      const unsubscribe = (this.provider as any).on(pattern, handler)
+      const providerWithOn = this.provider as ProviderWithOn
+      const unsubscribe = providerWithOn.on(pattern, handler)
       // Store unsubscribe function with unique ID
       const handlerId = crypto.randomUUID()
       this._eventHandlers.set(handlerId, unsubscribe)
@@ -355,12 +661,19 @@ export class DatabaseServiceCore extends RpcTarget {
   async emit(
     eventOrOptions: string | { event: string; actor: string; object?: string; data?: unknown },
     data?: unknown
-  ): Promise<any> {
+  ): Promise<DeserializedEventRow | null> {
+    type ProviderWithEmit = MemoryProvider & {
+      emit(
+        eventOrOptions: string | { event: string; actor: string; object?: string; data?: unknown },
+        data?: unknown
+      ): Promise<DeserializedEventRow>
+    }
     if ('emit' in this.provider) {
+      const providerWithEmit = this.provider as ProviderWithEmit
       if (typeof eventOrOptions === 'string') {
-        return (this.provider as any).emit(eventOrOptions, data)
+        return providerWithEmit.emit(eventOrOptions, data) as unknown as DeserializedEventRow
       }
-      return (this.provider as any).emit(eventOrOptions)
+      return providerWithEmit.emit(eventOrOptions) as unknown as DeserializedEventRow
     }
     return null
   }
@@ -375,9 +688,20 @@ export class DatabaseServiceCore extends RpcTarget {
     since?: Date
     until?: Date
     limit?: number
-  }): Promise<any[]> {
+  }): Promise<DeserializedEventRow[]> {
+    type ProviderWithListEvents = MemoryProvider & {
+      listEvents(options?: {
+        event?: string
+        actor?: string
+        object?: string
+        since?: Date
+        until?: Date
+        limit?: number
+      }): Promise<DeserializedEventRow[]>
+    }
     if ('listEvents' in this.provider) {
-      return (this.provider as any).listEvents(options)
+      const providerWithListEvents = this.provider as ProviderWithListEvents
+      return providerWithListEvents.listEvents(options)
     }
     return []
   }
@@ -395,9 +719,19 @@ export class DatabaseServiceCore extends RpcTarget {
     object?: string
     data?: unknown
     total?: number
-  }): Promise<any> {
+  }): Promise<Action | null> {
+    type ProviderWithCreateAction = MemoryProvider & {
+      createAction(options: {
+        action: string
+        actor: string
+        object?: string
+        data?: unknown
+        total?: number
+      }): Promise<Action>
+    }
     if ('createAction' in this.provider) {
-      return (this.provider as any).createAction(options)
+      const providerWithCreateAction = this.provider as ProviderWithCreateAction
+      return providerWithCreateAction.createAction(options)
     }
     return null
   }
@@ -405,9 +739,13 @@ export class DatabaseServiceCore extends RpcTarget {
   /**
    * Get an action by ID
    */
-  async getAction(id: string): Promise<any | null> {
+  async getAction(id: string): Promise<Action | null> {
+    type ProviderWithGetAction = MemoryProvider & {
+      getAction(id: string): Promise<Action | null>
+    }
     if ('getAction' in this.provider) {
-      return (this.provider as any).getAction(id)
+      const providerWithGetAction = this.provider as ProviderWithGetAction
+      return providerWithGetAction.getAction(id) as unknown as Action | null
     }
     return null
   }
@@ -418,9 +756,16 @@ export class DatabaseServiceCore extends RpcTarget {
   async updateAction(
     id: string,
     updates: { status?: string; progress?: number; result?: unknown; error?: string }
-  ): Promise<any> {
+  ): Promise<Action | null> {
+    type ProviderWithUpdateAction = MemoryProvider & {
+      updateAction(
+        id: string,
+        updates: { status?: string; progress?: number; result?: unknown; error?: string }
+      ): Promise<Action>
+    }
     if ('updateAction' in this.provider) {
-      return (this.provider as any).updateAction(id, updates)
+      const providerWithUpdateAction = this.provider as ProviderWithUpdateAction
+      return providerWithUpdateAction.updateAction(id, updates)
     }
     return null
   }
@@ -436,9 +781,21 @@ export class DatabaseServiceCore extends RpcTarget {
     since?: Date
     until?: Date
     limit?: number
-  }): Promise<any[]> {
+  }): Promise<Action[]> {
+    type ProviderWithListActions = MemoryProvider & {
+      listActions(options?: {
+        status?: string
+        action?: string
+        actor?: string
+        object?: string
+        since?: Date
+        until?: Date
+        limit?: number
+      }): Promise<Action[]>
+    }
     if ('listActions' in this.provider) {
-      return (this.provider as any).listActions(options)
+      const providerWithListActions = this.provider as ProviderWithListActions
+      return providerWithListActions.listActions(options)
     }
     return []
   }
@@ -450,9 +807,13 @@ export class DatabaseServiceCore extends RpcTarget {
   /**
    * Get an artifact
    */
-  async getArtifact(url: string, type: string): Promise<any | null> {
+  async getArtifact(url: string, type: string): Promise<Artifact | null> {
+    type ProviderWithGetArtifact = MemoryProvider & {
+      getArtifact(url: string, type: string): Promise<Artifact | null>
+    }
     if ('getArtifact' in this.provider) {
-      return (this.provider as any).getArtifact(url, type)
+      const providerWithGetArtifact = this.provider as ProviderWithGetArtifact
+      return providerWithGetArtifact.getArtifact(url, type) as unknown as Artifact | null
     }
     return null
   }
@@ -465,8 +826,16 @@ export class DatabaseServiceCore extends RpcTarget {
     type: string,
     data: { content: unknown; sourceHash: string; metadata?: Record<string, unknown> }
   ): Promise<void> {
+    type ProviderWithSetArtifact = MemoryProvider & {
+      setArtifact(
+        url: string,
+        type: string,
+        data: { content: unknown; sourceHash: string; metadata?: Record<string, unknown> }
+      ): Promise<void>
+    }
     if ('setArtifact' in this.provider) {
-      return (this.provider as any).setArtifact(url, type, data)
+      const providerWithSetArtifact = this.provider as ProviderWithSetArtifact
+      return providerWithSetArtifact.setArtifact(url, type, data)
     }
   }
 
@@ -474,17 +843,25 @@ export class DatabaseServiceCore extends RpcTarget {
    * Delete an artifact
    */
   async deleteArtifact(url: string, type?: string): Promise<void> {
+    type ProviderWithDeleteArtifact = MemoryProvider & {
+      deleteArtifact(url: string, type?: string): Promise<void>
+    }
     if ('deleteArtifact' in this.provider) {
-      return (this.provider as any).deleteArtifact(url, type)
+      const providerWithDeleteArtifact = this.provider as ProviderWithDeleteArtifact
+      return providerWithDeleteArtifact.deleteArtifact(url, type)
     }
   }
 
   /**
    * List artifacts for a URL
    */
-  async listArtifacts(url: string): Promise<any[]> {
+  async listArtifacts(url: string): Promise<Artifact[]> {
+    type ProviderWithListArtifacts = MemoryProvider & {
+      listArtifacts(url: string): Promise<Artifact[]>
+    }
     if ('listArtifacts' in this.provider) {
-      return (this.provider as any).listArtifacts(url)
+      const providerWithListArtifacts = this.provider as ProviderWithListArtifacts
+      return providerWithListArtifacts.listArtifacts(url) as unknown as Artifact[]
     }
     return []
   }
@@ -497,8 +874,12 @@ export class DatabaseServiceCore extends RpcTarget {
    * Clear all data in the provider (useful for testing)
    */
   clear(): void {
+    type ProviderWithClear = MemoryProvider & {
+      clear(): void
+    }
     if ('clear' in this.provider) {
-      ;(this.provider as any).clear()
+      const providerWithClear = this.provider as ProviderWithClear
+      providerWithClear.clear()
     }
   }
 }
@@ -518,15 +899,6 @@ export class DatabaseServiceCore extends RpcTarget {
  * Handles HTTP requests for CRUD operations on data records and relationships,
  * plus graph traversal queries.
  */
-// Type declarations for Cloudflare Workers runtime types
-type SqlStorage = {
-  exec(query: string, ...params: unknown[]): { toArray(): unknown[] }
-}
-
-type DurableObjectState = {
-  storage: { sql: SqlStorage }
-}
-
 export class DatabaseDO extends DurableObjectBase {
   private sql!: SqlStorage
   private initialized = false
@@ -544,9 +916,9 @@ export class DatabaseDO extends DurableObjectBase {
     { status: string; total: number; processed: number; errors: number }
   >()
 
-  constructor(state: DurableObjectState, env: unknown) {
+  constructor(state: MockDurableObjectState, env: unknown) {
     super(state, env)
-    this.sql = (state as any).storage.sql
+    this.sql = state.storage.sql
   }
 
   private ensureSchema(): void {
@@ -860,8 +1232,9 @@ export class DatabaseDO extends DurableObjectBase {
       }
 
       return Response.json({ error: 'Not found' }, { status: 404 })
-    } catch (err: any) {
-      return Response.json({ error: err.message || 'Internal error' }, { status: 500 })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Internal error'
+      return Response.json({ error: message }, { status: 500 })
     }
   }
 
@@ -875,7 +1248,7 @@ export class DatabaseDO extends DurableObjectBase {
     const offset = url.searchParams.get('offset')
 
     let query = 'SELECT * FROM _data'
-    const params: any[] = []
+    const params: unknown[] = []
 
     if (type) {
       query += ' WHERE type = ?'
@@ -894,15 +1267,15 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const rows = this.sql.exec(query, ...params).toArray()
-    const results = rows.map((row: any) => this.deserializeDataRow(row))
+    const results = rows.map((row) => this.deserializeDataRow(row))
     return Response.json(results)
   }
 
   private async handleInsertData(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: CreateDataBody
     try {
-      body = (await request.json()) as Record<string, any>
-    } catch (err) {
+      body = (await request.json()) as CreateDataBody
+    } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
@@ -962,7 +1335,7 @@ export class DatabaseDO extends DurableObjectBase {
     if (rows.length === 0) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
-    return Response.json(this.deserializeDataRow(rows[0] as any))
+    return Response.json(this.deserializeDataRow(rows[0]))
   }
 
   private async handleUpdateData(id: string, request: Request): Promise<Response> {
@@ -971,11 +1344,11 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
-    const existing = this.deserializeDataRow(rows[0] as any)
-    const body = (await request.json()) as Record<string, any>
+    const existing = this.deserializeDataRow(rows[0])
+    const body = (await request.json()) as UpdateDataBody
 
     // Merge data fields (shallow merge)
-    const mergedData = { ...existing['data'], ...(body['data'] ?? {}) }
+    const mergedData = { ...existing.data, ...(body.data ?? {}) }
     const now = new Date().toISOString()
     const dataJson = JSON.stringify(mergedData)
 
@@ -984,36 +1357,28 @@ export class DatabaseDO extends DurableObjectBase {
     // Emit Type.updated event
     const actor = request.headers.get('X-Actor') ?? 'system'
     this.emitEvent({
-      event: `${existing['type']}.updated`,
+      event: `${existing.type}.updated`,
       actor,
-      object: `${existing['type']}/${id}`,
+      object: `${existing.type}/${id}`,
       data: mergedData,
-      previousData: existing['data'],
+      previousData: existing.data,
     })
 
     // If embedding exists, update it with new content
     const existingEmbedding = this.sql
-      .exec(
-        'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
-        existing['type'],
-        id
-      )
+      .exec('SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?', existing.type, id)
       .toArray()
     if (existingEmbedding.length > 0) {
-      await this.generateEmbeddingForEntity(
-        existing['type'] as string,
-        id,
-        mergedData as Record<string, unknown>
-      ).catch(() => {
+      await this.generateEmbeddingForEntity(existing.type, id, mergedData).catch(() => {
         // Silently ignore embedding generation errors on update
       })
     }
 
     const result = {
-      id: existing['id'],
-      type: existing['type'],
+      id: existing.id,
+      type: existing.type,
       data: mergedData,
-      created_at: existing['created_at'],
+      created_at: existing.created_at,
       updated_at: now,
     }
     return Response.json(result)
@@ -1025,7 +1390,7 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ deleted: false })
     }
 
-    const entity = this.deserializeDataRow(rows[0] as any)
+    const entity = this.deserializeDataRow(rows[0])
 
     // Check for cascade option
     const cascade = url?.searchParams.get('cascade') === 'true'
@@ -1079,7 +1444,8 @@ export class DatabaseDO extends DurableObjectBase {
     const rels = this.sql.exec('SELECT to_id FROM _rels WHERE from_id = ?', fromId).toArray()
 
     for (const rel of rels) {
-      const toId = (rel as any).to_id as string
+      const relRow = rel as RelRow
+      const toId = relRow.to_id
       if (visited.has(toId)) continue
       visited.add(toId)
 
@@ -1109,7 +1475,7 @@ export class DatabaseDO extends DurableObjectBase {
     const relation = url.searchParams.get('relation')
 
     let query = 'SELECT * FROM _rels WHERE 1=1'
-    const params: any[] = []
+    const params: unknown[] = []
 
     if (from_id) {
       query += ' AND from_id = ?'
@@ -1125,12 +1491,12 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const rows = this.sql.exec(query, ...params).toArray()
-    const results = rows.map((row: any) => this.deserializeRelRow(row))
+    const results = rows.map((row) => this.deserializeRelRow(row))
     return Response.json(results)
   }
 
   private async handleCreateRel(request: Request): Promise<Response> {
-    const body = (await request.json()) as Record<string, any>
+    const body = (await request.json()) as CreateRelBody
     const { from_id, relation, to_id, metadata } = body
 
     // Validate required fields
@@ -1175,9 +1541,10 @@ export class DatabaseDO extends DurableObjectBase {
         object: `${from_id}->${relation}->${to_id}`,
         data: { from_id, relation, to_id, metadata: metadata ?? null },
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Handle duplicate composite key -- upsert
-      if (err.message && err.message.includes('UNIQUE constraint')) {
+      const errMsg = err instanceof Error ? err.message : ''
+      if (errMsg.includes('UNIQUE constraint')) {
         this.sql.exec(
           'UPDATE _rels SET metadata = ? WHERE from_id = ? AND relation = ? AND to_id = ?',
           metadataJson,
@@ -1194,23 +1561,32 @@ export class DatabaseDO extends DurableObjectBase {
             to_id
           )
           .toArray()
-        const result: Record<string, any> = { from_id, relation, to_id }
-        result['metadata'] = metadata ?? null
-        result['created_at'] = (rows[0] as any)?.created_at
+        const relRow = rows[0] as RelRow | undefined
+        const result: DeserializedRelRow = {
+          from_id,
+          relation,
+          to_id,
+          metadata: metadata ?? null,
+          created_at: relRow?.created_at ?? now,
+        }
         return Response.json(result)
       } else {
         throw err
       }
     }
 
-    const result: Record<string, any> = { from_id, relation, to_id }
-    result['metadata'] = metadata ?? null
-    result['created_at'] = now
+    const result: DeserializedRelRow = {
+      from_id,
+      relation,
+      to_id,
+      metadata: metadata ?? null,
+      created_at: now,
+    }
     return Response.json(result)
   }
 
   private async handleDeleteRel(request: Request): Promise<Response> {
-    const body = (await request.json()) as Record<string, any>
+    const body = (await request.json()) as CreateRelBody
     const { from_id, relation, to_id } = body
 
     const existing = this.sql
@@ -1226,7 +1602,7 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ deleted: false })
     }
 
-    const existingRel = this.deserializeRelRow(existing[0] as any)
+    const existingRel = this.deserializeRelRow(existing[0])
 
     this.sql.exec(
       'DELETE FROM _rels WHERE from_id = ? AND relation = ? AND to_id = ?',
@@ -1283,7 +1659,7 @@ export class DatabaseDO extends DurableObjectBase {
     // Forward traversal with from_id (no relation means all outgoing)
     if (from_id && !relationParam) {
       const rows = this.sql.exec('SELECT to_id FROM _rels WHERE from_id = ?', from_id).toArray()
-      const toIds: string[] = [...new Set(rows.map((r: any) => r.to_id as string))]
+      const toIds: string[] = [...new Set(rows.map((r) => (r as RelRow).to_id))]
 
       if (toIds.length === 0) {
         return Response.json([])
@@ -1326,26 +1702,24 @@ export class DatabaseDO extends DurableObjectBase {
     const metadataMap = new Map<string, Record<string, unknown>>()
 
     for (const row of outgoing) {
-      const toId = (row as any).to_id as string
+      const relRow = row as RelRow
+      const toId = relRow.to_id
       resultIds.add(toId)
-      if (includeMetadata && (row as any).metadata) {
+      if (includeMetadata && relRow.metadata) {
         const meta =
-          typeof (row as any).metadata === 'string'
-            ? JSON.parse((row as any).metadata)
-            : (row as any).metadata
-        metadataMap.set(toId, meta)
+          typeof relRow.metadata === 'string' ? JSON.parse(relRow.metadata) : relRow.metadata
+        metadataMap.set(toId, meta as Record<string, unknown>)
       }
     }
 
     for (const row of incoming) {
-      const fromId = (row as any).from_id as string
+      const relRow = row as RelRow
+      const fromId = relRow.from_id
       resultIds.add(fromId)
-      if (includeMetadata && (row as any).metadata) {
+      if (includeMetadata && relRow.metadata) {
         const meta =
-          typeof (row as any).metadata === 'string'
-            ? JSON.parse((row as any).metadata)
-            : (row as any).metadata
-        metadataMap.set(fromId, meta)
+          typeof relRow.metadata === 'string' ? JSON.parse(relRow.metadata) : relRow.metadata
+        metadataMap.set(fromId, meta as Record<string, unknown>)
       }
     }
 
@@ -1396,7 +1770,8 @@ export class DatabaseDO extends DurableObjectBase {
 
       const nextIds = new Set<string>()
       for (const row of rows) {
-        const toId = (row as any).to_id as string
+        const relRow = row as RelRow
+        const toId = relRow.to_id
         // For the last hop, don't prevent returning visited nodes (allows self-reference results)
         // For intermediate hops, use cycle detection to prevent infinite loops
         const isLastHop = i === effectiveRelations.length - 1
@@ -1405,12 +1780,10 @@ export class DatabaseDO extends DurableObjectBase {
             visited.add(toId)
           }
           nextIds.add(toId)
-          if (includeMetadata && (row as any).metadata) {
+          if (includeMetadata && relRow.metadata) {
             const meta =
-              typeof (row as any).metadata === 'string'
-                ? JSON.parse((row as any).metadata)
-                : (row as any).metadata
-            metadataMap.set(toId, meta)
+              typeof relRow.metadata === 'string' ? JSON.parse(relRow.metadata) : relRow.metadata
+            metadataMap.set(toId, meta as Record<string, unknown>)
           }
         }
       }
@@ -1446,14 +1819,13 @@ export class DatabaseDO extends DurableObjectBase {
     const metadataMap = new Map<string, Record<string, unknown>>()
 
     for (const row of rows) {
-      const fromId = (row as any).from_id as string
+      const relRow = row as RelRow
+      const fromId = relRow.from_id
       fromIds.push(fromId)
-      if (includeMetadata && (row as any).metadata) {
+      if (includeMetadata && relRow.metadata) {
         const meta =
-          typeof (row as any).metadata === 'string'
-            ? JSON.parse((row as any).metadata)
-            : (row as any).metadata
-        metadataMap.set(fromId, meta)
+          typeof relRow.metadata === 'string' ? JSON.parse(relRow.metadata) : relRow.metadata
+        metadataMap.set(fromId, meta as Record<string, unknown>)
       }
     }
 
@@ -1480,7 +1852,7 @@ export class DatabaseDO extends DurableObjectBase {
   ): Response {
     const placeholders = ids.map(() => '?').join(',')
     let query = `SELECT * FROM _data WHERE id IN (${placeholders})`
-    const params: any[] = [...ids]
+    const params: unknown[] = [...ids]
 
     if (typeFilter) {
       query += ' AND type = ?'
@@ -1488,10 +1860,15 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const records = this.sql.exec(query, ...params).toArray()
-    const results = records.map((r: any) => {
-      const entity = this.deserializeDataRow(r)
-      if (metadataMap && metadataMap.has(entity['id'] as string)) {
-        ;(entity as any).$rel = metadataMap.get(entity['id'] as string)
+    const results = records.map((r) => {
+      const entity = this.deserializeDataRow(r) as DeserializedDataRow & {
+        $rel?: Record<string, unknown>
+      }
+      if (metadataMap && metadataMap.has(entity.id)) {
+        const relData = metadataMap.get(entity.id)
+        if (relData !== undefined) {
+          entity.$rel = relData
+        }
       }
       return entity
     })
@@ -1503,14 +1880,14 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /traverse/filter - filter traversal by metadata
    */
   private async handleTraverseFilter(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: TraverseFilterBody
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as TraverseFilterBody
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { from_id, relation, metadataFilter } = body
+    const { from_id, relation, filter: metadataFilter } = body
 
     if (!from_id || !relation) {
       return Response.json({ error: 'from_id and relation are required' }, { status: 400 })
@@ -1528,8 +1905,9 @@ export class DatabaseDO extends DurableObjectBase {
     const matchingIds: string[] = []
 
     for (const row of rows) {
-      const toId = (row as any).to_id as string
-      const rawMetadata = (row as any).metadata
+      const relRow = row as RelRow
+      const toId = relRow.to_id
+      const rawMetadata = relRow.metadata
 
       if (!metadataFilter) {
         matchingIds.push(toId)
@@ -1544,7 +1922,7 @@ export class DatabaseDO extends DurableObjectBase {
         : {}
 
       // Apply metadata filter
-      if (this.matchesMetadataFilter(metadata, metadataFilter)) {
+      if (this.matchesMetadataFilter(metadata as Record<string, unknown>, metadataFilter)) {
         matchingIds.push(toId)
       }
     }
@@ -1559,7 +1937,7 @@ export class DatabaseDO extends DurableObjectBase {
       .exec(`SELECT * FROM _data WHERE id IN (${placeholders})`, ...matchingIds)
       .toArray()
 
-    return Response.json(entities.map((r: any) => this.deserializeDataRow(r)))
+    return Response.json(entities.map((r) => this.deserializeDataRow(r)))
   }
 
   /**
@@ -1609,9 +1987,9 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle PATCH /rels - update relationship metadata
    */
   private async handleUpdateRel(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -1636,7 +2014,7 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ error: 'Relationship not found' }, { status: 404 })
     }
 
-    const existingRel = this.deserializeRelRow(existing[0] as any)
+    const existingRel = this.deserializeRelRow(existing[0])
 
     // Update metadata
     const metadataJson = metadata ? JSON.stringify(metadata) : null
@@ -1683,7 +2061,8 @@ export class DatabaseDO extends DurableObjectBase {
     if (rows.length === 0) {
       return Response.json({ version: 1 })
     }
-    return Response.json({ version: parseInt((rows[0] as any).value, 10) })
+    const metaRow = rows[0] as MetaRow
+    return Response.json({ version: parseInt(metaRow.value, 10) })
   }
 
   // ===========================================================================
@@ -1834,7 +2213,7 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const rows = this.sql.exec(query, ...params).toArray()
-    const results = rows.map((row: any) => this.deserializeDataRow(row))
+    const results = rows.map((row) => this.deserializeDataRow(row))
     return Response.json(results)
   }
 
@@ -1842,9 +2221,9 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /query/list - complex query via JSON body
    */
   private async handleQueryListPost(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: QueryListBody
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as QueryListBody
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -1876,7 +2255,7 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const rows = this.sql.exec(query, ...params).toArray()
-    const results = rows.map((row: any) => this.deserializeDataRow(row))
+    const results = rows.map((row) => this.deserializeDataRow(row))
     return Response.json(results)
   }
 
@@ -1884,9 +2263,9 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /query/find - find first matching record
    */
   private async handleQueryFind(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: QueryListBody
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as QueryListBody
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -1908,7 +2287,7 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json(null)
     }
 
-    return Response.json(this.deserializeDataRow(rows[0] as any))
+    return Response.json(this.deserializeDataRow(rows[0]))
   }
 
   /**
@@ -1947,14 +2326,14 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /query/search - full-text search
    */
   private async handleQuerySearch(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: SearchBody
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as SearchBody
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { type, query: searchQuery, fields, minScore, limit } = body
+    const { type, query: searchQuery, fields, limit, minScore } = body
 
     if (!type) {
       return Response.json({ error: 'type field is required' }, { status: 400 })
@@ -1972,11 +2351,11 @@ export class DatabaseDO extends DurableObjectBase {
     const rows = this.sql.exec('SELECT * FROM _data WHERE type = ?', type).toArray()
 
     // Filter and score results
-    const results: Array<{ row: any; score: number }> = []
+    const results: Array<{ row: DeserializedDataRow; score: number }> = []
 
     for (const row of rows) {
-      const record = this.deserializeDataRow(row as any)
-      const data = record['data'] as Record<string, unknown>
+      const record = this.deserializeDataRow(row)
+      const data = record.data
 
       // Determine which fields to search
       const searchFields =
@@ -2097,7 +2476,7 @@ export class DatabaseDO extends DurableObjectBase {
     const order = url.searchParams.get('order') ?? 'desc'
 
     let query = 'SELECT * FROM _events WHERE 1=1'
-    const params: any[] = []
+    const params: unknown[] = []
 
     // Filter by event type (with wildcard support)
     if (event) {
@@ -2140,7 +2519,8 @@ export class DatabaseDO extends DurableObjectBase {
         .exec('SELECT timestamp FROM _events WHERE id = ?', cursor)
         .toArray()
       if (cursorRows.length > 0) {
-        const cursorTs = (cursorRows[0] as any).timestamp
+        const cursorEvent = cursorRows[0] as EventRow
+        const cursorTs = cursorEvent.timestamp
         if (order === 'asc') {
           query += ' AND (timestamp > ? OR (timestamp = ? AND id > ?))'
           params.push(cursorTs, cursorTs, cursor)
@@ -2168,7 +2548,7 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const rows = this.sql.exec(query, ...params).toArray()
-    const results = rows.map((row: any) => this.deserializeEventRow(row))
+    const results = rows.map((row) => this.deserializeEventRow(row))
     return Response.json(results)
   }
 
@@ -2176,25 +2556,25 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /events - create custom event
    */
   private async handleCreateEvent(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
     const { event, actor, object, data, result } = body
 
-    if (!event) {
+    if (!event || typeof event !== 'string') {
       return Response.json({ error: 'event field is required' }, { status: 400 })
     }
 
     const eventRecord = this.emitEvent({
-      event,
-      actor: actor ?? 'system',
-      object,
+      event: event as string,
+      actor: (actor as string | undefined) ?? 'system',
+      ...(object !== undefined && { object: object as string }),
       data,
-      result,
+      ...(result !== undefined && { result: result as string }),
     })
 
     return Response.json(eventRecord)
@@ -2204,9 +2584,9 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /events/replay - replay events
    */
   private async handleReplayEvents(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -2214,7 +2594,7 @@ export class DatabaseDO extends DurableObjectBase {
     const { source, object, event: eventFilter, since } = body
 
     let query = 'SELECT * FROM _events WHERE 1=1'
-    const params: any[] = []
+    const params: unknown[] = []
 
     if (object) {
       query += ' AND object = ?'
@@ -2234,7 +2614,7 @@ export class DatabaseDO extends DurableObjectBase {
     query += ' ORDER BY timestamp ASC'
 
     const rows = this.sql.exec(query, ...params).toArray()
-    const events = rows.map((row: any) => this.deserializeEventRow(row))
+    const events = rows.map((row) => this.deserializeEventRow(row))
 
     return Response.json({
       source: source ?? 'local',
@@ -2247,28 +2627,28 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /events/rebuild - rebuild entity from events
    */
   private async handleRebuildEntity(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
     const { object } = body
 
-    if (!object) {
+    if (!object || typeof object !== 'string') {
       return Response.json({ error: 'object field is required' }, { status: 400 })
     }
 
     // Parse object format: Type/id
-    const [type, id] = object.split('/')
+    const [type, id] = (object as string).split('/')
     if (!type || !id) {
       return Response.json({ error: 'Invalid object format, expected Type/id' }, { status: 400 })
     }
 
     // Get all events for this object in chronological order
     const rows = this.sql
-      .exec('SELECT * FROM _events WHERE object = ? ORDER BY timestamp ASC', object)
+      .exec('SELECT * FROM _events WHERE object = ? ORDER BY timestamp ASC', object as string)
       .toArray()
 
     if (rows.length === 0) {
@@ -2281,7 +2661,7 @@ export class DatabaseDO extends DurableObjectBase {
     let hasData = false
 
     for (const row of rows) {
-      const event = this.deserializeEventRow(row as any)
+      const event = this.deserializeEventRow(row)
       const eventType = event['event'] as string
 
       if (eventType.endsWith('.created')) {
@@ -2332,9 +2712,9 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /events/subscribe - create subscription
    */
   private async handleSubscribe(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -2482,9 +2862,9 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /pipeline/config - configure pipeline
    */
   private async handlePipelineConfig(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -2503,9 +2883,9 @@ export class DatabaseDO extends DurableObjectBase {
    * Handle POST /pipeline/test-error - test error handling
    */
   private async handlePipelineTestError(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
@@ -2521,24 +2901,21 @@ export class DatabaseDO extends DurableObjectBase {
   /**
    * Deserialize an event row from the database
    */
-  private deserializeEventRow(row: Record<string, any>): Record<string, any> {
+  private deserializeEventRow(row: unknown): DeserializedEventRow {
+    const r = row as EventRow
     return {
-      id: row['id'],
-      event: row['event'],
-      actor: row['actor'],
-      object: row['object'],
-      data: row['data']
-        ? typeof row['data'] === 'string'
-          ? JSON.parse(row['data'])
-          : row['data']
+      id: r.id,
+      event: r.event,
+      actor: r.actor,
+      object: r.object,
+      data: r.data ? (typeof r.data === 'string' ? JSON.parse(r.data) : r.data) : null,
+      result: r.result,
+      previousData: r.previous_data
+        ? typeof r.previous_data === 'string'
+          ? JSON.parse(r.previous_data)
+          : r.previous_data
         : null,
-      result: row['result'],
-      previousData: row['previous_data']
-        ? typeof row['previous_data'] === 'string'
-          ? JSON.parse(row['previous_data'])
-          : row['previous_data']
-        : null,
-      timestamp: row['timestamp'],
+      timestamp: r.timestamp,
     }
   }
 
@@ -2546,27 +2923,29 @@ export class DatabaseDO extends DurableObjectBase {
   // Helpers
   // ===========================================================================
 
-  private deserializeDataRow(row: Record<string, any>): Record<string, any> {
+  private deserializeDataRow(row: unknown): DeserializedDataRow {
+    const r = row as DataRow
     return {
-      id: row['id'],
-      type: row['type'],
-      data: typeof row['data'] === 'string' ? JSON.parse(row['data']) : row['data'],
-      created_at: row['created_at'],
-      updated_at: row['updated_at'],
+      id: r.id,
+      type: r.type,
+      data: typeof r.data === 'string' ? JSON.parse(r.data) : (r.data as Record<string, unknown>),
+      created_at: r.created_at,
+      updated_at: r.updated_at,
     }
   }
 
-  private deserializeRelRow(row: Record<string, any>): Record<string, any> {
+  private deserializeRelRow(row: unknown): DeserializedRelRow {
+    const r = row as RelRow
     return {
-      from_id: row['from_id'],
-      relation: row['relation'],
-      to_id: row['to_id'],
-      metadata: row['metadata']
-        ? typeof row['metadata'] === 'string'
-          ? JSON.parse(row['metadata'])
-          : row['metadata']
+      from_id: r.from_id,
+      relation: r.relation,
+      to_id: r.to_id,
+      metadata: r.metadata
+        ? typeof r.metadata === 'string'
+          ? JSON.parse(r.metadata)
+          : (r.metadata as Record<string, unknown>)
         : null,
-      created_at: row['created_at'],
+      created_at: r.created_at,
     }
   }
 
@@ -2578,15 +2957,15 @@ export class DatabaseDO extends DurableObjectBase {
    * Configure embeddings model
    */
   private async handleConfigureEmbeddings(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
     if (body['model']) {
-      this.embeddingsConfig.model = body['model']
+      this.embeddingsConfig.model = body['model'] as string
     }
 
     return Response.json(this.embeddingsConfig)
@@ -2603,7 +2982,7 @@ export class DatabaseDO extends DurableObjectBase {
     if (entityType) {
       const entities = this.sql.exec('SELECT * FROM _data WHERE type = ?', entityType).toArray()
       for (const row of entities) {
-        const entity = this.deserializeDataRow(row as any)
+        const entity = this.deserializeDataRow(row)
         const existing = this.sql
           .exec(
             'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
@@ -2622,7 +3001,7 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     let query = 'SELECT * FROM _embeddings'
-    const params: any[] = []
+    const params: unknown[] = []
 
     if (entityType) {
       query += ' WHERE entity_type = ?'
@@ -2632,15 +3011,18 @@ export class DatabaseDO extends DurableObjectBase {
     query += ' ORDER BY created_at ASC'
 
     const rows = this.sql.exec(query, ...params).toArray()
-    const results = rows.map((row: any) => ({
-      entity_type: row.entity_type,
-      entity_id: row.entity_id,
-      model: row.model,
-      vector: typeof row.vector === 'string' ? JSON.parse(row.vector) : row.vector,
-      content_hash: row.content_hash,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-    }))
+    const results = rows.map((row) => {
+      const embRow = row as EmbeddingRow
+      return {
+        entity_type: embRow.entity_type,
+        entity_id: embRow.entity_id,
+        model: embRow.model,
+        vector: typeof embRow.vector === 'string' ? JSON.parse(embRow.vector) : embRow.vector,
+        content_hash: embRow.content_hash,
+        created_at: embRow.created_at,
+        updated_at: embRow.updated_at,
+      }
+    })
 
     return Response.json(results)
   }
@@ -2656,25 +3038,26 @@ export class DatabaseDO extends DurableObjectBase {
    * Warm up embedding cache for a type
    */
   private async handleEmbeddingsWarmup(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { type } = body
+    const { type: rawType } = body
 
-    if (!type) {
+    if (!rawType || typeof rawType !== 'string') {
       return Response.json({ error: 'type field is required' }, { status: 400 })
     }
+    const type = rawType as string
 
     // Get all entities of this type
     const entities = this.sql.exec('SELECT * FROM _data WHERE type = ?', type).toArray()
     let warmed = 0
 
     for (const row of entities) {
-      const entity = this.deserializeDataRow(row as any)
+      const entity = this.deserializeDataRow(row)
       // Check if embedding already exists
       const existing = this.sql
         .exec(
@@ -2701,25 +3084,26 @@ export class DatabaseDO extends DurableObjectBase {
    * Generate embeddings for all entities of a type
    */
   private async handleEmbeddingsGenerate(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { type } = body
+    const { type: rawType } = body
 
-    if (!type) {
+    if (!rawType || typeof rawType !== 'string') {
       return Response.json({ error: 'type field is required' }, { status: 400 })
     }
+    const type = rawType as string
 
     // Get all entities of this type
     const entities = this.sql.exec('SELECT * FROM _data WHERE type = ?', type).toArray()
     let generated = 0
 
     for (const row of entities) {
-      const entity = this.deserializeDataRow(row as any)
+      const entity = this.deserializeDataRow(row)
       await this.generateEmbeddingForEntity(
         type,
         entity['id'] as string,
@@ -2735,18 +3119,19 @@ export class DatabaseDO extends DurableObjectBase {
    * Batch process embeddings for specific entities
    */
   private async handleEmbeddingsBatch(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { type, ids, skipExisting } = body
+    const { type: rawType, ids, skipExisting } = body
 
-    if (!type || !Array.isArray(ids)) {
+    if (!rawType || typeof rawType !== 'string' || !Array.isArray(ids)) {
       return Response.json({ error: 'type and ids array are required' }, { status: 400 })
     }
+    const type = rawType as string
 
     let processed = 0
     let skipped = 0
@@ -2773,8 +3158,12 @@ export class DatabaseDO extends DurableObjectBase {
         }
       }
 
-      const entity = this.deserializeDataRow(entityRows[0] as any)
-      await this.generateEmbeddingForEntity(type, id, entity['data'] as Record<string, unknown>)
+      const entity = this.deserializeDataRow(entityRows[0])
+      await this.generateEmbeddingForEntity(
+        type,
+        id as string,
+        entity['data'] as Record<string, unknown>
+      )
       processed++
     }
 
@@ -2785,24 +3174,26 @@ export class DatabaseDO extends DurableObjectBase {
    * Start a batch embedding job
    */
   private async handleEmbeddingsBatchStart(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { type, batchSize = 10 } = body
+    const { type: rawType, batchSize = 10 } = body
 
-    if (!type) {
+    if (!rawType || typeof rawType !== 'string') {
       return Response.json({ error: 'type field is required' }, { status: 400 })
     }
+    const type = rawType as string
 
     // Count entities of this type
     const countResult = this.sql
       .exec('SELECT COUNT(*) as count FROM _data WHERE type = ?', type)
       .toArray()
-    const total = (countResult[0] as any)?.count ?? 0
+    const countRow = countResult[0] as CountRow | undefined
+    const total = countRow?.count ?? 0
 
     const jobId = crypto.randomUUID()
 
@@ -2815,7 +3206,7 @@ export class DatabaseDO extends DurableObjectBase {
     })
 
     // Start processing in the background
-    this.processBatchJob(jobId, type, batchSize).catch(() => {
+    this.processBatchJob(jobId, type, batchSize as number).catch(() => {
       const job = this.batchJobs.get(jobId)
       if (job) {
         job.status = 'failed'
@@ -2841,7 +3232,7 @@ export class DatabaseDO extends DurableObjectBase {
       const batch = entities.slice(i, i + batchSize)
       for (const row of batch) {
         try {
-          const entity = this.deserializeDataRow(row as any)
+          const entity = this.deserializeDataRow(row)
           await this.generateEmbeddingForEntity(
             type,
             entity['id'] as string,
@@ -2893,26 +3284,22 @@ export class DatabaseDO extends DurableObjectBase {
     if (embeddingRows.length > 0) {
       // Cache hit
       this.embeddingsCacheStats.cacheHits++
-      const row = embeddingRows[0] as any
+      const embRow = embeddingRows[0] as EmbeddingRow
       return Response.json({
-        entity_type: row.entity_type,
-        entity_id: row.entity_id,
-        model: row.model,
-        vector: typeof row.vector === 'string' ? JSON.parse(row.vector) : row.vector,
-        content_hash: row.content_hash,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
+        entity_type: embRow.entity_type,
+        entity_id: embRow.entity_id,
+        model: embRow.model,
+        vector: typeof embRow.vector === 'string' ? JSON.parse(embRow.vector) : embRow.vector,
+        content_hash: embRow.content_hash,
+        created_at: embRow.created_at,
+        updated_at: embRow.updated_at,
       })
     }
 
     // Cache miss - generate embedding
     this.embeddingsCacheStats.cacheMisses++
-    const entity = this.deserializeDataRow(entityRows[0] as any)
-    const embedding = await this.generateEmbeddingForEntity(
-      entityType,
-      entityId,
-      entity['data'] as Record<string, unknown>
-    )
+    const entity = this.deserializeDataRow(entityRows[0])
+    const embedding = await this.generateEmbeddingForEntity(entityType, entityId, entity.data)
 
     if (!embedding) {
       // Could not generate embedding (e.g., no text content)
@@ -2926,22 +3313,35 @@ export class DatabaseDO extends DurableObjectBase {
    * Semantic search using vector similarity
    */
   private async handleSemanticSearch(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { type, query, minScore = 0, limit = 10, where, since, until } = body
+    const {
+      type: rawType,
+      query: rawQuery,
+      minScore: rawMinScore = 0,
+      limit: rawLimit = 10,
+      where,
+      since,
+      until,
+    } = body
 
-    if (!type) {
+    if (!rawType || typeof rawType !== 'string') {
       return Response.json({ error: 'type field is required' }, { status: 400 })
     }
 
-    if (!query || query.trim() === '') {
+    if (!rawQuery || typeof rawQuery !== 'string' || (rawQuery as string).trim() === '') {
       return Response.json({ error: 'query field is required' }, { status: 400 })
     }
+
+    const type = rawType as string
+    const query = rawQuery as string
+    const minScore = rawMinScore as number
+    const limit = rawLimit as number
 
     // Generate embedding for query
     const queryEmbedding = await this.generateEmbedding(query)
@@ -2951,7 +3351,7 @@ export class DatabaseDO extends DurableObjectBase {
 
     // Generate embeddings for entities that don't have them yet (lazy generation)
     for (const row of entities) {
-      const entity = this.deserializeDataRow(row as any)
+      const entity = this.deserializeDataRow(row)
       const existingEmbedding = this.sql
         .exec(
           'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
@@ -2977,7 +3377,7 @@ export class DatabaseDO extends DurableObjectBase {
     const results: Array<{ entityId: string; score: number }> = []
 
     for (const row of embeddingRows) {
-      const embeddingRow = row as any
+      const embeddingRow = row as EmbeddingRow
       const vector =
         typeof embeddingRow.vector === 'string'
           ? JSON.parse(embeddingRow.vector)
@@ -3002,7 +3402,7 @@ export class DatabaseDO extends DurableObjectBase {
         .toArray()
       if (entityRows.length === 0) continue
 
-      const entity = this.deserializeDataRow(entityRows[0] as any)
+      const entity = this.deserializeDataRow(entityRows[0])
 
       // Apply where filters if specified
       if (where) {
@@ -3038,22 +3438,36 @@ export class DatabaseDO extends DurableObjectBase {
    * Hybrid search combining FTS and semantic
    */
   private async handleHybridSearch(request: Request): Promise<Response> {
-    let body: Record<string, any>
+    let body: Record<string, unknown>
     try {
-      body = (await request.json()) as Record<string, any>
+      body = (await request.json()) as Record<string, unknown>
     } catch {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    const { type, query, limit = 10, ftsWeight = 0.5, semanticWeight = 0.5, rrfK = 60 } = body
+    const {
+      type: rawType,
+      query: rawQuery,
+      limit: rawLimit = 10,
+      ftsWeight: rawFtsWeight = 0.5,
+      semanticWeight: rawSemanticWeight = 0.5,
+      rrfK: rawRrfK = 60,
+    } = body
 
-    if (!type) {
+    if (!rawType) {
       return Response.json({ error: 'type field is required' }, { status: 400 })
     }
 
-    if (!query || query.trim() === '') {
+    if (!rawQuery || (rawQuery as string).trim() === '') {
       return Response.json({ error: 'query field is required' }, { status: 400 })
     }
+
+    const type = rawType as string
+    const query = rawQuery as string
+    const limit = rawLimit as number
+    const ftsWeight = rawFtsWeight as number
+    const semanticWeight = rawSemanticWeight as number
+    const rrfK = rawRrfK as number
 
     // Get FTS results
     const ftsRanks = new Map<string, number>()
@@ -3064,7 +3478,7 @@ export class DatabaseDO extends DurableObjectBase {
     const queryTerms = queryLower.split(/\s+/)
 
     for (const row of entities) {
-      const entity = this.deserializeDataRow(row as any)
+      const entity = this.deserializeDataRow(row)
       const data = entity['data'] as Record<string, unknown>
 
       // Simple FTS: check if any text field contains query terms
@@ -3090,7 +3504,7 @@ export class DatabaseDO extends DurableObjectBase {
 
     // Ensure embeddings exist for all entities (lazy generation)
     for (const row of entities) {
-      const entity = this.deserializeDataRow(row as any)
+      const entity = this.deserializeDataRow(row)
       const existingEmbedding = this.sql
         .exec(
           'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
@@ -3115,7 +3529,7 @@ export class DatabaseDO extends DurableObjectBase {
     const semanticResults: Array<{ entityId: string; score: number }> = []
 
     for (const row of embeddingRows) {
-      const embeddingRow = row as any
+      const embeddingRow = row as EmbeddingRow
       const vector =
         typeof embeddingRow.vector === 'string'
           ? JSON.parse(embeddingRow.vector)
@@ -3173,7 +3587,7 @@ export class DatabaseDO extends DurableObjectBase {
         .toArray()
       if (entityRows.length === 0) continue
 
-      const entity = this.deserializeDataRow(entityRows[0] as any)
+      const entity = this.deserializeDataRow(entityRows[0])
 
       finalResults.push({
         id: entity['id'],
@@ -3226,8 +3640,9 @@ export class DatabaseDO extends DurableObjectBase {
       )
       .toArray()
 
-    const id = existing.length > 0 ? (existing[0] as any).id : crypto.randomUUID()
-    const createdAt = existing.length > 0 ? (existing[0] as any).created_at : now
+    const existingEmb = existing.length > 0 ? (existing[0] as EmbeddingRow) : null
+    const id = existingEmb?.id ?? crypto.randomUUID()
+    const createdAt = existingEmb?.created_at ?? now
     const vectorJson = JSON.stringify(vector)
 
     if (existing.length > 0) {
@@ -3272,7 +3687,8 @@ export class DatabaseDO extends DurableObjectBase {
    */
   private async generateEmbedding(text: string): Promise<number[]> {
     // Try to use AI binding if available
-    const ai = (this.env as any)?.AI
+    const envWithAI = this.env as EnvWithAI
+    const ai = envWithAI?.AI
     if (ai && typeof ai.run === 'function') {
       try {
         const result = await ai.run(this.embeddingsConfig.model, { text: [text] })

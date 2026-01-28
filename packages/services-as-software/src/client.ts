@@ -43,16 +43,18 @@ export function Client(config: ClientConfig): ServiceClient {
   if (config.auth) {
     switch (config.auth.type) {
       case 'api-key':
-        headers['Authorization'] = `Bearer ${config.auth.credentials.apiKey || config.auth.credentials.token}`
+        headers['Authorization'] = `Bearer ${
+          config.auth.credentials['apiKey'] || config.auth.credentials['token']
+        }`
         break
       case 'basic':
         const basicAuth = Buffer.from(
-          `${config.auth.credentials.username}:${config.auth.credentials.password}`
+          `${config.auth.credentials['username']}:${config.auth.credentials['password']}`
         ).toString('base64')
         headers['Authorization'] = `Basic ${basicAuth}`
         break
       case 'jwt':
-        headers['Authorization'] = `Bearer ${config.auth.credentials.token}`
+        headers['Authorization'] = `Bearer ${config.auth.credentials['token']}`
         break
       // OAuth would require more complex flow
     }
@@ -63,11 +65,13 @@ export function Client(config: ClientConfig): ServiceClient {
    */
   async function request<T>(endpoint: string, body?: unknown): Promise<T> {
     const url = `${baseUrl}/${endpoint.replace(/^\//, '')}`
+    const bodyStr = body ? JSON.stringify(body) : undefined
+    const signal = config.timeout ? AbortSignal.timeout(config.timeout) : undefined
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: config.timeout ? AbortSignal.timeout(config.timeout) : undefined,
+      ...(bodyStr !== undefined && { body: bodyStr }),
+      ...(signal !== undefined && { signal }),
     })
 
     if (!response.ok) {

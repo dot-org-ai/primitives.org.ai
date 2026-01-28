@@ -56,8 +56,7 @@ function schemaToParameters(schema: Schema): ToolParameter[] {
 
   return Object.entries(jsonSchema.properties).map(([name, propSchema]) => ({
     name,
-    description:
-      (propSchema as JSONSchema).description || `Parameter: ${name}`,
+    description: (propSchema as JSONSchema).description || `Parameter: ${name}`,
     schema: propSchema as JSONSchema,
     required: required.includes(name),
     default: (propSchema as JSONSchema).default,
@@ -99,14 +98,14 @@ export function defineTool<TInput, TOutput>(
     name: options.name,
     description: options.description,
     category: options.category,
-    subcategory: options.subcategory,
+    ...(options.subcategory !== undefined && { subcategory: options.subcategory }),
     parameters: schemaToParameters(options.input),
-    output: options.output
-      ? {
-          description: 'Tool output',
-          schema: options.output,
-        }
-      : undefined,
+    ...(options.output && {
+      output: {
+        description: 'Tool output',
+        schema: options.output,
+      },
+    }),
     handler: options.handler,
     ...options.options,
   }
@@ -147,10 +146,7 @@ export function createToolExecutor(context: ToolContext) {
     /**
      * Execute a tool by ID with context tracking
      */
-    async execute<TInput, TOutput>(
-      toolId: string,
-      input: TInput
-    ): Promise<ToolResult<TOutput>> {
+    async execute<TInput, TOutput>(toolId: string, input: TInput): Promise<ToolResult<TOutput>> {
       const tool = registry.get(toolId)
 
       if (!tool) {
@@ -164,11 +160,7 @@ export function createToolExecutor(context: ToolContext) {
       }
 
       // Check audience restrictions
-      if (
-        tool.audience &&
-        tool.audience !== 'both' &&
-        tool.audience !== context.executor.type
-      ) {
+      if (tool.audience && tool.audience !== 'both' && tool.audience !== context.executor.type) {
         return {
           success: false,
           error: {
@@ -189,7 +181,7 @@ export function createToolExecutor(context: ToolContext) {
           data,
           metadata: {
             duration,
-            requestId: context.requestId,
+            ...(context.requestId !== undefined && { requestId: context.requestId }),
           },
         }
       } catch (error) {
@@ -204,7 +196,7 @@ export function createToolExecutor(context: ToolContext) {
           },
           metadata: {
             duration,
-            requestId: context.requestId,
+            ...(context.requestId !== undefined && { requestId: context.requestId }),
           },
         }
       }
@@ -264,7 +256,7 @@ export function toolBuilder(id: string) {
       return this
     },
 
-    subcategory(subcategory: DefineToolOptions<unknown, unknown>['subcategory']) {
+    subcategory(subcategory: NonNullable<DefineToolOptions<unknown, unknown>['subcategory']>) {
       config.subcategory = subcategory
       return this
     },
@@ -288,13 +280,19 @@ export function toolBuilder(id: string) {
       }
     },
 
-    options(opts: Partial<AnyTool>) {
-      config.options = opts as DefineToolOptions<unknown, unknown>['options']
+    options(opts: NonNullable<DefineToolOptions<unknown, unknown>['options']>) {
+      config.options = opts
       return this
     },
 
     build<TInput, TOutput>(): Tool<TInput, TOutput> {
-      if (!config.name || !config.description || !config.category || !config.input || !config.handler) {
+      if (
+        !config.name ||
+        !config.description ||
+        !config.category ||
+        !config.input ||
+        !config.handler
+      ) {
         throw new Error('Tool requires id, name, description, category, input, and handler')
       }
       return defineTool(config as DefineToolOptions<TInput, TOutput>)

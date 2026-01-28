@@ -12,6 +12,7 @@
  */
 
 import type { WorkflowContext } from 'ai-workflows'
+import { generateRequestId } from './utils/id.js'
 import type {
   Worker,
   Team,
@@ -620,5 +621,5 @@ async function executeTask<T>(
 }
 
 function generateId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  return generateRequestId(prefix)
 }

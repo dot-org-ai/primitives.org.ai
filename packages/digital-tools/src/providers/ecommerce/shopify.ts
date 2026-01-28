@@ -173,7 +173,7 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
     const response = await fetch(`${baseUrl}${endpoint}`, {
       method,
       headers: getHeaders(),
-      body: body ? JSON.stringify(body) : undefined,
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     })
 
     if (!response.ok) {
@@ -194,8 +194,8 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
     info: shopifyInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      shopDomain = cfg.shopDomain as string
-      accessToken = cfg.accessToken as string
+      shopDomain = cfg['shopDomain'] as string
+      accessToken = cfg['accessToken'] as string
 
       if (!shopDomain) {
         throw new Error('Shopify shop domain is required')
@@ -249,7 +249,7 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
         images?: Array<{ src: string }>
       } = {
         title: product.title,
-        body_html: product.description,
+        ...(product.description !== undefined && { body_html: product.description }),
         vendor: 'Default',
         product_type: '',
         tags: product.tags?.join(', ') || '',
@@ -262,7 +262,7 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
         shopifyProduct.variants = product.variants.map((v) => ({
           title: v.title,
           price: v.price.toString(),
-          sku: v.sku,
+          ...(v.sku !== undefined && { sku: v.sku }),
           inventory_quantity: v.inventory || 0,
         }))
       } else {
@@ -271,7 +271,7 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
           {
             title: 'Default Title',
             price: product.price.toString(),
-            sku: product.sku,
+            ...(product.sku !== undefined && { sku: product.sku }),
             inventory_quantity: product.inventory || 0,
           },
         ]
@@ -361,7 +361,6 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
       return {
         items: response.products.map(mapShopifyProduct),
         hasMore: response.products.length === (options?.limit || 50),
-        total: undefined, // Shopify doesn't provide total count in products endpoint
       }
     },
 
@@ -397,7 +396,6 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
       return {
         items: response.orders.map(mapShopifyOrder),
         hasMore: response.orders.length === (options?.limit || 50),
-        total: undefined,
       }
     },
 
@@ -444,7 +442,6 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
       return {
         items: response.customers.map(mapShopifyCustomer),
         hasMore: response.customers.length === (options?.limit || 50),
-        total: undefined,
       }
     },
 
@@ -471,7 +468,11 @@ export function createShopifyProvider(config: ProviderConfig): EcommerceProvider
           throw new Error('No inventory levels found for this variant')
         }
 
-        const locationId = levelsResponse.inventory_levels[0].location_id
+        const firstLevel = levelsResponse.inventory_levels[0]
+        if (!firstLevel) {
+          throw new Error('No inventory levels found for this variant')
+        }
+        const locationId = firstLevel.location_id
 
         // Set the inventory level
         await makeRequest('/inventory_levels/set.json', 'POST', {
@@ -497,25 +498,27 @@ function mapShopifyProduct(product: ShopifyProduct): EcommerceProductData {
   return {
     id: product.id.toString(),
     title: product.title,
-    description: product.body_html,
+    ...(product.body_html !== undefined && { description: product.body_html }),
     price: parseFloat(firstVariant?.price || '0'),
-    compareAtPrice: firstVariant?.compare_at_price
-      ? parseFloat(firstVariant.compare_at_price)
-      : undefined,
-    sku: firstVariant?.sku,
-    inventory: firstVariant?.inventory_quantity,
+    ...(firstVariant?.compare_at_price && {
+      compareAtPrice: parseFloat(firstVariant.compare_at_price),
+    }),
+    ...(firstVariant?.sku !== undefined && { sku: firstVariant.sku }),
+    ...(firstVariant?.inventory_quantity !== undefined && {
+      inventory: firstVariant.inventory_quantity,
+    }),
     images: product.images?.map((img) => img.src) || [],
     variants:
       product.variants?.map((v) => ({
         id: v.id.toString(),
         title: v.title,
         price: parseFloat(v.price),
-        sku: v.sku,
+        ...(v.sku !== undefined && { sku: v.sku }),
         inventory: v.inventory_quantity,
       })) || [],
     tags: product.tags ? product.tags.split(', ') : [],
     status: product.status || 'active',
-    url: product.admin_graphql_api_id,
+    ...(product.admin_graphql_api_id !== undefined && { url: product.admin_graphql_api_id }),
     createdAt: new Date(product.created_at),
     updatedAt: new Date(product.updated_at),
   }
@@ -531,12 +534,12 @@ function mapShopifyOrder(order: ShopifyOrder): OrderData {
     status: order.cancelled_at ? 'cancelled' : order.closed_at ? 'closed' : 'open',
     financialStatus: order.financial_status || 'pending',
     fulfillmentStatus: order.fulfillment_status || 'unfulfilled',
-    customerId: order.customer?.id?.toString(),
+    ...(order.customer?.id !== undefined && { customerId: order.customer.id.toString() }),
     email: order.email || order.customer?.email || '',
     lineItems:
       order.line_items?.map((item) => ({
         productId: item.product_id?.toString() || '',
-        variantId: item.variant_id?.toString(),
+        ...(item.variant_id !== undefined && { variantId: item.variant_id.toString() }),
         title: item.title,
         quantity: item.quantity,
         price: parseFloat(item.price),
@@ -546,32 +549,40 @@ function mapShopifyOrder(order: ShopifyOrder): OrderData {
     shipping: parseFloat(order.total_shipping_price_set?.shop_money?.amount || '0'),
     total: parseFloat(order.total_price || '0'),
     currency: order.currency || 'USD',
-    shippingAddress: order.shipping_address
-      ? {
-          firstName: order.shipping_address.first_name || '',
-          lastName: order.shipping_address.last_name || '',
-          address1: order.shipping_address.address1 || '',
+    ...(order.shipping_address && {
+      shippingAddress: {
+        firstName: order.shipping_address.first_name || '',
+        lastName: order.shipping_address.last_name || '',
+        address1: order.shipping_address.address1 || '',
+        ...(order.shipping_address.address2 !== undefined && {
           address2: order.shipping_address.address2,
-          city: order.shipping_address.city || '',
+        }),
+        city: order.shipping_address.city || '',
+        ...(order.shipping_address.province !== undefined && {
           province: order.shipping_address.province,
-          postalCode: order.shipping_address.zip || '',
-          country: order.shipping_address.country || '',
-          phone: order.shipping_address.phone,
-        }
-      : undefined,
-    billingAddress: order.billing_address
-      ? {
-          firstName: order.billing_address.first_name || '',
-          lastName: order.billing_address.last_name || '',
-          address1: order.billing_address.address1 || '',
+        }),
+        postalCode: order.shipping_address.zip || '',
+        country: order.shipping_address.country || '',
+        ...(order.shipping_address.phone !== undefined && { phone: order.shipping_address.phone }),
+      },
+    }),
+    ...(order.billing_address && {
+      billingAddress: {
+        firstName: order.billing_address.first_name || '',
+        lastName: order.billing_address.last_name || '',
+        address1: order.billing_address.address1 || '',
+        ...(order.billing_address.address2 !== undefined && {
           address2: order.billing_address.address2,
-          city: order.billing_address.city || '',
+        }),
+        city: order.billing_address.city || '',
+        ...(order.billing_address.province !== undefined && {
           province: order.billing_address.province,
-          postalCode: order.billing_address.zip || '',
-          country: order.billing_address.country || '',
-          phone: order.billing_address.phone,
-        }
-      : undefined,
+        }),
+        postalCode: order.billing_address.zip || '',
+        country: order.billing_address.country || '',
+        ...(order.billing_address.phone !== undefined && { phone: order.billing_address.phone }),
+      },
+    }),
     createdAt: new Date(order.created_at),
     updatedAt: new Date(order.updated_at),
   }
@@ -584,9 +595,9 @@ function mapShopifyCustomer(customer: ShopifyCustomer): EcommerceCustomerData {
   return {
     id: customer.id.toString(),
     email: customer.email || '',
-    firstName: customer.first_name,
-    lastName: customer.last_name,
-    phone: customer.phone,
+    ...(customer.first_name !== undefined && { firstName: customer.first_name }),
+    ...(customer.last_name !== undefined && { lastName: customer.last_name }),
+    ...(customer.phone !== undefined && { phone: customer.phone }),
     ordersCount: customer.orders_count || 0,
     totalSpent: parseFloat(customer.total_spent || '0'),
     createdAt: new Date(customer.created_at),

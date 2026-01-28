@@ -228,7 +228,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         'Content-Type': 'application/json; charset=utf-8',
         Authorization: `Bearer ${token}`,
       },
-      body: body ? JSON.stringify(body) : undefined,
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     })
 
     const data = (await response.json()) as T
@@ -239,7 +239,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     info: slackInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      token = (cfg.accessToken || cfg.botToken) as string
+      token = (cfg['accessToken'] || cfg['botToken']) as string
       if (!token) {
         throw new Error('Slack access token or bot token is required')
       }
@@ -252,7 +252,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         return {
           healthy: data.ok === true,
           latencyMs: Date.now() - start,
-          message: data.ok ? `Connected as ${data.user}` : data.error,
+          message: data.ok ? `Connected as ${data.user}` : data.error || 'Unknown error',
           checkedAt: new Date(),
         }
       } catch (error) {
@@ -275,7 +275,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       if (options.channel) {
-        body.channel = options.channel
+        body['channel'] = options.channel
       } else if (options.userId) {
         // Open DM conversation first
         const dm = await slackApi<SlackConversationsOpenResponse>('conversations.open', {
@@ -287,7 +287,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
             error: { code: dm.error || 'UNKNOWN', message: `Failed to open DM: ${dm.error}` },
           }
         }
-        body.channel = dm.channel?.id
+        body['channel'] = dm.channel?.id
       } else {
         return {
           success: false,
@@ -296,15 +296,15 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       if (options.threadId) {
-        body.thread_ts = options.threadId
+        body['thread_ts'] = options.threadId
       }
 
       if (options.blocks) {
-        body.blocks = options.blocks
+        body['blocks'] = options.blocks
       }
 
       if (options.metadata) {
-        body.metadata = {
+        body['metadata'] = {
           event_type: 'message_metadata',
           event_payload: options.metadata,
         }
@@ -315,9 +315,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       if (data.ok) {
         return {
           success: true,
-          messageId: data.ts,
-          timestamp: data.ts,
-          channel: data.channel,
+          ...(data.ts !== undefined && { messageId: data.ts }),
+          ...(data.ts !== undefined && { timestamp: data.ts }),
+          ...(data.channel !== undefined && { channel: data.channel }),
         }
       }
 
@@ -334,7 +334,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       if (blocks) {
-        body.blocks = blocks
+        body['blocks'] = blocks
       }
 
       const data = await slackApi<SlackPostMessageResponse>('chat.update', body)
@@ -342,9 +342,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       if (data.ok) {
         return {
           success: true,
-          messageId: data.ts,
-          timestamp: data.ts,
-          channel: data.channel,
+          ...(data.ts !== undefined && { messageId: data.ts }),
+          ...(data.ts !== undefined && { timestamp: data.ts }),
+          ...(data.channel !== undefined && { channel: data.channel }),
         }
       }
 
@@ -390,6 +390,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       const msg = data.messages[0]
+      if (!msg) return null
       return mapSlackMessage(msg, channel)
     },
 
@@ -403,13 +404,13 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       if (options?.cursor) {
-        body.cursor = options.cursor
+        body['cursor'] = options.cursor
       }
       if (options?.since) {
-        body.oldest = (options.since.getTime() / 1000).toString()
+        body['oldest'] = (options.since.getTime() / 1000).toString()
       }
       if (options?.until) {
-        body.latest = (options.until.getTime() / 1000).toString()
+        body['latest'] = (options.until.getTime() / 1000).toString()
       }
 
       const data = await slackApi<SlackConversationsHistoryResponse>('conversations.history', body)
@@ -421,7 +422,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       return {
         items: (data.messages || []).map((msg) => mapSlackMessage(msg, channel)),
         hasMore: data.has_more || false,
-        nextCursor: data.response_metadata?.next_cursor,
+        ...(data.response_metadata?.next_cursor !== undefined && {
+          nextCursor: data.response_metadata.next_cursor,
+        }),
       }
     },
 
@@ -455,11 +458,11 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       if (options?.cursor) {
-        body.cursor = options.cursor
+        body['cursor'] = options.cursor
       }
 
       if (options?.types) {
-        body.types = options.types
+        body['types'] = options.types
           .map((t) => (t === 'private' ? 'private_channel' : 'public_channel'))
           .join(',')
       }
@@ -473,7 +476,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       return {
         items: data.channels.map(mapSlackChannel),
         hasMore: data.response_metadata?.next_cursor ? true : false,
-        nextCursor: data.response_metadata?.next_cursor,
+        ...(data.response_metadata?.next_cursor !== undefined && {
+          nextCursor: data.response_metadata.next_cursor,
+        }),
       }
     },
 
@@ -543,7 +548,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       if (options?.cursor) {
-        body.cursor = options.cursor
+        body['cursor'] = options.cursor
       }
 
       if (options?.channel) {
@@ -567,7 +572,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         return {
           items: members.filter((m): m is MemberData => m !== null),
           hasMore: channelData.response_metadata?.next_cursor ? true : false,
-          nextCursor: channelData.response_metadata?.next_cursor,
+          ...(channelData.response_metadata?.next_cursor !== undefined && {
+            nextCursor: channelData.response_metadata.next_cursor,
+          }),
         }
       } else {
         // Get all workspace members
@@ -579,7 +586,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         return {
           items: usersData.members.filter((m) => !m.deleted).map(mapSlackUser),
           hasMore: usersData.response_metadata?.next_cursor ? true : false,
-          nextCursor: usersData.response_metadata?.next_cursor,
+          ...(usersData.response_metadata?.next_cursor !== undefined && {
+            nextCursor: usersData.response_metadata.next_cursor,
+          }),
         }
       }
     },
@@ -614,7 +623,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         id: data.team.id,
         name: data.team.name,
         domain: data.team.domain,
-        icon: data.team.icon?.image_132,
+        ...(data.team.icon?.image_132 !== undefined && { icon: data.team.icon.image_132 }),
       }
     },
   }
@@ -627,15 +636,17 @@ function mapSlackMessage(msg: SlackMessage, channel: string): MessageData {
     userId: msg.user,
     text: msg.text,
     timestamp: msg.ts,
-    threadId: msg.thread_ts,
-    replyCount: msg.reply_count,
-    reactions: msg.reactions?.map((r) => ({
-      emoji: r.name,
-      count: r.count,
-      users: r.users,
-    })),
+    ...(msg.thread_ts !== undefined && { threadId: msg.thread_ts }),
+    ...(msg.reply_count !== undefined && { replyCount: msg.reply_count }),
+    ...(msg.reactions && {
+      reactions: msg.reactions.map((r) => ({
+        emoji: r.name,
+        count: r.count,
+        users: r.users,
+      })),
+    }),
     edited: !!msg.edited,
-    editedAt: msg.edited?.ts ? new Date(parseFloat(msg.edited.ts) * 1000) : undefined,
+    ...(msg.edited?.ts && { editedAt: new Date(parseFloat(msg.edited.ts) * 1000) }),
   }
 }
 
@@ -643,8 +654,8 @@ function mapSlackChannel(ch: SlackChannel): ChannelData {
   return {
     id: ch.id,
     name: ch.name,
-    topic: ch.topic?.value,
-    description: ch.purpose?.value,
+    ...(ch.topic?.value !== undefined && { topic: ch.topic.value }),
+    ...(ch.purpose?.value !== undefined && { description: ch.purpose.value }),
     isPrivate: ch.is_private || false,
     isArchived: ch.is_archived || false,
     memberCount: ch.num_members || 0,
@@ -657,12 +668,12 @@ function mapSlackUser(user: SlackUser): MemberData {
     id: user.id,
     username: user.name,
     displayName: user.real_name || user.profile?.display_name || user.name,
-    email: user.profile?.email,
-    avatar: user.profile?.image_192,
-    title: user.profile?.title,
+    ...(user.profile?.email !== undefined && { email: user.profile.email }),
+    ...(user.profile?.image_192 !== undefined && { avatar: user.profile.image_192 }),
+    ...(user.profile?.title !== undefined && { title: user.profile.title }),
     isAdmin: user.is_admin || user.is_owner || false,
     isBot: user.is_bot || false,
-    timezone: user.tz,
+    ...(user.tz !== undefined && { timezone: user.tz }),
   }
 }
 

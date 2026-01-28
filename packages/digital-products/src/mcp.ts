@@ -44,13 +44,13 @@ export function MCP(config: Omit<MCPDefinition, 'type'>): MCPDefinition {
     description: config.description,
     version: config.version,
     transport: config.transport,
-    tools: config.tools,
-    resources: config.resources,
-    prompts: config.prompts,
-    config: config.config,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.tools !== undefined && { tools: config.tools }),
+    ...(config.resources !== undefined && { resources: config.resources }),
+    ...(config.prompts !== undefined && { prompts: config.prompts }),
+    ...(config.config !== undefined && { config: config.config }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(mcp)
@@ -78,14 +78,14 @@ export function MCP(config: Omit<MCPDefinition, 'type'>): MCPDefinition {
 export function Tool(
   name: string,
   description: string,
-  inputSchema: SimpleSchema,
+  inputSchema: Record<string, unknown>,
   handler?: (input: unknown) => Promise<unknown>
 ): MCPTool {
   return {
     name,
     description,
-    inputSchema,
-    handler,
+    inputSchema: inputSchema as MCPTool['inputSchema'],
+    ...(handler !== undefined && { handler }),
   }
 }
 
@@ -112,7 +112,7 @@ export function Resource(
     uri,
     name,
     description,
-    mimeType,
+    ...(mimeType !== undefined && { mimeType }),
   }
 }
 
@@ -135,11 +135,18 @@ export function Prompt(
   template: string,
   args?: SimpleSchema
 ): MCPPrompt {
+  if (args !== undefined) {
+    return {
+      name,
+      description,
+      template,
+      arguments: args as Record<string, unknown>,
+    }
+  }
   return {
     name,
     description,
     template,
-    arguments: args,
   }
 }
 

@@ -54,11 +54,7 @@ export interface DBProvider {
   list(type: string, options?: ListOptions): Promise<Record<string, unknown>[]>
 
   /** Search entities */
-  search(
-    type: string,
-    query: string,
-    options?: SearchOptions
-  ): Promise<Record<string, unknown>[]>
+  search(type: string, query: string, options?: SearchOptions): Promise<Record<string, unknown>[]>
 
   /** Create an entity */
   create(
@@ -68,21 +64,13 @@ export interface DBProvider {
   ): Promise<Record<string, unknown>>
 
   /** Update an entity */
-  update(
-    type: string,
-    id: string,
-    data: Record<string, unknown>
-  ): Promise<Record<string, unknown>>
+  update(type: string, id: string, data: Record<string, unknown>): Promise<Record<string, unknown>>
 
   /** Delete an entity */
   delete(type: string, id: string): Promise<boolean>
 
   /** Get related entities */
-  related(
-    type: string,
-    id: string,
-    relation: string
-  ): Promise<Record<string, unknown>[]>
+  related(type: string, id: string, relation: string): Promise<Record<string, unknown>[]>
 
   /** Create a relationship */
   relate(
@@ -153,11 +141,16 @@ export interface DBProviderExtended extends DBProvider {
 
   // Actions API
   /** Create a new action */
-  createAction(options: CreateActionOptions | { type: string; data: unknown; total?: number }): Promise<DBAction>
+  createAction(
+    options: CreateActionOptions | { type: string; data: unknown; total?: number }
+  ): Promise<DBAction>
   /** Get an action by ID */
   getAction(id: string): Promise<DBAction | null>
   /** Update an action */
-  updateAction(id: string, updates: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>>): Promise<DBAction>
+  updateAction(
+    id: string,
+    updates: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>>
+  ): Promise<DBAction>
   /** List actions */
   listActions(options?: {
     status?: DBAction['status']
@@ -177,7 +170,11 @@ export interface DBProviderExtended extends DBProvider {
   /** Get an artifact */
   getArtifact(url: string, type: string): Promise<DBArtifact | null>
   /** Set an artifact */
-  setArtifact(url: string, type: string, data: { content: unknown; sourceHash: string; metadata?: Record<string, unknown> }): Promise<void>
+  setArtifact(
+    url: string,
+    type: string,
+    data: { content: unknown; sourceHash: string; metadata?: Record<string, unknown> }
+  ): Promise<void>
   /** Delete an artifact */
   deleteArtifact(url: string, type?: string): Promise<void>
   /** List artifacts for a URL */
@@ -187,42 +184,60 @@ export interface DBProviderExtended extends DBProvider {
 /**
  * Type guard to check if provider has semantic search
  */
-export function hasSemanticSearch(provider: DBProvider): provider is DBProvider & Pick<DBProviderExtended, 'semanticSearch'> {
+export function hasSemanticSearch(
+  provider: DBProvider
+): provider is DBProvider & Pick<DBProviderExtended, 'semanticSearch'> {
   return 'semanticSearch' in provider
 }
 
 /**
  * Type guard to check if provider has hybrid search
  */
-export function hasHybridSearch(provider: DBProvider): provider is DBProvider & Pick<DBProviderExtended, 'hybridSearch'> {
+export function hasHybridSearch(
+  provider: DBProvider
+): provider is DBProvider & Pick<DBProviderExtended, 'hybridSearch'> {
   return 'hybridSearch' in provider
 }
 
 /**
  * Type guard to check if provider has events API
  */
-export function hasEventsAPI(provider: DBProvider): provider is DBProvider & Pick<DBProviderExtended, 'on' | 'emit' | 'listEvents' | 'replayEvents'> {
+export function hasEventsAPI(
+  provider: DBProvider
+): provider is DBProvider &
+  Pick<DBProviderExtended, 'on' | 'emit' | 'listEvents' | 'replayEvents'> {
   return 'on' in provider && 'emit' in provider
 }
 
 /**
  * Type guard to check if provider has actions API
  */
-export function hasActionsAPI(provider: DBProvider): provider is DBProvider & Pick<DBProviderExtended, 'createAction' | 'getAction' | 'updateAction' | 'listActions' | 'retryAction' | 'cancelAction'> {
+export function hasActionsAPI(
+  provider: DBProvider
+): provider is DBProvider &
+  Pick<
+    DBProviderExtended,
+    'createAction' | 'getAction' | 'updateAction' | 'listActions' | 'retryAction' | 'cancelAction'
+  > {
   return 'createAction' in provider && 'getAction' in provider
 }
 
 /**
  * Type guard to check if provider has artifacts API
  */
-export function hasArtifactsAPI(provider: DBProvider): provider is DBProvider & Pick<DBProviderExtended, 'getArtifact' | 'setArtifact' | 'deleteArtifact' | 'listArtifacts'> {
+export function hasArtifactsAPI(
+  provider: DBProvider
+): provider is DBProvider &
+  Pick<DBProviderExtended, 'getArtifact' | 'setArtifact' | 'deleteArtifact' | 'listArtifacts'> {
   return 'getArtifact' in provider && 'setArtifact' in provider
 }
 
 /**
  * Type guard to check if provider has embeddings config
  */
-export function hasEmbeddingsConfig(provider: DBProvider): provider is DBProvider & Pick<DBProviderExtended, 'setEmbeddingsConfig'> {
+export function hasEmbeddingsConfig(
+  provider: DBProvider
+): provider is DBProvider & Pick<DBProviderExtended, 'setEmbeddingsConfig'> {
   return 'setEmbeddingsConfig' in provider
 }
 
@@ -336,7 +351,7 @@ export async function resolveProvider(): Promise<DBProvider> {
 
   providerPromise = (async () => {
     const databaseUrl =
-      (typeof process !== 'undefined' && process.env?.DATABASE_URL) || './content'
+      (typeof process !== 'undefined' && process.env?.['DATABASE_URL']) || './content'
 
     const parsed = parseDatabaseUrl(databaseUrl)
 
@@ -461,8 +476,8 @@ async function checkFileCountThreshold(root: string): Promise<void> {
     if (count > FILE_COUNT_THRESHOLD) {
       console.warn(
         `\n  You have ${count.toLocaleString()} MDX files. ` +
-        `Consider upgrading to ClickHouse for better performance:\n` +
-        `   DATABASE_URL=chdb://./data/clickhouse\n`
+          `Consider upgrading to ClickHouse for better performance:\n` +
+          `   DATABASE_URL=chdb://./data/clickhouse\n`
       )
     }
   } catch {

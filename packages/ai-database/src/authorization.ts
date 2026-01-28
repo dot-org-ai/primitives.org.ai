@@ -41,13 +41,13 @@ export interface Subject {
  * Subject types
  */
 export type SubjectType =
-  | 'user'       // Human user
-  | 'group'      // Group of users
-  | 'team'       // Team (organizational unit)
-  | 'service'    // Service account
-  | 'agent'      // AI agent
-  | 'role'       // Role (for role inheritance)
-  | string       // Custom subject types
+  | 'user' // Human user
+  | 'group' // Group of users
+  | 'team' // Team (organizational unit)
+  | 'service' // Service account
+  | 'agent' // AI agent
+  | 'role' // Role (for role inheritance)
+  | string // Custom subject types
 
 /**
  * Resource - what is being accessed
@@ -154,12 +154,12 @@ export interface Role {
  * Standard role levels (can be customized)
  */
 export type RoleLevel =
-  | 'owner'      // Full control, can delete
-  | 'admin'      // Full control, cannot delete
-  | 'editor'     // Can modify
-  | 'viewer'     // Read-only
-  | 'guest'      // Limited read
-  | string       // Custom levels
+  | 'owner' // Full control, can delete
+  | 'admin' // Full control, cannot delete
+  | 'editor' // Can modify
+  | 'viewer' // Read-only
+  | 'guest' // Limited read
+  | string // Custom levels
 
 // =============================================================================
 // Assignment (Warrant)
@@ -201,9 +201,9 @@ export interface Assignment {
  * Assignment input (for creating assignments)
  */
 export interface AssignmentInput {
-  subject: Subject | string  // Can use "user:123" format
+  subject: Subject | string // Can use "user:123" format
   role: string
-  resource: ResourceRef | string  // Can use "workspace:456" format
+  resource: ResourceRef | string // Can use "workspace:456" format
   expiresAt?: Date
   metadata?: Record<string, unknown>
 }
@@ -382,7 +382,7 @@ export const StandardPermissions = {
       ? `Perform ${verbs.join(', ')} on ${resourceType}`
       : `Perform actions on ${resourceType}`,
     resourceType,
-    actions: verbs || ['*'],  // '*' means all verbs
+    actions: verbs || ['*'], // '*' means all verbs
     inheritable: true,
   }),
 
@@ -391,14 +391,14 @@ export const StandardPermissions = {
     description: `Delete ${resourceType}`,
     resourceType,
     actions: ['delete', 'remove', 'destroy'],
-    inheritable: false,  // Usually not inherited
+    inheritable: false, // Usually not inherited
   }),
 
   manage: (resourceType: string): Permission => ({
     name: 'manage',
     description: `Full management of ${resourceType}`,
     resourceType,
-    actions: ['*'],  // All actions
+    actions: ['*'], // All actions
     inheritable: true,
   }),
 }
@@ -431,9 +431,10 @@ export function verbPermission(
   options?: { inheritable?: boolean; description?: string }
 ): Permission {
   const verbList = Array.isArray(verbs) ? verbs : [verbs]
-  const name = verbList.length === 1
-    ? `${resourceType}.${verbList[0]}`
-    : `${resourceType}.[${verbList.join(',')}]`
+  const name =
+    verbList.length === 1
+      ? `${resourceType}.${verbList[0]}`
+      : `${resourceType}.[${verbList.join(',')}]`
 
   return {
     name,
@@ -557,9 +558,7 @@ export function createStandardRoles(resourceType: string): Record<RoleLevel, Rol
       name: 'Viewer',
       description: `Read-only access to ${resourceType}`,
       resourceType,
-      permissions: [
-        StandardPermissions.read(resourceType),
-      ],
+      permissions: [StandardPermissions.read(resourceType)],
     },
 
     guest: {
@@ -612,14 +611,12 @@ export interface AuthorizedNoun extends Noun {
 /**
  * Add authorization to a Noun
  */
-export function authorizeNoun(
-  noun: Noun,
-  config: AuthorizedNoun['authorization']
-): AuthorizedNoun {
-  return {
-    ...noun,
-    authorization: config,
+export function authorizeNoun(noun: Noun, config: AuthorizedNoun['authorization']): AuthorizedNoun {
+  const result: AuthorizedNoun = { ...noun }
+  if (config !== undefined) {
+    result.authorization = config
   }
+  return result
 }
 
 // =============================================================================
@@ -654,7 +651,11 @@ export interface AuthorizationEngine {
 
   // Discovery
   listSubjectsWithAccess(resource: ResourceRef, action?: string): Promise<Subject[]>
-  listResourcesForSubject(subject: Subject, resourceType: string, action?: string): Promise<Resource[]>
+  listResourcesForSubject(
+    subject: Subject,
+    resourceType: string,
+    action?: string
+  ): Promise<Resource[]>
 }
 
 // =============================================================================
@@ -774,12 +775,9 @@ export class InMemoryAuthorizationEngine implements AuthorizationEngine {
 
   // Assignment management
   async assign(input: AssignmentInput): Promise<Assignment> {
-    const subject = typeof input.subject === 'string'
-      ? parseSubject(input.subject)
-      : input.subject
-    const resource = typeof input.resource === 'string'
-      ? parseResource(input.resource)
-      : input.resource
+    const subject = typeof input.subject === 'string' ? parseSubject(input.subject) : input.subject
+    const resource =
+      typeof input.resource === 'string' ? parseResource(input.resource) : input.resource
 
     const assignment: Assignment = {
       id: `${formatSubject(subject)}:${input.role}:${formatResource(resource)}`,
@@ -787,8 +785,12 @@ export class InMemoryAuthorizationEngine implements AuthorizationEngine {
       role: input.role,
       resource,
       createdAt: new Date(),
-      expiresAt: input.expiresAt,
-      metadata: input.metadata,
+    }
+    if (input.expiresAt !== undefined) {
+      assignment.expiresAt = input.expiresAt
+    }
+    if (input.metadata !== undefined) {
+      assignment.metadata = input.metadata
     }
 
     this.assignments.set(assignment.id, assignment)
@@ -821,12 +823,10 @@ export class InMemoryAuthorizationEngine implements AuthorizationEngine {
   // Authorization checks
   async check(request: AuthzCheckRequest): Promise<AuthzCheckResult> {
     const start = Date.now()
-    const subject = typeof request.subject === 'string'
-      ? parseSubject(request.subject)
-      : request.subject
-    const resource = typeof request.resource === 'string'
-      ? parseResource(request.resource)
-      : request.resource
+    const subject =
+      typeof request.subject === 'string' ? parseSubject(request.subject) : request.subject
+    const resource =
+      typeof request.resource === 'string' ? parseResource(request.resource) : request.resource
 
     // Check direct assignments
     const assignments = await this.listAssignments({ subject })
@@ -855,7 +855,7 @@ export class InMemoryAuthorizationEngine implements AuthorizationEngine {
 
   async batchCheck(request: AuthzBatchCheckRequest): Promise<AuthzBatchCheckResult> {
     const start = Date.now()
-    const results = await Promise.all(request.checks.map(c => this.check(c)))
+    const results = await Promise.all(request.checks.map((c) => this.check(c)))
     return {
       results,
       latencyMs: Date.now() - start,
@@ -999,16 +999,10 @@ export interface BusinessRole {
 /**
  * Link business roles to authorization roles
  */
-export function linkBusinessRole(
-  businessRole: BusinessRole,
-  authRoles: string[]
-): BusinessRole {
+export function linkBusinessRole(businessRole: BusinessRole, authRoles: string[]): BusinessRole {
   return {
     ...businessRole,
-    authorizationRoles: [
-      ...(businessRole.authorizationRoles || []),
-      ...authRoles,
-    ],
+    authorizationRoles: [...(businessRole.authorizationRoles || []), ...authRoles],
   }
 }
 
@@ -1029,13 +1023,21 @@ export const RoleNoun: Noun = {
     name: { type: 'string', description: 'Display name' },
     description: { type: 'string', optional: true, description: 'Role description' },
     resourceType: { type: 'string', description: 'Resource type this role is scoped to' },
-    level: { type: 'string', optional: true, description: 'Role level (owner, admin, editor, viewer, guest)' },
+    level: {
+      type: 'string',
+      optional: true,
+      description: 'Role level (owner, admin, editor, viewer, guest)',
+    },
   },
 
   relationships: {
     permissions: { type: 'Permission[]', description: 'Permissions granted by this role' },
     inherits: { type: 'Role[]', description: 'Parent roles inherited from' },
-    assignments: { type: 'Assignment[]', backref: 'role', description: 'Assignments using this role' },
+    assignments: {
+      type: 'Assignment[]',
+      backref: 'role',
+      description: 'Assignments using this role',
+    },
   },
 
   actions: ['create', 'update', 'delete', 'assign', 'unassign'],
@@ -1081,11 +1083,19 @@ export const PermissionNoun: Noun = {
     description: { type: 'string', optional: true, description: 'Permission description' },
     resourceType: { type: 'string', description: 'Resource type this applies to' },
     actions: { type: 'string', array: true, description: 'Actions granted' },
-    inheritable: { type: 'boolean', optional: true, description: 'Whether permission flows to children' },
+    inheritable: {
+      type: 'boolean',
+      optional: true,
+      description: 'Whether permission flows to children',
+    },
   },
 
   relationships: {
-    roles: { type: 'Role[]', backref: 'permissions', description: 'Roles that include this permission' },
+    roles: {
+      type: 'Role[]',
+      backref: 'permissions',
+      description: 'Roles that include this permission',
+    },
   },
 
   actions: ['create', 'update', 'delete'],

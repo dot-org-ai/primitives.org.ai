@@ -46,7 +46,7 @@ export function Provider(config: ProviderConfig): Provider {
   return {
     name: config.name,
     baseUrl: config.baseUrl,
-    auth: config.auth,
+    ...(config.auth !== undefined && { auth: config.auth }),
     services: config.services || [],
 
     service<T extends ServiceClient>(serviceName: string): T {
@@ -56,7 +56,7 @@ export function Provider(config: ProviderConfig): Provider {
       // Create a client for this service
       const client = Client({
         url: serviceUrl,
-        auth: config.auth,
+        ...(config.auth !== undefined && { auth: config.auth }),
       })
 
       return client as T
@@ -82,14 +82,7 @@ export const providers = {
           secret: credentials.secretAccessKey,
         },
       },
-      services: [
-        'translate',
-        'comprehend',
-        'polly',
-        'rekognition',
-        'textract',
-        'transcribe',
-      ],
+      services: ['translate', 'comprehend', 'polly', 'rekognition', 'textract', 'transcribe'],
     })
   },
 
@@ -104,13 +97,7 @@ export const providers = {
         type: 'api-key',
         credentials: { apiKey: credentials.apiKey },
       },
-      services: [
-        'translate',
-        'language',
-        'speech',
-        'texttospeech',
-        'vision',
-      ],
+      services: ['translate', 'language', 'speech', 'texttospeech', 'vision'],
     })
   },
 
@@ -125,13 +112,7 @@ export const providers = {
         type: 'api-key',
         credentials: { apiKey: credentials.subscriptionKey },
       },
-      services: [
-        'translator',
-        'language',
-        'speech',
-        'vision',
-        'form-recognizer',
-      ],
+      services: ['translator', 'language', 'speech', 'vision', 'form-recognizer'],
     })
   },
 
@@ -146,13 +127,7 @@ export const providers = {
         type: 'api-key',
         credentials: { apiKey: credentials.apiKey },
       },
-      services: [
-        'chat',
-        'completions',
-        'embeddings',
-        'images',
-        'audio',
-      ],
+      services: ['chat', 'completions', 'embeddings', 'images', 'audio'],
     })
   },
 
@@ -167,10 +142,7 @@ export const providers = {
         type: 'api-key',
         credentials: { apiKey: credentials.apiKey },
       },
-      services: [
-        'messages',
-        'completions',
-      ],
+      services: ['messages', 'completions'],
     })
   },
 

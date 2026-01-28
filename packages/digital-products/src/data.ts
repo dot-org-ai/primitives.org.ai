@@ -2,7 +2,12 @@
  * Data() - Define structured data
  */
 
-import type { DataDefinition, IndexDefinition, RelationshipDefinition, ValidationRule } from './types.js'
+import type {
+  DataDefinition,
+  IndexDefinition,
+  RelationshipDefinition,
+  ValidationRule,
+} from './types.js'
 import type { SimpleSchema } from 'ai-functions'
 import { registerProduct } from './product.js'
 
@@ -44,12 +49,12 @@ export function Data(config: Omit<DataDefinition, 'type'>): DataDefinition {
     version: config.version,
     schema: config.schema,
     provider: config.provider || 'fs',
-    indexes: config.indexes,
-    relationships: config.relationships,
-    validation: config.validation,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.indexes !== undefined && { indexes: config.indexes }),
+    ...(config.relationships !== undefined && { relationships: config.relationships }),
+    ...(config.validation !== undefined && { validation: config.validation }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(data)
@@ -124,6 +129,6 @@ export function Validate(
     field,
     rule,
     params: paramsOrMessage,
-    message,
+    ...(message !== undefined && { message }),
   }
 }

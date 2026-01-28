@@ -85,13 +85,15 @@ export function createValueGenerator(config: ValueGeneratorConfig = {}): ValueGe
     if (!config.aiFunction) {
       throw new Error('aiFunction is required when creating an AI value generator')
     }
-    return new AIValueGenerator({
+    const aiConfig: import('./ai.js').AIValueGeneratorConfig = {
       aiFunction: config.aiFunction,
-      model: config.model,
-      maxTokens: config.maxTokens,
-      temperature: config.temperature,
-      fallbackToPlaceholder: config.fallbackToPlaceholder,
-    })
+    }
+    if (config.model !== undefined) aiConfig.model = config.model
+    if (config.maxTokens !== undefined) aiConfig.maxTokens = config.maxTokens
+    if (config.temperature !== undefined) aiConfig.temperature = config.temperature
+    if (config.fallbackToPlaceholder !== undefined)
+      aiConfig.fallbackToPlaceholder = config.fallbackToPlaceholder
+    return new AIValueGenerator(aiConfig)
   }
 
   return new PlaceholderValueGenerator()
@@ -175,13 +177,14 @@ export async function generateContextAwareValue(
   parentData: Record<string, unknown> = {}
 ): Promise<string> {
   const generator = getValueGenerator()
-  const result = await generator.generate({
+  const request: import('./types.js').GenerationRequest = {
     fieldName,
     type,
     fullContext,
-    hint,
     parentData,
-  })
+  }
+  if (hint !== undefined) request.hint = hint
+  const result = await generator.generate(request)
   return result.value
 }
 
@@ -209,7 +212,13 @@ export function generateContextAwareValueSync(
   const generator = new PlaceholderValueGenerator()
   // Access the private generateValue method via the generate interface
   // Since we know PlaceholderValueGenerator.generate is sync-compatible
-  const request = { fieldName, type, fullContext, hint, parentData }
+  const request: import('./types.js').GenerationRequest = {
+    fieldName,
+    type,
+    fullContext,
+    parentData,
+  }
+  if (hint !== undefined) request.hint = hint
 
   // We can safely synchronously return since PlaceholderValueGenerator
   // doesn't actually do any async work in its current implementation

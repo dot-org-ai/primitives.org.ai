@@ -62,14 +62,14 @@ export function SDK(config: Omit<SDKDefinition, 'type'>): SDKDefinition {
     description: config.description,
     version: config.version,
     language: config.language,
-    api: config.api,
-    exports: config.exports,
-    install: config.install,
-    docs: config.docs,
-    examples: config.examples,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.api !== undefined && { api: config.api }),
+    ...(config.exports !== undefined && { exports: config.exports }),
+    ...(config.install !== undefined && { install: config.install }),
+    ...(config.docs !== undefined && { docs: config.docs }),
+    ...(config.examples !== undefined && { examples: config.examples }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(sdk)
@@ -108,14 +108,53 @@ export function Export(
     methods?: SDKExport[]
   }
 ): SDKExport {
-  return {
-    type,
-    name,
-    description,
-    parameters: options?.parameters,
-    returns: options?.returns,
-    methods: options?.methods,
+  const base = { type, name, description }
+
+  // Build the result object conditionally to satisfy exactOptionalPropertyTypes
+  // Cast to Record<string, unknown> to match the local SimpleSchema type
+  if (
+    options?.parameters !== undefined &&
+    options?.returns !== undefined &&
+    options?.methods !== undefined
+  ) {
+    return {
+      ...base,
+      parameters: options.parameters as Record<string, unknown>,
+      returns: options.returns as Record<string, unknown>,
+      methods: options.methods,
+    }
   }
+  if (options?.parameters !== undefined && options?.returns !== undefined) {
+    return {
+      ...base,
+      parameters: options.parameters as Record<string, unknown>,
+      returns: options.returns as Record<string, unknown>,
+    }
+  }
+  if (options?.parameters !== undefined && options?.methods !== undefined) {
+    return {
+      ...base,
+      parameters: options.parameters as Record<string, unknown>,
+      methods: options.methods,
+    }
+  }
+  if (options?.returns !== undefined && options?.methods !== undefined) {
+    return {
+      ...base,
+      returns: options.returns as Record<string, unknown>,
+      methods: options.methods,
+    }
+  }
+  if (options?.parameters !== undefined) {
+    return { ...base, parameters: options.parameters as Record<string, unknown> }
+  }
+  if (options?.returns !== undefined) {
+    return { ...base, returns: options.returns as Record<string, unknown> }
+  }
+  if (options?.methods !== undefined) {
+    return { ...base, methods: options.methods }
+  }
+  return base
 }
 
 /**
@@ -143,6 +182,6 @@ export function Example(
     title,
     description,
     code,
-    output,
+    ...(output !== undefined && { output }),
   }
 }

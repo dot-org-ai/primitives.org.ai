@@ -69,7 +69,7 @@ class AwsSignatureV4 {
   private getCanonicalQueryString(params: Record<string, string>): string {
     return Object.keys(params)
       .sort()
-      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key] ?? '')}`)
       .join('&')
   }
 
@@ -103,7 +103,7 @@ class AwsSignatureV4 {
     // Create canonical request
     const canonicalHeaders = Object.keys(signedHeaders)
       .sort()
-      .map((key) => `${key.toLowerCase()}:${signedHeaders[key].trim()}`)
+      .map((key) => `${key.toLowerCase()}:${signedHeaders[key]!.trim()}`)
       .join('\n')
 
     const signedHeadersList = Object.keys(signedHeaders)
@@ -163,11 +163,11 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
     info: s3Info,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      accessKeyId = cfg.accessKeyId as string
-      secretAccessKey = cfg.secretAccessKey as string
-      bucket = cfg.bucket as string
-      region = cfg.region as string
-      endpoint = (cfg.endpoint as string) || `https://${bucket}.s3.${region}.amazonaws.com`
+      accessKeyId = cfg['accessKeyId'] as string
+      secretAccessKey = cfg['secretAccessKey'] as string
+      bucket = cfg['bucket'] as string
+      region = cfg['region'] as string
+      endpoint = (cfg['endpoint'] as string) || `https://${bucket}.s3.${region}.amazonaws.com`
 
       if (!accessKeyId || !secretAccessKey || !bucket || !region) {
         throw new Error('S3 requires accessKeyId, secretAccessKey, bucket, and region')
@@ -179,7 +179,12 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
     async healthCheck(): Promise<ProviderHealth> {
       const start = Date.now()
       try {
-        const headers = await signer.sign('HEAD', '/', { host: `${bucket}.s3.${region}.amazonaws.com` }, null)
+        const headers = await signer.sign(
+          'HEAD',
+          '/',
+          { host: `${bucket}.s3.${region}.amazonaws.com` },
+          null
+        )
 
         const response = await fetch(`${endpoint}/`, {
           method: 'HEAD',
@@ -206,7 +211,11 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
       // No cleanup needed
     },
 
-    async upload(path: string, content: Buffer | string, options?: StorageUploadOptions): Promise<StorageFileData> {
+    async upload(
+      path: string,
+      content: Buffer | string,
+      options?: StorageUploadOptions
+    ): Promise<StorageFileData> {
       try {
         const buffer = typeof content === 'string' ? Buffer.from(content) : content
         const headers: Record<string, string> = {
@@ -244,20 +253,27 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
           path,
           name: path.split('/').pop() || path,
           size: buffer.length,
-          contentType: options?.contentType,
-          etag,
+          ...(options?.contentType !== undefined && { contentType: options.contentType }),
+          ...(etag !== undefined && { etag }),
           lastModified: new Date(),
           isFolder: false,
           url: `${endpoint}/${path}`,
         }
       } catch (error) {
-        throw new Error(`Failed to upload to S3: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to upload to S3: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
     async download(path: string): Promise<Buffer> {
       try {
-        const headers = await signer.sign('GET', `/${path}`, { host: `${bucket}.s3.${region}.amazonaws.com` }, null)
+        const headers = await signer.sign(
+          'GET',
+          `/${path}`,
+          { host: `${bucket}.s3.${region}.amazonaws.com` },
+          null
+        )
 
         const response = await fetch(`${endpoint}/${path}`, {
           method: 'GET',
@@ -271,13 +287,20 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
         const arrayBuffer = await response.arrayBuffer()
         return Buffer.from(arrayBuffer)
       } catch (error) {
-        throw new Error(`Failed to download from S3: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to download from S3: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
     async delete(path: string): Promise<boolean> {
       try {
-        const headers = await signer.sign('DELETE', `/${path}`, { host: `${bucket}.s3.${region}.amazonaws.com` }, null)
+        const headers = await signer.sign(
+          'DELETE',
+          `/${path}`,
+          { host: `${bucket}.s3.${region}.amazonaws.com` },
+          null
+        )
 
         const response = await fetch(`${endpoint}/${path}`, {
           method: 'DELETE',
@@ -286,22 +309,27 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
 
         return response.ok || response.status === 204
       } catch (error) {
-        throw new Error(`Failed to delete from S3: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to delete from S3: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
-    async list(prefix: string = '', options?: StorageListOptions): Promise<PaginatedResult<StorageFileData>> {
+    async list(
+      prefix: string = '',
+      options?: StorageListOptions
+    ): Promise<PaginatedResult<StorageFileData>> {
       try {
         const queryParams: Record<string, string> = {
           'list-type': '2',
         }
 
         if (prefix) {
-          queryParams.prefix = prefix
+          queryParams['prefix'] = prefix
         }
 
         if (options?.delimiter) {
-          queryParams.delimiter = options.delimiter
+          queryParams['delimiter'] = options.delimiter
         }
 
         if (options?.limit) {
@@ -312,10 +340,16 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
           queryParams['continuation-token'] = options.cursor
         }
 
-        const headers = await signer.sign('GET', '/', { host: `${bucket}.s3.${region}.amazonaws.com` }, null, queryParams)
+        const headers = await signer.sign(
+          'GET',
+          '/',
+          { host: `${bucket}.s3.${region}.amazonaws.com` },
+          null,
+          queryParams
+        )
 
         const queryString = Object.keys(queryParams)
-          .map((key) => `${key}=${encodeURIComponent(queryParams[key])}`)
+          .map((key) => `${key}=${encodeURIComponent(queryParams[key] ?? '')}`)
           .join('&')
 
         const response = await fetch(`${endpoint}/?${queryString}`, {
@@ -334,29 +368,33 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
         const contentsMatches = xmlText.matchAll(/<Contents>(.*?)<\/Contents>/gs)
         for (const match of contentsMatches) {
           const content = match[1]
+          if (!content) continue
           const keyMatch = content.match(/<Key>(.*?)<\/Key>/)
           const sizeMatch = content.match(/<Size>(.*?)<\/Size>/)
           const lastModifiedMatch = content.match(/<LastModified>(.*?)<\/LastModified>/)
           const etagMatch = content.match(/<ETag>(.*?)<\/ETag>/)
 
-          if (keyMatch) {
-            const path = keyMatch[1]
+          const pathValue = keyMatch?.[1]
+          if (pathValue) {
             items.push({
-              path,
-              name: path.split('/').pop() || path,
-              size: sizeMatch ? parseInt(sizeMatch[1], 10) : 0,
-              etag: etagMatch ? etagMatch[1].replace(/"/g, '') : undefined,
-              lastModified: lastModifiedMatch ? new Date(lastModifiedMatch[1]) : new Date(),
+              path: pathValue,
+              name: pathValue.split('/').pop() || pathValue,
+              size: sizeMatch?.[1] ? parseInt(sizeMatch[1], 10) : 0,
+              ...(etagMatch?.[1] && { etag: etagMatch[1].replace(/"/g, '') }),
+              lastModified: lastModifiedMatch?.[1] ? new Date(lastModifiedMatch[1]) : new Date(),
               isFolder: false,
-              url: `${endpoint}/${path}`,
+              url: `${endpoint}/${pathValue}`,
             })
           }
         }
 
         // Parse common prefixes (folders)
-        const prefixMatches = xmlText.matchAll(/<CommonPrefixes>.*?<Prefix>(.*?)<\/Prefix>.*?<\/CommonPrefixes>/gs)
+        const prefixMatches = xmlText.matchAll(
+          /<CommonPrefixes>.*?<Prefix>(.*?)<\/Prefix>.*?<\/CommonPrefixes>/gs
+        )
         for (const match of prefixMatches) {
           const folderPath = match[1]
+          if (!folderPath) continue
           items.push({
             path: folderPath,
             name: folderPath.split('/').filter(Boolean).pop() || folderPath,
@@ -367,21 +405,30 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
         }
 
         const isTruncated = xmlText.includes('<IsTruncated>true</IsTruncated>')
-        const nextTokenMatch = xmlText.match(/<NextContinuationToken>(.*?)<\/NextContinuationToken>/)
+        const nextTokenMatch = xmlText.match(
+          /<NextContinuationToken>(.*?)<\/NextContinuationToken>/
+        )
 
         return {
           items,
           hasMore: isTruncated,
-          nextCursor: nextTokenMatch ? nextTokenMatch[1] : undefined,
+          ...(nextTokenMatch?.[1] !== undefined && { nextCursor: nextTokenMatch[1] }),
         }
       } catch (error) {
-        throw new Error(`Failed to list S3 objects: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to list S3 objects: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
     async getMetadata(path: string): Promise<StorageFileData | null> {
       try {
-        const headers = await signer.sign('HEAD', `/${path}`, { host: `${bucket}.s3.${region}.amazonaws.com` }, null)
+        const headers = await signer.sign(
+          'HEAD',
+          `/${path}`,
+          { host: `${bucket}.s3.${region}.amazonaws.com` },
+          null
+        )
 
         const response = await fetch(`${endpoint}/${path}`, {
           method: 'HEAD',
@@ -404,14 +451,16 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
           path,
           name: path.split('/').pop() || path,
           size: contentLength ? parseInt(contentLength, 10) : 0,
-          contentType: contentType || undefined,
-          etag,
+          ...(contentType && { contentType }),
+          ...(etag && { etag }),
           lastModified: lastModified ? new Date(lastModified) : new Date(),
           isFolder: false,
           url: `${endpoint}/${path}`,
         }
       } catch (error) {
-        throw new Error(`Failed to get S3 metadata: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to get S3 metadata: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -444,7 +493,9 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
 
         return metadata
       } catch (error) {
-        throw new Error(`Failed to copy in S3: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to copy in S3: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -458,7 +509,9 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
 
         return metadata
       } catch (error) {
-        throw new Error(`Failed to move in S3: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to move in S3: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -469,28 +522,43 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
 
         const queryParams: Record<string, string> = {
           'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-          'X-Amz-Credential': `${accessKeyId}/${new Date().toISOString().slice(0, 10).replace(/-/g, '')}/${region}/s3/aws4_request`,
+          'X-Amz-Credential': `${accessKeyId}/${new Date()
+            .toISOString()
+            .slice(0, 10)
+            .replace(/-/g, '')}/${region}/s3/aws4_request`,
           'X-Amz-Date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''),
           'X-Amz-Expires': expiresIn.toString(),
           'X-Amz-SignedHeaders': 'host',
         }
 
-        const headers = await signer.sign('GET', `/${path}`, { host: `${bucket}.s3.${region}.amazonaws.com` }, null, queryParams)
+        const headers = await signer.sign(
+          'GET',
+          `/${path}`,
+          { host: `${bucket}.s3.${region}.amazonaws.com` },
+          null,
+          queryParams
+        )
 
         // Extract signature from Authorization header
         const authHeader = headers['Authorization']
-        const signatureMatch = authHeader.match(/Signature=([a-f0-9]+)/)
-        if (signatureMatch) {
-          queryParams['X-Amz-Signature'] = signatureMatch[1]
+        if (authHeader) {
+          const signatureMatch = authHeader.match(/Signature=([a-f0-9]+)/)
+          if (signatureMatch?.[1]) {
+            queryParams['X-Amz-Signature'] = signatureMatch[1]
+          }
         }
 
         const queryString = Object.keys(queryParams)
-          .map((key) => `${key}=${encodeURIComponent(queryParams[key])}`)
+          .map((key) => `${key}=${encodeURIComponent(queryParams[key] ?? '')}`)
           .join('&')
 
         return `${endpoint}/${path}?${queryString}`
       } catch (error) {
-        throw new Error(`Failed to generate signed URL: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to generate signed URL: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
+        )
       }
     },
 
@@ -501,7 +569,11 @@ export function createS3Provider(config: ProviderConfig): StorageProvider {
         await this.upload(folderPath, Buffer.from(''), { contentType: 'application/x-directory' })
         return true
       } catch (error) {
-        throw new Error(`Failed to create folder in S3: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to create folder in S3: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
+        )
       }
     },
   }

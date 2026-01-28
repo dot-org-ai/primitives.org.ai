@@ -42,9 +42,9 @@ export class AIValueGenerator implements ValueGenerator {
 
   constructor(config: AIValueGeneratorConfig) {
     this.aiFunction = config.aiFunction
-    this.model = config.model
-    this.maxTokens = config.maxTokens
-    this.temperature = config.temperature
+    if (config.model !== undefined) this.model = config.model
+    if (config.maxTokens !== undefined) this.maxTokens = config.maxTokens
+    if (config.temperature !== undefined) this.temperature = config.temperature
     this.fallbackToPlaceholder = config.fallbackToPlaceholder ?? false
     this.placeholderGenerator = new PlaceholderValueGenerator()
   }
@@ -60,13 +60,14 @@ export class AIValueGenerator implements ValueGenerator {
       const prompt = this.buildPrompt(request)
       const response = await this.aiFunction(prompt)
 
+      const metadata: { source: 'ai'; model?: string; tokens?: number } = {
+        source: 'ai',
+      }
+      if (this.model !== undefined) metadata.model = this.model
+      if (response.usage?.tokens !== undefined) metadata.tokens = response.usage.tokens
       return {
         value: response.text,
-        metadata: {
-          source: 'ai',
-          model: this.model,
-          tokens: response.usage?.tokens,
-        },
+        metadata,
       }
     } catch (error) {
       if (this.fallbackToPlaceholder) {
@@ -126,7 +127,7 @@ export class AIValueGenerator implements ValueGenerator {
       if (genCtx.parentChain && genCtx.parentChain.length > 0) {
         const chainInfo = genCtx.parentChain
           .map((entity) => {
-            const name = entity.name || entity.title || entity.$id
+            const name = entity['name'] || entity['title'] || entity.$id
             return `${entity.$type}: ${name}`
           })
           .join(' > ')
@@ -137,7 +138,7 @@ export class AIValueGenerator implements ValueGenerator {
       if (genCtx.previouslyGenerated && genCtx.previouslyGenerated.length > 0) {
         const prevInfo = genCtx.previouslyGenerated
           .map((entity) => {
-            const name = entity.name || entity.title || entity.$id
+            const name = entity['name'] || entity['title'] || entity.$id
             return `${entity.$type}: ${name}`
           })
           .join(', ')
@@ -150,7 +151,7 @@ export class AIValueGenerator implements ValueGenerator {
         parts.push(`Array field: ${fieldName}, generating item ${index + 1}`)
         if (previousItems.length > 0) {
           const prevItemsInfo = previousItems
-            .map((item) => item.name || item.title || item.$id)
+            .map((item) => item['name'] || item['title'] || item.$id)
             .join(', ')
           parts.push(`Previous items: ${prevItemsInfo}`)
         }

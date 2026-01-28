@@ -138,20 +138,21 @@ export function updateProgress(goal: GoalDefinition, progress: number): GoalDefi
   }
 
   // Auto-update status based on progress
-  let status = goal.status
+  let status: GoalDefinition['status']
   if (progress === 0) {
     status = 'not-started'
   } else if (progress === 100) {
     status = 'completed'
-  } else if (progress > 0) {
+  } else {
     status = 'in-progress'
   }
 
-  return {
+  const result: GoalDefinition = {
     ...goal,
     progress,
-    status,
   }
+  if (status !== undefined) result.status = status
+  return result
 }
 
 /**

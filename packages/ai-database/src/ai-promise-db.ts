@@ -1861,16 +1861,19 @@ export function wrapEntityOperations<T>(
       )
     },
 
-    // Semantic search methods
+    // Semantic search methods - delegate to underlying operations
+    // These will throw CapabilityNotSupportedError if provider doesn't support them
     semanticSearch(
       query: string,
       options?: SemanticSearchOptions
     ): Promise<Array<T & { $score: number }>> {
-      if (operations.semanticSearch) {
-        return operations.semanticSearch(query, options)
+      if (!operations.semanticSearch) {
+        // This shouldn't happen when using createEntityOperations, but handle edge case
+        return Promise.reject(
+          new Error('semanticSearch is not available. Use search() for basic text matching.')
+        )
       }
-      // Fallback: return empty array if not supported
-      return Promise.resolve([])
+      return operations.semanticSearch(query, options)
     },
 
     hybridSearch(
@@ -1879,11 +1882,13 @@ export function wrapEntityOperations<T>(
     ): Promise<
       Array<T & { $rrfScore: number; $ftsRank: number; $semanticRank: number; $score: number }>
     > {
-      if (operations.hybridSearch) {
-        return operations.hybridSearch(query, options)
+      if (!operations.hybridSearch) {
+        // This shouldn't happen when using createEntityOperations, but handle edge case
+        return Promise.reject(
+          new Error('hybridSearch is not available. Use search() for basic text matching.')
+        )
       }
-      // Fallback: return empty array if not supported
-      return Promise.resolve([])
+      return operations.hybridSearch(query, options)
     },
 
     // Mutations - pass through create which supports both (data, options?) and (id, data, options?)

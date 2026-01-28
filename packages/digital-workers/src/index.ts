@@ -443,3 +443,40 @@ export type {
   HandleErrorOptions,
   EscalationMetrics,
 } from './error-escalation.js'
+
+// Export runtime integration for human request processing
+export {
+  // Classes
+  HumanRequestProcessor,
+  InMemoryRequestStore,
+  // Factory functions
+  createHumanRequestProcessor,
+} from './runtime.js'
+
+export type {
+  // Request types
+  HumanRequest,
+  HumanRequestStore,
+  RequestStatus,
+  RequestType,
+  RequestResult,
+  CreateRequestData,
+  UpdateRequestData,
+  // Processor types
+  ProcessorConfig,
+  TransportAdapters,
+  SubmitResult,
+  SubmitRequestData,
+  WebhookPayload,
+  WebhookResult,
+  CompleteCallbackData,
+  TimeoutCallbackData,
+  CancelResult,
+} from './runtime.js'
+
+// Export logger interface for error logging
+export type { Logger } from './logger.js'
+export { noopLogger, createConsoleLogger } from './logger.js'
+
+// Export ID generation utilities
+export { generateRequestId } from './utils/id.js'

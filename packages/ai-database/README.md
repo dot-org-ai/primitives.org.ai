@@ -655,6 +655,219 @@ const db = createApiDatabase({ baseUrl: 'https://api.example.com' })
 
 ---
 
+## Provider Capabilities
+
+Different database providers support different features. Use `detectCapabilities()` to check what's available at runtime:
+
+```typescript
+import { detectCapabilities, requireCapability, CapabilityNotSupportedError } from 'ai-database'
+
+const capabilities = await detectCapabilities(provider)
+
+// Check capabilities
+if (capabilities.hasSemanticSearch) {
+  const results = await provider.semanticSearch('Post', 'machine learning')
+} else {
+  // Fallback to regular search
+  const results = await provider.search('Post', 'machine learning')
+}
+
+// Require capabilities (throws if unavailable)
+requireCapability(capabilities, 'hasEvents')
+provider.on('Post.created', handleCreate)
+```
+
+### Capability Matrix
+
+| Capability | MemoryProvider | RDB | DigitalObjects |
+|------------|----------------|-----|----------------|
+| **Semantic Search** | Yes | No | No |
+| **Events API** | Yes | No | No |
+| **Actions API** | Yes | No | No |
+| **Artifacts** | Yes | No | No |
+| **Batch Operations** | Yes | No | No |
+
+### Capabilities
+
+| Capability | Description | Methods Required |
+|------------|-------------|------------------|
+| `hasSemanticSearch` | Vector similarity search | `semanticSearch()`, `setEmbeddingsConfig()` |
+| `hasEvents` | Event emission and subscription | `on()`, `emit()`, `listEvents()` |
+| `hasActions` | Durable action tracking | `createAction()`, `getAction()`, `updateAction()` |
+| `hasArtifacts` | Artifact/cache storage | `getArtifact()`, `setArtifact()` |
+| `hasBatchOperations` | Concurrency-controlled batching | `withConcurrency()` or `mapWithConcurrency()` |
+
+### Graceful Degradation
+
+When a capability isn't available, use fallbacks:
+
+```typescript
+import { detectCapabilities, warnIfUnavailable } from 'ai-database'
+
+const capabilities = await detectCapabilities(provider)
+
+// Log a warning (once) if semantic search unavailable
+warnIfUnavailable(capabilities, 'hasSemanticSearch', 'semanticSearch')
+
+// Use capability with fallback
+async function searchPosts(query: string) {
+  if (capabilities.hasSemanticSearch) {
+    return provider.semanticSearch('Post', query)
+  }
+  return provider.search('Post', query)
+}
+```
+
+### Features Requiring Semantic Search
+
+When using a provider without semantic search support (e.g., RDB), some features behave differently:
+
+| Feature | With Semantic Search | Without Semantic Search |
+|---------|---------------------|------------------------|
+| `~>` Forward Fuzzy | Matches via vector similarity, falls back to generation | Uses text search fallback, then generates if no match |
+| `<~` Backward Fuzzy | Matches via vector similarity | Uses text search fallback |
+| `db.Entity.semanticSearch()` | Vector similarity search | Throws `CapabilityNotSupportedError` |
+| `db.Entity.hybridSearch()` | Combined FTS + vector search | Throws `CapabilityNotSupportedError` |
+| `db.semanticSearch()` | Global vector search | Throws `CapabilityNotSupportedError` |
+
+**Fuzzy Operator Fallback**: When semantic search is unavailable, fuzzy operators (`~>` and `<~`) gracefully degrade to basic text search:
+
+```typescript
+// Without semantic search, these operators use text matching instead of embeddings
+const { db } = DB({
+  Article: {
+    category: '~>Category',  // Will use text search fallback
+  },
+  Category: { name: 'string' }
+})
+
+// Forward fuzzy (~>) tries text search first, generates if no match found
+await db.Article.create({ categoryHint: 'Tech' })  // Searches for 'Tech' in categories
+
+// Backward fuzzy (<~) uses text search only - never generates
+await db.Article.create({ categoryHint: 'Tech' })  // Returns null if no text match
+```
+
+**Explicit Search Methods**: When you need semantic search but it's unavailable, the methods throw with helpful alternatives:
+
+```typescript
+import { CapabilityNotSupportedError, isCapabilityNotSupportedError } from 'ai-database'
+
+try {
+  await db.Post.semanticSearch('machine learning')
+} catch (error) {
+  if (isCapabilityNotSupportedError(error)) {
+    console.log(error.capability)   // 'hasSemanticSearch'
+    console.log(error.alternative)  // 'Use the regular search() method instead...'
+    // Fall back to text search
+    const results = await db.Post.search('machine learning')
+  }
+}
+```
+
+---
+
+## Integration with RDB
+
+[RDB](https://github.com/ai-primitives/rdb) provides a simple relational database backend for ai-database. Use it when you want:
+
+- Edge-native storage via Cloudflare Durable Objects or D1
+- Simple two-table schema (`_data` and `_rels`)
+- Graph traversal and relationship queries
+
+### Creating an RDB Provider Adapter
+
+```typescript
+import { setProvider, DB } from 'ai-database'
+import type { DBProvider, ListOptions, SearchOptions } from 'ai-database'
+import { RDB } from '@dotdo/rdb'
+
+// Adapter to bridge RDB and ai-database interfaces
+class RDBProviderAdapter implements DBProvider {
+  private rdb: RDB
+
+  constructor(sqlStorage: SqlStorage) {
+    this.rdb = new RDB(sqlStorage)
+  }
+
+  async get(type: string, id: string) {
+    const entity = await this.rdb.get(type, id)
+    if (!entity) return null
+    return { $id: entity.id, $type: entity.type, ...entity }
+  }
+
+  async list(type: string, options?: ListOptions) {
+    const entities = await this.rdb.list(type, options)
+    return entities.map(e => ({ $id: e.id, $type: e.type, ...e }))
+  }
+
+  async search(type: string, query: string, options?: SearchOptions) {
+    // RDB uses filter-based search; perform text matching
+    const all = await this.rdb.list(type, options)
+    return all
+      .filter(e => JSON.stringify(e).toLowerCase().includes(query.toLowerCase()))
+      .map(e => ({ $id: e.id, $type: e.type, ...e }))
+  }
+
+  async create(type: string, id: string | undefined, data: Record<string, unknown>) {
+    const entity = await this.rdb.create(type, data, id)
+    return { $id: entity.id, $type: entity.type, ...entity }
+  }
+
+  async update(type: string, id: string, data: Record<string, unknown>) {
+    const entity = await this.rdb.update(type, id, data)
+    return { $id: entity.id, $type: entity.type, ...entity }
+  }
+
+  async delete(type: string, id: string): Promise<boolean> {
+    const exists = await this.rdb.get(type, id)
+    if (!exists) return false
+    await this.rdb.delete(type, id)
+    return true
+  }
+
+  async related(type: string, id: string, relation: string) {
+    const entities = await this.rdb.related(type, id, relation)
+    return entities.map(e => ({ $id: e.id, $type: e.type, ...e }))
+  }
+
+  async relate(fromType: string, fromId: string, relation: string, toType: string, toId: string, metadata?: object) {
+    await this.rdb.relate(fromType, fromId, relation, toType, toId, metadata)
+  }
+
+  async unrelate(fromType: string, fromId: string, relation: string, toType: string, toId: string) {
+    await this.rdb.unrelate(fromType, fromId, relation, toType, toId)
+  }
+}
+
+// Usage in a Durable Object
+export class MyDO extends DurableObject {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env)
+    setProvider(new RDBProviderAdapter(ctx.storage.sql))
+  }
+}
+
+// Now use ai-database schema with RDB backend
+const { db } = DB({
+  Post: { title: 'string', author: '->Author.posts' },
+  Author: { name: 'string' },
+})
+
+const author = await db.Author.create({ name: 'Alice' })
+const post = await db.Post.create({ title: 'Hello', author: author.$id })
+```
+
+### Limitations with RDB
+
+When using RDB as a provider:
+
+- **No semantic search**: Fuzzy operators (`~>`, `<~`) require vector embeddings. Use exact operators (`->`, `<-`) instead, or use MemoryProvider for semantic matching.
+- **No events/actions API**: RDB focuses on core CRUD and relationships.
+- **Text search only**: The `search()` method performs text matching, not semantic similarity.
+
+---
+
 ## Related
 
 - [ai-functions](https://github.com/ai-primitives/ai-primitives/tree/main/packages/ai-functions) - AI-powered functions

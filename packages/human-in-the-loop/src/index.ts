@@ -70,6 +70,14 @@ export type { Role, Team, Goal, Goals, KPI, OKR, KeyResult } from 'org.ai'
 // Export store implementations
 export { InMemoryHumanStore } from './store.js'
 
+// Export enhanced store for digital-workers runtime
+export {
+  InMemoryHumanStore as EnhancedInMemoryStore,
+  createInMemoryStore,
+} from './stores/in-memory.js'
+
+export type { InMemoryHumanStoreOptions } from './stores/in-memory.js'
+
 // Export timeout/retry utilities
 export {
   // Classes

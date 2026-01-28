@@ -44,14 +44,14 @@ export function Content(config: Omit<ContentDefinition, 'type'>): ContentDefinit
     description: config.description,
     version: config.version,
     format: config.format || 'markdown',
-    source: config.source,
-    schema: config.schema,
-    frontmatter: config.frontmatter,
-    categories: config.categories,
-    workflow: config.workflow,
-    metadata: config.metadata,
-    tags: config.tags,
     status: config.status || 'active',
+    ...(config.source !== undefined && { source: config.source }),
+    ...(config.schema !== undefined && { schema: config.schema }),
+    ...(config.frontmatter !== undefined && { frontmatter: config.frontmatter }),
+    ...(config.categories !== undefined && { categories: config.categories }),
+    ...(config.workflow !== undefined && { workflow: config.workflow }),
+    ...(config.metadata !== undefined && { metadata: config.metadata }),
+    ...(config.tags !== undefined && { tags: config.tags }),
   }
 
   return registerProduct(content)

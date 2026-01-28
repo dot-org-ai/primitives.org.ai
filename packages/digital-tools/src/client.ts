@@ -17,7 +17,7 @@
  * @packageDocumentation
  */
 
-import { RPC } from 'rpc.do'
+import { RPC, http } from 'rpc.do'
 import type { AnyTool, ToolCategory, ToolQuery, MCPTool, ToolSubcategory } from './types.js'
 
 /**
@@ -116,7 +116,8 @@ const DEFAULT_URL = 'https://digital-tools.workers.dev'
  * ```
  */
 export function createToolClient(url: string = DEFAULT_URL, options?: ToolClientOptions) {
-  return RPC<ToolServiceAPI>(url, options)
+  const token = options?.token
+  return RPC<ToolServiceAPI>(http(url, token))
 }
 
 /**

@@ -95,7 +95,11 @@ export function buildNLQueryContext(schema: ParsedSchema, targetType?: string): 
     })
   }
 
-  return { types, targetType }
+  const result: NLQueryContext = { types }
+  if (targetType !== undefined) {
+    result.targetType = targetType
+  }
+  return result
 }
 
 // =============================================================================

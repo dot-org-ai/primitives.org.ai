@@ -294,8 +294,10 @@ export async function searchUnionTypes(
     searchOrder: [],
     fallbackTriggered: false,
     allTypesExhausted: false,
-    belowThresholdMatches: options.includeBelowThreshold ? [] : undefined,
     errors: [],
+  }
+  if (options.includeBelowThreshold) {
+    result.belowThresholdMatches = []
   }
 
   // Handle empty types array
@@ -334,10 +336,9 @@ async function searchOrdered(
     }
 
     try {
-      const matches = await searcher(type, query, {
-        threshold,
-        limit: options.limit,
-      })
+      const searchOpts: { threshold?: number; limit?: number } = { threshold }
+      if (options.limit !== undefined) searchOpts.limit = options.limit
+      const matches = await searcher(type, query, searchOpts)
 
       // Filter by threshold
       const { above, below } = filterByThreshold(matches, threshold, includeBelowThreshold)
@@ -359,11 +360,12 @@ async function searchOrdered(
         throw error
       }
       // Continue mode: record error and try next type
-      result.errors!.push({
+      const searchError: SearchError = {
         type,
         message: error instanceof Error ? error.message : String(error),
-        error: error instanceof Error ? error : undefined,
-      })
+      }
+      if (error instanceof Error) searchError.error = error
+      result.errors!.push(searchError)
     }
   }
 
@@ -392,10 +394,9 @@ async function searchParallel(
     const threshold = getThresholdForType(type, options)
 
     try {
-      const matches = await searcher(type, query, {
-        threshold,
-        limit: options.limit,
-      })
+      const searchOpts: { threshold?: number; limit?: number } = { threshold }
+      if (options.limit !== undefined) searchOpts.limit = options.limit
+      const matches = await searcher(type, query, searchOpts)
       return { type, matches, error: null }
     } catch (error) {
       return {
@@ -475,20 +476,19 @@ async function searchParallel(
  * )
  * ```
  */
-export function createProviderSearcher(
-  provider: {
-    semanticSearch: (
-      type: string,
-      query: string,
-      options?: { minScore?: number; limit?: number }
-    ) => Promise<Array<{ $id: string; $score: number; [key: string]: unknown }>>
-  }
-): UnionSearcher {
+export function createProviderSearcher(provider: {
+  semanticSearch: (
+    type: string,
+    query: string,
+    options?: { minScore?: number; limit?: number }
+  ) => Promise<Array<{ $id: string; $score: number; [key: string]: unknown }>>
+}): UnionSearcher {
   return async (type, query, options) => {
-    const results = await provider.semanticSearch(type, query, {
-      minScore: options?.threshold,
+    const searchOpts: { minScore?: number; limit?: number } = {
       limit: options?.limit ?? 10,
-    })
+    }
+    if (options?.threshold !== undefined) searchOpts.minScore = options.threshold
+    const results = await provider.semanticSearch(type, query, searchOpts)
 
     return results.map((r) => ({
       ...r,

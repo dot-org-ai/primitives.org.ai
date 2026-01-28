@@ -35,6 +35,8 @@ import {
   wrapEntityOperations,
   type ForEachOptions,
   type ForEachResult,
+  type ForEachActionsAPI,
+  type ForEachActionState,
 } from './ai-promise-db.js'
 import {
   cosineSimilarity,
@@ -45,6 +47,13 @@ import {
   type SemanticSearchOptions as SemanticOpts,
   type HybridSearchOptions as HybridOpts,
 } from './semantic.js'
+import {
+  isDraft,
+  extractRefs,
+  hasFactoryFunction,
+  isPlainObject,
+  getSchemaMetadata,
+} from './type-guards.js'
 
 // =============================================================================
 // Re-exports from modular files
@@ -128,7 +137,10 @@ export {
   hasEmbeddingsConfig,
 } from './schema/index.js'
 
-export type { AIGenerationConfig, EntityOperationsConfig } from './schema/index.js'
+// Import generateAIFields directly from cascade.js to avoid potential circular dependency
+import { generateAIFields } from './schema/cascade.js'
+
+export type { AIGenerationConfig, EntityOperationsConfig, SeedResult } from './schema/index.js'
 
 // Import type guards for internal use
 import {
@@ -142,6 +154,15 @@ import {
 
 // Import extended provider types for type assertions
 import type { DBProviderExtended, SemanticSearchResult } from './schema/index.js'
+
+// Import error handling utilities
+import {
+  isNotFoundError,
+  isEntityExistsError,
+  wrapDatabaseError,
+  DatabaseError,
+  CapabilityNotSupportedError,
+} from './errors.js'
 
 // Re-export linguistic utilities from linguistic.ts
 export {
@@ -842,13 +863,13 @@ export function parseOperator(definition: string): OperatorParseResult | null {
       }
 
       return {
-        prompt,
+        ...(prompt !== undefined && { prompt }),
         operator: op,
         direction,
         matchMode,
         targetType,
-        unionTypes,
-        threshold,
+        ...(unionTypes !== undefined && { unionTypes }),
+        ...(threshold !== undefined && { threshold }),
       }
     }
   }
@@ -942,15 +963,19 @@ function parseField(name: string, definition: FieldDefinition): ParsedField {
     isArray,
     isOptional,
     isRelation,
-    relatedType,
-    backref,
+    ...(relatedType !== undefined && { relatedType }),
+    ...(backref !== undefined && { backref }),
   }
 
   // Only add operator properties if an operator was found
   if (operator) {
     result.operator = operator
-    result.direction = direction
-    result.matchMode = matchMode
+    if (direction !== undefined) {
+      result.direction = direction
+    }
+    if (matchMode !== undefined) {
+      result.matchMode = matchMode
+    }
     if (prompt) {
       result.prompt = prompt
     }
@@ -1317,6 +1342,16 @@ export interface ListOptions {
   order?: 'asc' | 'desc'
   limit?: number
   offset?: number
+  /**
+   * Suppress errors and return empty array instead of throwing.
+   * Useful for graceful degradation when the database is unavailable.
+   */
+  suppressErrors?: boolean
+  /**
+   * Error handler callback. If provided, errors are passed to this callback
+   * instead of being thrown. The callback can return a fallback value.
+   */
+  onError?: (error: Error) => unknown[] | void
 }
 
 export interface SearchOptions extends ListOptions {
@@ -2013,9 +2048,16 @@ export function setNLQueryGenerator(generator: NLQueryGenerator): void {
 }
 
 /**
+ * Get the currently configured NL query generator
+ */
+export function getNLQueryGenerator(): NLQueryGenerator | null {
+  return nlQueryGenerator
+}
+
+/**
  * Build schema context for NL queries
  */
-function buildNLQueryContext(schema: ParsedSchema, targetType?: string): NLQueryContext {
+export function buildNLQueryContext(schema: ParsedSchema, targetType?: string): NLQueryContext {
   const types: NLQueryContext['types'] = []
 
   for (const [name, entity] of schema.entities) {
@@ -2044,13 +2086,13 @@ function buildNLQueryContext(schema: ParsedSchema, targetType?: string): NLQuery
     })
   }
 
-  return { types, targetType }
+  return { types, ...(targetType !== undefined && { targetType }) }
 }
 
 /**
  * Execute a natural language query
  */
-async function executeNLQuery<T>(
+export async function executeNLQuery<T>(
   question: string,
   schema: ParsedSchema,
   targetType?: string
@@ -2091,13 +2133,16 @@ async function executeNLQuery<T>(
     let typeResults: Record<string, unknown>[]
 
     if (plan.search) {
-      typeResults = await provider.search(typeName, plan.search, {
-        where: plan.filters,
-      })
+      typeResults = await provider.search(
+        typeName,
+        plan.search,
+        plan.filters ? { where: plan.filters } : undefined
+      )
     } else {
-      typeResults = await provider.list(typeName, {
-        where: plan.filters,
-      })
+      typeResults = await provider.list(
+        typeName,
+        plan.filters ? { where: plan.filters } : undefined
+      )
     }
 
     results.push(...(typeResults as T[]))
@@ -2114,7 +2159,7 @@ async function executeNLQuery<T>(
 /**
  * Create a natural language query function for a specific type
  */
-function createNLQueryFn<T>(schema: ParsedSchema, typeName?: string): NLQueryFn<T> {
+export function createNLQueryFn<T>(schema: ParsedSchema, typeName?: string): NLQueryFn<T> {
   return async (strings: TemplateStringsArray, ...values: unknown[]) => {
     // Interpolate the template
     const question = strings.reduce((acc, str, i) => {
@@ -2285,7 +2330,8 @@ async function resolveProvider(): Promise<DBProvider> {
   if (providerPromise) return providerPromise
 
   providerPromise = (async () => {
-    const databaseUrl = (typeof process !== 'undefined' && process.env?.DATABASE_URL) || './content'
+    const databaseUrl =
+      (typeof process !== 'undefined' && process.env?.['DATABASE_URL']) || './content'
 
     const parsed = parseDatabaseUrl(databaseUrl)
 
@@ -2298,9 +2344,12 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'fs': {
         try {
-          // Dynamic import with type assertion - module type checked at runtime
-          const fsModule = (await import('@mdxdb/fs')) as unknown as FsProviderModule
-          globalProvider = fsModule.createFsProvider({ root: parsed.root })
+          // Dynamic import with runtime validation using type guard
+          const fsModule = await import('@mdxdb/fs')
+          if (!hasFactoryFunction(fsModule, 'createFsProvider')) {
+            throw new Error('@mdxdb/fs does not export createFsProvider')
+          }
+          globalProvider = fsModule.createFsProvider({ root: parsed.root }) as DBProvider
 
           // Check file count and warn if approaching threshold
           checkFileCountThreshold(parsed.root)
@@ -2314,16 +2363,23 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'sqlite': {
         try {
-          // Dynamic import with type assertion - module type checked at runtime
-          const sqliteModule = (await import('@mdxdb/sqlite')) as unknown as SqliteProviderModule
+          // Dynamic import with runtime validation using type guard
+          const sqliteModule = await import('@mdxdb/sqlite')
+          if (!hasFactoryFunction(sqliteModule, 'createSqliteProvider')) {
+            throw new Error('@mdxdb/sqlite does not export createSqliteProvider')
+          }
 
           if (parsed.remoteUrl) {
             // Remote Turso
-            globalProvider = await sqliteModule.createSqliteProvider({ url: parsed.remoteUrl })
+            globalProvider = (await sqliteModule.createSqliteProvider({
+              url: parsed.remoteUrl,
+            })) as DBProvider
           } else {
             // Local SQLite in .db folder
             const dbPath = `${parsed.root}/.db/index.sqlite`
-            globalProvider = await sqliteModule.createSqliteProvider({ url: `file:${dbPath}` })
+            globalProvider = (await sqliteModule.createSqliteProvider({
+              url: `file:${dbPath}`,
+            })) as DBProvider
           }
         } catch (err) {
           console.warn('@mdxdb/sqlite not available, falling back to memory provider')
@@ -2335,24 +2391,25 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'clickhouse': {
         try {
-          // Dynamic import with type assertion - module type checked at runtime
-          const chModule = (await import(
-            '@mdxdb/clickhouse'
-          )) as unknown as ClickhouseProviderModule
+          // Dynamic import with runtime validation using type guard
+          const chModule = await import('@mdxdb/clickhouse')
+          if (!hasFactoryFunction(chModule, 'createClickhouseProvider')) {
+            throw new Error('@mdxdb/clickhouse does not export createClickhouseProvider')
+          }
 
           if (parsed.remoteUrl) {
             // Remote ClickHouse
-            globalProvider = await chModule.createClickhouseProvider({
+            globalProvider = (await chModule.createClickhouseProvider({
               mode: 'http',
               url: parsed.remoteUrl,
-            })
+            })) as DBProvider
           } else {
             // Local chDB in .db folder
             const dbPath = `${parsed.root}/.db/clickhouse`
-            globalProvider = await chModule.createClickhouseProvider({
+            globalProvider = (await chModule.createClickhouseProvider({
               mode: 'chdb',
               url: dbPath,
-            })
+            })) as DBProvider
           }
         } catch (err) {
           console.warn('@mdxdb/clickhouse not available, falling back to memory provider')
@@ -2431,14 +2488,29 @@ function createEdgeEntityOperations(
 ): EntityOperations<Record<string, unknown>> {
   /**
    * Get runtime Edge records from the provider
+   *
+   * @param options - Options for error handling
+   * @returns Runtime edges, or empty array for not-found errors
+   * @throws DatabaseError for unexpected provider failures
    */
-  async function getRuntimeEdges(): Promise<Array<Record<string, unknown>>> {
+  async function getRuntimeEdges(options?: {
+    suppressErrors?: boolean
+  }): Promise<Array<Record<string, unknown>>> {
     try {
       const provider = await getProvider()
       const runtimeEdges = await provider.list('Edge')
       return runtimeEdges
-    } catch {
-      return []
+    } catch (error) {
+      // "Not found" errors are expected - Edge table may not exist yet
+      if (isNotFoundError(error)) {
+        return []
+      }
+      // If suppressErrors is set, return empty array for any error
+      if (options?.suppressErrors) {
+        return []
+      }
+      // Wrap and rethrow unexpected errors with context
+      throw wrapDatabaseError(error, 'list', 'Edge')
     }
   }
 
@@ -2446,20 +2518,22 @@ function createEdgeEntityOperations(
    * Get all edges (schema + runtime), with runtime taking precedence
    * For fuzzy edges, only return runtime edges (they have similarity scores)
    */
-  async function getAllEdges(): Promise<Array<Record<string, unknown>>> {
-    const runtimeEdges = await getRuntimeEdges()
+  async function getAllEdges(options?: {
+    suppressErrors?: boolean
+  }): Promise<Array<Record<string, unknown>>> {
+    const runtimeEdges = await getRuntimeEdges(options)
 
     // Create a set of runtime edge keys (from:name) to filter duplicates
-    const runtimeEdgeKeys = new Set(runtimeEdges.map((e) => `${e.from}:${e.name}`))
+    const runtimeEdgeKeys = new Set(runtimeEdges.map((e) => `${e['from']}:${e['name']}`))
 
     // For schema edges, only include those without a runtime counterpart
     // (runtime edges have more specific info like similarity scores)
     const filteredSchemaEdges = schemaEdgeRecords.filter((e) => {
-      const key = `${e.from}:${e.name}`
+      const key = `${e['from']}:${e['name']}`
       // If there's a runtime edge with the same from:name, skip the schema edge
       // unless the schema edge is of type 'exact' and runtime is 'fuzzy'
       const hasRuntimeVersion = runtimeEdgeKeys.has(key)
-      if (hasRuntimeVersion && e.matchMode === 'fuzzy') {
+      if (hasRuntimeVersion && e['matchMode'] === 'fuzzy') {
         return false // Skip schema fuzzy edge, use runtime version instead
       }
       return !hasRuntimeVersion
@@ -2472,29 +2546,46 @@ function createEdgeEntityOperations(
     async get(id: string) {
       // Check runtime edges first (they have more specific info)
       const runtimeEdges = await getRuntimeEdges()
-      const runtimeMatch = runtimeEdges.find((e) => e.$id === id || `${e.from}:${e.name}` === id)
+      const runtimeMatch = runtimeEdges.find(
+        (e) => e['$id'] === id || `${e['from']}:${e['name']}` === id
+      )
       if (runtimeMatch) return { ...runtimeMatch, $type: 'Edge' }
 
       // Fall back to schema edges
-      return schemaEdgeRecords.find((e) => `${e.from}:${e.name}` === id) ?? null
+      return schemaEdgeRecords.find((e) => `${e['from']}:${e['name']}` === id) ?? null
     },
 
     async list(options?: ListOptions) {
-      let results = await getAllEdges()
+      try {
+        const suppressErrors = options?.suppressErrors
+        let results = await getAllEdges(
+          suppressErrors !== undefined ? { suppressErrors } : undefined
+        )
 
-      // Apply where filter
-      if (options?.where) {
-        for (const [key, value] of Object.entries(options.where)) {
-          results = results.filter((e) => e[key] === value)
+        // Apply where filter
+        if (options?.where) {
+          for (const [key, value] of Object.entries(options.where)) {
+            results = results.filter((e) => e[key] === value)
+          }
         }
-      }
 
-      // Add $id and $type
-      return results.map((e) => ({
-        ...e,
-        $id: e.$id || `${e.from}:${e.name}`,
-        $type: 'Edge',
-      }))
+        // Add $id and $type
+        return results.map((e) => ({
+          ...e,
+          $id: e['$id'] || `${e['from']}:${e['name']}`,
+          $type: 'Edge',
+        }))
+      } catch (error) {
+        // Handle error with callback if provided
+        if (options?.onError) {
+          const fallback = options.onError(
+            error instanceof Error ? error : new Error(String(error))
+          )
+          // onError returns unknown - coerce to array or return empty array
+          return Array.isArray(fallback) ? (fallback as Record<string, unknown>[]) : []
+        }
+        throw error
+      }
     },
 
     async find(where: Record<string, unknown>) {
@@ -2506,7 +2597,7 @@ function createEdgeEntityOperations(
 
       return results.map((e) => ({
         ...e,
-        $id: e.$id || `${e.from}:${e.name}`,
+        $id: e['$id'] || `${e['from']}:${e['name']}`,
         $type: 'Edge',
       }))
     },
@@ -2517,13 +2608,13 @@ function createEdgeEntityOperations(
       return allEdges
         .filter(
           (e) =>
-            String(e.from).toLowerCase().includes(queryLower) ||
-            String(e.name).toLowerCase().includes(queryLower) ||
-            String(e.to).toLowerCase().includes(queryLower)
+            String(e['from']).toLowerCase().includes(queryLower) ||
+            String(e['name']).toLowerCase().includes(queryLower) ||
+            String(e['to']).toLowerCase().includes(queryLower)
         )
         .map((e) => ({
           ...e,
-          $id: e.$id || `${e.from}:${e.name}`,
+          $id: e['$id'] || `${e['from']}:${e['name']}`,
           $type: 'Edge',
         }))
     },
@@ -2579,7 +2670,7 @@ function createNounEntityOperations(
   return {
     async get(id: string) {
       // Find by name (type name)
-      return nounRecords.find((n) => n.name === id || n.$id === id) ?? null
+      return nounRecords.find((n) => n['name'] === id || n['$id'] === id) ?? null
     },
 
     async list(options?: ListOptions) {
@@ -2594,7 +2685,7 @@ function createNounEntityOperations(
       }
       return results.map((n) => ({
         ...n,
-        $id: n.$id || n.name,
+        $id: n['$id'] || n['name'],
         $type: 'Noun',
       }))
     },
@@ -2606,7 +2697,7 @@ function createNounEntityOperations(
       }
       return results.map((n) => ({
         ...n,
-        $id: n.$id || n.name,
+        $id: n['$id'] || n['name'],
         $type: 'Noun',
       }))
     },
@@ -2616,16 +2707,16 @@ function createNounEntityOperations(
       return nounRecords
         .filter(
           (n) =>
-            String(n.name).toLowerCase().includes(queryLower) ||
-            String(n.singular).toLowerCase().includes(queryLower) ||
-            String(n.plural).toLowerCase().includes(queryLower) ||
-            String(n.description || '')
+            String(n['name']).toLowerCase().includes(queryLower) ||
+            String(n['singular']).toLowerCase().includes(queryLower) ||
+            String(n['plural']).toLowerCase().includes(queryLower) ||
+            String(n['description'] || '')
               .toLowerCase()
               .includes(queryLower)
         )
         .map((n) => ({
           ...n,
-          $id: n.$id || n.name,
+          $id: n['$id'] || n['name'],
           $type: 'Noun',
         }))
     },
@@ -2680,7 +2771,7 @@ function createVerbEntityOperations(
   return {
     async get(id: string) {
       // Find by action name
-      return verbRecords.find((v) => v.action === id || v.$id === id) ?? null
+      return verbRecords.find((v) => v['action'] === id || v['$id'] === id) ?? null
     },
 
     async list(options?: ListOptions) {
@@ -2695,7 +2786,7 @@ function createVerbEntityOperations(
       }
       return results.map((v) => ({
         ...v,
-        $id: v.$id || v.action,
+        $id: v['$id'] || v['action'],
         $type: 'Verb',
       }))
     },
@@ -2707,7 +2798,7 @@ function createVerbEntityOperations(
       }
       return results.map((v) => ({
         ...v,
-        $id: v.$id || v.action,
+        $id: v['$id'] || v['action'],
         $type: 'Verb',
       }))
     },
@@ -2717,20 +2808,20 @@ function createVerbEntityOperations(
       return verbRecords
         .filter(
           (v) =>
-            String(v.action).toLowerCase().includes(queryLower) ||
-            String(v.actor || '')
+            String(v['action']).toLowerCase().includes(queryLower) ||
+            String(v['actor'] || '')
               .toLowerCase()
               .includes(queryLower) ||
-            String(v.activity || '')
+            String(v['activity'] || '')
               .toLowerCase()
               .includes(queryLower) ||
-            String(v.description || '')
+            String(v['description'] || '')
               .toLowerCase()
               .includes(queryLower)
         )
         .map((v) => ({
           ...v,
-          $id: v.$id || v.action,
+          $id: v['$id'] || v['action'],
           $type: 'Verb',
         }))
     },
@@ -3059,6 +3150,25 @@ export function DB<TSchema extends DatabaseSchema>(
     },
   }
 
+  // Create ForEachActionsAPI adapter for wrapEntityOperations
+  const forEachActionsAPI: ForEachActionsAPI = {
+    async create(data: { type: string; data: unknown; total?: number }) {
+      const result = await actionsAPI.create(data)
+      return { id: result.id }
+    },
+    async get(id: string) {
+      return actionsAPI.get(id) as Promise<ForEachActionState | null>
+    },
+    async update(id: string, updates: Partial<ForEachActionState>) {
+      // Filter to only the properties that actionsAPI.update accepts
+      const filteredUpdates: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>> =
+        {}
+      if (updates.status !== undefined) filteredUpdates.status = updates.status
+      if (updates.progress !== undefined) filteredUpdates.progress = updates.progress
+      return actionsAPI.update(id, filteredUpdates)
+    },
+  }
+
   // Create entity operations for each type with promise pipelining
   // NOTE: Using Record<string, unknown> here because entity operations types vary by schema.
   // The actual types are determined at runtime and enforced via wrapEntityOperations.
@@ -3085,19 +3195,19 @@ export function DB<TSchema extends DatabaseSchema>(
     if (entityName === 'Edge') {
       // Special handling for Edge entity - query from in-memory edge records + runtime edges
       const edgeOps = createEdgeEntityOperations(allEdgeRecords, resolveProvider)
-      entityOperations[entityName] = wrapEntityOperations(entityName, edgeOps, actionsAPI)
+      entityOperations[entityName] = wrapEntityOperations(entityName, edgeOps, forEachActionsAPI)
     } else if (entityName === 'Noun') {
       // Noun entity - auto-generated from schema entity types
       const nounOps = createNounEntityOperations(allNounRecords)
-      entityOperations[entityName] = wrapEntityOperations(entityName, nounOps, actionsAPI)
+      entityOperations[entityName] = wrapEntityOperations(entityName, nounOps, forEachActionsAPI)
     } else if (entityName === 'Verb') {
       // Verb entity - standard verbs with conjugation forms
       const verbOps = createVerbEntityOperations(allVerbRecords)
-      entityOperations[entityName] = wrapEntityOperations(entityName, verbOps, actionsAPI)
+      entityOperations[entityName] = wrapEntityOperations(entityName, verbOps, forEachActionsAPI)
     } else {
       const baseOps = createEntityOperations(entityName, entity, parsedSchema)
       // Wrap with DBPromise for chainable queries, inject actions for forEach persistence
-      const wrappedOps = wrapEntityOperations(entityName, baseOps, actionsAPI)
+      const wrappedOps = wrapEntityOperations(entityName, baseOps, forEachActionsAPI)
 
       // Add draft and resolve with event emission
       const draftFn = async (
@@ -3109,7 +3219,11 @@ export function DB<TSchema extends DatabaseSchema>(
           throw new Error(`Draft method not available for ${entityName}`)
         }
         const draft = await baseOps.draft(data, options)
-        ;(draft as Record<string, unknown>).$type = entityName
+        // Draft objects are always Record<string, unknown> - safe to set $type
+        if (draft && typeof draft === 'object' && !Array.isArray(draft)) {
+          const draftRecord = draft as Record<string, unknown>
+          draftRecord['$type'] = entityName
+        }
         emitInternalEventForOps('draft', draft)
         return draft
       }
@@ -3120,9 +3234,11 @@ export function DB<TSchema extends DatabaseSchema>(
         if (!baseOps.resolve) {
           throw new Error(`Resolve method not available for ${entityName}`)
         }
+        // Draft<T> is always a Record with $phase - this cast is safe after validation
         const resolved = await baseOps.resolve(draft as Draft<Record<string, unknown>>, options)
-        if (resolved && typeof resolved === 'object') {
-          ;(resolved as Record<string, unknown>).$type = entityName
+        if (resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
+          const resolvedRecord = resolved as Record<string, unknown>
+          resolvedRecord['$type'] = entityName
         }
         emitInternalEventForOps('resolve', resolved)
         return resolved
@@ -3133,17 +3249,19 @@ export function DB<TSchema extends DatabaseSchema>(
       const originalCreate = wrappedOps.create
       wrappedOps.create = async (...args: unknown[]): Promise<unknown> => {
         // Parse arguments - can be (data, options?) or (id, data, options?)
+        // Type assertions here are necessary because variadic args are typed as unknown[]
         let data: Record<string, unknown>
         let options: CreateEntityOptions | undefined
 
         if (typeof args[0] === 'string') {
-          // (id, data, options?)
-          data = args[1] as Record<string, unknown>
-          options = args[2] as CreateEntityOptions | undefined
+          // (id, data, options?) - args[1] is the data object
+          data = isPlainObject(args[1]) ? args[1] : {}
+          options = isPlainObject(args[2]) ? (args[2] as CreateEntityOptions) : undefined
         } else {
-          // (data, options?)
-          data = args[0] as Record<string, unknown>
-          options = args[1] as CreateEntityOptions | undefined
+          // (data, options?) - args[0] is the data object
+          data = isPlainObject(args[0]) ? args[0] : {}
+          // Check if second arg is options (has option-like properties)
+          options = isPlainObject(args[1]) ? (args[1] as CreateEntityOptions) : undefined
         }
 
         if (options?.draftOnly) {
@@ -3151,18 +3269,51 @@ export function DB<TSchema extends DatabaseSchema>(
           return draft
         }
 
-        // Run draft phase first
-        const draft = (await draftFn(data)) as Record<string, unknown>
+        // Run draft phase first - draftFn returns an object with draft properties
+        const draftResult = await draftFn(data)
+        const draft = isPlainObject(draftResult) ? draftResult : {}
         // Then resolve
-        const resolved = (await resolveFn(draft)) as Record<string, unknown>
+        const resolveResult = await resolveFn(draft)
+        const resolved = isPlainObject(resolveResult) ? resolveResult : {}
         // Create the final entity (without phase markers)
-        const finalData = { ...(resolved || {}) }
-        delete finalData.$phase
-        delete finalData.$refs
-        delete finalData.$errors
-        delete finalData.$type
+        const finalData = { ...resolved }
+        delete finalData['$phase']
+        delete finalData['$refs']
+        delete finalData['$errors']
+        delete finalData['$type']
 
-        return originalCreate.call(wrappedOps, ...args)
+        // Generate AI fields for entities with $context dependencies
+        // The draft phase skips prompt fields for entities with $context because
+        // those fields need pre-fetched context data to generate properly.
+        const provider = await resolveProvider()
+        const entityDefForAI = parsedSchema.entities.get(entityName)
+        let processedData = finalData
+        if (entityDefForAI) {
+          processedData = await generateAIFields(
+            finalData,
+            entityName,
+            entityDefForAI,
+            parsedSchema,
+            provider
+          )
+        }
+
+        // Call originalCreate with the processed data
+        // Type assertion to Function is necessary for dynamic method call with spread args
+        if (typeof args[0] === 'string') {
+          return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
+            wrappedOps,
+            args[0],
+            processedData,
+            options
+          )
+        } else {
+          return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
+            wrappedOps,
+            processedData,
+            options
+          )
+        }
       }
 
       entityOperations[entityName] = wrappedOps
@@ -3214,14 +3365,22 @@ export function DB<TSchema extends DatabaseSchema>(
 
     async semanticSearch(query: string, options?: SemanticSearchOptions) {
       const provider = await resolveProvider()
+
+      if (!hasSemanticSearch(provider)) {
+        throw new CapabilityNotSupportedError(
+          'hasSemanticSearch',
+          `Semantic search is not supported by the current provider. ` +
+            `The provider does not implement the semanticSearch method required for vector similarity search.`,
+          `Use the regular search() method instead, which performs basic text matching.`
+        )
+      }
+
       const results: Array<{ $id: string; $type: string; $score: number; [key: string]: unknown }> =
         []
 
-      if (hasSemanticSearch(provider)) {
-        for (const [typeName] of parsedSchema.entities) {
-          const typeResults = await provider.semanticSearch(typeName, query, options)
-          results.push(...typeResults)
-        }
+      for (const [typeName] of parsedSchema.entities) {
+        const typeResults = await provider.semanticSearch(typeName, query, options)
+        results.push(...typeResults)
       }
 
       // Sort by score across all types
@@ -3234,7 +3393,7 @@ export function DB<TSchema extends DatabaseSchema>(
 
     async count(type: string, where?: Record<string, unknown>) {
       const provider = await resolveProvider()
-      const results = await provider.list(type, { where })
+      const results = await provider.list(type, where ? { where } : undefined)
       return results.length
     },
 
@@ -3243,7 +3402,10 @@ export function DB<TSchema extends DatabaseSchema>(
       callback: (entity: unknown) => void | Promise<void>
     ) {
       const provider = await resolveProvider()
-      const results = await provider.list(options.type, { where: options.where })
+      const results = await provider.list(
+        options.type,
+        options.where ? { where: options.where } : undefined
+      )
       const concurrency = options.concurrency ?? 1
 
       if (concurrency === 1) {
@@ -3316,24 +3478,26 @@ export function DB<TSchema extends DatabaseSchema>(
       // Return minimal event if provider doesn't support emit
       const now = new Date()
       if (typeof optionsOrType === 'string') {
+        // data parameter is typed as unknown, but we expect it to be an optional object
+        const objectData = isPlainObject(data) ? data : undefined
         return {
           id: crypto.randomUUID(),
           actor: 'system',
           event: optionsOrType,
-          objectData: data as Record<string, unknown> | undefined,
+          ...(objectData !== undefined && { objectData }),
           timestamp: now,
         }
       }
       return {
         id: crypto.randomUUID(),
         actor: optionsOrType.actor,
-        actorData: optionsOrType.actorData,
+        ...(optionsOrType.actorData !== undefined && { actorData: optionsOrType.actorData }),
         event: optionsOrType.event,
-        object: optionsOrType.object,
-        objectData: optionsOrType.objectData,
-        result: optionsOrType.result,
-        resultData: optionsOrType.resultData,
-        meta: optionsOrType.meta,
+        ...(optionsOrType.object !== undefined && { object: optionsOrType.object }),
+        ...(optionsOrType.objectData !== undefined && { objectData: optionsOrType.objectData }),
+        ...(optionsOrType.result !== undefined && { result: optionsOrType.result }),
+        ...(optionsOrType.resultData !== undefined && { resultData: optionsOrType.resultData }),
+        ...(optionsOrType.meta !== undefined && { meta: optionsOrType.meta }),
         timestamp: now,
       }
     },
@@ -3725,9 +3889,17 @@ async function generateEntity(
 
   // Gather context for generation
   const parentEntity = schema.entities.get(context.parent)
-  const parentSchema = parentEntity?.schema || {}
-  const instructions = parentSchema.$instructions as string | undefined
-  const schemaContext = parentSchema.$context as string | undefined
+  // EntitySchema is Record<string, FieldDefinition | unknown> - safe to treat as Record
+  const parentSchema = parentEntity?.schema ?? {}
+  // Use type guard helper to safely extract schema metadata
+  const instructions = getSchemaMetadata<string>(
+    parentSchema as Record<string, unknown>,
+    '$instructions'
+  )
+  const schemaContext = getSchemaMetadata<string>(
+    parentSchema as Record<string, unknown>,
+    '$context'
+  )
 
   // Extract relevant parent data for context (excluding metadata fields)
   const parentContextFields: string[] = []
@@ -3759,18 +3931,10 @@ async function generateEntity(
     if (!field.isRelation) {
       if (field.type === 'string') {
         // Generate context-aware content
-        data[fieldName] = generateContextAwareValue(
-          fieldName,
-          type,
-          fullContext,
-          prompt,
-          context.parentData
-        )
+        data[fieldName] = generateContextAwareValue(fieldName, type, fullContext, prompt)
       } else if (field.isArray && field.type === 'string') {
         // Generate array of strings
-        data[fieldName] = [
-          generateContextAwareValue(fieldName, type, fullContext, prompt, context.parentData),
-        ]
+        data[fieldName] = [generateContextAwareValue(fieldName, type, fullContext, prompt)]
       }
     } else if (field.operator === '<-' && field.direction === 'backward') {
       // Backward relation to parent - set the parent's ID if this entity's
@@ -3939,7 +4103,7 @@ async function resolveForwardExact(
           provider
         )
         const created = await provider.create(generateType, undefined, resolvedGenerated)
-        resolved[fieldName] = [created.$id]
+        resolved[fieldName] = [created['$id']]
 
         // Store matched type for union types
         if (field.unionTypes) {
@@ -3950,7 +4114,7 @@ async function resolveForwardExact(
         pendingRelations.push({
           fieldName,
           targetType: generateType,
-          targetId: created.$id as string,
+          targetId: created['$id'] as string,
         })
       } else {
         // Single non-optional forward relation - generate the related entity
@@ -3973,7 +4137,7 @@ async function resolveForwardExact(
             provider
           )
           const created = await provider.create(generateType, undefined, resolvedGenerated)
-          resolved[fieldName] = created.$id
+          resolved[fieldName] = created['$id']
 
           // Store matched type for union types
           if (field.unionTypes) {
@@ -4058,7 +4222,7 @@ async function cascadeGenerate(
   progress.depth = depth
   options.onProgress?.({ ...progress, phase: 'generating' })
 
-  const entityId = (entity.$id || entity.id) as string
+  const entityId = (entity['$id'] || entity['id']) as string
 
   for (const [fieldName, field] of entityDef.fields) {
     // Only cascade through forward relationships (-> or ~>) that are arrays
@@ -4076,7 +4240,9 @@ async function cascadeGenerate(
     // Report progress for this type
     progress.currentDepth = depth
     progress.depth = depth
-    progress.currentType = field.relatedType
+    if (field.relatedType !== undefined) {
+      progress.currentType = field.relatedType
+    }
     options.onProgress?.({ ...progress, phase: 'generating' })
 
     try {
@@ -4134,7 +4300,7 @@ async function cascadeGenerate(
 
         // Update the parent entity with the new relation
         const existingIds = (entity[fieldName] as string[]) || []
-        const newIds = [...existingIds, created.$id as string]
+        const newIds = [...existingIds, created['$id'] as string]
         await provider.update(entityDef.name, entityId, { [fieldName]: newIds })
         entity[fieldName] = newIds
 
@@ -4144,7 +4310,7 @@ async function cascadeGenerate(
           entityId,
           fieldName,
           field.relatedType!,
-          created.$id as string
+          created['$id'] as string
         )
 
         progress.totalEntitiesCreated++
@@ -4174,8 +4340,8 @@ async function cascadeGenerate(
         const created = await provider.create(field.relatedType!, undefined, generated)
 
         // Update the parent entity with the new relation
-        await provider.update(entityDef.name, entityId, { [fieldName]: created.$id })
-        entity[fieldName] = created.$id
+        await provider.update(entityDef.name, entityId, { [fieldName]: created['$id'] })
+        entity[fieldName] = created['$id']
 
         progress.totalEntitiesCreated++
         if (!progress.typesGenerated.includes(field.relatedType!)) {
@@ -4291,8 +4457,11 @@ async function resolveBackwardFuzzy(
               resolved[`${fieldName}$matchedTypes`] = validMatches.map((m) => m.type)
             } else {
               // For single fields, return the best match
-              resolved[fieldName] = matches[0].id
-              resolved[`${fieldName}$matchedType`] = matches[0].type
+              const firstMatch = matches[0]
+              if (firstMatch) {
+                resolved[fieldName] = firstMatch.id
+                resolved[`${fieldName}$matchedType`] = firstMatch.type
+              }
             }
           }
         } else {
@@ -4309,7 +4478,10 @@ async function resolveBackwardFuzzy(
               resolved[fieldName] = matches.filter((m) => m.$score >= threshold).map((m) => m.$id)
             } else {
               // For single fields, return the best match
-              resolved[fieldName] = matches[0].$id
+              const firstMatch = matches[0]
+              if (firstMatch) {
+                resolved[fieldName] = firstMatch.$id
+              }
             }
           }
         }
@@ -4479,12 +4651,12 @@ async function resolveForwardFuzzy(
                 $generatedBy: parentId,
                 $sourceField: fieldName,
               })
-              resultIds.push(created.$id as string)
+              resultIds.push(created['$id'] as string)
               matchedTypes.push(generateType)
               pendingRelations.push({
                 fieldName,
                 targetType: generateType,
-                targetId: created.$id as string,
+                targetId: created['$id'] as string,
                 matchedType: generateType,
               })
             }
@@ -4542,12 +4714,12 @@ async function resolveForwardFuzzy(
               $generatedBy: parentId,
               $sourceField: fieldName,
             })
-            resolved[fieldName] = created.$id
+            resolved[fieldName] = created['$id']
             resolved[`${fieldName}$matchedType`] = generateType
             pendingRelations.push({
               fieldName,
               targetType: generateType,
-              targetId: created.$id as string,
+              targetId: created['$id'] as string,
               matchedType: generateType,
             })
           }
@@ -4594,7 +4766,7 @@ async function resolveNestedPending(
         )
         const created = await provider.create(pending.type, undefined, resolvedNested)
         // Set as array or single value based on field definition
-        resolved[fieldName] = field?.isArray ? [created.$id] : created.$id
+        resolved[fieldName] = field?.isArray ? [created['$id']] : created['$id']
       }
     }
   }
@@ -4623,10 +4795,10 @@ function generateNaturalLanguageContent(
     // Extract key words from prompt for natural language
     const keyWords = prompt.toLowerCase()
     if (keyWords.includes('idea') || keyWords.includes('concept')) {
-      return `A innovative idea for ${context.name || targetType}`
+      return `A innovative idea for ${context['name'] || targetType}`
     }
     if (keyWords.includes('customer') || keyWords.includes('buyer') || keyWords.includes('user')) {
-      return `The target customer segment for ${context.name || targetType}`
+      return `The target customer segment for ${context['name'] || targetType}`
     }
     if (keyWords.includes('related') || keyWords.includes('similar')) {
       return `Related ${targetType.toLowerCase()} content`
@@ -4639,10 +4811,10 @@ function generateNaturalLanguageContent(
   // Generate based on field name patterns
   const fieldLower = fieldName.toLowerCase()
   if (fieldLower.includes('idea')) {
-    return `A compelling idea for ${context.name || 'the project'}`
+    return `A compelling idea for ${context['name'] || 'the project'}`
   }
   if (fieldLower.includes('customer')) {
-    return `The ideal customer for ${context.name || 'the business'}`
+    return `The ideal customer for ${context['name'] || 'the business'}`
   }
   if (
     fieldLower.includes('founder') ||
@@ -4657,25 +4829,25 @@ function generateNaturalLanguageContent(
     return `An experienced ${fieldName}`
   }
   if (fieldLower.includes('assignee') || fieldLower.includes('owner')) {
-    return `The right person for ${context.title || context.name || 'this task'}`
+    return `The right person for ${context['title'] || context['name'] || 'this task'}`
   }
   if (fieldLower.includes('department') || fieldLower.includes('team')) {
-    return `A department for ${context.name || 'the organization'}`
+    return `A department for ${context['name'] || 'the organization'}`
   }
   if (fieldLower.includes('client') || fieldLower.includes('sponsor')) {
-    return `A ${fieldName} for ${context.name || context.title || 'the project'}`
+    return `A ${fieldName} for ${context['name'] || context['title'] || 'the project'}`
   }
   if (fieldLower.includes('item') || fieldLower.includes('component')) {
     return `${targetType} component`
   }
   if (fieldLower.includes('member') || fieldLower.includes('project')) {
-    return `${targetType} for ${context.name || 'the team'}`
+    return `${targetType} for ${context['name'] || 'the team'}`
   }
   if (fieldLower.includes('character')) {
-    return `A character for ${context.title || context.name || 'the story'}`
+    return `A character for ${context['title'] || context['name'] || 'the story'}`
   }
   if (fieldLower.includes('setting') || fieldLower.includes('location')) {
-    return `A setting for ${context.title || context.name || 'the story'}`
+    return `A setting for ${context['title'] || context['name'] || 'the story'}`
   }
   if (fieldLower.includes('address')) {
     return `Address information`
@@ -4712,7 +4884,10 @@ async function resolveReferenceSpec(
       })
 
       if (matches.length > 0) {
-        return matches[0].$id
+        const firstMatch = matches[0]
+        if (firstMatch) {
+          return firstMatch.$id
+        }
       }
     }
 
@@ -4740,7 +4915,7 @@ async function resolveReferenceSpec(
         type: field.relatedType!,
         matchMode: 'exact',
         resolved: false,
-        prompt: field.prompt,
+        ...(field.prompt !== undefined && { prompt: field.prompt }),
       }
       const nestedId = await resolveReferenceSpec(nestedSpec, generatedData, schema, provider)
       if (nestedId) {
@@ -4755,7 +4930,7 @@ async function resolveReferenceSpec(
     $generatedBy: spec.matchMode === 'fuzzy' ? 'fuzzy-resolution' : 'reference-resolution',
     $sourceField: spec.field,
   })
-  return created.$id as string
+  return created['$id'] as string
 }
 
 /**
@@ -4775,16 +4950,32 @@ function createEntityOperations<T>(
     },
 
     async list(options?: ListOptions): Promise<T[]> {
-      const provider = await resolveProvider()
-      const results = await provider.list(typeName, options)
-      return Promise.all(results.map((r) => hydrateEntity(r, entity, schema) as T))
+      try {
+        const provider = await resolveProvider()
+        const results = await provider.list(typeName, options)
+        return Promise.all(results.map((r) => hydrateEntity(r, entity, schema) as T))
+      } catch (error) {
+        // Handle error with callback if provided
+        if (options?.onError) {
+          const wrappedError = error instanceof Error ? error : new Error(String(error))
+          const fallback = options.onError(wrappedError)
+          return (fallback ?? []) as T[]
+        }
+        // Suppress errors if requested
+        if (options?.suppressErrors) {
+          return []
+        }
+        throw error
+      }
     },
 
     async find(where: Partial<T>): Promise<T[]> {
       const provider = await resolveProvider()
+      // Partial<T> is a subset of Record<string, unknown> - safe cast for provider API
       const results = await provider.list(typeName, {
         where: where as Record<string, unknown>,
       })
+      // hydrateEntity returns Record<string, unknown>, cast to T for type-safe API
       return Promise.all(results.map((r) => hydrateEntity(r, entity, schema) as T))
     },
 
@@ -4802,22 +4993,26 @@ function createEntityOperations<T>(
       const provider = await resolveProvider()
 
       // Parse arguments: support both (data, options) and (id, data, options) signatures
+      // Type assertions are necessary here because T extends Record<string, unknown>
+      // but TypeScript can't infer this from the Omit<T, ...> type
       let providedId: string | undefined
       let data: Record<string, unknown>
       let options: CreateEntityOptions | undefined
 
       if (typeof idOrData === 'string') {
-        // First arg is ID
+        // First arg is ID - maybeDataOrOptions must be the data object
         providedId = idOrData
-        data = maybeDataOrOptions as Record<string, unknown>
+        // Safe cast: maybeDataOrOptions is Omit<T, '$id' | '$type'> which extends Record
+        data = (maybeDataOrOptions ?? {}) as Record<string, unknown>
         options = maybeOptions
       } else {
-        // First arg is data
+        // First arg is data - safe cast since idOrData is Omit<T, '$id' | '$type'>
         providedId = undefined
         data = idOrData as Record<string, unknown>
-        // Check if second arg is options or data
+        // Check if second arg is options by detecting option-specific properties
         if (
           maybeDataOrOptions &&
+          typeof maybeDataOrOptions === 'object' &&
           ('cascade' in maybeDataOrOptions ||
             'maxDepth' in maybeDataOrOptions ||
             'onProgress' in maybeDataOrOptions ||
@@ -4859,7 +5054,13 @@ function createEntityOperations<T>(
         provider
       )
 
-      const result = await provider.create(typeName, entityId, finalData)
+      let result: Record<string, unknown>
+      try {
+        result = await provider.create(typeName, entityId, finalData)
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'create', typeName, entityId)
+      }
 
       // Create relationships for array fields (exact)
       for (const rel of pendingRelations) {
@@ -4872,8 +5073,7 @@ function createEntityOperations<T>(
       for (const rel of fuzzyPendingRelations) {
         await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId, {
           matchMode: 'fuzzy',
-          similarity: rel.similarity,
-          matchedType: rel.matchedType,
+          ...(rel.similarity !== undefined && { similarity: rel.similarity }),
         })
 
         // Also create an Edge entity to store the fuzzy match metadata
@@ -4893,8 +5093,11 @@ function createEntityOperations<T>(
               fromId: entityId,
               toId: rel.targetId,
             })
-          } catch {
-            // Edge already exists (could happen with duplicate targetIds), ignore
+          } catch (error) {
+            // Only ignore actual duplicate key errors, propagate other errors
+            if (!isEntityExistsError(error)) {
+              throw wrapDatabaseError(error, 'create', 'Edge', edgeId)
+            }
           }
         }
       }
@@ -4929,25 +5132,43 @@ function createEntityOperations<T>(
     },
 
     async update(id: string, data: Partial<Omit<T, '$id' | '$type'>>): Promise<T> {
-      const provider = await resolveProvider()
-      const result = await provider.update(typeName, id, data as Record<string, unknown>)
-      return hydrateEntity(result, entity, schema) as T
+      try {
+        const provider = await resolveProvider()
+        // Partial<Omit<T, ...>> is a subset of Record<string, unknown> - safe cast for provider API
+        const result = await provider.update(typeName, id, data as Record<string, unknown>)
+        return hydrateEntity(result, entity, schema) as T
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'update', typeName, id)
+      }
     },
 
     async upsert(id: string, data: Omit<T, '$id' | '$type'>): Promise<T> {
-      const provider = await resolveProvider()
-      const existing = await provider.get(typeName, id)
-      if (existing) {
-        const result = await provider.update(typeName, id, data as Record<string, unknown>)
+      try {
+        const provider = await resolveProvider()
+        const existing = await provider.get(typeName, id)
+        // Omit<T, ...> is a subset of Record<string, unknown> - safe cast for provider API
+        if (existing) {
+          const result = await provider.update(typeName, id, data as Record<string, unknown>)
+          return hydrateEntity(result, entity, schema) as T
+        }
+        const result = await provider.create(typeName, id, data as Record<string, unknown>)
         return hydrateEntity(result, entity, schema) as T
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'upsert', typeName, id)
       }
-      const result = await provider.create(typeName, id, data as Record<string, unknown>)
-      return hydrateEntity(result, entity, schema) as T
     },
 
     async delete(id: string): Promise<boolean> {
-      const provider = await resolveProvider()
-      return provider.delete(typeName, id)
+      try {
+        const provider = await resolveProvider()
+        const result = await provider.delete(typeName, id)
+        return result
+      } catch (error) {
+        if (error instanceof DatabaseError) throw error
+        throw wrapDatabaseError(error, 'delete', typeName, id)
+      }
     },
 
     async forEach(
@@ -4968,19 +5189,24 @@ function createEntityOperations<T>(
       options?: SemanticSearchOptions
     ): Promise<Array<T & { $score: number }>> {
       const provider = await resolveProvider()
-      if (hasSemanticSearch(provider)) {
-        const results = await provider.semanticSearch(typeName, query, options)
-        return Promise.all(
-          results.map(
-            (r) =>
-              ({
-                ...hydrateEntity(r, entity, schema),
-                $score: r.$score,
-              } as T & { $score: number })
-          )
+      if (!hasSemanticSearch(provider)) {
+        throw new CapabilityNotSupportedError(
+          'hasSemanticSearch',
+          `Semantic search is not supported by the current provider. ` +
+            `The provider does not implement the semanticSearch method required for vector similarity search.`,
+          `Use the regular search() method instead, which performs basic text matching.`
         )
       }
-      return []
+      const results = await provider.semanticSearch(typeName, query, options)
+      return Promise.all(
+        results.map(
+          (r) =>
+            ({
+              ...hydrateEntity(r, entity, schema),
+              $score: r.$score,
+            } as T & { $score: number })
+        )
+      )
     },
 
     async hybridSearch(
@@ -4990,27 +5216,32 @@ function createEntityOperations<T>(
       Array<T & { $rrfScore: number; $ftsRank: number; $semanticRank: number; $score: number }>
     > {
       const provider = await resolveProvider()
-      if (hasHybridSearch(provider)) {
-        const results = await provider.hybridSearch(typeName, query, options)
-        return Promise.all(
-          results.map(
-            (r) =>
-              ({
-                ...hydrateEntity(r, entity, schema),
-                $rrfScore: r.$rrfScore,
-                $ftsRank: r.$ftsRank,
-                $semanticRank: r.$semanticRank,
-                $score: r.$score,
-              } as T & {
-                $rrfScore: number
-                $ftsRank: number
-                $semanticRank: number
-                $score: number
-              })
-          )
+      if (!hasHybridSearch(provider)) {
+        throw new CapabilityNotSupportedError(
+          'hasHybridSearch',
+          `Hybrid search is not supported by the current provider. ` +
+            `The provider does not implement the hybridSearch method required for combined FTS and vector search.`,
+          `Use the regular search() method instead, which performs basic text matching.`
         )
       }
-      return []
+      const results = await provider.hybridSearch(typeName, query, options)
+      return Promise.all(
+        results.map(
+          (r) =>
+            ({
+              ...hydrateEntity(r, entity, schema),
+              $rrfScore: r.$rrfScore,
+              $ftsRank: r.$ftsRank,
+              $semanticRank: r.$semanticRank,
+              $score: r.$score,
+            } as T & {
+              $rrfScore: number
+              $ftsRank: number
+              $semanticRank: number
+              $score: number
+            })
+        )
+      )
     },
 
     async draft(
@@ -5031,24 +5262,28 @@ function createEntityOperations<T>(
         if (field.operator && field.relatedType) {
           const matchMode = field.matchMode ?? (field.operator.includes('~') ? 'fuzzy' : 'exact')
 
+          // data is Partial<Omit<T, ...>> which extends Record<string, unknown>
+          // The cast is safe because we're accessing arbitrary properties
+          const dataRecord = data as Record<string, unknown>
+
           if (field.isArray) {
             // Array relationship
             const generatedText = generateNaturalLanguageContent(
               fieldName,
               field.prompt,
               field.relatedType,
-              data as Record<string, unknown>
+              dataRecord
             )
             draftData[fieldName] = generatedText
 
             // Create ref specs for array
             const refSpec: ReferenceSpec = {
               field: fieldName,
-              operator: field.operator,
+              operator: field.operator!,
               type: field.relatedType,
               matchMode,
               resolved: false,
-              prompt: field.prompt,
+              ...(field.prompt !== undefined && { prompt: field.prompt }),
               generatedText,
             }
             refs[fieldName] = [refSpec]
@@ -5062,17 +5297,17 @@ function createEntityOperations<T>(
               fieldName,
               field.prompt,
               field.relatedType,
-              data as Record<string, unknown>
+              dataRecord
             )
             draftData[fieldName] = generatedText
 
             refs[fieldName] = {
               field: fieldName,
-              operator: field.operator,
+              operator: field.operator!,
               type: field.relatedType,
               matchMode,
               resolved: false,
-              prompt: field.prompt,
+              ...(field.prompt !== undefined && { prompt: field.prompt }),
               generatedText,
             }
 
@@ -5083,13 +5318,14 @@ function createEntityOperations<T>(
         }
       }
 
-      draftData.$refs = refs
+      draftData['$refs'] = refs
+      // draftData has all Draft<T> properties - safe to return as Draft<T>
       return draftData as Draft<T>
     },
 
     async resolve(draft: Draft<T>, options?: ResolveOptions): Promise<Resolved<T>> {
-      // Validate that this is actually a draft - Draft<T> has $phase property
-      if (draft.$phase !== 'draft') {
+      // Validate that this is actually a draft - use type guard for safe access
+      if (!isDraft(draft)) {
         throw new Error('Cannot resolve entity: not a draft (missing $phase: "draft")')
       }
 
@@ -5098,10 +5334,11 @@ function createEntityOperations<T>(
       const errors: Array<{ field: string; error: string }> = []
 
       // Remove draft markers
-      delete resolved.$refs
-      resolved.$phase = 'resolved'
+      delete resolved['$refs']
+      resolved['$phase'] = 'resolved'
 
-      const refs = draft.$refs
+      // Extract refs using type guard - safe access since isDraft validated
+      const refs = (extractRefs(draft) || {}) as Record<string, ReferenceSpec | ReferenceSpec[]>
 
       // Resolve each reference
       for (const [fieldName, refSpec] of Object.entries(refs)) {
@@ -5138,7 +5375,7 @@ function createEntityOperations<T>(
       // Add $errors if onError mode is 'skip' (even if empty, to indicate skip mode was used)
       // or if there are actual errors
       if (errors.length > 0 || options?.onError === 'skip') {
-        resolved.$errors = errors
+        resolved['$errors'] = errors
       }
 
       return resolved as Resolved<T>
@@ -5164,7 +5401,7 @@ function hydrateEntity(
   schema: ParsedSchema
 ): Record<string, unknown> {
   const hydrated: Record<string, unknown> = { ...data }
-  const id = (data.$id || data.id) as string
+  const id = (data['$id'] || data['id']) as string
   const typeName = entity.name
 
   // Add lazy getters for relations
@@ -5185,7 +5422,9 @@ function hydrateEntity(
         const matchedType = (data[`${fieldName}$matchedType`] as string) || field.relatedType!
         const actualRelatedEntity = schema.entities.get(matchedType) || relatedEntity
 
-        const thenableProxy = new Proxy({} as Record<string, unknown>, {
+        // Create a thenable proxy - the empty object target is just a placeholder for the Proxy
+        const proxyTarget: Record<string, unknown> = {}
+        const thenableProxy = new Proxy(proxyTarget, {
           get(target, prop) {
             if (prop === 'then') {
               return (resolve: (value: unknown) => void, reject: (reason: unknown) => void) => {
@@ -5285,13 +5524,13 @@ function hydrateEntity(
                   // Check if any entity of relatedType has this entity in that relation
                   const allRelated = await provider.list(field.relatedType!)
                   for (const candidate of allRelated) {
-                    const candidateId = (candidate.$id || candidate.id) as string
+                    const candidateId = (candidate['$id'] || candidate['id']) as string
                     const related = await provider.related(
                       field.relatedType!,
                       candidateId,
                       relFieldName
                     )
-                    if (related.some((r) => (r.$id || r.id) === id)) {
+                    if (related.some((r) => (r['$id'] || r['id']) === id)) {
                       return hydrateEntity(candidate, relatedEntity, schema)
                     }
                   }

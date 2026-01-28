@@ -204,3 +204,9 @@ export class SemanticSearchError extends DatabaseError {
     this.name = 'SemanticSearchError'
   }
 }
+
+// Re-export CapabilityNotSupportedError for convenience
+export {
+  CapabilityNotSupportedError,
+  isCapabilityNotSupportedError,
+} from './provider-capabilities.js'

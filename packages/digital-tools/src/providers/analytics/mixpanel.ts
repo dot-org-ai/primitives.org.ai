@@ -47,8 +47,8 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
     info: mixpanelInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      projectToken = cfg.projectToken as string
-      apiSecret = cfg.apiSecret as string | undefined
+      projectToken = cfg['projectToken'] as string
+      apiSecret = cfg['apiSecret'] as string | undefined
 
       if (!projectToken) {
         throw new Error('Mixpanel project token is required')
@@ -76,7 +76,7 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
           body: JSON.stringify([testEvent]),
         })
 
-        const result = await response.json() as { status: number }
+        const result = (await response.json()) as { status: number }
 
         return {
           healthy: response.ok && result.status === 1,
@@ -105,7 +105,9 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
           properties: {
             token: projectToken,
             distinct_id: event.userId || event.anonymousId || 'unknown',
-            time: event.timestamp ? Math.floor(event.timestamp.getTime() / 1000) : Math.floor(Date.now() / 1000),
+            time: event.timestamp
+              ? Math.floor(event.timestamp.getTime() / 1000)
+              : Math.floor(Date.now() / 1000),
             $insert_id: `${event.event}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
             ...event.properties,
           },
@@ -119,7 +121,7 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
           body: JSON.stringify([eventData]),
         })
 
-        const result = await response.json() as { status: number }
+        const result = (await response.json()) as { status: number }
         return response.ok && result.status === 1
       } catch (error) {
         console.error('Mixpanel track error:', error)
@@ -143,7 +145,7 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
           body: JSON.stringify([engageData]),
         })
 
-        const result = await response.json() as { status: number }
+        const result = (await response.json()) as { status: number }
         return response.ok && result.status === 1
       } catch (error) {
         console.error('Mixpanel identify error:', error)
@@ -180,7 +182,7 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
           body: JSON.stringify([aliasEvent]),
         })
 
-        const result = await response.json() as { status: number }
+        const result = (await response.json()) as { status: number }
         return response.ok && result.status === 1
       } catch (error) {
         console.error('Mixpanel alias error:', error)
@@ -205,7 +207,7 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
           return null
         }
 
-        const data = await response.json() as {
+        const data = (await response.json()) as {
           name?: string
           description?: string
           query?: AnalyticsQueryOptions
@@ -216,9 +218,9 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
         return {
           id: reportId,
           name: data.name || reportId,
-          description: data.description,
+          ...(data.description !== undefined && { description: data.description }),
           query: data.query || { metrics: [], dateRange: { start: new Date(), end: new Date() } },
-          result: data.result,
+          ...(data.result !== undefined && { result: data.result }),
           createdAt: data.created ? new Date(data.created) : new Date(),
           updatedAt: data.updated ? new Date(data.updated) : new Date(),
         }
@@ -237,10 +239,11 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
         const auth = Buffer.from(`${apiSecret}:`).toString('base64')
 
         // Construct query parameters
-        const params = new URLSearchParams({
-          from_date: query.dateRange.start.toISOString().split('T')[0],
-          to_date: query.dateRange.end.toISOString().split('T')[0],
-        })
+        const params = new URLSearchParams()
+        const fromDate = query.dateRange.start.toISOString().split('T')[0]
+        const toDate = query.dateRange.end.toISOString().split('T')[0]
+        if (fromDate) params.append('from_date', fromDate)
+        if (toDate) params.append('to_date', toDate)
 
         if (query.metrics.length > 0) {
           params.append('event', query.metrics.join(','))
@@ -251,9 +254,7 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
         }
 
         // Use the segmentation endpoint for queries
-        const endpoint = query.dimensions && query.dimensions.length > 0
-          ? 'segmentation'
-          : 'events'
+        const endpoint = query.dimensions && query.dimensions.length > 0 ? 'segmentation' : 'events'
 
         const response = await fetch(`${MIXPANEL_QUERY_URL}/${endpoint}?${params.toString()}`, {
           headers: {
@@ -265,7 +266,7 @@ export function createMixpanelProvider(config: ProviderConfig): AnalyticsProvide
           throw new Error(`Query failed: ${response.statusText}`)
         }
 
-        const data = await response.json() as {
+        const data = (await response.json()) as {
           data?: Record<string, Record<string, number>>
         }
 

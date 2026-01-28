@@ -86,14 +86,14 @@ export function Endpoint<TInput = unknown, TOutput = unknown>(
 ): EndpointDefinition<TInput, TOutput> {
   return {
     name: config.name,
-    description: config.description,
+    ...(config.description !== undefined && { description: config.description }),
     method: config.method || 'POST',
     path: config.path || `/${config.name}`,
-    input: config.input,
-    output: config.output,
+    ...(config.input !== undefined && { input: config.input }),
+    ...(config.output !== undefined && { output: config.output }),
     handler: config.handler,
-    pricing: config.pricing,
-    rateLimit: config.rateLimit,
+    ...(config.pricing !== undefined && { pricing: config.pricing }),
+    ...(config.rateLimit !== undefined && { rateLimit: config.rateLimit }),
     requiresAuth: config.requiresAuth !== false, // Default to true
   }
 }

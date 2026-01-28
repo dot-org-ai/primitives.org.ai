@@ -318,3 +318,98 @@ export function getSymbolProperty<T = unknown>(obj: object, sym: symbol): T | un
 export function asItem<T>(value: unknown): T {
   return value as T
 }
+
+// =============================================================================
+// Draft/Resolve Type Guards
+// =============================================================================
+
+/**
+ * Check if an object is in draft phase.
+ * Draft objects have $phase === 'draft' and may have $refs.
+ */
+export function isDraft(value: unknown): value is Record<string, unknown> & { $phase: 'draft' } {
+  return isPlainObject(value) && value['$phase'] === 'draft'
+}
+
+/**
+ * Check if an object is in resolved phase.
+ * Resolved objects have $phase === 'resolved'.
+ */
+export function isResolved(
+  value: unknown
+): value is Record<string, unknown> & { $phase: 'resolved' } {
+  return isPlainObject(value) && value['$phase'] === 'resolved'
+}
+
+/**
+ * Extract $refs from a draft object safely.
+ * Returns undefined if the value is not a draft or has no $refs.
+ */
+export function extractRefs(value: unknown): Record<string, unknown> | undefined {
+  if (isDraft(value) && isPlainObject(value['$refs'])) {
+    return value['$refs'] as Record<string, unknown>
+  }
+  return undefined
+}
+
+/**
+ * Set a property on a Record safely.
+ * Used to avoid type assertions when setting properties on draft/resolved objects.
+ */
+export function setProperty(obj: Record<string, unknown>, key: string, value: unknown): void {
+  obj[key] = value
+}
+
+// =============================================================================
+// Dynamic Import Type Guards
+// =============================================================================
+
+/**
+ * Validate that a dynamic import result has the expected factory function.
+ * Used to replace dangerous double-casts (as unknown as SomeModule).
+ *
+ * @example
+ * ```ts
+ * const module = await import('@mdxdb/fs')
+ * if (hasFactoryFunction(module, 'createFsProvider')) {
+ *   const provider = module.createFsProvider({ root: './content' })
+ * }
+ * ```
+ */
+export function hasFactoryFunction<T extends string>(
+  module: unknown,
+  functionName: T
+): module is Record<T, (...args: unknown[]) => unknown> {
+  return (
+    module !== null &&
+    typeof module === 'object' &&
+    functionName in module &&
+    typeof (module as Record<string, unknown>)[functionName] === 'function'
+  )
+}
+
+/**
+ * Check if a value is a function.
+ * Useful for validating dynamic imports.
+ */
+export function isFunction(value: unknown): value is (...args: unknown[]) => unknown {
+  return typeof value === 'function'
+}
+
+// =============================================================================
+// Schema Type Guards
+// =============================================================================
+
+/**
+ * Safely access schema metadata fields.
+ * Returns undefined if the field is not present or not the expected type.
+ */
+export function getSchemaMetadata<T>(
+  schema: Record<string, unknown> | undefined,
+  field: string
+): T | undefined {
+  if (!schema || !isPlainObject(schema)) {
+    return undefined
+  }
+  return schema[field] as T | undefined
+}

@@ -17,6 +17,7 @@ import type {
 } from '../transports.js'
 import { registerTransport } from '../transports.js'
 import type { WorkerRef, ApprovalResult, ContactChannel } from '../types.js'
+import { generateRequestId } from '../utils/id.js'
 
 // =============================================================================
 // Email Provider Interface (Provider-Agnostic)
@@ -987,9 +988,7 @@ export class EmailTransport {
       }
 
       if (payload.type === 'approval') {
-        const requestId =
-          (payload.metadata?.['requestId'] as string) ||
-          `apr_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const requestId = (payload.metadata?.['requestId'] as string) || generateRequestId('apr')
 
         const approvalOptions: {
           to: string[]

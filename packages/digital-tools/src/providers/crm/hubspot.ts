@@ -141,15 +141,15 @@ function mapContactFromHubSpot(contact: HubSpotContact): CRMContactData {
   const props = contact.properties || {}
   return {
     id: contact.id,
-    firstName: props.firstname || '',
-    lastName: props.lastname || '',
-    email: props.email,
-    phone: props.phone,
-    company: props.company,
-    title: props.jobtitle,
-    ownerId: props.hubspot_owner_id,
-    createdAt: new Date(props.createdate || contact.createdAt || Date.now()),
-    updatedAt: new Date(props.lastmodifieddate || contact.updatedAt || Date.now()),
+    firstName: props['firstname'] || '',
+    lastName: props['lastname'] || '',
+    ...(props['email'] !== undefined && { email: props['email'] }),
+    ...(props['phone'] !== undefined && { phone: props['phone'] }),
+    ...(props['company'] !== undefined && { company: props['company'] }),
+    ...(props['jobtitle'] !== undefined && { title: props['jobtitle'] }),
+    ...(props['hubspot_owner_id'] !== undefined && { ownerId: props['hubspot_owner_id'] }),
+    createdAt: new Date(props['createdate'] || contact.createdAt || Date.now()),
+    updatedAt: new Date(props['lastmodifieddate'] || contact.updatedAt || Date.now()),
   }
 }
 
@@ -160,23 +160,25 @@ function mapDealFromHubSpot(deal: HubSpotDeal): DealData {
   const props = deal.properties || {}
   return {
     id: deal.id,
-    name: props.dealname || '',
-    value: props.amount ? parseFloat(props.amount) : undefined,
-    currency: props.deal_currency_code,
-    stage: props.dealstage || '',
-    probability: props.hs_deal_stage_probability
-      ? parseFloat(props.hs_deal_stage_probability)
-      : undefined,
-    contactId: props.associatedcontactid,
-    companyId: props.associatedcompanyid,
-    ownerId: props.hubspot_owner_id,
-    closeDate: props.closedate ? new Date(props.closedate) : undefined,
-    createdAt: new Date(props.createdate || deal.createdAt || Date.now()),
-    updatedAt: new Date(props.hs_lastmodifieddate || deal.updatedAt || Date.now()),
-    wonAt: props.hs_date_entered_closedwon ? new Date(props.hs_date_entered_closedwon) : undefined,
-    lostAt: props.hs_date_entered_closedlost
-      ? new Date(props.hs_date_entered_closedlost)
-      : undefined,
+    name: props['dealname'] || '',
+    ...(props['amount'] !== undefined && { value: parseFloat(props['amount']) }),
+    ...(props['deal_currency_code'] !== undefined && { currency: props['deal_currency_code'] }),
+    stage: props['dealstage'] || '',
+    ...(props['hs_deal_stage_probability'] !== undefined && {
+      probability: parseFloat(props['hs_deal_stage_probability']),
+    }),
+    ...(props['associatedcontactid'] !== undefined && { contactId: props['associatedcontactid'] }),
+    ...(props['associatedcompanyid'] !== undefined && { companyId: props['associatedcompanyid'] }),
+    ...(props['hubspot_owner_id'] !== undefined && { ownerId: props['hubspot_owner_id'] }),
+    ...(props['closedate'] !== undefined && { closeDate: new Date(props['closedate']) }),
+    createdAt: new Date(props['createdate'] || deal.createdAt || Date.now()),
+    updatedAt: new Date(props['hs_lastmodifieddate'] || deal.updatedAt || Date.now()),
+    ...(props['hs_date_entered_closedwon'] !== undefined && {
+      wonAt: new Date(props['hs_date_entered_closedwon']),
+    }),
+    ...(props['hs_date_entered_closedlost'] !== undefined && {
+      lostAt: new Date(props['hs_date_entered_closedlost']),
+    }),
   }
 }
 
@@ -187,16 +189,18 @@ function mapActivityFromHubSpot(engagement: HubSpotEngagement, contactId: string
   const props = engagement.properties || {}
   return {
     id: engagement.id,
-    type: props.hs_engagement_type || 'note',
-    subject: props.hs_engagement_subject || '',
-    body: props.hs_note_body || props.hs_email_text || '',
+    type: props['hs_engagement_type'] || 'note',
+    subject: props['hs_engagement_subject'] || '',
+    body: props['hs_note_body'] || props['hs_email_text'] || '',
     contactId,
-    ownerId: props.hubspot_owner_id || '',
-    dueDate: props.hs_task_due_date ? new Date(props.hs_task_due_date) : undefined,
-    completedAt: props.hs_engagement_completed_at
-      ? new Date(props.hs_engagement_completed_at)
-      : undefined,
-    createdAt: new Date(props.hs_createdate || engagement.createdAt || Date.now()),
+    ownerId: props['hubspot_owner_id'] || '',
+    ...(props['hs_task_due_date'] !== undefined && {
+      dueDate: new Date(props['hs_task_due_date']),
+    }),
+    ...(props['hs_engagement_completed_at'] !== undefined && {
+      completedAt: new Date(props['hs_engagement_completed_at']),
+    }),
+    createdAt: new Date(props['hs_createdate'] || engagement.createdAt || Date.now()),
   }
 }
 
@@ -326,10 +330,10 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         lastname: contact.lastName,
       }
 
-      if (contact.email) properties.email = contact.email
-      if (contact.phone) properties.phone = contact.phone
-      if (contact.company) properties.company = contact.company
-      if (contact.title) properties.jobtitle = contact.title
+      if (contact.email) properties['email'] = contact.email
+      if (contact.phone) properties['phone'] = contact.phone
+      if (contact.company) properties['company'] = contact.company
+      if (contact.title) properties['jobtitle'] = contact.title
 
       // Add custom fields
       if (contact.customFields) {
@@ -399,12 +403,12 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
     ): Promise<CRMContactData> {
       const properties: Record<string, string> = {}
 
-      if (updates.firstName !== undefined) properties.firstname = updates.firstName
-      if (updates.lastName !== undefined) properties.lastname = updates.lastName
-      if (updates.email !== undefined) properties.email = updates.email
-      if (updates.phone !== undefined) properties.phone = updates.phone
-      if (updates.company !== undefined) properties.company = updates.company
-      if (updates.title !== undefined) properties.jobtitle = updates.title
+      if (updates.firstName !== undefined) properties['firstname'] = updates.firstName
+      if (updates.lastName !== undefined) properties['lastname'] = updates.lastName
+      if (updates.email !== undefined) properties['email'] = updates.email
+      if (updates.phone !== undefined) properties['phone'] = updates.phone
+      if (updates.company !== undefined) properties['company'] = updates.company
+      if (updates.title !== undefined) properties['jobtitle'] = updates.title
 
       // Add custom fields
       if (updates.customFields) {
@@ -463,9 +467,9 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         const data = (await response.json()) as HubSpotListResponse<HubSpotContact>
         return {
           items: (data.results || []).map(mapContactFromHubSpot),
-          total: data.total,
+          ...(data.total !== undefined && { total: data.total }),
           hasMore: !!data.paging?.next,
-          nextCursor: data.paging?.next?.after,
+          ...(data.paging?.next?.after !== undefined && { nextCursor: data.paging.next.after }),
         }
       } catch (error) {
         throw new Error(
@@ -527,11 +531,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         dealstage: deal.stage,
       }
 
-      if (deal.value !== undefined) properties.amount = String(deal.value)
-      if (deal.currency) properties.deal_currency_code = deal.currency
-      if (deal.closeDate) properties.closedate = deal.closeDate.toISOString()
+      if (deal.value !== undefined) properties['amount'] = String(deal.value)
+      if (deal.currency) properties['deal_currency_code'] = deal.currency
+      if (deal.closeDate) properties['closedate'] = deal.closeDate.toISOString()
       if (deal.probability !== undefined)
-        properties.hs_deal_stage_probability = String(deal.probability)
+        properties['hs_deal_stage_probability'] = String(deal.probability)
 
       try {
         const response = await fetch(`${baseUrl}/objects/deals`, {
@@ -601,13 +605,13 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
     async updateDeal(dealId: string, updates: Partial<CreateDealOptions>): Promise<DealData> {
       const properties: Record<string, string> = {}
 
-      if (updates.name !== undefined) properties.dealname = updates.name
-      if (updates.stage !== undefined) properties.dealstage = updates.stage
-      if (updates.value !== undefined) properties.amount = String(updates.value)
-      if (updates.currency !== undefined) properties.deal_currency_code = updates.currency
-      if (updates.closeDate !== undefined) properties.closedate = updates.closeDate.toISOString()
+      if (updates.name !== undefined) properties['dealname'] = updates.name
+      if (updates.stage !== undefined) properties['dealstage'] = updates.stage
+      if (updates.value !== undefined) properties['amount'] = String(updates.value)
+      if (updates.currency !== undefined) properties['deal_currency_code'] = updates.currency
+      if (updates.closeDate !== undefined) properties['closedate'] = updates.closeDate.toISOString()
       if (updates.probability !== undefined)
-        properties.hs_deal_stage_probability = String(updates.probability)
+        properties['hs_deal_stage_probability'] = String(updates.probability)
 
       try {
         const response = await fetch(`${baseUrl}/objects/deals/${dealId}`, {
@@ -657,9 +661,9 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         const data = (await response.json()) as HubSpotListResponse<HubSpotDeal>
         return {
           items: (data.results || []).map(mapDealFromHubSpot),
-          total: data.total,
+          ...(data.total !== undefined && { total: data.total }),
           hasMore: !!data.paging?.next,
-          nextCursor: data.paging?.next?.after,
+          ...(data.paging?.next?.after !== undefined && { nextCursor: data.paging.next.after }),
         }
       } catch (error) {
         throw new Error(
@@ -691,14 +695,14 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
 
       if (activity.body) {
         if (engagementType === 'NOTE') {
-          properties.hs_note_body = activity.body
+          properties['hs_note_body'] = activity.body
         } else if (engagementType === 'EMAIL') {
-          properties.hs_email_text = activity.body
+          properties['hs_email_text'] = activity.body
         }
       }
 
       if (activity.dueDate) {
-        properties.hs_task_due_date = activity.dueDate.toISOString()
+        properties['hs_task_due_date'] = activity.dueDate.toISOString()
       }
 
       try {

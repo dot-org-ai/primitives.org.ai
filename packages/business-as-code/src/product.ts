@@ -82,7 +82,7 @@ export function getRoadmapByStatus(
   product: ProductDefinition,
   status: RoadmapItem['status']
 ): RoadmapItem[] {
-  return product.roadmap?.filter(item => item.status === status) || []
+  return product.roadmap?.filter((item) => item.status === status) || []
 }
 
 /**
@@ -92,7 +92,7 @@ export function getRoadmapByPriority(
   product: ProductDefinition,
   priority: RoadmapItem['priority']
 ): RoadmapItem[] {
-  return product.roadmap?.filter(item => item.priority === priority) || []
+  return product.roadmap?.filter((item) => item.priority === priority) || []
 }
 
 /**
@@ -102,7 +102,7 @@ export function getOverdueRoadmapItems(product: ProductDefinition): RoadmapItem[
   const now = new Date()
   return (
     product.roadmap?.filter(
-      item =>
+      (item) =>
         item.targetDate &&
         item.targetDate < now &&
         item.status !== 'completed' &&
@@ -119,14 +119,13 @@ export function updateRoadmapItem(
   itemName: string,
   updates: Partial<RoadmapItem>
 ): ProductDefinition {
-  const roadmap = product.roadmap?.map(item =>
+  const roadmap = product.roadmap?.map((item) =>
     item.name === itemName ? { ...item, ...updates } : item
   )
 
-  return {
-    ...product,
-    roadmap,
-  }
+  const result: ProductDefinition = { ...product }
+  if (roadmap !== undefined) result.roadmap = roadmap
+  return result
 }
 
 /**
@@ -145,7 +144,7 @@ export function addFeature(product: ProductDefinition, feature: string): Product
 export function removeFeature(product: ProductDefinition, feature: string): ProductDefinition {
   return {
     ...product,
-    features: product.features?.filter(f => f !== feature) || [],
+    features: product.features?.filter((f) => f !== feature) || [],
   }
 }
 

@@ -240,8 +240,9 @@ export async function prefetchContextPaths(
 
       if (!fetched) {
         // Fetch the related entity
-        fetched = await provider.get(field.relatedType!, entityId)
-        if (fetched) {
+        const fetchedResult = await provider.get(field.relatedType!, entityId)
+        if (fetchedResult) {
+          fetched = fetchedResult
           fetchCache.set(cacheKey, fetched)
         }
       }
@@ -339,7 +340,7 @@ export async function resolveNestedPending(
           provider
         )
         const created = await provider.create(pending.type, undefined, resolvedNested)
-        resolved[fieldName] = created.$id
+        resolved[fieldName] = created['$id']
       }
     }
   }
@@ -419,8 +420,8 @@ export async function resolveReferenceSpec(
   // Create a new entity
   let generatedData: Record<string, unknown> = {}
   const hint = spec.generatedText || spec.prompt || spec.field
-  const parentType = contextData.$type as string | undefined
-  const parentId = contextData.$id as string | undefined
+  const parentType = contextData['$type'] as string | undefined
+  const parentId = contextData['$id'] as string | undefined
 
   // Try AI generation first if available
   if (generateEntityWithAI && parentType) {
@@ -428,14 +429,24 @@ export async function resolveReferenceSpec(
       const aiData = await generateEntityWithAI(
         spec.type,
         hint,
-        { parent: parentType, parentData: contextData, parentId },
+        {
+          parent: parentType,
+          parentData: contextData,
+          ...(parentId !== undefined ? { parentId } : {}),
+        },
         schema
       )
       if (aiData && Object.keys(aiData).length > 0) {
         // Resolve any nested pending relations (from generateEntity)
         generatedData = await resolveNestedPending(aiData, targetEntity, schema, provider)
       }
-    } catch {
+    } catch (error) {
+      // Log AI generation failure for debugging before falling through to placeholder
+      // This prevents silent failures from hiding issues
+      console.debug(
+        `AI generation failed for ${spec.type} (parent: ${parentType}), falling back to placeholder:`,
+        error instanceof Error ? error.message : error
+      )
       // Fall through to placeholder generation
     }
   }
@@ -452,7 +463,7 @@ export async function resolveReferenceSpec(
 
     // Include source entity's $instructions (parent context) and target entity's $instructions
     const sourceInstructions = spec.sourceInstructions
-    const targetInstructions = targetEntity.schema?.$instructions as string | undefined
+    const targetInstructions = targetEntity.schema?.['$instructions'] as string | undefined
     const contextParts: string[] = []
     // Source instructions first (parent context propagation)
     if (sourceInstructions) {
@@ -503,7 +514,7 @@ export async function resolveReferenceSpec(
           type: field.relatedType!,
           matchMode: 'exact',
           resolved: false,
-          prompt: field.prompt,
+          ...(field.prompt !== undefined ? { prompt: field.prompt } : {}),
         }
         const nestedId = await resolveReferenceSpec(
           nestedSpec,
@@ -528,7 +539,7 @@ export async function resolveReferenceSpec(
       parentId || (spec.matchMode === 'fuzzy' ? 'fuzzy-resolution' : 'reference-resolution'),
     $sourceField: spec.field,
   })
-  return created.$id as string
+  return created['$id'] as string
 }
 
 // =============================================================================
@@ -571,7 +582,7 @@ export function hydrateEntity(
   resolveProvider: () => Promise<DBProvider>
 ): Record<string, unknown> {
   const hydrated: Record<string, unknown> = { ...data }
-  const id = (data.$id || data.id) as string
+  const id = (data['$id'] || data['id']) as string
   const typeName = entity.name
 
   // Add lazy getters for relations
@@ -748,13 +759,13 @@ export function hydrateEntity(
                   // Check if any entity of relatedType has this entity in that relation
                   const allRelated = await provider.list(field.relatedType!)
                   for (const candidate of allRelated) {
-                    const candidateId = (candidate.$id || candidate.id) as string
+                    const candidateId = (candidate['$id'] || candidate['id']) as string
                     const related = await provider.related(
                       field.relatedType!,
                       candidateId,
                       relFieldName
                     )
-                    if (related.some((r) => (r.$id || r.id) === id)) {
+                    if (related.some((r) => (r['$id'] || r['id']) === id)) {
                       return hydrateEntity(candidate, relatedEntity, schema, resolveProvider)
                     }
                   }

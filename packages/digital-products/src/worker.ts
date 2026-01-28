@@ -26,6 +26,7 @@
  * @packageDocumentation
  */
 
+// @ts-expect-error cloudflare:workers is a Cloudflare Workers runtime module
 import { WorkerEntrypoint, RpcTarget } from 'cloudflare:workers'
 
 // =============================================================================
@@ -97,6 +98,24 @@ export interface ListOptions {
 }
 
 /**
+ * DurableObjectNamespace type declaration for Cloudflare Workers
+ */
+declare interface DurableObjectNamespace {
+  idFromName(name: string): DurableObjectId
+  idFromString(id: string): DurableObjectId
+  newUniqueId(): DurableObjectId
+  get(id: DurableObjectId): DurableObjectStub
+}
+
+declare interface DurableObjectId {
+  toString(): string
+}
+
+declare interface DurableObjectStub {
+  fetch(request: Request): Promise<Response>
+}
+
+/**
  * Environment bindings for the worker
  */
 export interface Env {
@@ -156,11 +175,11 @@ export class ProductServiceCore extends RpcTarget {
       description: data.description,
       version: data.version,
       status: data.status || 'draft',
-      type: data.type,
-      metadata: data.metadata,
-      tags: data.tags,
       createdAt: now,
       updatedAt: now,
+      ...(data.type !== undefined && { type: data.type }),
+      ...(data.metadata !== undefined && { metadata: data.metadata }),
+      ...(data.tags !== undefined && { tags: data.tags }),
     }
 
     products.set(product.id, product)
@@ -185,13 +204,13 @@ export class ProductServiceCore extends RpcTarget {
 
     const updated: ProductData = {
       ...existing,
-      ...data,
+      ...(data as unknown as Record<string, unknown>),
       id: existing.id, // ID cannot be changed
       createdAt: existing.createdAt, // createdAt cannot be changed
       updatedAt: new Date(),
       // Merge metadata if provided
-      metadata: data.metadata ? { ...existing.metadata, ...data.metadata } : existing.metadata,
-    }
+      ...(data.metadata ? { metadata: { ...existing.metadata, ...data.metadata } } : {}),
+    } as unknown as ProductData
 
     products.set(id, updated)
     return updated
@@ -244,8 +263,8 @@ export class ProductServiceCore extends RpcTarget {
     if (options?.orderBy) {
       const order = options.order || 'asc'
       result.sort((a, b) => {
-        const aVal = (a as Record<string, unknown>)[options.orderBy!]
-        const bVal = (b as Record<string, unknown>)[options.orderBy!]
+        const aVal = (a as unknown as Record<string, unknown>)[options.orderBy!]
+        const bVal = (b as unknown as Record<string, unknown>)[options.orderBy!]
 
         if (typeof aVal === 'string' && typeof bVal === 'string') {
           return order === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
@@ -289,9 +308,9 @@ export class ProductServiceCore extends RpcTarget {
       description: featureData.description,
       status: featureData.status || 'draft',
       productId,
-      metadata: featureData.metadata,
       createdAt: now,
       updatedAt: now,
+      ...(featureData.metadata !== undefined && { metadata: featureData.metadata }),
     }
 
     features.set(feature.id, feature)
@@ -358,10 +377,10 @@ export class ProductServiceCore extends RpcTarget {
       id: generateId(),
       productId,
       version: versionStr,
-      changelog,
       status: 'published',
       createdAt: now,
       publishedAt: now,
+      ...(changelog !== undefined && { changelog }),
     }
 
     versions.set(version.id, version)
@@ -430,10 +449,10 @@ export class ProductServiceCore extends RpcTarget {
       name,
       description: options?.description || '',
       productIds,
-      pricing: options?.pricing,
-      metadata: options?.metadata,
       createdAt: now,
       updatedAt: now,
+      ...(options?.pricing !== undefined && { pricing: options.pricing }),
+      ...(options?.metadata !== undefined && { metadata: options.metadata }),
     }
 
     bundles.set(bundle.id, bundle)
@@ -487,6 +506,9 @@ export class ProductServiceCore extends RpcTarget {
  * with all product management operations.
  */
 export class ProductService extends WorkerEntrypoint<Env> {
+  // Declare env property from WorkerEntrypoint
+  declare env: Env
+
   /**
    * Connect and get an RPC-enabled service
    *

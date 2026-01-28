@@ -40,10 +40,10 @@ export function createHourlyPricing(input: HourlyPricingInput): HourlyPricingCon
     model: 'hourly',
     rate: input.rate,
     currency: input.currency,
-    minimumHours: input.minimumHours,
-    billingIncrement: input.billingIncrement,
-    overtimeRate: input.overtimeRate,
-    overtimeThreshold: input.overtimeThreshold,
+    ...(input.minimumHours !== undefined && { minimumHours: input.minimumHours }),
+    ...(input.billingIncrement !== undefined && { billingIncrement: input.billingIncrement }),
+    ...(input.overtimeRate !== undefined && { overtimeRate: input.overtimeRate }),
+    ...(input.overtimeThreshold !== undefined && { overtimeThreshold: input.overtimeThreshold }),
   }
 }
 
@@ -118,7 +118,9 @@ export interface SubscriptionPricingInput {
   trialRequiresCard?: boolean
 }
 
-export function createSubscriptionPricing(input: SubscriptionPricingInput): SubscriptionPricingConfig {
+export function createSubscriptionPricing(
+  input: SubscriptionPricingInput
+): SubscriptionPricingConfig {
   const annualDiscount = input.annualDiscount ?? 0
 
   return {
@@ -126,12 +128,12 @@ export function createSubscriptionPricing(input: SubscriptionPricingInput): Subs
     monthlyPrice: input.monthlyPrice,
     currency: input.currency,
     billingInterval: input.billingInterval ?? 'monthly',
-    features: input.features,
+    ...(input.features !== undefined && { features: input.features }),
     annualDiscount,
-    limits: input.limits,
-    overageRates: input.overageRates,
-    trialDays: input.trialDays,
-    trialRequiresCard: input.trialRequiresCard,
+    ...(input.limits !== undefined && { limits: input.limits }),
+    ...(input.overageRates !== undefined && { overageRates: input.overageRates }),
+    ...(input.trialDays !== undefined && { trialDays: input.trialDays }),
+    ...(input.trialRequiresCard !== undefined && { trialRequiresCard: input.trialRequiresCard }),
     calculateAnnualPrice: () => {
       const yearlyBase = input.monthlyPrice * 12
       return yearlyBase * (1 - annualDiscount / 100)
@@ -167,7 +169,11 @@ export function createPricingTier(input: PricingTierInput): PricingTier {
 // Calculate Price
 // ============================================================================
 
-export type PricingConfig = HourlyPricingConfig | ProjectPricingConfig | SubscriptionPricingConfig | TieredPricingConfig
+export type PricingConfig =
+  | HourlyPricingConfig
+  | ProjectPricingConfig
+  | SubscriptionPricingConfig
+  | TieredPricingConfig
 
 export interface TieredPricingConfig {
   model: 'tiered'
@@ -198,7 +204,10 @@ export function calculatePrice(pricing: PricingConfig, input: CalculatePriceInpu
   }
 }
 
-function calculateHourlyPrice(pricing: HourlyPricingConfig, input: CalculatePriceInput): PriceResult {
+function calculateHourlyPrice(
+  pricing: HourlyPricingConfig,
+  input: CalculatePriceInput
+): PriceResult {
   let hours = input.hours ?? 0
 
   // Apply minimum hours
@@ -226,7 +235,10 @@ function calculateHourlyPrice(pricing: HourlyPricingConfig, input: CalculatePric
   return { amount, currency: pricing.currency }
 }
 
-function calculateProjectPrice(pricing: ProjectPricingConfig, input: CalculatePriceInput): PriceResult {
+function calculateProjectPrice(
+  pricing: ProjectPricingConfig,
+  input: CalculatePriceInput
+): PriceResult {
   let amount = pricing.basePrice
 
   // Add revision charges
@@ -245,7 +257,10 @@ function calculateProjectPrice(pricing: ProjectPricingConfig, input: CalculatePr
   return { amount, currency: pricing.currency }
 }
 
-function calculateSubscriptionPrice(pricing: SubscriptionPricingConfig, input: CalculatePriceInput): PriceResult {
+function calculateSubscriptionPrice(
+  pricing: SubscriptionPricingConfig,
+  input: CalculatePriceInput
+): PriceResult {
   let amount = pricing.monthlyPrice
 
   // Calculate overage
@@ -264,7 +279,10 @@ function calculateSubscriptionPrice(pricing: SubscriptionPricingConfig, input: C
   return { amount, currency: pricing.currency }
 }
 
-function calculateTieredPrice(pricing: TieredPricingConfig, input: CalculatePriceInput): PriceResult {
+function calculateTieredPrice(
+  pricing: TieredPricingConfig,
+  input: CalculatePriceInput
+): PriceResult {
   const quantity = input.quantity ?? 0
   let amount = 0
   let remaining = quantity
