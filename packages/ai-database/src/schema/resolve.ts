@@ -140,6 +140,135 @@ export async function resolveInstructions(
 }
 
 /**
+ * Find the field in the entity that references a given type
+ */
+function findFieldByRelatedType(
+  entityDef: ParsedEntity,
+  relatedType: string
+): { fieldName: string; field: ParsedField } | undefined {
+  for (const [fieldName, field] of entityDef.fields) {
+    if (field.isRelation && field.relatedType === relatedType) {
+      return { fieldName, field }
+    }
+  }
+  return undefined
+}
+
+/**
+ * Pre-fetch context dependencies declared in $context using dotted paths
+ *
+ * The $context field declares explicit context dependencies that should
+ * be pre-fetched before generating AI fields. Supports dotted paths like
+ * 'Startup.icp.industry' for deeply nested context fetching.
+ *
+ * Context paths can be:
+ * - Simple type names: 'Startup' - finds field that references Startup type
+ * - Dotted paths: 'Startup.icp.industry' - traverses relationships
+ *
+ * @param contextDeps - Array of context dependency paths (e.g., ['Startup', 'Startup.icp.industry'])
+ * @param entity - The current entity data
+ * @param typeName - The current entity type name
+ * @param schema - The parsed schema
+ * @param provider - The database provider for fetching related entities
+ * @returns Map of context path to fetched entity data
+ */
+export async function prefetchContextPaths(
+  contextDeps: string[],
+  entity: Record<string, unknown>,
+  typeName: string,
+  schema: ParsedSchema,
+  provider: DBProvider
+): Promise<Map<string, Record<string, unknown>>> {
+  const contextData = new Map<string, Record<string, unknown>>()
+  const currentEntity = schema.entities.get(typeName)
+  if (!currentEntity) return contextData
+
+  // Track already fetched entities to avoid duplicate fetches
+  // Key: "TypeName:entityId", Value: fetched entity data
+  const fetchCache = new Map<string, Record<string, unknown>>()
+
+  // Deduplicate context deps
+  const uniqueDeps = [...new Set(contextDeps)]
+
+  for (const dep of uniqueDeps) {
+    // Parse the path - could be "Startup" or "Startup.icp.industry"
+    const pathParts = dep.split('.')
+
+    // Start from the current entity and traverse the path
+    let currentData: Record<string, unknown> = entity
+    let currentEntityDef = currentEntity
+    let currentPath = ''
+
+    for (let i = 0; i < pathParts.length; i++) {
+      const part = pathParts[i]!
+      // Try two approaches:
+      // 1. Convert PascalCase type name to camelCase field name
+      // 2. Find field by related type
+      const camelCaseFieldName = part.charAt(0).toLowerCase() + part.slice(1)
+
+      let fieldInfo: { fieldName: string; field: ParsedField } | undefined
+
+      // First try exact field name match
+      const directField = currentEntityDef.fields.get(camelCaseFieldName)
+      if (directField?.isRelation && directField.relatedType) {
+        fieldInfo = { fieldName: camelCaseFieldName, field: directField }
+      }
+
+      // If no direct match, try to find field by related type (e.g., 'Related' -> find field that points to Related)
+      if (!fieldInfo) {
+        fieldInfo = findFieldByRelatedType(currentEntityDef, part)
+      }
+
+      if (!fieldInfo) {
+        // Path invalid - no field found
+        break
+      }
+
+      const { fieldName, field } = fieldInfo
+      currentPath = currentPath ? `${currentPath}.${fieldName}` : fieldName
+
+      // Get the entity ID from current data
+      const entityId = currentData[fieldName]
+      if (typeof entityId !== 'string') {
+        // Path invalid - no entity ID
+        break
+      }
+
+      // Check cache first
+      const cacheKey = `${field.relatedType}:${entityId}`
+      let fetched = fetchCache.get(cacheKey)
+
+      if (!fetched) {
+        // Fetch the related entity
+        fetched = await provider.get(field.relatedType!, entityId)
+        if (fetched) {
+          fetchCache.set(cacheKey, fetched)
+        }
+      }
+
+      if (!fetched) {
+        // Path invalid - entity not found
+        break
+      }
+
+      // Store the result with the actual field name path
+      contextData.set(currentPath, fetched)
+
+      // Update for next iteration
+      currentData = fetched
+      const nextEntityDef = schema.entities.get(field.relatedType!)
+      if (!nextEntityDef) {
+        // Path invalid - entity type not in schema
+        break
+      }
+      currentEntityDef = nextEntityDef
+    }
+  }
+
+  return contextData
+}
+
+/**
  * Pre-fetch context dependencies declared in $context
  *
  * The $context field declares explicit context dependencies that should
@@ -160,43 +289,8 @@ export async function prefetchContext(
   schema: ParsedSchema,
   provider: DBProvider
 ): Promise<Map<string, Record<string, unknown>>> {
-  const contextData = new Map<string, Record<string, unknown>>()
-  const currentEntity = schema.entities.get(typeName)
-  if (!currentEntity) return contextData
-
-  for (const dep of contextDeps) {
-    // Convert to camelCase for field lookup (e.g., "Startup" -> "startup")
-    const fieldName = dep.charAt(0).toLowerCase() + dep.slice(1)
-
-    // Check if we have a field that references this type
-    const field = currentEntity.fields.get(fieldName)
-    if (field?.isRelation && field.relatedType) {
-      const entityId = entity[fieldName]
-      if (typeof entityId === 'string') {
-        const fetched = await provider.get(field.relatedType, entityId)
-        if (fetched) {
-          contextData.set(fieldName, fetched)
-          // Also store nested relationships
-          const relatedEntity = schema.entities.get(field.relatedType)
-          if (relatedEntity) {
-            for (const [nestedFieldName, nestedField] of relatedEntity.fields) {
-              if (nestedField.isRelation && nestedField.relatedType) {
-                const nestedId = fetched[nestedFieldName]
-                if (typeof nestedId === 'string') {
-                  const nestedFetched = await provider.get(nestedField.relatedType, nestedId)
-                  if (nestedFetched) {
-                    contextData.set(`${fieldName}.${nestedFieldName}`, nestedFetched)
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return contextData
+  // Use the new path-based implementation which handles both simple and dotted paths
+  return prefetchContextPaths(contextDeps, entity, typeName, schema, provider)
 }
 
 /**

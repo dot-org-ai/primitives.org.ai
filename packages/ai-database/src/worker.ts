@@ -630,6 +630,24 @@ export class DatabaseDO extends DurableObjectBase {
         return this.handleGetVersion()
       }
 
+      // Route: /query/list (GET for simple, POST for complex)
+      if (path === '/query/list' && method === 'GET') {
+        return this.handleQueryList(url)
+      }
+      if (path === '/query/list' && method === 'POST') {
+        return this.handleQueryListPost(request)
+      }
+
+      // Route: /query/find (POST)
+      if (path === '/query/find' && method === 'POST') {
+        return this.handleQueryFind(request)
+      }
+
+      // Route: /query/search (POST)
+      if (path === '/query/search' && method === 'POST') {
+        return this.handleQuerySearch(request)
+      }
+
       return Response.json({ error: 'Not found' }, { status: 404 })
     } catch (err: any) {
       return Response.json({ error: err.message || 'Internal error' }, { status: 500 })
@@ -997,6 +1015,348 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ version: 1 })
     }
     return Response.json({ version: parseInt((rows[0] as any).value, 10) })
+  }
+
+  // ===========================================================================
+  // Query handlers
+  // ===========================================================================
+
+  /**
+   * Validate a field name to prevent SQL injection.
+   * Only allows alphanumeric characters, underscores, and dots for nested fields.
+   */
+  private isValidFieldName(fieldName: string): boolean {
+    return /^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$/.test(fieldName)
+  }
+
+  /**
+   * Build SQL WHERE clause from a where object.
+   * Returns [clause, params] tuple where clause includes the WHERE keyword.
+   */
+  /**
+   * Convert a value for SQLite JSON comparison.
+   * Booleans need to be converted to 1/0 because SQLite stores JSON booleans as integers.
+   */
+  private toSqliteValue(value: unknown): unknown {
+    if (typeof value === 'boolean') {
+      return value ? 1 : 0
+    }
+    return value
+  }
+
+  private buildWhereClause(
+    type: string,
+    where?: Record<string, unknown>
+  ): { clause: string; params: unknown[] } {
+    const conditions: string[] = ['type = ?']
+    const params: unknown[] = [type]
+
+    if (where) {
+      for (const [field, value] of Object.entries(where)) {
+        // Validate field name to prevent injection
+        if (!this.isValidFieldName(field)) {
+          continue // Skip invalid field names silently
+        }
+
+        // Handle nested field paths like "profile.location"
+        const jsonPath = field.includes('.') ? `$.${field}` : `$.${field}`
+
+        if (value === null) {
+          conditions.push(`json_extract(data, ?) IS NULL`)
+          params.push(jsonPath)
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          // Handle operators: $gt, $lt, $gte, $lte, $in, $ne
+          const ops = value as Record<string, unknown>
+          for (const [op, opValue] of Object.entries(ops)) {
+            const sqliteValue = this.toSqliteValue(opValue)
+            switch (op) {
+              case '$gt':
+                conditions.push(`json_extract(data, ?) > ?`)
+                params.push(jsonPath, sqliteValue)
+                break
+              case '$lt':
+                conditions.push(`json_extract(data, ?) < ?`)
+                params.push(jsonPath, sqliteValue)
+                break
+              case '$gte':
+                conditions.push(`json_extract(data, ?) >= ?`)
+                params.push(jsonPath, sqliteValue)
+                break
+              case '$lte':
+                conditions.push(`json_extract(data, ?) <= ?`)
+                params.push(jsonPath, sqliteValue)
+                break
+              case '$ne':
+                conditions.push(`json_extract(data, ?) != ?`)
+                params.push(jsonPath, sqliteValue)
+                break
+              case '$in':
+                if (Array.isArray(opValue) && opValue.length > 0) {
+                  const placeholders = opValue.map(() => '?').join(',')
+                  conditions.push(`json_extract(data, ?) IN (${placeholders})`)
+                  params.push(jsonPath, ...opValue.map((v) => this.toSqliteValue(v)))
+                }
+                break
+            }
+          }
+        } else {
+          // Simple equality - convert booleans to 1/0 for SQLite JSON comparison
+          conditions.push(`json_extract(data, ?) = ?`)
+          params.push(jsonPath, this.toSqliteValue(value))
+        }
+      }
+    }
+
+    return {
+      clause: conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '',
+      params,
+    }
+  }
+
+  /**
+   * Build ORDER BY clause from orderBy and order parameters.
+   */
+  private buildOrderByClause(orderBy?: string | null, order?: string | null): string {
+    if (!orderBy || !this.isValidFieldName(orderBy)) {
+      return ' ORDER BY rowid ASC'
+    }
+
+    const direction = order?.toLowerCase() === 'desc' ? 'DESC' : 'ASC'
+    const jsonPath = `$.${orderBy}`
+    return ` ORDER BY json_extract(data, '${jsonPath}') ${direction}`
+  }
+
+  /**
+   * Handle GET /query/list - simple query via URL params
+   */
+  private handleQueryList(url: URL): Response {
+    const type = url.searchParams.get('type')
+
+    if (!type) {
+      return Response.json({ error: 'type parameter is required' }, { status: 400 })
+    }
+
+    const limit = url.searchParams.get('limit')
+    const offset = url.searchParams.get('offset')
+    const orderBy = url.searchParams.get('orderBy')
+    const order = url.searchParams.get('order')
+
+    const { clause, params } = this.buildWhereClause(type)
+    let query = `SELECT * FROM _data${clause}`
+    query += this.buildOrderByClause(orderBy, order)
+
+    const limitNum = limit ? parseInt(limit, 10) : null
+    const offsetNum = offset ? parseInt(offset, 10) : null
+
+    // OFFSET requires LIMIT in SQLite, so add a very large default LIMIT if offset is specified without limit
+    if (offsetNum !== null && offsetNum >= 0) {
+      if (limitNum !== null && limitNum >= 0) {
+        query += ' LIMIT ?'
+        params.push(limitNum)
+      } else {
+        // Use a very large limit when only offset is specified
+        query += ' LIMIT -1'
+      }
+      query += ' OFFSET ?'
+      params.push(offsetNum)
+    } else if (limitNum !== null && limitNum >= 0) {
+      query += ' LIMIT ?'
+      params.push(limitNum)
+    }
+
+    const rows = this.sql.exec(query, ...params).toArray()
+    const results = rows.map((row: any) => this.deserializeDataRow(row))
+    return Response.json(results)
+  }
+
+  /**
+   * Handle POST /query/list - complex query via JSON body
+   */
+  private async handleQueryListPost(request: Request): Promise<Response> {
+    let body: Record<string, any>
+    try {
+      body = (await request.json()) as Record<string, any>
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const { type, where, orderBy, order, limit, offset } = body
+
+    if (!type) {
+      return Response.json({ error: 'type field is required' }, { status: 400 })
+    }
+
+    const { clause, params } = this.buildWhereClause(type, where)
+    let query = `SELECT * FROM _data${clause}`
+    query += this.buildOrderByClause(orderBy, order)
+
+    // OFFSET requires LIMIT in SQLite, so add a very large default LIMIT if offset is specified without limit
+    if (typeof offset === 'number' && offset >= 0) {
+      if (typeof limit === 'number' && limit >= 0) {
+        query += ' LIMIT ?'
+        params.push(limit)
+      } else {
+        // Use a very large limit when only offset is specified
+        query += ' LIMIT -1'
+      }
+      query += ' OFFSET ?'
+      params.push(offset)
+    } else if (typeof limit === 'number' && limit >= 0) {
+      query += ' LIMIT ?'
+      params.push(limit)
+    }
+
+    const rows = this.sql.exec(query, ...params).toArray()
+    const results = rows.map((row: any) => this.deserializeDataRow(row))
+    return Response.json(results)
+  }
+
+  /**
+   * Handle POST /query/find - find first matching record
+   */
+  private async handleQueryFind(request: Request): Promise<Response> {
+    let body: Record<string, any>
+    try {
+      body = (await request.json()) as Record<string, any>
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const { type, where, orderBy, order } = body
+
+    if (!type) {
+      return Response.json({ error: 'type field is required' }, { status: 400 })
+    }
+
+    const { clause, params } = this.buildWhereClause(type, where)
+    let query = `SELECT * FROM _data${clause}`
+    query += this.buildOrderByClause(orderBy, order)
+    query += ' LIMIT 1'
+
+    const rows = this.sql.exec(query, ...params).toArray()
+
+    if (rows.length === 0) {
+      return Response.json(null)
+    }
+
+    return Response.json(this.deserializeDataRow(rows[0] as any))
+  }
+
+  /**
+   * Escape special characters in LIKE patterns
+   */
+  private escapeLikePattern(pattern: string): string {
+    // Escape %, _, and \ for LIKE
+    return pattern.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
+  }
+
+  /**
+   * Calculate a simple relevance score based on term matches
+   */
+  private calculateRelevanceScore(text: string, query: string): number {
+    const lowerText = text.toLowerCase()
+    const lowerQuery = query.toLowerCase()
+    const terms = lowerQuery.split(/\s+/).filter((t) => t.length > 0)
+
+    if (terms.length === 0) return 0
+
+    let matchCount = 0
+    let exactMatch = lowerText.includes(lowerQuery)
+
+    for (const term of terms) {
+      if (lowerText.includes(term)) {
+        matchCount++
+      }
+    }
+
+    // Score: exact match gets bonus, then percentage of terms matched
+    const baseScore = matchCount / terms.length
+    return exactMatch ? Math.min(1, baseScore + 0.3) : baseScore
+  }
+
+  /**
+   * Handle POST /query/search - full-text search
+   */
+  private async handleQuerySearch(request: Request): Promise<Response> {
+    let body: Record<string, any>
+    try {
+      body = (await request.json()) as Record<string, any>
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const { type, query: searchQuery, fields, minScore, limit } = body
+
+    if (!type) {
+      return Response.json({ error: 'type field is required' }, { status: 400 })
+    }
+
+    if (!searchQuery || typeof searchQuery !== 'string') {
+      return Response.json({ error: 'query field is required' }, { status: 400 })
+    }
+
+    // Escape the search query for LIKE
+    const escapedQuery = this.escapeLikePattern(searchQuery)
+    const likePattern = `%${escapedQuery}%`
+
+    // Get all records of this type
+    const rows = this.sql.exec('SELECT * FROM _data WHERE type = ?', type).toArray()
+
+    // Filter and score results
+    const results: Array<{ row: any; score: number }> = []
+
+    for (const row of rows) {
+      const record = this.deserializeDataRow(row as any)
+      const data = record.data as Record<string, unknown>
+
+      // Determine which fields to search
+      const searchFields =
+        Array.isArray(fields) && fields.length > 0
+          ? fields
+          : Object.keys(data).filter(
+              (k) => typeof data[k] === 'string' || typeof data[k] === 'number'
+            )
+
+      // Search across fields
+      let maxScore = 0
+      let hasMatch = false
+
+      for (const field of searchFields) {
+        const value = data[field]
+        if (value === undefined || value === null) continue
+
+        const stringValue = String(value)
+        // Case-insensitive comparison
+        if (stringValue.toLowerCase().includes(searchQuery.toLowerCase())) {
+          hasMatch = true
+          const fieldScore = this.calculateRelevanceScore(stringValue, searchQuery)
+          maxScore = Math.max(maxScore, fieldScore)
+        }
+      }
+
+      if (hasMatch) {
+        // Apply minScore filter
+        if (typeof minScore === 'number' && maxScore < minScore) {
+          continue
+        }
+        results.push({ row: record, score: maxScore })
+      }
+    }
+
+    // Sort by score descending
+    results.sort((a, b) => b.score - a.score)
+
+    // Apply limit
+    const limitNum = typeof limit === 'number' && limit > 0 ? limit : results.length
+    const limited = results.slice(0, limitNum)
+
+    // Add score to results
+    const finalResults = limited.map(({ row, score }) => ({
+      ...row,
+      $score: score,
+    }))
+
+    return Response.json(finalResults)
   }
 
   // ===========================================================================

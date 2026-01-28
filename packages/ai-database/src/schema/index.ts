@@ -107,6 +107,7 @@ export {
   resolveContextPath,
   resolveInstructions,
   prefetchContext,
+  prefetchContextPaths,
   isPromptField,
   resolveNestedPending,
   resolveReferenceSpec,
