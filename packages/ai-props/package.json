@@ -13,6 +13,10 @@
     "./worker": {
       "import": "./dist/worker.js",
       "types": "./dist/worker.d.ts"
+    },
+    "./mdx": {
+      "import": "./dist/mdx.js",
+      "types": "./dist/mdx.d.ts"
     }
   },
   "scripts": {

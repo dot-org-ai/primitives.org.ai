@@ -99,6 +99,30 @@ export { toExpanded, toFlat, Verbs, resolveUrl, resolveShortUrl, parseUrl } from
 // Re-export semantic types
 export type { EmbeddingsConfig } from './semantic.js'
 
+// Re-export from schema/ modules (only items not defined locally in this file)
+export {
+  // AI Generation configuration
+  configureAIGeneration,
+  getAIGenerationConfig,
+  // Cascade functions
+  setValueGenerator,
+  getValueGenerator,
+  // Entity operations
+  createEntityOperations,
+  createEdgeEntityOperations,
+  // Verb derivation
+  FORWARD_TO_REVERSE,
+  BIDIRECTIONAL_PAIRS,
+  deriveReverseVerb,
+  fieldNameToVerb,
+  isPassiveVerb,
+  registerVerbPair,
+  registerBidirectionalPair,
+  registerFieldVerb,
+} from './schema/index.js'
+
+export type { AIGenerationConfig, EntityOperationsConfig } from './schema/index.js'
+
 // Re-export linguistic utilities from linguistic.ts
 export {
   conjugate,

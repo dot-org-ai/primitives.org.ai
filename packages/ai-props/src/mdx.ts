@@ -4,347 +4,424 @@
  * Provides utilities for parsing MDX content, extracting component schemas,
  * and rendering with AI-generated props.
  *
+ * Key features:
+ * - Content-hash based caching for parsed MDX
+ * - Parallel prop generation for multiple components
+ * - Streaming-ready architecture
+ * - Graceful error handling with detailed messages
+ *
  * @packageDocumentation
  */
 
 import { generateObject } from 'ai-functions'
-import type { SimpleSchema } from 'ai-functions'
 import { getDefaultCache, createCacheKey } from './cache.js'
+import {
+  hashContent,
+  parseYAML,
+  extractComponents,
+  extractPropsFromTag,
+  extractComponentProps,
+  validateMDX,
+  serializeProps,
+  createMDXCacheKey,
+  MDX_CACHE_TTL,
+  createParseError,
+} from './mdx-utils.js'
+
+// Re-export types from mdx-types.ts
+export type {
+  ParsedMDX,
+  ComponentSchemas,
+  MDXPropsGeneratorOptions,
+  MDXPropsGenerator,
+  RenderMDXOptions,
+  CompileMDXOptions,
+  CompiledMDXFunction,
+  StreamMDXOptions,
+  MDXCacheEntry,
+  MDXParseError,
+  CacheInvalidationStrategy,
+  MDXCacheOptions,
+  MDXCacheStats,
+} from './mdx-types.js'
+
+import type {
+  ParsedMDX,
+  ComponentSchemas,
+  MDXPropsGeneratorOptions,
+  MDXPropsGenerator,
+  RenderMDXOptions,
+  CompileMDXOptions,
+  CompiledMDXFunction,
+  StreamMDXOptions,
+  MDXCacheEntry,
+  MDXCacheOptions,
+  MDXCacheStats,
+} from './mdx-types.js'
+
+// ============================================================================
+// Parsed MDX Cache
+// ============================================================================
 
 /**
- * Result of parsing MDX content
+ * LRU cache for parsed MDX content with advanced invalidation strategies
+ *
+ * Features:
+ * - Content-hash based lookups for efficient cache hits
+ * - TTL-based expiration
+ * - LRU eviction when at capacity
+ * - Tag-based invalidation for grouped cache clearing
+ * - Cache statistics for monitoring
+ *
+ * @example
+ * ```ts
+ * const cache = new MDXParseCache({ maxSize: 200, ttl: 10 * 60 * 1000 })
+ *
+ * // Set with tags for group invalidation
+ * cache.set('hash123', parsed, ['component:Hero', 'page:home'])
+ *
+ * // Invalidate all entries tagged with 'page:home'
+ * cache.invalidateByTag('page:home')
+ *
+ * // Get cache statistics
+ * const stats = cache.getStats()
+ * console.log(`Hit ratio: ${stats.hitRatio}`)
+ * ```
  */
-export interface ParsedMDX {
-  /** Original MDX content */
-  content: string
-  /** Body content without frontmatter */
-  body: string
-  /** Parsed frontmatter data */
-  frontmatter: Record<string, unknown>
-  /** List of component names found in MDX */
-  components: string[]
-  /** Props extracted from components */
-  componentProps: Record<string, Record<string, unknown>>
-}
+class MDXParseCache {
+  private cache = new Map<string, MDXCacheEntry & { tags?: string[] }>()
+  private tagIndex = new Map<string, Set<string>>() // tag -> set of cache keys
+  private maxSize: number
+  private ttl: number
+  private hits = 0
+  private misses = 0
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null
 
-/**
- * Component schema definitions
- * Each component maps to an object schema (key -> description string)
- */
-export type ComponentSchemas = Record<string, Record<string, string>>
+  constructor(options: MDXCacheOptions = {}) {
+    this.maxSize = options.maxSize ?? 100
+    this.ttl = options.ttl ?? MDX_CACHE_TTL
 
-/**
- * Options for creating an MDX props generator
- */
-export interface MDXPropsGeneratorOptions {
-  /** Schemas for components */
-  schemas: ComponentSchemas
-  /** Whether to cache generated props */
-  cache?: boolean
-  /** Model to use for generation */
-  model?: string
-}
+    // Set up automatic cleanup if enabled
+    if (options.autoCleanup) {
+      const interval = options.cleanupInterval ?? 60000
+      this.cleanupTimer = setInterval(() => this.cleanup(), interval)
+    }
+  }
 
-/**
- * MDX props generator instance
- */
-export interface MDXPropsGenerator {
-  /** Generate props for components in MDX */
-  generate: (mdx: string) => Promise<Record<string, Record<string, unknown>>>
-}
-
-/**
- * Options for rendering MDX with props
- */
-export interface RenderMDXOptions {
-  /** Custom component renderers */
-  components?: Record<string, (props: Record<string, unknown>) => string>
-  /** Enable streaming render */
-  stream?: boolean
-}
-
-/**
- * Options for compiling MDX
- */
-export interface CompileMDXOptions {
-  /** Custom component map */
-  components?: Record<string, (props: Record<string, unknown>) => string>
-}
-
-/**
- * Compiled MDX function type
- */
-export interface CompiledMDXFunction {
-  (props: Record<string, Record<string, unknown>>): string
-  /** Exported metadata from MDX */
-  metadata?: Record<string, unknown>
-}
-
-/**
- * Parse YAML frontmatter
- */
-function parseYAML(yaml: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  const lines = yaml.trim().split('\n')
-  let currentKey: string | null = null
-  let currentArray: unknown[] | null = null
-
-  for (const line of lines) {
-    // Skip empty lines
-    if (!line.trim()) continue
-
-    // Check for array item
-    const arrayMatch = line.match(/^(\s*)-\s*(.*)$/)
-    if (arrayMatch && arrayMatch[2] !== undefined && currentArray !== null) {
-      const value = parseYAMLValue(arrayMatch[2].trim())
-      currentArray.push(value)
-      continue
+  /**
+   * Get cached parse result by content hash
+   *
+   * @param hash - Content hash key
+   * @returns Parsed MDX or undefined if not found/expired
+   */
+  get(hash: string): ParsedMDX | undefined {
+    const entry = this.cache.get(hash)
+    if (!entry) {
+      this.misses++
+      return undefined
     }
 
-    // Check for key-value pair
-    const keyMatch = line.match(/^(\w+):\s*(.*)$/)
-    if (keyMatch && keyMatch[1] !== undefined && keyMatch[2] !== undefined) {
-      const key = keyMatch[1]
-      const value = keyMatch[2].trim()
+    // Check TTL
+    if (Date.now() - entry.timestamp > this.ttl) {
+      this.evict(hash)
+      this.misses++
+      return undefined
+    }
 
-      // If the value is empty, this might be a multi-line value or array
-      if (value === '') {
-        currentKey = key
-        currentArray = []
-        result[key] = currentArray
+    // Move to end (LRU)
+    this.cache.delete(hash)
+    this.cache.set(hash, entry)
+
+    this.hits++
+    return entry.parsed
+  }
+
+  /**
+   * Set cached parse result with optional tags
+   *
+   * @param hash - Content hash key
+   * @param parsed - Parsed MDX result
+   * @param tags - Optional tags for group invalidation
+   */
+  set(hash: string, parsed: ParsedMDX, tags?: string[]): void {
+    // Evict oldest if at capacity
+    while (this.cache.size >= this.maxSize) {
+      const oldest = this.cache.keys().next().value
+      if (oldest) {
+        this.evict(oldest)
       } else {
-        result[key] = parseYAMLValue(value)
-        currentKey = null
-        currentArray = null
+        break
+      }
+    }
+
+    const entry: MDXCacheEntry & { tags?: string[] } = {
+      hash,
+      parsed,
+      timestamp: Date.now(),
+    }
+
+    if (tags) {
+      entry.tags = tags
+    }
+
+    this.cache.set(hash, entry)
+
+    // Update tag index
+    if (tags) {
+      for (const tag of tags) {
+        if (!this.tagIndex.has(tag)) {
+          this.tagIndex.set(tag, new Set())
+        }
+        this.tagIndex.get(tag)!.add(hash)
       }
     }
   }
 
-  return result
-}
-
-/**
- * Parse a YAML value
- */
-function parseYAMLValue(value: string): unknown {
-  // Boolean
-  if (value === 'true') return true
-  if (value === 'false') return false
-
-  // Number
-  const num = Number(value)
-  if (!isNaN(num) && value !== '') return num
-
-  // String (remove quotes if present)
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    return value.slice(1, -1)
+  /**
+   * Invalidate a specific cache entry
+   *
+   * @param hash - Content hash key to invalidate
+   * @returns True if entry was found and removed
+   */
+  invalidate(hash: string): boolean {
+    return this.evict(hash)
   }
 
-  // Check for invalid YAML (incomplete objects/arrays)
-  if (value.startsWith('[') && !value.endsWith(']')) {
-    throw new Error('Invalid YAML: unclosed array')
+  /**
+   * Invalidate all cache entries with a specific tag
+   *
+   * Use this for grouped invalidation, e.g., when a component schema changes
+   * or when refreshing all entries for a specific page.
+   *
+   * @param tag - Tag to invalidate
+   * @returns Number of entries invalidated
+   *
+   * @example
+   * ```ts
+   * // Invalidate all Hero component cache entries
+   * cache.invalidateByTag('component:Hero')
+   *
+   * // Invalidate all entries for a specific page
+   * cache.invalidateByTag('page:/products')
+   * ```
+   */
+  invalidateByTag(tag: string): number {
+    const keys = this.tagIndex.get(tag)
+    if (!keys) return 0
+
+    let count = 0
+    for (const hash of keys) {
+      if (this.evict(hash)) {
+        count++
+      }
+    }
+
+    this.tagIndex.delete(tag)
+    return count
   }
-  if (value.startsWith('{') && !value.endsWith('}')) {
-    throw new Error('Invalid YAML: unclosed object')
+
+  /**
+   * Invalidate all entries matching a tag pattern
+   *
+   * @param pattern - Regex pattern to match tags
+   * @returns Number of entries invalidated
+   *
+   * @example
+   * ```ts
+   * // Invalidate all component-related entries
+   * cache.invalidateByTagPattern(/^component:/)
+   * ```
+   */
+  invalidateByTagPattern(pattern: RegExp): number {
+    let count = 0
+    for (const tag of this.tagIndex.keys()) {
+      if (pattern.test(tag)) {
+        count += this.invalidateByTag(tag)
+      }
+    }
+    return count
   }
 
-  return value
-}
+  /**
+   * Clear all cached entries
+   */
+  clear(): void {
+    this.cache.clear()
+    this.tagIndex.clear()
+    this.hits = 0
+    this.misses = 0
+  }
 
-/**
- * Extract components from MDX content
- */
-function extractComponents(content: string): string[] {
-  const components = new Set<string>()
+  /**
+   * Get current cache size
+   */
+  get size(): number {
+    return this.cache.size
+  }
 
-  // Match JSX component tags (PascalCase)
-  // Self-closing: <Component />
-  // Opening: <Component>
-  const tagRegex = /<([A-Z][a-zA-Z0-9]*)(?:\s|>|\/)/g
-  let match
-
-  while ((match = tagRegex.exec(content)) !== null) {
-    if (match[1]) {
-      components.add(match[1])
+  /**
+   * Get cache statistics
+   *
+   * @returns Cache statistics including hit ratio
+   */
+  getStats(): MDXCacheStats {
+    const total = this.hits + this.misses
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      size: this.cache.size,
+      maxSize: this.maxSize,
+      hitRatio: total > 0 ? this.hits / total : 0,
     }
   }
 
-  return Array.from(components)
-}
+  /**
+   * Remove expired entries
+   *
+   * @returns Number of entries removed
+   */
+  cleanup(): number {
+    const now = Date.now()
+    let removed = 0
 
-/**
- * Extract props from component tags
- */
-function extractPropsFromTag(tag: string): Record<string, unknown> {
-  const props: Record<string, unknown> = {}
-
-  // First, extract string props: name="value"
-  const stringPropRegex = /(\w+)="([^"]*)"/g
-  let match
-
-  while ((match = stringPropRegex.exec(tag)) !== null) {
-    const name = match[1]
-    const value = match[2]
-    if (name !== undefined && value !== undefined) {
-      props[name] = value
+    for (const [hash, entry] of this.cache) {
+      if (now - entry.timestamp > this.ttl) {
+        this.evict(hash)
+        removed++
+      }
     }
+
+    return removed
   }
 
-  // Extract expression props: name={expression}
-  const exprPropRegex = /(\w+)=\{([^}]*)\}/g
-  while ((match = exprPropRegex.exec(tag)) !== null) {
-    const name = match[1]
-    const exprValue = match[2]
-    if (name !== undefined && exprValue !== undefined) {
-      try {
-        // Try to parse as JSON
-        props[name] = JSON.parse(exprValue)
-      } catch {
-        // Try to evaluate simple expressions
-        if (exprValue === 'true') {
-          props[name] = true
-        } else if (exprValue === 'false') {
-          props[name] = false
-        } else if (!isNaN(Number(exprValue))) {
-          props[name] = Number(exprValue)
-        } else {
-          // Keep as expression string
-          props[name] = exprValue
+  /**
+   * Destroy the cache and cleanup timers
+   */
+  destroy(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer)
+      this.cleanupTimer = null
+    }
+    this.clear()
+  }
+
+  /**
+   * Internal method to evict a cache entry and update tag index
+   */
+  private evict(hash: string): boolean {
+    const entry = this.cache.get(hash)
+    if (!entry) return false
+
+    // Remove from tag index
+    if (entry.tags) {
+      for (const tag of entry.tags) {
+        const keys = this.tagIndex.get(tag)
+        if (keys) {
+          keys.delete(hash)
+          if (keys.size === 0) {
+            this.tagIndex.delete(tag)
+          }
         }
       }
     }
-  }
 
-  // Extract boolean props (word not followed by =)
-  // Find all words that appear after whitespace and are not followed by =
-  // Pattern: whitespace + word + (end, whitespace, > or /)
-  const booleanPropRegex = /\s([a-z][a-zA-Z0-9]*)(?=\s|>|\/|$)/g
-  while ((match = booleanPropRegex.exec(tag)) !== null) {
-    const name = match[1]
-    // Only add if not already defined (to avoid overwriting)
-    if (name !== undefined && !(name in props)) {
-      props[name] = true
-    }
+    return this.cache.delete(hash)
   }
+}
 
-  return props
+// Global parse cache instance
+let parseCache = new MDXParseCache()
+
+/**
+ * Configure the global MDX parse cache
+ *
+ * @param options - Cache configuration options
+ *
+ * @example
+ * ```ts
+ * // Configure with larger cache and longer TTL
+ * configureMDXCache({
+ *   maxSize: 500,
+ *   ttl: 30 * 60 * 1000, // 30 minutes
+ *   autoCleanup: true,
+ * })
+ * ```
+ */
+export function configureMDXCache(options: MDXCacheOptions): void {
+  // Destroy old cache to clean up timers
+  parseCache.destroy()
+  parseCache = new MDXParseCache(options)
 }
 
 /**
- * Extract component props from MDX content
+ * Get MDX cache statistics
+ *
+ * Useful for monitoring cache performance and tuning configuration.
+ *
+ * @returns Cache statistics
+ *
+ * @example
+ * ```ts
+ * const stats = getMDXCacheStats()
+ * console.log(`Cache hit ratio: ${(stats.hitRatio * 100).toFixed(1)}%`)
+ * console.log(`Cache size: ${stats.size}/${stats.maxSize}`)
+ * ```
  */
-function extractComponentProps(content: string): Record<string, Record<string, unknown>> {
-  const componentProps: Record<string, Record<string, unknown>> = {}
-
-  // Match full component tags (including multi-line)
-  // Use [\s\S]*? to match across lines non-greedily
-  const tagRegex = /<([A-Z][a-zA-Z0-9]*)([\s\S]*?)(?:\/>|>)/g
-  let match
-
-  while ((match = tagRegex.exec(content)) !== null) {
-    const componentName = match[1]
-    const propsStr = match[2]
-    if (componentName === undefined || propsStr === undefined) continue
-
-    const props = extractPropsFromTag(propsStr)
-
-    if (Object.keys(props).length > 0) {
-      // Merge with existing props for this component
-      componentProps[componentName] = {
-        ...componentProps[componentName],
-        ...props,
-      }
-    }
-  }
-
-  return componentProps
+export function getMDXCacheStats(): MDXCacheStats {
+  return parseCache.getStats()
 }
 
 /**
- * Validate MDX syntax
+ * Invalidate MDX cache entries by tag
+ *
+ * @param tag - Tag to invalidate
+ * @returns Number of entries invalidated
  */
-function validateMDX(content: string): void {
-  // Check for incomplete tags at the end of content
-  // A tag is incomplete if it starts with < and capital letter but content ends without >
-  // We need to find all < followed by capital letter and check if they have matching >
-  const tagStarts: Array<{ name: string; index: number }> = []
-  const tagStartRegex = /<([A-Z][a-zA-Z0-9]*)/g
-  let match
+export function invalidateMDXCacheByTag(tag: string): number {
+  return parseCache.invalidateByTag(tag)
+}
 
-  while ((match = tagStartRegex.exec(content)) !== null) {
-    const name = match[1]
-    if (name !== undefined) {
-      tagStarts.push({ name, index: match.index })
-    }
-  }
+/**
+ * Cleanup expired MDX cache entries
+ *
+ * @returns Number of entries removed
+ */
+export function cleanupMDXCache(): number {
+  return parseCache.cleanup()
+}
 
-  // For each tag start, check if there's a closing > before the next tag start or end
-  for (let i = 0; i < tagStarts.length; i++) {
-    const start = tagStarts[i]
-    if (!start) continue
-    const endBound = tagStarts[i + 1]?.index ?? content.length
-    const tagContent = content.slice(start.index, endBound)
+// ============================================================================
+// Core Parsing Functions
+// ============================================================================
 
-    // Check if this tag has a closing >
-    if (!tagContent.includes('>')) {
-      throw new Error(`Invalid MDX syntax: incomplete tag <${start.name}`)
-    }
-  }
+/**
+ * Options for parsing MDX
+ */
+export interface ParseMDXOptions {
+  /**
+   * Tags to associate with the cached result for group invalidation
+   *
+   * @example
+   * ```ts
+   * parseMDX(content, { tags: ['page:/products', 'component:Hero'] })
+   * ```
+   */
+  tags?: string[]
 
-  // Check for invalid prop syntax: prop=>
-  if (/\w+=\s*>/.test(content)) {
-    throw new Error('Invalid MDX syntax: incomplete prop value')
-  }
-
-  // Use a better approach: find all complete tags and categorize them
-  // This regex handles multi-line tags by using [\s\S] instead of [^>]
-  const allTagsRegex = /<\/?([A-Z][a-zA-Z0-9]*)[\s\S]*?>/g
-  const tagMatches: Array<{ name: string; type: 'open' | 'close' | 'selfClose'; full: string }> = []
-
-  while ((match = allTagsRegex.exec(content)) !== null) {
-    const full = match[0]
-    const name = match[1]
-    if (name === undefined) continue
-
-    if (full.startsWith('</')) {
-      tagMatches.push({ name, type: 'close', full })
-    } else if (full.trimEnd().endsWith('/>')) {
-      tagMatches.push({ name, type: 'selfClose', full })
-    } else {
-      tagMatches.push({ name, type: 'open', full })
-    }
-  }
-
-  // Count opens and closes per tag name
-  const openCount: Record<string, number> = {}
-  const closeCount: Record<string, number> = {}
-
-  for (const tag of tagMatches) {
-    if (tag.type === 'open') {
-      openCount[tag.name] = (openCount[tag.name] || 0) + 1
-    } else if (tag.type === 'close') {
-      closeCount[tag.name] = (closeCount[tag.name] || 0) + 1
-    }
-    // selfClose tags don't need matching
-  }
-
-  // Each open tag should have a matching close tag
-  for (const name of Object.keys(openCount)) {
-    const opens = openCount[name] || 0
-    const closes = closeCount[name] || 0
-    if (opens > closes) {
-      throw new Error(`Invalid MDX syntax: unclosed <${name}> tag`)
-    }
-  }
+  /**
+   * Skip caching for this parse operation
+   */
+  skipCache?: boolean
 }
 
 /**
  * Parse MDX content string
  *
+ * Extracts frontmatter, identifies components, and parses component props.
+ * Results are cached based on content hash for performance.
+ *
  * @param mdx - MDX content string
+ * @param options - Parse options (optional)
  * @returns Parsed MDX structure
  *
  * @example
@@ -361,8 +438,30 @@ function validateMDX(content: string): void {
  * console.log(result.frontmatter.title) // 'Hello'
  * console.log(result.components) // ['Hero']
  * ```
+ *
+ * @example
+ * ```ts
+ * // Parse with cache tags for group invalidation
+ * const result = parseMDX(content, {
+ *   tags: ['page:/home', 'component:Hero']
+ * })
+ *
+ * // Later, invalidate all home page entries
+ * invalidateMDXCacheByTag('page:/home')
+ * ```
  */
-export function parseMDX(mdx: string): ParsedMDX {
+export function parseMDX(mdx: string, options?: ParseMDXOptions): ParsedMDX {
+  const { tags, skipCache = false } = options ?? {}
+
+  // Check cache first (unless skipped)
+  const contentHash = hashContent(mdx)
+  if (!skipCache) {
+    const cached = parseCache.get(contentHash)
+    if (cached) {
+      return cached
+    }
+  }
+
   let body = mdx
   let frontmatter: Record<string, unknown> = {}
 
@@ -390,13 +489,22 @@ export function parseMDX(mdx: string): ParsedMDX {
   // Extract component props
   const componentProps = extractComponentProps(body)
 
-  return {
+  const result: ParsedMDX = {
     content: mdx,
     body,
     frontmatter,
     components,
     componentProps,
   }
+
+  // Cache the result with optional tags
+  if (!skipCache) {
+    // Auto-generate component tags if not provided
+    const cacheTags = tags ?? components.map((c) => `component:${c}`)
+    parseCache.set(contentHash, result, cacheTags)
+  }
+
+  return result
 }
 
 /**
@@ -413,7 +521,7 @@ export function parseMDX(mdx: string): ParsedMDX {
  *   <Card title="Hello" count={5} />
  * `)
  *
- * // schemas.Card = { title: string, count: string }
+ * // schemas.Card = { title: 'title (string)', count: 'count (number)' }
  * ```
  */
 export function extractComponentSchemas(mdx: string): ComponentSchemas {
@@ -442,7 +550,7 @@ export function extractComponentSchemas(mdx: string): ComponentSchemas {
       const stringValue = propMatch[2]
       const exprValue = propMatch[3]
 
-      // Skip if prop name is empty or starts with lowercase (likely a tag attribute)
+      // Skip if prop name doesn't start with lowercase (likely a tag attribute)
       if (!propName || !propName.match(/^[a-z]/)) continue
 
       // Add to schema with description based on value type
@@ -466,8 +574,15 @@ export function extractComponentSchemas(mdx: string): ComponentSchemas {
   return schemas
 }
 
+// ============================================================================
+// Props Generation
+// ============================================================================
+
 /**
  * Create an MDX props generator
+ *
+ * The generator uses content-hash based caching and supports parallel
+ * generation for multiple components.
  *
  * @param options - Generator options
  * @returns MDX props generator instance
@@ -478,6 +593,8 @@ export function extractComponentSchemas(mdx: string): ComponentSchemas {
  *   schemas: {
  *     Hero: { title: 'Hero title', subtitle: 'Hero subtitle' },
  *   },
+ *   cache: true,
+ *   maxParallel: 3,
  * })
  *
  * const props = await generator.generate(`<Hero />`)
@@ -485,8 +602,64 @@ export function extractComponentSchemas(mdx: string): ComponentSchemas {
  * ```
  */
 export function createMDXPropsGenerator(options: MDXPropsGeneratorOptions): MDXPropsGenerator {
-  const { schemas, cache = false, model } = options
+  const { schemas, cache = false, model, maxParallel = 3 } = options
   const propsCache = cache ? getDefaultCache() : null
+
+  /**
+   * Generate props for a single component
+   */
+  async function generateComponentProps(
+    componentName: string,
+    schema: Record<string, string>,
+    explicitProps: Record<string, unknown>,
+    frontmatter: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    // Build schema for missing props only
+    const missingPropsSchema: Record<string, string> = {}
+    for (const [key, value] of Object.entries(schema)) {
+      if (!(key in explicitProps)) {
+        missingPropsSchema[key] = value
+      }
+    }
+
+    // If no missing props, return explicit props
+    if (Object.keys(missingPropsSchema).length === 0) {
+      return explicitProps
+    }
+
+    // Check cache if enabled
+    if (propsCache) {
+      const cacheKey = createMDXCacheKey(componentName, missingPropsSchema, frontmatter)
+      const cached = propsCache.get<Record<string, unknown>>(cacheKey)
+      if (cached) {
+        return { ...cached.props, ...explicitProps }
+      }
+    }
+
+    // Build context from frontmatter
+    const contextParts: string[] = []
+    if (Object.keys(frontmatter).length > 0) {
+      contextParts.push('Page context:')
+      contextParts.push(JSON.stringify(frontmatter, null, 2))
+    }
+    contextParts.push(`Generate props for the ${componentName} component.`)
+
+    const genResult = await generateObject({
+      model: model || 'sonnet',
+      schema: missingPropsSchema,
+      prompt: contextParts.join('\n'),
+    })
+
+    const generatedProps = genResult.object as Record<string, unknown>
+
+    // Cache if enabled
+    if (propsCache) {
+      const cacheKey = createMDXCacheKey(componentName, missingPropsSchema, frontmatter)
+      propsCache.set(cacheKey, generatedProps)
+    }
+
+    return { ...generatedProps, ...explicitProps }
+  }
 
   return {
     async generate(mdx: string): Promise<Record<string, Record<string, unknown>>> {
@@ -496,73 +669,52 @@ export function createMDXPropsGenerator(options: MDXPropsGeneratorOptions): MDXP
       // Get components that have schemas
       const componentsToGenerate = parsed.components.filter((c) => schemas[c])
 
-      for (const componentName of componentsToGenerate) {
-        const schema = schemas[componentName]
-        if (!schema) continue
+      if (componentsToGenerate.length === 0) {
+        return result
+      }
 
-        // Get explicit props from MDX
-        const explicitProps = parsed.componentProps[componentName] || {}
+      // Generate props in parallel batches
+      const batches: string[][] = []
+      for (let i = 0; i < componentsToGenerate.length; i += maxParallel) {
+        batches.push(componentsToGenerate.slice(i, i + maxParallel))
+      }
 
-        // Build schema for missing props only
-        const missingPropsSchema: Record<string, string> = {}
-        for (const [key, value] of Object.entries(schema)) {
-          if (!(key in explicitProps)) {
-            missingPropsSchema[key] = value
-          }
-        }
+      for (const batch of batches) {
+        const promises = batch.map(async (componentName) => {
+          const schema = schemas[componentName]
+          if (!schema) return { componentName, props: {} }
 
-        // Check cache if enabled
-        if (propsCache) {
-          const cacheKey = createCacheKey(
-            { component: componentName, schema: missingPropsSchema },
+          const explicitProps = parsed.componentProps[componentName] || {}
+          const props = await generateComponentProps(
+            componentName,
+            schema,
+            explicitProps,
             parsed.frontmatter
           )
-          const cached = propsCache.get<Record<string, unknown>>(cacheKey)
-          if (cached) {
-            result[componentName] = { ...cached.props, ...explicitProps }
-            continue
-          }
-        }
 
-        // Generate missing props if needed
-        if (Object.keys(missingPropsSchema).length > 0) {
-          // Build context from frontmatter
-          const contextParts: string[] = []
-          if (Object.keys(parsed.frontmatter).length > 0) {
-            contextParts.push('Page context:')
-            contextParts.push(JSON.stringify(parsed.frontmatter, null, 2))
-          }
-          contextParts.push(`Generate props for the ${componentName} component.`)
+          return { componentName, props }
+        })
 
-          const genResult = await generateObject({
-            model: model || 'sonnet',
-            schema: missingPropsSchema,
-            prompt: contextParts.join('\n'),
-          })
-
-          const generatedProps = genResult.object as Record<string, unknown>
-
-          // Merge with explicit props
-          result[componentName] = { ...generatedProps, ...explicitProps }
-
-          // Cache if enabled
-          if (propsCache) {
-            const cacheKey = createCacheKey(
-              { component: componentName, schema: missingPropsSchema },
-              parsed.frontmatter
-            )
-            propsCache.set(cacheKey, generatedProps)
-          }
-        } else {
-          // All props were explicit
-          result[componentName] = explicitProps
+        const batchResults = await Promise.all(promises)
+        for (const { componentName, props } of batchResults) {
+          result[componentName] = props
         }
       }
 
       return result
     },
+
+    clearCache(): void {
+      if (propsCache) {
+        propsCache.clear()
+      }
+    },
   }
 }
+
+// ============================================================================
+// Rendering Functions
+// ============================================================================
 
 /**
  * Render MDX with injected props
@@ -588,14 +740,14 @@ export async function renderMDXWithProps(
   // Validate props
   for (const [componentName, componentProps] of Object.entries(props)) {
     if (componentProps === null) {
-      throw new Error(`Invalid props for component ${componentName}: props cannot be null`)
+      throw createParseError(`Invalid props for component ${componentName}: props cannot be null`)
     }
   }
 
   const { components = {}, stream = false } = options
   const parsed = parseMDX(mdx)
 
-  // Build component prop map - filter out nulls (already validated above)
+  // Build component prop map - filter out nulls
   const componentPropsMap: Record<string, Record<string, unknown>> = {}
   for (const [name, propsValue] of Object.entries(props)) {
     if (propsValue !== null) {
@@ -603,7 +755,7 @@ export async function renderMDXWithProps(
     }
   }
 
-  // Merge with props extracted from MDX
+  // Merge with props extracted from MDX (MDX props take precedence)
   for (const [name, mdxProps] of Object.entries(parsed.componentProps)) {
     componentPropsMap[name] = {
       ...componentPropsMap[name],
@@ -640,14 +792,7 @@ export async function renderMDXWithProps(
       })
     } else {
       // Default: inject props into the tag
-      const propsStr = Object.entries(componentProps)
-        .map(([k, v]) => {
-          if (typeof v === 'string') {
-            return `${k}="${v}"`
-          }
-          return `${k}={${JSON.stringify(v)}}`
-        })
-        .join(' ')
+      const propsStr = serializeProps(componentProps)
 
       // For self-closing tags, inject props
       output = output.replace(selfCloseRegex, () => {
@@ -658,7 +803,6 @@ export async function renderMDXWithProps(
 
   if (stream) {
     // Return as a ReadableStream
-    const textEncoder = new TextEncoder()
     return new ReadableStream<string>({
       start(controller) {
         // Split output into chunks and enqueue
@@ -672,14 +816,6 @@ export async function renderMDXWithProps(
   }
 
   return output
-}
-
-/**
- * Options for streaming MDX rendering
- */
-export interface StreamMDXOptions {
-  /** Custom component renderers */
-  components?: Record<string, (props: Record<string, unknown>) => string>
 }
 
 /**
@@ -703,7 +839,7 @@ export interface StreamMDXOptions {
  * while (true) {
  *   const { done, value } = await reader.read()
  *   if (done) break
- *   console.log(value)
+ *   console.log(new TextDecoder().decode(value))
  * }
  * ```
  */
@@ -715,9 +851,10 @@ export async function streamMDXWithProps(
   // Use renderMDXWithProps with stream option and convert to Uint8Array stream
   const result = await renderMDXWithProps(mdx, props, { ...options, stream: true })
 
+  const textEncoder = new TextEncoder()
+
   if (result instanceof ReadableStream) {
     // Convert string stream to Uint8Array stream
-    const textEncoder = new TextEncoder()
     const stringReader = result.getReader()
 
     return new ReadableStream<Uint8Array>({
@@ -733,7 +870,6 @@ export async function streamMDXWithProps(
   }
 
   // Fallback: wrap string result in a stream
-  const textEncoder = new TextEncoder()
   return new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(textEncoder.encode(result))
@@ -742,8 +878,15 @@ export async function streamMDXWithProps(
   })
 }
 
+// ============================================================================
+// Compilation
+// ============================================================================
+
 /**
  * Compile MDX to an executable function
+ *
+ * Compilation is lazy - the MDX is parsed once, and the returned function
+ * can be called multiple times with different props.
  *
  * @param mdx - MDX content string
  * @param options - Compile options
@@ -762,10 +905,8 @@ export async function compileMDX(
   const { components = {} } = options
 
   // Check for runtime errors in JSX expressions
-  // Match patterns like: <>{(() => { throw ... })()}</>
-  // Or any expression containing throw
   if (mdx.includes('throw new Error') || mdx.includes('throw Error')) {
-    throw new Error('Runtime error in MDX expression')
+    throw createParseError('Runtime error in MDX expression')
   }
 
   // Extract export statements
@@ -791,12 +932,12 @@ export async function compileMDX(
     .replace(/^export\s+.*$/gm, '')
     .trim()
 
-  // Parse once for validation
+  // Parse once for validation (this also caches the result)
   parseMDX(cleanMdx)
 
   // Create the compiled function
   const compiled: CompiledMDXFunction = (props: Record<string, Record<string, unknown>>) => {
-    // Synchronous version of render
+    // Parse is cached, so this is fast
     const parsed = parseMDX(cleanMdx)
     let output = parsed.body
 
@@ -824,14 +965,7 @@ export async function compileMDX(
         })
       } else {
         // Default: inject props
-        const propsStr = Object.entries(componentProps)
-          .map(([k, v]) => {
-            if (typeof v === 'string') {
-              return `${k}="${v}"`
-            }
-            return `${k}={${JSON.stringify(v)}}`
-          })
-          .join(' ')
+        const propsStr = serializeProps(componentProps)
 
         output = output.replace(selfCloseRegex, () => {
           return `<${componentName} ${propsStr} />`
@@ -848,4 +982,26 @@ export async function compileMDX(
   }
 
   return compiled
+}
+
+// ============================================================================
+// Cache Management
+// ============================================================================
+
+/**
+ * Clear the MDX parse cache
+ *
+ * Use this when you need to force re-parsing of all MDX content.
+ */
+export function clearMDXCache(): void {
+  parseCache.clear()
+}
+
+/**
+ * Get the current MDX parse cache size
+ *
+ * @returns Number of cached parse results
+ */
+export function getMDXCacheSize(): number {
+  return parseCache.size
 }
