@@ -1,0 +1,44 @@
+{
+  // Wrangler configuration for digital-tasks worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+  //
+  // The default export (TaskService) extends WorkerEntrypoint
+  // All public methods are automatically exposed via RPC
+
+  "name": "digital-tasks",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // AI binding for Cloudflare Workers AI
+  // Enables real AI Gateway access in tests for AI-powered task execution
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Durable Objects for task state persistence
+  "durable_objects": {
+    "bindings": [
+      { "name": "TASK_STATE", "class_name": "TaskStateDO" }
+    ]
+  },
+
+  // Migrations for Durable Objects
+  "migrations": [
+    { "tag": "v1", "new_classes": ["TaskStateDO"] }
+  ],
+
+  // Queue bindings for task scheduling and background processing
+  "queues": {
+    "producers": [
+      { "binding": "TASK_QUEUE", "queue": "task-queue" }
+    ],
+    "consumers": [
+      { "queue": "task-queue", "max_batch_size": 10, "max_batch_timeout": 30 }
+    ]
+  },
+
+  // Environment variables placeholder
+  // Actual values come from .dev.vars in local development
+  "vars": {}
+}

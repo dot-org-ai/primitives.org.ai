@@ -15,7 +15,13 @@ export default defineWorkersConfig({
           compatibilityDate: '2025-01-20',
           compatibilityFlags: ['nodejs_compat_v2'],
           durableObjects: {
-            PRODUCT_CATALOG: 'ProductCatalog',
+            TASK_STATE: 'TaskStateDO',
+          },
+          queueProducers: {
+            TASK_QUEUE: { queueName: 'task-queue' },
+          },
+          queueConsumers: {
+            'task-queue': {},
           },
         },
       },

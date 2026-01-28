@@ -1,0 +1,36 @@
+{
+  // Wrangler configuration for autonomous-agents worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+
+  "name": "autonomous-agents",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // AI binding for Cloudflare Workers AI
+  // Enables real AI Gateway access for agent reasoning/planning
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Durable Objects for agent state and memory persistence
+  "durable_objects": {
+    "bindings": [
+      { "name": "AGENT_STATE", "class_name": "AgentDurableObject" }
+    ]
+  },
+
+  // Migrations for Durable Objects
+  "migrations": [
+    { "tag": "v1", "new_classes": ["AgentDurableObject"] }
+  ],
+
+  // The default export (AgentService) extends WorkerEntrypoint
+  // All public methods are automatically exposed via RPC
+
+  // Environment variables for AI Gateway
+  // These are loaded from .dev.vars or .env in local development
+  "vars": {
+    // Placeholder - actual values come from .dev.vars
+  }
+}

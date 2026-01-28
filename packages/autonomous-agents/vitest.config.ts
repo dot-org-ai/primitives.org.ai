@@ -15,7 +15,7 @@ export default defineWorkersConfig({
           compatibilityDate: '2025-01-20',
           compatibilityFlags: ['nodejs_compat_v2'],
           durableObjects: {
-            PRODUCT_CATALOG: 'ProductCatalog',
+            AGENT_STATE: 'AgentService',
           },
         },
       },

@@ -13,6 +13,10 @@
     "./queue": {
       "import": "./dist/queue.js",
       "types": "./dist/queue.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
     }
   },
   "scripts": {
@@ -27,6 +31,11 @@
     "ai-functions": "workspace:*",
     "digital-tools": "workspace:*",
     "digital-workers": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250124.0",
+    "vitest": "3.0.4"
   },
   "keywords": [
     "ai",

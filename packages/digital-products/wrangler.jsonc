@@ -1,0 +1,36 @@
+{
+  // Wrangler configuration for digital-products worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+
+  "name": "digital-products",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // AI binding for Cloudflare Workers AI
+  // Enables real AI Gateway access in tests (cache: true for deterministic tests)
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Durable Objects for product catalog persistence
+  "durable_objects": {
+    "bindings": [
+      { "name": "PRODUCT_CATALOG", "class_name": "ProductCatalog" }
+    ]
+  },
+
+  // Migrations for Durable Objects
+  "migrations": [
+    { "tag": "v1", "new_classes": ["ProductCatalog"] }
+  ],
+
+  // The default export (ProductService) extends WorkerEntrypoint
+  // All public methods are automatically exposed via RPC
+
+  // Environment variables for AI Gateway
+  // These are loaded from .dev.vars or .env in local development
+  "vars": {
+    // Placeholder - actual values come from .dev.vars
+  }
+}

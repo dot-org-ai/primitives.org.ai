@@ -10,19 +10,19 @@ export default defineWorkersConfig({
 
     poolOptions: {
       workers: {
-        wrangler: { configPath: './wrangler.jsonc' },
+        main: './src/worker.ts',
         miniflare: {
           compatibilityDate: '2025-01-20',
           compatibilityFlags: ['nodejs_compat_v2'],
           durableObjects: {
-            PRODUCT_CATALOG: 'ProductCatalog',
+            HUMAN_REVIEW_STATE: 'HumanReviewWorker',
           },
         },
       },
     },
 
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
-    testTimeout: 60000, // AI calls can take time
+    testTimeout: 60000, // Human review operations can take time
     hookTimeout: 30000,
 
     // Coverage configuration

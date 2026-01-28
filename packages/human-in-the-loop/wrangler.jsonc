@@ -1,0 +1,43 @@
+{
+  // Wrangler configuration for human-in-the-loop worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+
+  "name": "human-in-the-loop",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // AI binding for Cloudflare Workers AI
+  // Enables real AI Gateway access for content classification, priority suggestions, etc.
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Durable Objects for persistent review state
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "HUMAN_REVIEW_STATE",
+        "class_name": "HumanReviewWorker"
+      }
+    ]
+  },
+
+  // Migrations for Durable Objects with SQLite storage
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["HumanReviewWorker"]
+    }
+  ],
+
+  // The default export (HumanReviewWorker) extends WorkerEntrypoint
+  // The connect() method returns HumanReviewServiceCore (RpcTarget)
+  // All public methods on HumanReviewServiceCore are exposed via RPC
+
+  // Environment variables
+  // These are loaded from .dev.vars or .env in local development
+  "vars": {
+    // Placeholder - actual values come from .dev.vars
+  }
+}
