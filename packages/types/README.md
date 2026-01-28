@@ -1,58 +1,105 @@
 # @org.ai/types
 
-**You're building AI-powered applications, but TypeScript keeps fighting you.** Your AI functions return `any`, your workflow contexts are untyped blobs, and refactoring means breaking things you cannot see.
+**Foundation type definitions for the AI primitives ecosystem.**
 
-`@org.ai/types` gives you the type safety you need to build AI applications with confidence.
+> **Note for Consumers**: This is an internal foundation package. For application development, use [`org.ai`](../org.ai) instead, which re-exports all types from this package plus additional organizational types (Role, Team, Goal, KPI, OKR).
 
-## The Problem
+## Package Relationship
 
-```typescript
-// Without types: runtime errors waiting to happen
-const result = await aiFunction(input) // What does this return?
-workflow.on('event', (data) => {       // What's in data?
-  workflow.state.user = data           // Is this right?
-})
+```
+@org.ai/types (foundation - internal)
+└── Provides base types used by all packages
+
+org.ai (consumer-facing)
+├── Re-exports ALL of @org.ai/types
+└── Adds organizational types (Role, Team, Goal, KPI, OKR)
+
+Consumers should:
+  import { Thing, Agent, Role, Team } from 'org.ai'  // Correct
+
+NOT:
+  import { Thing, Agent } from '@org.ai/types'       // Internal use only
 ```
 
-## The Solution
+## When to Use This Package
+
+- **Internal packages** in the monorepo that need foundation types
+- **Building new packages** that extend the type system
+
+For **application development**, always use `org.ai`:
 
 ```typescript
-import type { AIFunctionType, WorkflowContextType, EventHandlerType } from '@org.ai/types'
-
-// With types: autocomplete, refactoring, and compile-time safety
-const summarize: AIFunctionType<Summary, Document> = async (doc) => {
-  // TypeScript knows doc is Document, return must be Summary
-}
-
-const handler: EventHandlerType<void, UserEvent> = (data, ctx) => {
-  // data is UserEvent, ctx has full WorkflowContextType methods
-  ctx.send('notification', { userId: data.userId })
-}
+// Recommended for applications
+import type { Thing, Agent, Human, Role, Team, Goal } from 'org.ai'
 ```
 
-## Quick Start
+## Foundation Types
 
-### 1. Install
+This package provides the core type definitions:
+
+### Entity Types
+- `Thing`, `ThingDO` - Base entity types with URL-based identity
+- `Things`, `ThingsDO`, `Collection` - Collection types
+- `Noun`, `Verb`, `StandardVerbs` - Schema types
+
+### Worker Types
+- `WorkerType` - Base worker interface
+- `AgentType` - AI agent with model, autonomy settings
+- `HumanType` - Human worker with role, department, availability
+
+### Event Types (5W+H)
+- `Event` - Full event with all dimensions
+- `EventWhat`, `EventWho`, `EventWhen`, `EventWhere`, `EventWhy`, `EventHow`
+
+### Tool Types
+- `ToolType` - Tool definition
+- `ToolParameterType`, `ToolInputType`, `ToolOutputType`
+- `ExecutableToolType`, `ValidatableToolType`
+- `ToolsType`, `ToolboxType`
+
+### Business Framework Types
+- `LeanCanvasType` - 9-box business model canvas
+- `StoryBrandType` - 7-part narrative framework
+- `FounderType` - Founding team member
+- `StartupType` - Startup with lifecycle stages
+- `ICPType` - Ideal Customer Profile
+
+### Utility Types
+- `AIFunctionType<TOutput, TInput, TConfig>` - Generic AI function
+- `EventHandlerType<TOutput, TInput>` - Workflow event handlers
+- `WorkflowContextType` - Workflow execution context
+- `RelationshipOperatorType` - Database relationship operators
+- `ParsedFieldType` - Schema field definitions
+- `ListOptions`, `ListResult`, `PaginationInfo` - Pagination types
+
+### Type Guards
+- `isWorker`, `isAgent`, `isHuman`
+- `isTool`, `isToolParameter`, `isToolExecutionResult`
+- `isStartup`, `isICP`
+- `isLeanCanvas`, `isStoryBrand`, `isFounder`
+
+### Factory Functions
+- `createAgent(opts)` - Create an AI agent
+- `createHuman(opts)` - Create a human worker
+
+## Installation (for internal packages)
 
 ```bash
-npm install @org.ai/types
+pnpm add @org.ai/types
 ```
 
-### 2. Import the types you need
+## Usage (for internal packages)
 
 ```typescript
 import type {
-  AIFunctionType,
-  EventHandlerType,
+  Thing,
+  AgentType,
+  HumanType,
   WorkflowContextType,
-  RelationshipOperatorType,
-  ParsedFieldType,
 } from '@org.ai/types'
+
+import { isAgent, createAgent } from '@org.ai/types'
 ```
-
-### 3. Build with confidence
-
-Your IDE now understands your AI code. Refactor fearlessly.
 
 ## Type Reference
 
@@ -75,14 +122,6 @@ type Summarizer = AIFunctionType<Summary>
 // vs the awkward alternative
 type Summarizer = AIFunctionType<Document, Summary>  // Wait, which is which?
 ```
-
-## Part of the org.ai Ecosystem
-
-This package provides shared types for:
-- [ai-functions](../ai-functions) - AI function primitives
-- [ai-workflows](../ai-workflows) - Workflow orchestration
-- [ai-database](../ai-database) - AI-native database with relationships
-- And [more packages](../) in the org.ai monorepo
 
 ## License
 

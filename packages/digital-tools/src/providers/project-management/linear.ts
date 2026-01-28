@@ -23,6 +23,93 @@ import { defineProvider } from '../registry.js'
 
 const LINEAR_API_URL = 'https://api.linear.app/graphql'
 
+// =============================================================================
+// Linear API Response Types
+// =============================================================================
+
+/** Linear GraphQL response wrapper */
+interface LinearGraphQLResponse<T> {
+  data?: T
+  errors?: Array<{ message: string }>
+}
+
+/** Linear project from API */
+interface LinearProject {
+  id: string
+  key: string
+  name: string
+  description?: string
+  lead?: { id: string }
+  url: string
+}
+
+/** Linear issue state from API */
+interface LinearIssueState {
+  name: string
+}
+
+/** Linear label from API */
+interface LinearLabel {
+  name: string
+}
+
+/** Linear user reference from API */
+interface LinearUserRef {
+  id: string
+}
+
+/** Linear issue from API */
+interface LinearIssue {
+  id: string
+  identifier: string
+  title: string
+  description?: string
+  state: LinearIssueState
+  priority: number
+  priorityLabel: string
+  labels: { nodes: LinearLabel[] }
+  assignee?: LinearUserRef
+  creator?: LinearUserRef
+  createdAt: string
+  updatedAt: string
+  url: string
+}
+
+/** Linear comment from API */
+interface LinearComment {
+  id: string
+  body: string
+  user: LinearUserRef
+  createdAt: string
+}
+
+/** Linear page info from API */
+interface LinearPageInfo {
+  hasNextPage: boolean
+  endCursor: string
+}
+
+/** Linear issue filter for GraphQL */
+interface LinearIssueFilter {
+  project?: { id: { eq: string } }
+  state?: { name: { in: string[] } }
+  assignee?: { id: { eq: string } }
+  labels?: { name: { in: string[] } }
+}
+
+/** Linear issue create input */
+interface LinearIssueCreateInput {
+  projectId: string
+  title: string
+  description?: string
+  type?: string
+  priority?: number
+  assigneeId?: string
+  parentId?: string
+  estimate?: number
+  labelIds?: string[]
+}
+
 /**
  * Linear provider info
  */
@@ -40,10 +127,10 @@ export const linearInfo: ProviderInfo = {
 /**
  * GraphQL query helper
  */
-async function graphqlRequest<T = any>(
+async function graphqlRequest<T>(
   apiKey: string,
   query: string,
-  variables?: Record<string, any>
+  variables?: Record<string, unknown>
 ): Promise<T> {
   const response = await fetch(LINEAR_API_URL, {
     method: 'POST',
@@ -54,7 +141,7 @@ async function graphqlRequest<T = any>(
     body: JSON.stringify({ query, variables }),
   })
 
-  const result = (await response.json()) as any
+  const result = (await response.json()) as LinearGraphQLResponse<T>
 
   if (result.errors) {
     throw new Error(result.errors[0]?.message || 'GraphQL query failed')
@@ -83,10 +170,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
     async healthCheck(): Promise<ProviderHealth> {
       const start = Date.now()
       try {
-        await graphqlRequest(
-          apiKey,
-          `query { viewer { id name } }`
-        )
+        await graphqlRequest(apiKey, `query { viewer { id name } }`)
 
         return {
           healthy: true,
@@ -135,13 +219,13 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
 
       const data = await graphqlRequest<{
         projects: {
-          nodes: any[]
-          pageInfo: { hasNextPage: boolean; endCursor: string }
+          nodes: LinearProject[]
+          pageInfo: LinearPageInfo
         }
       }>(apiKey, query, { first, after })
 
       return {
-        items: data.projects.nodes.map((p: any) => ({
+        items: data.projects.nodes.map((p) => ({
           id: p.id,
           key: p.key,
           name: p.name,
@@ -171,7 +255,9 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
       `
 
       try {
-        const data = await graphqlRequest<{ project: any }>(apiKey, query, { id: projectId })
+        const data = await graphqlRequest<{ project: LinearProject | null }>(apiKey, query, {
+          id: projectId,
+        })
 
         if (!data.project) {
           return null
@@ -224,7 +310,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
         }
       `
 
-      const input: any = {
+      const input: LinearIssueCreateInput = {
         projectId,
         title: issue.title,
         description: issue.description,
@@ -240,7 +326,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
       }
 
       const data = await graphqlRequest<{
-        issueCreate: { success: boolean; issue: any }
+        issueCreate: { success: boolean; issue: LinearIssue }
       }>(apiKey, query, { input })
 
       if (!data.issueCreate.success) {
@@ -257,7 +343,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
         type: issue.type || 'Issue',
         status: created.state.name,
         priority: created.priorityLabel,
-        labels: created.labels.nodes.map((l: any) => l.name),
+        labels: created.labels.nodes.map((l) => l.name),
         assigneeId: created.assignee?.id,
         reporterId: created.creator?.id,
         createdAt: new Date(created.createdAt),
@@ -298,7 +384,9 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
       `
 
       try {
-        const data = await graphqlRequest<{ issue: any }>(apiKey, query, { id: issueId })
+        const data = await graphqlRequest<{ issue: LinearIssue | null }>(apiKey, query, {
+          id: issueId,
+        })
 
         if (!data.issue) {
           return null
@@ -314,7 +402,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
           type: 'Issue',
           status: issue.state.name,
           priority: issue.priorityLabel,
-          labels: issue.labels.nodes.map((l: any) => l.name),
+          labels: issue.labels.nodes.map((l) => l.name),
           assigneeId: issue.assignee?.id,
           reporterId: issue.creator?.id,
           createdAt: new Date(issue.createdAt),
@@ -360,7 +448,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
         }
       `
 
-      const input: any = {}
+      const input: Partial<LinearIssueCreateInput> = {}
 
       if (updates.title) input.title = updates.title
       if (updates.description !== undefined) input.description = updates.description
@@ -369,7 +457,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
       if (updates.estimate !== undefined) input.estimate = updates.estimate
 
       const data = await graphqlRequest<{
-        issueUpdate: { success: boolean; issue: any }
+        issueUpdate: { success: boolean; issue: LinearIssue }
       }>(apiKey, query, { id: issueId, input })
 
       if (!data.issueUpdate.success) {
@@ -386,7 +474,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
         type: 'Issue',
         status: updated.state.name,
         priority: updated.priorityLabel,
-        labels: updated.labels.nodes.map((l: any) => l.name),
+        labels: updated.labels.nodes.map((l) => l.name),
         assigneeId: updated.assignee?.id,
         reporterId: updated.creator?.id,
         createdAt: new Date(updated.createdAt),
@@ -423,7 +511,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
       const after = options?.cursor
 
       // Build filter
-      const filter: any = { project: { id: { eq: projectId } } }
+      const filter: LinearIssueFilter = { project: { id: { eq: projectId } } }
 
       if (options?.status?.length) {
         filter.state = { name: { in: options.status } }
@@ -475,13 +563,13 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
 
       const data = await graphqlRequest<{
         issues: {
-          nodes: any[]
-          pageInfo: { hasNextPage: boolean; endCursor: string }
+          nodes: LinearIssue[]
+          pageInfo: LinearPageInfo
         }
       }>(apiKey, query, { first, after, filter })
 
       return {
-        items: data.issues.nodes.map((issue: any) => ({
+        items: data.issues.nodes.map((issue) => ({
           id: issue.id,
           key: issue.identifier,
           title: issue.title,
@@ -489,7 +577,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
           type: 'Issue',
           status: issue.state.name,
           priority: issue.priorityLabel,
-          labels: issue.labels.nodes.map((l: any) => l.name),
+          labels: issue.labels.nodes.map((l) => l.name),
           assigneeId: issue.assignee?.id,
           reporterId: issue.creator?.id,
           createdAt: new Date(issue.createdAt),
@@ -545,7 +633,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
       `
 
       // Build filter
-      const filter: any = {}
+      const filter: LinearIssueFilter = {}
 
       if (options?.status?.length) {
         filter.state = { name: { in: options.status } }
@@ -561,13 +649,13 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
 
       const data = await graphqlRequest<{
         issueSearch: {
-          nodes: any[]
-          pageInfo: { hasNextPage: boolean; endCursor: string }
+          nodes: LinearIssue[]
+          pageInfo: LinearPageInfo
         }
       }>(apiKey, graphqlQuery, { first, after, query, filter })
 
       return {
-        items: data.issueSearch.nodes.map((issue: any) => ({
+        items: data.issueSearch.nodes.map((issue) => ({
           id: issue.id,
           key: issue.identifier,
           title: issue.title,
@@ -575,7 +663,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
           type: 'Issue',
           status: issue.state.name,
           priority: issue.priorityLabel,
-          labels: issue.labels.nodes.map((l: any) => l.name),
+          labels: issue.labels.nodes.map((l) => l.name),
           assigneeId: issue.assignee?.id,
           reporterId: issue.creator?.id,
           createdAt: new Date(issue.createdAt),
@@ -605,7 +693,7 @@ export function createLinearProvider(config: ProviderConfig): ProjectManagementP
       `
 
       const data = await graphqlRequest<{
-        commentCreate: { success: boolean; comment: any }
+        commentCreate: { success: boolean; comment: LinearComment }
       }>(apiKey, query, {
         input: {
           issueId,

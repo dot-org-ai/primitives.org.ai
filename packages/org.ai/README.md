@@ -1,102 +1,106 @@
 # org.ai
 
-All primitives for building AI-powered organizations.
+**The primary consumer-facing types package for AI-powered organizations.**
 
-## Overview
+`org.ai` consolidates foundation types from `@org.ai/types` with organizational types (Role, Team, Goal, KPI, OKR) into a single, unified package. **Consumers should import from `org.ai`, not `@org.ai/types` directly.**
 
-`org.ai` is a comprehensive TypeScript package that provides shared type definitions and re-exports from the AI primitives ecosystem. It serves as a unified entry point for accessing types and functionality related to:
+## Package Relationship
 
-- **AI Functions** - Core primitives for AI-powered operations
-- **Autonomous Agents** - Building and orchestrating AI agents
-- **Workflows** - Event-driven workflow automation
-- **Database** - Schema-first database with promise pipelining
-- **Digital Workers** - Abstracting human and AI workers
-- **Business Logic** - KPIs, OKRs, and financial metrics
-- **Human-in-the-Loop** - Human oversight and approval workflows
-- **And more...**
-
-> **Note**: This package is primarily focused on providing shared type definitions. For the full umbrella package with all runtime functionality, consider using `ai-primitives` instead.
+```
+org.ai (consumer-facing)
+├── Re-exports all of @org.ai/types (foundation types)
+│   ├── Thing, ThingDO - Base entity types
+│   ├── Worker, Agent, Human - Worker types
+│   ├── Tool, Toolbox - Tool types
+│   ├── Event (5W+H) - Event types
+│   ├── Noun, Verb - Schema types
+│   ├── LeanCanvas, StoryBrand, Founder - Business framework types
+│   └── Startup, ICP - Customer profile types
+│
+└── Adds organizational types (defined in org.ai)
+    ├── Role - Job roles and responsibilities
+    ├── Team - Team structures and members
+    ├── Goal - Goal tracking
+    ├── KPI - Key Performance Indicators
+    └── OKR - Objectives and Key Results
+```
 
 ## Installation
 
 ```bash
 npm install org.ai
-```
-
-```bash
+# or
 pnpm add org.ai
-```
-
-```bash
+# or
 yarn add org.ai
 ```
 
 ## Usage
 
-### Importing Types (Recommended)
+### Import Types (Recommended)
 
 ```typescript
-import type { Thing, Agent, Workflow, Event, Worker, Tool } from 'org.ai'
+// Import everything from org.ai - the unified entry point
+import type {
+  // Foundation types (from @org.ai/types)
+  Thing,
+  Worker,
+  Agent,
+  Human,
+  Tool,
+  Event,
+  Noun,
+  Verb,
+  Startup,
+  ICP,
+  LeanCanvas,
+  StoryBrand,
+
+  // Organizational types (from org.ai)
+  Role,
+  Team,
+  Goal,
+  KPI,
+  OKR,
+} from 'org.ai'
 ```
 
-### Subpath Imports
-
-For more granular imports, use the available subpaths:
+### Type Guards and Factory Functions
 
 ```typescript
-// AI Functions - core primitives
-import { ai, generate, list, schema } from 'org.ai/functions'
+import {
+  // Type guards
+  isWorker,
+  isAgent,
+  isHuman,
+  isTool,
+  isRole,
+  isTeam,
+  isGoal,
+  isKPI,
+  isOKR,
 
-// Workflows - event-driven automation
-import { Workflow, on, every } from 'org.ai/workflows'
+  // Factory functions
+  createAgent,
+  createHuman,
+  createRole,
+  createTeam,
+} from 'org.ai'
 
-// Agents - autonomous AI agents
-import { Agent, Role, Team } from 'org.ai/agents'
+// Runtime type checking
+if (isAgent(worker)) {
+  console.log(worker.model, worker.autonomous)
+}
 
-// Database - schema-first with promise pipelining
-import { DB } from 'org.ai/database'
-
-// Models - language model resolution
-import { resolve, list as listModels } from 'org.ai/models'
-
-// Providers - AI provider registry
-import * as providers from 'org.ai/providers'
-
-// Tasks - task management
-import { createTask, task, parallel, sequential } from 'org.ai/tasks'
-
-// Tools - digital tools for humans and AI
-import { defineTool } from 'org.ai/tools'
-
-// Products - digital product primitives
-import { Product, App, API } from 'org.ai/products'
-
-// Services - AI-powered services
-import { Service, Endpoint, Client } from 'org.ai/services'
-
-// Business - business logic primitives
-import { Business, kpis, okrs } from 'org.ai/business'
-
-// Human-in-the-Loop - human oversight
-import { Human, HumanManager } from 'org.ai/human'
-
-// Props - AI-powered component props
-import { createAIComponent, generateProps } from 'org.ai/props'
-
-// Evaluate - secure code execution
-import { evaluate, createEvaluator } from 'org.ai/evaluate'
-
-// Experiments - A/B testing
-import { Experiment, track } from 'org.ai/experiments'
-
-// Tests - test utilities
-import { expect, TestRunner } from 'org.ai/tests'
-
-// Types - shared type definitions
-import type { Thing, Worker, Agent } from 'org.ai/types'
+// Create typed entities
+const agent = createAgent({
+  model: 'claude-3-opus',
+  autonomous: true,
+  name: 'ResearchAgent',
+})
 ```
 
-## Core Types
+## Foundation Types (from @org.ai/types)
 
 ### Thing
 
@@ -168,334 +172,126 @@ interface Event {
 }
 ```
 
-## API Reference
+## Organizational Types (defined in org.ai)
 
-### AI Functions (`org.ai/functions`)
+### Role
 
-Core primitives for AI-powered operations:
-
-```typescript
-// Text generation with template literals
-const summary = await ai`Summarize this article: ${article}`
-
-// Generate structured objects
-const user = await generate<User>('Create a test user', { schema: UserSchema })
-
-// Generate lists
-const ideas = await list`5 startup ideas for ${industry}`
-
-// Boolean checks
-const isSpam = await is`Is this comment spam? ${comment}`
-
-// Extract structured data
-const entities = await extract`Extract names and dates from: ${text}`
-
-// Human-in-the-loop operations
-const approval = await approve({ title: 'Budget Request', data: { amount: 50000 } })
-const answer = await ask('What is the priority for this task?')
-const choice = await decide(['high', 'medium', 'low'], 'Select priority')
-```
-
-### Workflows (`org.ai/workflows`)
-
-Event-driven workflows with `$` context:
+Defines job roles and responsibilities:
 
 ```typescript
-import { Workflow, on, every, send } from 'org.ai/workflows'
-
-const workflow = Workflow($ => {
-  // Event handlers
-  $.on.Customer.created(async (customer, $) => {
-    $.log('New customer:', customer.name)
-    await $.send('Email.welcome', { to: customer.email })
-  })
-
-  // Scheduled tasks
-  $.every.hour(async ($) => {
-    $.log('Hourly check')
-  })
-
-  $.every.Monday.at9am(async ($) => {
-    $.log('Weekly standup reminder')
-  })
-})
-
-await workflow.start()
-```
-
-### Agents (`org.ai/agents`)
-
-Autonomous AI agents with roles and goals:
-
-```typescript
-import { Agent, Role, Team, Goals } from 'org.ai/agents'
-
-// Define a role
-const productManager = Role({
-  name: 'Product Manager',
-  description: 'Manages product strategy and roadmap',
-  skills: ['product strategy', 'user research', 'roadmap planning'],
-})
-
-// Create an agent
-const agent = Agent({
-  name: 'ProductAgent',
-  role: productManager,
-  mode: 'autonomous',
-  goals: [
-    { id: 'g1', description: 'Define Q1 roadmap', target: '100%' }
-  ],
-})
-
-// Execute tasks
-const result = await agent.do('Create product brief for feature X')
-
-// Make decisions
-const choice = await agent.decide(['A', 'B', 'C'], 'Which feature to prioritize?')
-
-// Request approval
-const approval = await agent.approve({
-  title: 'Budget Request',
-  description: 'Request $50k for research',
-  data: { amount: 50000 },
-})
-```
-
-### Database (`org.ai/database`)
-
-Schema-first database with promise pipelining:
-
-```typescript
-import { DB } from 'org.ai/database'
-
-const { db } = DB({
-  Lead: {
-    name: 'string',
-    company: 'Company.leads',
-    score: 'number',
-  },
-  Company: {
-    name: 'string',
-  }
-})
-
-// Chain without await
-const leads = db.Lead.list()
-const qualified = await leads.filter(l => l.score > 80)
-
-// Batch relationship loading
-const withCompanies = await leads.map(l => ({
-  name: l.name,
-  company: l.company,  // Batch loaded!
-}))
-
-// Natural language queries
-const results = await db.Lead`who closed deals this month?`
-```
-
-### Tasks (`org.ai/tasks`)
-
-Task management primitives:
-
-```typescript
-import { createTask, task, parallel, sequential, toMarkdown } from 'org.ai/tasks'
-
-// Create individual tasks
-const myTask = createTask({
-  title: 'Review PR',
-  description: 'Review and approve the feature PR',
-  priority: 'high',
-})
-
-// Parallel execution
-const results = await parallel([
-  task('Fetch user data'),
-  task('Load permissions'),
-  task('Get preferences'),
-])
-
-// Sequential execution
-await sequential([
-  task('Validate input'),
-  task('Process data'),
-  task('Save results'),
-])
-```
-
-### Business Logic (`org.ai/business`)
-
-Business metrics and KPIs:
-
-```typescript
-import { Business, kpis, okrs, financials } from 'org.ai/business'
-
-const business = Business({
-  name: 'My Startup',
-  kpis: kpis({
-    revenue: { target: 1000000, current: 750000 },
-    customers: { target: 1000, current: 850 },
-  }),
-  okrs: okrs([
-    {
-      objective: 'Increase market share',
-      keyResults: [
-        { description: 'Reach 10% market share', target: 10, current: 7 },
-      ],
-    },
-  ]),
-})
-```
-
-### Human-in-the-Loop (`org.ai/human`)
-
-Human oversight and approval workflows:
-
-```typescript
-import { Human, HumanManager } from 'org.ai/human'
-
-const manager = HumanManager({
-  retryConfig: { maxRetries: 3, backoff: 'exponential' },
-  slaConfig: { responseTime: '1h', escalationPath: ['manager', 'director'] },
-})
-
-// Request human review
-const decision = await manager.request({
-  type: 'approval',
-  title: 'Large Purchase Approval',
-  data: { amount: 100000, vendor: 'Acme Corp' },
-})
-```
-
-### Experiments (`org.ai/experiments`)
-
-A/B testing and experimentation:
-
-```typescript
-import { Experiment, track, decide } from 'org.ai/experiments'
-
-const experiment = Experiment({
-  name: 'new-onboarding-flow',
-  variants: [
-    { id: 'control', weight: 0.5 },
-    { id: 'treatment', weight: 0.5 },
-  ],
-})
-
-// Get variant for user
-const variant = await decide(experiment, userId)
-
-// Track conversion
-await track('conversion', { experimentId: experiment.id, variantId: variant.id })
-```
-
-### Evaluate (`org.ai/evaluate`)
-
-Secure code execution in sandboxed environments:
-
-```typescript
-import { evaluate, createEvaluator } from 'org.ai/evaluate'
-
-const result = await evaluate({
-  code: `
-    const sum = (a, b) => a + b;
-    return sum(2, 3);
-  `,
-  timeout: 5000,
-})
-
-console.log(result.output) // 5
-```
-
-## Type Guards
-
-The package includes type guards for runtime type checking:
-
-```typescript
-import {
-  isWorker,
-  isAgent,
-  isHuman,
-  isTool,
-  isStartup,
-  isLeanCanvas,
-  isStoryBrand,
-  isFounder,
-  isICP,
-} from 'org.ai'
-
-if (isAgent(worker)) {
-  console.log(worker.model, worker.autonomous)
+interface Role {
+  name: string
+  description?: string
+  responsibilities?: string[]
+  skills?: string[]
+  workerType?: 'human' | 'agent' | 'any'
 }
 ```
 
-## Factory Functions
+### Team
 
-Create typed entities with auto-generated IDs:
+Team structures with members and channels:
 
 ```typescript
-import { createAgent, createHuman } from 'org.ai'
-
-const agent = createAgent({
-  model: 'claude-3-opus',
-  autonomous: true,
-  name: 'ResearchAgent',
-  systemPrompt: 'You are a research assistant...',
-})
-
-const human = createHuman({
-  name: 'John Doe',
-  email: 'john@example.com',
-  role: 'Engineer',
-  department: 'Product',
-})
+interface Team {
+  name: string
+  description?: string
+  members: TeamMember[]
+  lead?: TeamLead
+  channels?: Channel[]
+}
 ```
 
-## Available Exports
+### Goal
 
-| Subpath | Description |
-|---------|-------------|
-| `org.ai` | Main entry - types and re-exports |
-| `org.ai/functions` | AI function primitives |
-| `org.ai/providers` | AI provider registry |
-| `org.ai/models` | Language model resolution |
-| `org.ai/database` | Schema-first database |
-| `org.ai/workflows` | Event-driven workflows |
-| `org.ai/agents` | Autonomous AI agents |
-| `org.ai/workers` | Digital workers abstraction |
-| `org.ai/tasks` | Task management |
-| `org.ai/tools` | Digital tools |
-| `org.ai/products` | Digital product primitives |
-| `org.ai/services` | Services as software |
-| `org.ai/business` | Business logic primitives |
-| `org.ai/human` | Human-in-the-loop |
-| `org.ai/props` | AI-powered component props |
-| `org.ai/evaluate` | Secure code execution |
-| `org.ai/experiments` | A/B testing |
-| `org.ai/tests` | Test utilities |
-| `org.ai/types` | Shared type definitions |
+Goal tracking with status and priority:
 
-## Dependencies
+```typescript
+interface Goal {
+  id: string
+  description: string
+  status: 'not_started' | 'in_progress' | 'completed' | 'blocked'
+  category?: 'growth' | 'efficiency' | 'quality' | 'innovation'
+  priority?: 'low' | 'medium' | 'high' | 'critical'
+  target?: number | string
+  current?: number | string
+  dueDate?: Date
+}
+```
 
-This package re-exports from the following workspace packages:
+### KPI
 
-- `@org.ai/types` - Shared type definitions (scoped package)
-- `ai-functions` - Core AI primitives
-- `ai-providers` - Provider registry
-- `ai-database` - Database primitives
-- `ai-workflows` - Workflow engine
-- `ai-props` - Component props
-- `ai-evaluate` - Code execution
-- `ai-experiments` - Experimentation
-- `ai-tests` - Test utilities
-- `autonomous-agents` - Agent primitives
-- `digital-workers` - Worker abstraction
-- `digital-tasks` - Task management
-- `digital-tools` - Tool definitions
-- `digital-products` - Product primitives
-- `services-as-software` - Service primitives
-- `business-as-code` - Business logic
-- `human-in-the-loop` - Human oversight
-- `language-models` - Model resolution
+Key Performance Indicators with trends and history:
+
+```typescript
+interface KPI {
+  name: string
+  value: number
+  target: number
+  unit?: string
+  category?: 'financial' | 'customer' | 'operational' | 'growth'
+  trend?: 'up' | 'down' | 'stable'
+  frequency?: 'daily' | 'weekly' | 'monthly' | 'quarterly'
+  history?: KPIHistoryEntry[]
+}
+```
+
+### OKR
+
+Objectives and Key Results:
+
+```typescript
+interface OKR {
+  objective: string
+  description?: string
+  keyResults: KeyResult[]
+  status?: 'on_track' | 'at_risk' | 'off_track' | 'achieved'
+  owner?: string
+  period?: string
+}
+
+interface KeyResult {
+  description: string
+  target: number
+  current: number
+  unit?: string
+  status?: 'not_started' | 'in_progress' | 'achieved' | 'missed'
+}
+```
+
+## Why org.ai Instead of @org.ai/types?
+
+1. **Single Import Source**: Import all types from one package
+2. **Complete Type Set**: Foundation types + organizational types in one place
+3. **Simplified Dependencies**: Only add `org.ai` to your package.json
+4. **Future-Proof**: New organizational types will be added to `org.ai`
+
+`@org.ai/types` is the foundation package used internally by other packages in the monorepo. For application development, always use `org.ai`.
+
+## Subpath Exports
+
+For specific use cases, subpath exports are available:
+
+```typescript
+// Types only (same as main export)
+import type { Thing, Role, Team } from 'org.ai/types'
+
+// Identity utilities
+import { createUser, createAgentIdentity, createSession } from 'org.ai/identity'
+```
+
+## Part of the AI Primitives Ecosystem
+
+`org.ai` provides types for the entire ecosystem:
+
+- [ai-functions](../ai-functions) - AI function primitives
+- [ai-workflows](../ai-workflows) - Workflow orchestration
+- [ai-database](../ai-database) - AI-native database
+- [autonomous-agents](../autonomous-agents) - Agent primitives
+- [digital-workers](../digital-workers) - Worker abstraction
+- [business-as-code](../business-as-code) - Business logic
+
+For runtime functionality, use the individual packages or the `ai-primitives` umbrella package.
 
 ## License
 

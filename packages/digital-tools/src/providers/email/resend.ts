@@ -23,6 +23,72 @@ import { defineProvider } from '../registry.js'
 
 const RESEND_API_URL = 'https://api.resend.com'
 
+// =============================================================================
+// Resend API Response Types
+// =============================================================================
+
+/** Resend success response for sending email */
+interface ResendSendResponse {
+  id: string
+}
+
+/** Resend error response */
+interface ResendErrorResponse {
+  name?: string
+  message?: string
+}
+
+/** Resend batch send response item */
+interface ResendBatchItem {
+  id: string
+}
+
+/** Resend batch send response */
+interface ResendBatchResponse {
+  data: ResendBatchItem[]
+}
+
+/** Resend email data from API */
+interface ResendEmailData {
+  id: string
+  from: string
+  to: string | string[]
+  cc?: string[]
+  bcc?: string[]
+  subject: string
+  text?: string
+  html?: string
+  last_event: string
+  created_at?: string
+}
+
+/** Resend DNS record from API */
+interface ResendDNSRecord {
+  type: string
+  name: string
+  value: string
+  status: string
+}
+
+/** Resend domain response from API */
+interface ResendDomainResponse {
+  name: string
+  status: string
+  records?: ResendDNSRecord[]
+}
+
+/** Resend domain list item from API */
+interface ResendDomainListItem {
+  name: string
+  status: string
+  created_at: string
+}
+
+/** Resend domains list response */
+interface ResendDomainsListResponse {
+  data?: ResendDomainListItem[]
+}
+
 /**
  * Resend provider info
  */
@@ -132,17 +198,19 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
         const data = await response.json()
 
         if (response.ok) {
+          const sendResponse = data as ResendSendResponse
           return {
             success: true,
-            messageId: (data as any).id,
+            messageId: sendResponse.id,
           }
         }
 
+        const errorResponse = data as ResendErrorResponse
         return {
           success: false,
           error: {
-            code: (data as any).name || `HTTP_${response.status}`,
-            message: (data as any).message || response.statusText,
+            code: errorResponse.name || `HTTP_${response.status}`,
+            message: errorResponse.message || response.statusText,
           },
         }
       } catch (error) {
@@ -183,18 +251,20 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
         const data = await response.json()
 
         if (response.ok) {
-          return (data as any).data.map((item: any) => ({
+          const batchResponse = data as ResendBatchResponse
+          return batchResponse.data.map((item) => ({
             success: true,
             messageId: item.id,
           }))
         }
 
         // If batch fails, return error for all
+        const errorResponse = data as ResendErrorResponse
         return emails.map(() => ({
           success: false,
           error: {
-            code: (data as any).name || `HTTP_${response.status}`,
-            message: (data as any).message || response.statusText,
+            code: errorResponse.name || `HTTP_${response.status}`,
+            message: errorResponse.message || response.statusText,
           },
         }))
       } catch (error) {
@@ -221,7 +291,7 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data = (await response.json()) as any
+        const data = (await response.json()) as ResendEmailData
         return {
           id: data.id,
           from: data.from,
@@ -249,17 +319,18 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
         body: JSON.stringify({ name: domain }),
       })
 
-      const data = (await response.json()) as any
+      const data = (await response.json()) as ResendDomainResponse
 
       return {
         domain: data.name,
         verified: data.status === 'verified',
-        dnsRecords: data.records?.map((r: any) => ({
-          type: r.type,
-          name: r.name,
-          value: r.value,
-          verified: r.status === 'verified',
-        })) || [],
+        dnsRecords:
+          data.records?.map((r) => ({
+            type: r.type as 'TXT' | 'CNAME' | 'MX',
+            name: r.name,
+            value: r.value,
+            verified: r.status === 'verified',
+          })) || [],
       }
     },
 
@@ -270,12 +341,14 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
         },
       })
 
-      const data = (await response.json()) as any
-      return data.data?.map((d: any) => ({
-        domain: d.name,
-        verified: d.status === 'verified',
-        createdAt: new Date(d.created_at),
-      })) || []
+      const data = (await response.json()) as ResendDomainsListResponse
+      return (
+        data.data?.map((d) => ({
+          domain: d.name,
+          verified: d.status === 'verified',
+          createdAt: new Date(d.created_at),
+        })) || []
+      )
     },
   }
 }

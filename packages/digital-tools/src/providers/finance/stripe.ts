@@ -27,6 +27,80 @@ import { defineProvider } from '../registry.js'
 
 const STRIPE_API_URL = 'https://api.stripe.com/v1'
 
+// =============================================================================
+// Stripe API Response Types
+// =============================================================================
+
+/** Stripe API error response */
+interface StripeErrorResponse {
+  error?: {
+    message?: string
+    type?: string
+    code?: string
+  }
+}
+
+/** Stripe status transitions for invoices */
+interface StripeStatusTransitions {
+  paid_at?: number
+}
+
+/** Stripe invoice from API */
+interface StripeInvoice {
+  id: string
+  number?: string
+  customer: string
+  status: string
+  currency: string
+  subtotal: number
+  tax?: number
+  total: number
+  amount_due: number
+  amount_paid: number
+  due_date?: number
+  status_transitions?: StripeStatusTransitions
+  hosted_invoice_url?: string
+  created: number
+}
+
+/** Stripe payment intent from API */
+interface StripePaymentIntent {
+  id: string
+  amount: number
+  currency: string
+  status: string
+  customer?: string
+  invoice?: string
+  payment_method?: string
+  description?: string
+  created: number
+}
+
+/** Stripe refund from API */
+interface StripeRefund {
+  id: string
+  payment_intent: string
+  amount: number
+  status: string
+  created: number
+}
+
+/** Stripe customer from API */
+interface StripeCustomer {
+  id: string
+  name?: string
+  email?: string
+  phone?: string
+  balance?: number
+  created: number
+}
+
+/** Stripe list response wrapper */
+interface StripeListResponse<T> {
+  data: T[]
+  has_more: boolean
+}
+
 /**
  * Stripe provider info
  */
@@ -92,10 +166,8 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        (error as any)?.error?.message || `Stripe API error: ${response.status}`
-      )
+      const error = (await response.json().catch(() => ({}))) as StripeErrorResponse
+      throw new Error(error.error?.message || `Stripe API error: ${response.status}`)
     }
 
     return response.json() as Promise<T>
@@ -115,7 +187,10 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       } else if (Array.isArray(value)) {
         value.forEach((item, index) => {
           if (typeof item === 'object' && item !== null) {
-            Object.assign(result, flattenParams(item as Record<string, unknown>, `${fullKey}[${index}]`))
+            Object.assign(
+              result,
+              flattenParams(item as Record<string, unknown>, `${fullKey}[${index}]`)
+            )
           } else {
             result[`${fullKey}[${index}]`] = String(item)
           }
@@ -172,10 +247,8 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
-      throw new Error(
-        (error as any)?.error?.message || `Stripe API error: ${response.status}`
-      )
+      const error = (await response.json().catch(() => ({}))) as StripeErrorResponse
+      throw new Error(error.error?.message || `Stripe API error: ${response.status}`)
     }
 
     return response.json() as Promise<T>
@@ -588,7 +661,9 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       }
     },
 
-    async listCustomers(options: PaginationOptions = {}): Promise<PaginatedResult<FinanceCustomerData>> {
+    async listCustomers(
+      options: PaginationOptions = {}
+    ): Promise<PaginatedResult<FinanceCustomerData>> {
       const params: Record<string, string> = {}
 
       if (options.limit) {
@@ -620,7 +695,9 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
 /**
  * Map Stripe invoice status to standard status
  */
-function mapStripeInvoiceStatus(status: string): 'draft' | 'open' | 'paid' | 'void' | 'uncollectible' {
+function mapStripeInvoiceStatus(
+  status: string
+): 'draft' | 'open' | 'paid' | 'void' | 'uncollectible' {
   switch (status) {
     case 'draft':
       return 'draft'

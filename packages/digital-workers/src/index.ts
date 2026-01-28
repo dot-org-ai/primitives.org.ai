@@ -308,6 +308,76 @@ export type {
   CompositeBalancerConfig,
 } from './load-balancing.js'
 
+// Export Slack transport adapter
+export {
+  SlackTransport,
+  createSlackTransport,
+  registerSlackTransport,
+  // Block Kit helpers
+  slackSection,
+  slackHeader,
+  slackDivider,
+  slackContext,
+  slackButton,
+  slackActions,
+} from './transports/slack.js'
+
+export type {
+  SlackTransportConfig,
+  SlackBlockType,
+  SlackTextObject,
+  SlackButtonElement,
+  SlackConfirmDialog,
+  SlackSectionBlock,
+  SlackDividerBlock,
+  SlackHeaderBlock,
+  SlackContextBlock,
+  SlackActionsBlock,
+  SlackBlock,
+  SlackMessage,
+  SlackApiResponse,
+  SlackPostMessageResponse,
+  SlackUserInfoResponse,
+  SlackConversationInfoResponse,
+  SlackInteractionPayload,
+  SlackActionPayload,
+  SlackWebhookRequest,
+  WebhookHandlerResult,
+} from './transports/slack.js'
+
+// Export Email transport adapter
+export {
+  EmailTransport,
+  createEmailTransport,
+  createEmailTransportWithProvider,
+  createResendProvider,
+  // Template generators
+  generateNotificationEmail,
+  generateApprovalEmail,
+  // Reply parsing
+  parseApprovalReply,
+  // Type guards
+  isEmailTransportConfig,
+  isApproved,
+  isRejected,
+} from './transports/email.js'
+
+export type {
+  // Provider types
+  EmailProvider,
+  EmailMessage,
+  EmailSendResult,
+  EmailAttachment,
+  EmailTag,
+  // Configuration types
+  EmailTransportConfig,
+  EmailTemplateOptions,
+  // Approval types
+  ApprovalRequestData,
+  ParsedEmailReply,
+  InboundEmail,
+} from './transports/email.js'
+
 // Export error escalation for multi-level error handling
 export {
   // Error Classification

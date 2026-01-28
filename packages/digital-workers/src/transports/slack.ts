@@ -542,10 +542,17 @@ export class SlackTransport {
    */
   async handleWebhook(request: SlackWebhookRequest): Promise<WebhookHandlerResult> {
     // Verify signature
-    if (!this.verifySignature(request)) {
+    try {
+      if (!this.verifySignature(request)) {
+        return {
+          success: false,
+          error: 'Invalid request signature',
+        }
+      }
+    } catch (error) {
       return {
         success: false,
-        error: 'Invalid request signature',
+        error: error instanceof Error ? error.message : 'Signature verification failed',
       }
     }
 

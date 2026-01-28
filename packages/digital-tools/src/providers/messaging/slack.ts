@@ -29,6 +29,175 @@ import { defineProvider } from '../registry.js'
 
 const SLACK_API_URL = 'https://slack.com/api'
 
+// =============================================================================
+// Slack API Response Types
+// =============================================================================
+
+/** Slack API response base */
+interface SlackApiResponse {
+  ok: boolean
+  error?: string
+}
+
+/** Slack reaction from API */
+interface SlackReaction {
+  name: string
+  count: number
+  users: string[]
+}
+
+/** Slack message edit info */
+interface SlackEditInfo {
+  ts?: string
+}
+
+/** Slack message from API */
+interface SlackMessage {
+  ts: string
+  user: string
+  text: string
+  thread_ts?: string
+  reply_count?: number
+  reactions?: SlackReaction[]
+  edited?: SlackEditInfo
+  channel?: { id: string }
+}
+
+/** Slack channel topic/purpose from API */
+interface SlackChannelMeta {
+  value?: string
+}
+
+/** Slack channel from API */
+interface SlackChannel {
+  id: string
+  name: string
+  topic?: SlackChannelMeta
+  purpose?: SlackChannelMeta
+  is_private?: boolean
+  is_archived?: boolean
+  num_members?: number
+  created: number
+}
+
+/** Slack user profile from API */
+interface SlackUserProfile {
+  display_name?: string
+  email?: string
+  image_192?: string
+  title?: string
+}
+
+/** Slack user from API */
+interface SlackUser {
+  id: string
+  name: string
+  real_name?: string
+  profile?: SlackUserProfile
+  is_admin?: boolean
+  is_owner?: boolean
+  is_bot?: boolean
+  deleted?: boolean
+  tz?: string
+}
+
+/** Slack team icon from API */
+interface SlackTeamIcon {
+  image_132?: string
+}
+
+/** Slack team from API */
+interface SlackTeam {
+  id: string
+  name: string
+  domain: string
+  icon?: SlackTeamIcon
+}
+
+/** Slack response metadata */
+interface SlackResponseMetadata {
+  next_cursor?: string
+}
+
+/** Slack paging info */
+interface SlackPaging {
+  pages: number
+  page: number
+}
+
+/** Slack messages search result */
+interface SlackMessagesSearchResult {
+  matches: SlackMessage[]
+  paging: SlackPaging
+  total: number
+}
+
+/** Slack auth test response */
+interface SlackAuthTestResponse extends SlackApiResponse {
+  user?: string
+}
+
+/** Slack conversations open response */
+interface SlackConversationsOpenResponse extends SlackApiResponse {
+  channel?: { id: string }
+}
+
+/** Slack post message response */
+interface SlackPostMessageResponse extends SlackApiResponse {
+  ts?: string
+  channel?: string
+}
+
+/** Slack conversations history response */
+interface SlackConversationsHistoryResponse extends SlackApiResponse {
+  messages?: SlackMessage[]
+  has_more?: boolean
+  response_metadata?: SlackResponseMetadata
+}
+
+/** Slack search messages response */
+interface SlackSearchMessagesResponse extends SlackApiResponse {
+  messages: SlackMessagesSearchResult
+}
+
+/** Slack conversations list response */
+interface SlackConversationsListResponse extends SlackApiResponse {
+  channels: SlackChannel[]
+  response_metadata?: SlackResponseMetadata
+}
+
+/** Slack conversations info response */
+interface SlackConversationsInfoResponse extends SlackApiResponse {
+  channel: SlackChannel
+}
+
+/** Slack conversations members response */
+interface SlackConversationsMembersResponse extends SlackApiResponse {
+  members: string[]
+  response_metadata?: SlackResponseMetadata
+}
+
+/** Slack users list response */
+interface SlackUsersListResponse extends SlackApiResponse {
+  members: SlackUser[]
+  response_metadata?: SlackResponseMetadata
+}
+
+/** Slack users info response */
+interface SlackUsersInfoResponse extends SlackApiResponse {
+  user: SlackUser
+}
+
+/** Slack presence response */
+interface SlackPresenceResponse extends SlackApiResponse {
+  presence: string
+}
+
+/** Slack team info response */
+interface SlackTeamInfoResponse extends SlackApiResponse {
+  team: SlackTeam
+}
+
 /**
  * Slack provider info
  */
@@ -49,7 +218,10 @@ export const slackInfo: ProviderInfo = {
 export function createSlackProvider(config: ProviderConfig): MessagingProvider {
   let token: string
 
-  async function slackApi(method: string, body?: Record<string, unknown>): Promise<any> {
+  async function slackApi<T extends SlackApiResponse>(
+    method: string,
+    body?: Record<string, unknown>
+  ): Promise<T> {
     const response = await fetch(`${SLACK_API_URL}/${method}`, {
       method: 'POST',
       headers: {
@@ -59,7 +231,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       body: body ? JSON.stringify(body) : undefined,
     })
 
-    const data = await response.json()
+    const data = (await response.json()) as T
     return data
   }
 
@@ -76,7 +248,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     async healthCheck(): Promise<ProviderHealth> {
       const start = Date.now()
       try {
-        const data = await slackApi('auth.test')
+        const data = await slackApi<SlackAuthTestResponse>('auth.test')
         return {
           healthy: data.ok === true,
           latencyMs: Date.now() - start,
@@ -106,14 +278,16 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         body.channel = options.channel
       } else if (options.userId) {
         // Open DM conversation first
-        const dm = await slackApi('conversations.open', { users: options.userId })
+        const dm = await slackApi<SlackConversationsOpenResponse>('conversations.open', {
+          users: options.userId,
+        })
         if (!dm.ok) {
           return {
             success: false,
-            error: { code: dm.error, message: `Failed to open DM: ${dm.error}` },
+            error: { code: dm.error || 'UNKNOWN', message: `Failed to open DM: ${dm.error}` },
           }
         }
-        body.channel = dm.channel.id
+        body.channel = dm.channel?.id
       } else {
         return {
           success: false,
@@ -136,7 +310,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         }
       }
 
-      const data = await slackApi('chat.postMessage', body)
+      const data = await slackApi<SlackPostMessageResponse>('chat.postMessage', body)
 
       if (data.ok) {
         return {
@@ -149,7 +323,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
 
       return {
         success: false,
-        error: { code: data.error, message: data.error },
+        error: { code: data.error || 'UNKNOWN', message: data.error || 'Unknown error' },
       }
     },
 
@@ -163,7 +337,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         body.blocks = blocks
       }
 
-      const data = await slackApi('chat.update', body)
+      const data = await slackApi<SlackPostMessageResponse>('chat.update', body)
 
       if (data.ok) {
         return {
@@ -176,17 +350,17 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
 
       return {
         success: false,
-        error: { code: data.error, message: data.error },
+        error: { code: data.error || 'UNKNOWN', message: data.error || 'Unknown error' },
       }
     },
 
     async delete(messageId: string, channel: string): Promise<boolean> {
-      const data = await slackApi('chat.delete', { ts: messageId, channel })
+      const data = await slackApi<SlackApiResponse>('chat.delete', { ts: messageId, channel })
       return data.ok === true
     },
 
     async react(messageId: string, channel: string, emoji: string): Promise<boolean> {
-      const data = await slackApi('reactions.add', {
+      const data = await slackApi<SlackApiResponse>('reactions.add', {
         name: emoji.replace(/:/g, ''),
         timestamp: messageId,
         channel,
@@ -195,7 +369,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     },
 
     async unreact(messageId: string, channel: string, emoji: string): Promise<boolean> {
-      const data = await slackApi('reactions.remove', {
+      const data = await slackApi<SlackApiResponse>('reactions.remove', {
         name: emoji.replace(/:/g, ''),
         timestamp: messageId,
         channel,
@@ -204,7 +378,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     },
 
     async getMessage(messageId: string, channel: string): Promise<MessageData | null> {
-      const data = await slackApi('conversations.history', {
+      const data = await slackApi<SlackConversationsHistoryResponse>('conversations.history', {
         channel,
         latest: messageId,
         inclusive: true,
@@ -219,7 +393,10 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       return mapSlackMessage(msg, channel)
     },
 
-    async listMessages(channel: string, options?: MessageListOptions): Promise<PaginatedResult<MessageData>> {
+    async listMessages(
+      channel: string,
+      options?: MessageListOptions
+    ): Promise<PaginatedResult<MessageData>> {
       const body: Record<string, unknown> = {
         channel,
         limit: options?.limit || 100,
@@ -235,21 +412,24 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         body.latest = (options.until.getTime() / 1000).toString()
       }
 
-      const data = await slackApi('conversations.history', body)
+      const data = await slackApi<SlackConversationsHistoryResponse>('conversations.history', body)
 
       if (!data.ok) {
         return { items: [], hasMore: false }
       }
 
       return {
-        items: data.messages.map((msg: any) => mapSlackMessage(msg, channel)),
+        items: (data.messages || []).map((msg) => mapSlackMessage(msg, channel)),
         hasMore: data.has_more || false,
         nextCursor: data.response_metadata?.next_cursor,
       }
     },
 
-    async searchMessages(query: string, options?: MessageSearchOptions): Promise<PaginatedResult<MessageData>> {
-      const data = await slackApi('search.messages', {
+    async searchMessages(
+      query: string,
+      options?: MessageSearchOptions
+    ): Promise<PaginatedResult<MessageData>> {
+      const data = await slackApi<SlackSearchMessagesResponse>('search.messages', {
         query,
         count: options?.limit || 100,
         page: options?.offset ? Math.floor(options.offset / (options.limit || 100)) + 1 : 1,
@@ -260,7 +440,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       return {
-        items: data.messages.matches.map((match: any) => mapSlackMessage(match, match.channel.id)),
+        items: data.messages.matches.map((match) =>
+          mapSlackMessage(match, match.channel?.id || '')
+        ),
         hasMore: data.messages.paging.pages > data.messages.paging.page,
         total: data.messages.total,
       }
@@ -277,10 +459,12 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
       }
 
       if (options?.types) {
-        body.types = options.types.map((t) => (t === 'private' ? 'private_channel' : 'public_channel')).join(',')
+        body.types = options.types
+          .map((t) => (t === 'private' ? 'private_channel' : 'public_channel'))
+          .join(',')
       }
 
-      const data = await slackApi('conversations.list', body)
+      const data = await slackApi<SlackConversationsListResponse>('conversations.list', body)
 
       if (!data.ok) {
         return { items: [], hasMore: false }
@@ -294,7 +478,9 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     },
 
     async getChannel(channelId: string): Promise<ChannelData | null> {
-      const data = await slackApi('conversations.info', { channel: channelId })
+      const data = await slackApi<SlackConversationsInfoResponse>('conversations.info', {
+        channel: channelId,
+      })
 
       if (!data.ok) {
         return null
@@ -309,7 +495,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         is_private: options?.isPrivate || false,
       }
 
-      const data = await slackApi('conversations.create', body)
+      const data = await slackApi<SlackConversationsInfoResponse>('conversations.create', body)
 
       if (!data.ok) {
         throw new Error(`Failed to create channel: ${data.error}`)
@@ -319,7 +505,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
 
       // Set topic if provided
       if (options?.topic) {
-        await slackApi('conversations.setTopic', {
+        await slackApi<SlackApiResponse>('conversations.setTopic', {
           channel: data.channel.id,
           topic: options.topic,
         })
@@ -327,7 +513,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
 
       // Set description/purpose if provided
       if (options?.description) {
-        await slackApi('conversations.setPurpose', {
+        await slackApi<SlackApiResponse>('conversations.setPurpose', {
           channel: data.channel.id,
           purpose: options.description,
         })
@@ -337,17 +523,17 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     },
 
     async archiveChannel(channelId: string): Promise<boolean> {
-      const data = await slackApi('conversations.archive', { channel: channelId })
+      const data = await slackApi<SlackApiResponse>('conversations.archive', { channel: channelId })
       return data.ok === true
     },
 
     async joinChannel(channelId: string): Promise<boolean> {
-      const data = await slackApi('conversations.join', { channel: channelId })
+      const data = await slackApi<SlackApiResponse>('conversations.join', { channel: channelId })
       return data.ok === true
     },
 
     async leaveChannel(channelId: string): Promise<boolean> {
-      const data = await slackApi('conversations.leave', { channel: channelId })
+      const data = await slackApi<SlackApiResponse>('conversations.leave', { channel: channelId })
       return data.ok === true
     },
 
@@ -360,45 +546,46 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
         body.cursor = options.cursor
       }
 
-      let data: any
-
       if (options?.channel) {
         // Get members of specific channel
-        data = await slackApi('conversations.members', { ...body, channel: options.channel })
-        if (!data.ok) {
+        const channelData = await slackApi<SlackConversationsMembersResponse>(
+          'conversations.members',
+          { ...body, channel: options.channel }
+        )
+        if (!channelData.ok) {
           return { items: [], hasMore: false }
         }
 
         // Fetch user info for each member
         const members = await Promise.all(
-          data.members.map(async (userId: string) => {
-            const userInfo = await slackApi('users.info', { user: userId })
+          channelData.members.map(async (userId: string) => {
+            const userInfo = await slackApi<SlackUsersInfoResponse>('users.info', { user: userId })
             return userInfo.ok ? mapSlackUser(userInfo.user) : null
           })
         )
 
         return {
-          items: members.filter(Boolean) as MemberData[],
-          hasMore: data.response_metadata?.next_cursor ? true : false,
-          nextCursor: data.response_metadata?.next_cursor,
+          items: members.filter((m): m is MemberData => m !== null),
+          hasMore: channelData.response_metadata?.next_cursor ? true : false,
+          nextCursor: channelData.response_metadata?.next_cursor,
         }
       } else {
         // Get all workspace members
-        data = await slackApi('users.list', body)
-        if (!data.ok) {
+        const usersData = await slackApi<SlackUsersListResponse>('users.list', body)
+        if (!usersData.ok) {
           return { items: [], hasMore: false }
         }
 
         return {
-          items: data.members.filter((m: any) => !m.deleted).map(mapSlackUser),
-          hasMore: data.response_metadata?.next_cursor ? true : false,
-          nextCursor: data.response_metadata?.next_cursor,
+          items: usersData.members.filter((m) => !m.deleted).map(mapSlackUser),
+          hasMore: usersData.response_metadata?.next_cursor ? true : false,
+          nextCursor: usersData.response_metadata?.next_cursor,
         }
       }
     },
 
     async getMember(userId: string): Promise<MemberData | null> {
-      const data = await slackApi('users.info', { user: userId })
+      const data = await slackApi<SlackUsersInfoResponse>('users.info', { user: userId })
 
       if (!data.ok) {
         return null
@@ -408,7 +595,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     },
 
     async getPresence(userId: string): Promise<PresenceData> {
-      const data = await slackApi('users.getPresence', { user: userId })
+      const data = await slackApi<SlackPresenceResponse>('users.getPresence', { user: userId })
 
       return {
         userId,
@@ -417,7 +604,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
     },
 
     async getWorkspace(): Promise<WorkspaceData> {
-      const data = await slackApi('team.info')
+      const data = await slackApi<SlackTeamInfoResponse>('team.info')
 
       if (!data.ok) {
         throw new Error(`Failed to get workspace info: ${data.error}`)
@@ -433,7 +620,7 @@ export function createSlackProvider(config: ProviderConfig): MessagingProvider {
   }
 }
 
-function mapSlackMessage(msg: any, channel: string): MessageData {
+function mapSlackMessage(msg: SlackMessage, channel: string): MessageData {
   return {
     id: msg.ts,
     channel,
@@ -442,7 +629,7 @@ function mapSlackMessage(msg: any, channel: string): MessageData {
     timestamp: msg.ts,
     threadId: msg.thread_ts,
     replyCount: msg.reply_count,
-    reactions: msg.reactions?.map((r: any) => ({
+    reactions: msg.reactions?.map((r) => ({
       emoji: r.name,
       count: r.count,
       users: r.users,
@@ -452,7 +639,7 @@ function mapSlackMessage(msg: any, channel: string): MessageData {
   }
 }
 
-function mapSlackChannel(ch: any): ChannelData {
+function mapSlackChannel(ch: SlackChannel): ChannelData {
   return {
     id: ch.id,
     name: ch.name,
@@ -465,7 +652,7 @@ function mapSlackChannel(ch: any): ChannelData {
   }
 }
 
-function mapSlackUser(user: any): MemberData {
+function mapSlackUser(user: SlackUser): MemberData {
   return {
     id: user.id,
     username: user.name,

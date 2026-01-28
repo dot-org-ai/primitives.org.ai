@@ -25,6 +25,101 @@ import { defineProvider } from '../registry.js'
 
 const HUBSPOT_API_URL = 'https://api.hubapi.com/crm/v3'
 
+// =============================================================================
+// HubSpot API Response Types
+// =============================================================================
+
+/** HubSpot contact properties from API */
+interface HubSpotContactProperties {
+  firstname?: string
+  lastname?: string
+  email?: string
+  phone?: string
+  company?: string
+  jobtitle?: string
+  hubspot_owner_id?: string
+  createdate?: string
+  lastmodifieddate?: string
+  [key: string]: string | undefined
+}
+
+/** HubSpot contact response from API */
+interface HubSpotContact {
+  id: string
+  properties: HubSpotContactProperties
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** HubSpot deal properties from API */
+interface HubSpotDealProperties {
+  dealname?: string
+  amount?: string
+  deal_currency_code?: string
+  dealstage?: string
+  hs_deal_stage_probability?: string
+  associatedcontactid?: string
+  associatedcompanyid?: string
+  hubspot_owner_id?: string
+  closedate?: string
+  createdate?: string
+  hs_lastmodifieddate?: string
+  hs_date_entered_closedwon?: string
+  hs_date_entered_closedlost?: string
+  [key: string]: string | undefined
+}
+
+/** HubSpot deal response from API */
+interface HubSpotDeal {
+  id: string
+  properties: HubSpotDealProperties
+  createdAt?: string
+  updatedAt?: string
+}
+
+/** HubSpot engagement properties from API */
+interface HubSpotEngagementProperties {
+  hs_engagement_type?: string
+  hs_engagement_subject?: string
+  hs_note_body?: string
+  hs_email_text?: string
+  hubspot_owner_id?: string
+  hs_task_due_date?: string
+  hs_engagement_completed_at?: string
+  hs_createdate?: string
+  [key: string]: string | undefined
+}
+
+/** HubSpot engagement response from API */
+interface HubSpotEngagement {
+  id: string
+  properties: HubSpotEngagementProperties
+  createdAt?: string
+}
+
+/** HubSpot paginated list response */
+interface HubSpotListResponse<T> {
+  results: T[]
+  total?: number
+  paging?: {
+    next?: {
+      after: string
+    }
+  }
+}
+
+/** HubSpot association result */
+interface HubSpotAssociationResult {
+  id: string
+}
+
+/** HubSpot error response */
+interface HubSpotErrorResponse {
+  message?: string
+  status?: string
+  category?: string
+}
+
 /**
  * HubSpot provider info
  */
@@ -42,7 +137,7 @@ export const hubspotInfo: ProviderInfo = {
 /**
  * Map HubSpot contact properties to CRMContactData
  */
-function mapContactFromHubSpot(contact: any): CRMContactData {
+function mapContactFromHubSpot(contact: HubSpotContact): CRMContactData {
   const props = contact.properties || {}
   return {
     id: contact.id,
@@ -53,15 +148,15 @@ function mapContactFromHubSpot(contact: any): CRMContactData {
     company: props.company,
     title: props.jobtitle,
     ownerId: props.hubspot_owner_id,
-    createdAt: new Date(props.createdate || contact.createdAt),
-    updatedAt: new Date(props.lastmodifieddate || contact.updatedAt),
+    createdAt: new Date(props.createdate || contact.createdAt || Date.now()),
+    updatedAt: new Date(props.lastmodifieddate || contact.updatedAt || Date.now()),
   }
 }
 
 /**
  * Map HubSpot deal properties to DealData
  */
-function mapDealFromHubSpot(deal: any): DealData {
+function mapDealFromHubSpot(deal: HubSpotDeal): DealData {
   const props = deal.properties || {}
   return {
     id: deal.id,
@@ -69,22 +164,26 @@ function mapDealFromHubSpot(deal: any): DealData {
     value: props.amount ? parseFloat(props.amount) : undefined,
     currency: props.deal_currency_code,
     stage: props.dealstage || '',
-    probability: props.hs_deal_stage_probability ? parseFloat(props.hs_deal_stage_probability) : undefined,
+    probability: props.hs_deal_stage_probability
+      ? parseFloat(props.hs_deal_stage_probability)
+      : undefined,
     contactId: props.associatedcontactid,
     companyId: props.associatedcompanyid,
     ownerId: props.hubspot_owner_id,
     closeDate: props.closedate ? new Date(props.closedate) : undefined,
-    createdAt: new Date(props.createdate || deal.createdAt),
-    updatedAt: new Date(props.hs_lastmodifieddate || deal.updatedAt),
+    createdAt: new Date(props.createdate || deal.createdAt || Date.now()),
+    updatedAt: new Date(props.hs_lastmodifieddate || deal.updatedAt || Date.now()),
     wonAt: props.hs_date_entered_closedwon ? new Date(props.hs_date_entered_closedwon) : undefined,
-    lostAt: props.hs_date_entered_closedlost ? new Date(props.hs_date_entered_closedlost) : undefined,
+    lostAt: props.hs_date_entered_closedlost
+      ? new Date(props.hs_date_entered_closedlost)
+      : undefined,
   }
 }
 
 /**
  * Map HubSpot engagement to CRMActivityData
  */
-function mapActivityFromHubSpot(engagement: any, contactId: string): CRMActivityData {
+function mapActivityFromHubSpot(engagement: HubSpotEngagement, contactId: string): CRMActivityData {
   const props = engagement.properties || {}
   return {
     id: engagement.id,
@@ -94,8 +193,10 @@ function mapActivityFromHubSpot(engagement: any, contactId: string): CRMActivity
     contactId,
     ownerId: props.hubspot_owner_id || '',
     dueDate: props.hs_task_due_date ? new Date(props.hs_task_due_date) : undefined,
-    completedAt: props.hs_engagement_completed_at ? new Date(props.hs_engagement_completed_at) : undefined,
-    createdAt: new Date(props.hs_createdate || engagement.createdAt),
+    completedAt: props.hs_engagement_completed_at
+      ? new Date(props.hs_engagement_completed_at)
+      : undefined,
+    createdAt: new Date(props.hs_createdate || engagement.createdAt || Date.now()),
   }
 }
 
@@ -153,7 +254,10 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
   }
 
   // Helper function to associate engagement with contact
-  async function associateEngagementWithContact(engagementId: string, contactId: string): Promise<void> {
+  async function associateEngagementWithContact(
+    engagementId: string,
+    contactId: string
+  ): Promise<void> {
     try {
       const response = await fetch(
         `${baseUrl}/objects/engagements/${engagementId}/associations/contacts/${contactId}/engagement_to_contact`,
@@ -217,7 +321,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
     },
 
     async createContact(contact: CreateContactOptions): Promise<CRMContactData> {
-      const properties: Record<string, any> = {
+      const properties: Record<string, string> = {
         firstname: contact.firstName,
         lastname: contact.lastName,
       }
@@ -229,7 +333,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
 
       // Add custom fields
       if (contact.customFields) {
-        Object.assign(properties, contact.customFields)
+        for (const [key, value] of Object.entries(contact.customFields)) {
+          if (value !== undefined && value !== null) {
+            properties[key] = String(value)
+          }
+        }
       }
 
       try {
@@ -243,11 +351,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error((errorData as any)?.message || `HTTP ${response.status}`)
+          const errorData = (await response.json().catch(() => ({}))) as HubSpotErrorResponse
+          throw new Error(errorData.message || `HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotContact
         return mapContactFromHubSpot(data)
       } catch (error) {
         throw new Error(
@@ -273,7 +381,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotContact
         return mapContactFromHubSpot(data)
       } catch (error) {
         if (error instanceof Error && error.message.includes('404')) {
@@ -289,7 +397,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
       contactId: string,
       updates: Partial<CreateContactOptions>
     ): Promise<CRMContactData> {
-      const properties: Record<string, any> = {}
+      const properties: Record<string, string> = {}
 
       if (updates.firstName !== undefined) properties.firstname = updates.firstName
       if (updates.lastName !== undefined) properties.lastname = updates.lastName
@@ -300,7 +408,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
 
       // Add custom fields
       if (updates.customFields) {
-        Object.assign(properties, updates.customFields)
+        for (const [key, value] of Object.entries(updates.customFields)) {
+          if (value !== undefined && value !== null) {
+            properties[key] = String(value)
+          }
+        }
       }
 
       try {
@@ -314,11 +426,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error((errorData as any)?.message || `HTTP ${response.status}`)
+          const errorData = (await response.json().catch(() => ({}))) as HubSpotErrorResponse
+          throw new Error(errorData.message || `HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotContact
         return mapContactFromHubSpot(data)
       } catch (error) {
         throw new Error(
@@ -348,7 +460,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotListResponse<HubSpotContact>
         return {
           items: (data.results || []).map(mapContactFromHubSpot),
           total: data.total,
@@ -400,7 +512,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotListResponse<HubSpotContact>
         return (data.results || []).map(mapContactFromHubSpot)
       } catch (error) {
         throw new Error(
@@ -410,7 +522,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
     },
 
     async createDeal(deal: CreateDealOptions): Promise<DealData> {
-      const properties: Record<string, any> = {
+      const properties: Record<string, string> = {
         dealname: deal.name,
         dealstage: deal.stage,
       }
@@ -418,7 +530,8 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
       if (deal.value !== undefined) properties.amount = String(deal.value)
       if (deal.currency) properties.deal_currency_code = deal.currency
       if (deal.closeDate) properties.closedate = deal.closeDate.toISOString()
-      if (deal.probability !== undefined) properties.hs_deal_stage_probability = String(deal.probability)
+      if (deal.probability !== undefined)
+        properties.hs_deal_stage_probability = String(deal.probability)
 
       try {
         const response = await fetch(`${baseUrl}/objects/deals`, {
@@ -431,11 +544,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error((errorData as any)?.message || `HTTP ${response.status}`)
+          const errorData = (await response.json().catch(() => ({}))) as HubSpotErrorResponse
+          throw new Error(errorData.message || `HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotDeal
         const dealData = mapDealFromHubSpot(data)
 
         // Associate with contact if specified
@@ -473,7 +586,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotDeal
         return mapDealFromHubSpot(data)
       } catch (error) {
         if (error instanceof Error && error.message.includes('404')) {
@@ -486,14 +599,15 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
     },
 
     async updateDeal(dealId: string, updates: Partial<CreateDealOptions>): Promise<DealData> {
-      const properties: Record<string, any> = {}
+      const properties: Record<string, string> = {}
 
       if (updates.name !== undefined) properties.dealname = updates.name
       if (updates.stage !== undefined) properties.dealstage = updates.stage
       if (updates.value !== undefined) properties.amount = String(updates.value)
       if (updates.currency !== undefined) properties.deal_currency_code = updates.currency
       if (updates.closeDate !== undefined) properties.closedate = updates.closeDate.toISOString()
-      if (updates.probability !== undefined) properties.hs_deal_stage_probability = String(updates.probability)
+      if (updates.probability !== undefined)
+        properties.hs_deal_stage_probability = String(updates.probability)
 
       try {
         const response = await fetch(`${baseUrl}/objects/deals/${dealId}`, {
@@ -506,11 +620,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error((errorData as any)?.message || `HTTP ${response.status}`)
+          const errorData = (await response.json().catch(() => ({}))) as HubSpotErrorResponse
+          throw new Error(errorData.message || `HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotDeal
         return mapDealFromHubSpot(data)
       } catch (error) {
         throw new Error(
@@ -540,7 +654,7 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotListResponse<HubSpotDeal>
         return {
           items: (data.results || []).map(mapDealFromHubSpot),
           total: data.total,
@@ -554,15 +668,23 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
       }
     },
 
-    async logActivity(contactId: string, activity: CreateActivityOptions): Promise<CRMActivityData> {
+    async logActivity(
+      contactId: string,
+      activity: CreateActivityOptions
+    ): Promise<CRMActivityData> {
       // Map activity type to HubSpot engagement type
-      const engagementType = activity.type === 'email' ? 'EMAIL' :
-                             activity.type === 'call' ? 'CALL' :
-                             activity.type === 'meeting' ? 'MEETING' :
-                             activity.type === 'task' ? 'TASK' :
-                             'NOTE'
+      const engagementType =
+        activity.type === 'email'
+          ? 'EMAIL'
+          : activity.type === 'call'
+          ? 'CALL'
+          : activity.type === 'meeting'
+          ? 'MEETING'
+          : activity.type === 'task'
+          ? 'TASK'
+          : 'NOTE'
 
-      const properties: Record<string, any> = {
+      const properties: Record<string, string> = {
         hs_engagement_type: engagementType.toLowerCase(),
         hs_engagement_subject: activity.subject,
       }
@@ -590,11 +712,11 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error((errorData as any)?.message || `HTTP ${response.status}`)
+          const errorData = (await response.json().catch(() => ({}))) as HubSpotErrorResponse
+          throw new Error(errorData.message || `HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
+        const data = (await response.json()) as HubSpotEngagement
 
         // Associate engagement with contact
         await associateEngagementWithContact(data.id, contactId)
@@ -624,8 +746,8 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
           throw new Error(`HTTP ${response.status}`)
         }
 
-        const data: any = await response.json()
-        const engagementIds = (data.results || []).map((r: any) => r.id)
+        const data = (await response.json()) as HubSpotListResponse<HubSpotAssociationResult>
+        const engagementIds = (data.results || []).map((r) => r.id)
 
         if (engagementIds.length === 0) {
           return []
@@ -641,15 +763,15 @@ export function createHubSpotProvider(config: ProviderConfig): CRMProvider {
               },
             })
             if (engResponse.ok) {
-              return engResponse.json()
+              return (await engResponse.json()) as HubSpotEngagement
             }
             return null
           })
         )
 
         return engagements
-          .filter((eng: any) => eng !== null)
-          .map((eng: any) => mapActivityFromHubSpot(eng, contactId))
+          .filter((eng): eng is HubSpotEngagement => eng !== null)
+          .map((eng) => mapActivityFromHubSpot(eng, contactId))
       } catch (error) {
         throw new Error(
           `Failed to list activities: ${error instanceof Error ? error.message : 'Unknown error'}`

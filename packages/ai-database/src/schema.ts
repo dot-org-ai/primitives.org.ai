@@ -119,9 +119,29 @@ export {
   registerVerbPair,
   registerBidirectionalPair,
   registerFieldVerb,
+  // Provider type guards
+  hasSemanticSearch,
+  hasHybridSearch,
+  hasEventsAPI,
+  hasActionsAPI,
+  hasArtifactsAPI,
+  hasEmbeddingsConfig,
 } from './schema/index.js'
 
 export type { AIGenerationConfig, EntityOperationsConfig } from './schema/index.js'
+
+// Import type guards for internal use
+import {
+  hasSemanticSearch,
+  hasHybridSearch,
+  hasEventsAPI,
+  hasActionsAPI,
+  hasArtifactsAPI,
+  hasEmbeddingsConfig,
+} from './schema/index.js'
+
+// Import extended provider types for type assertions
+import type { DBProviderExtended, SemanticSearchResult } from './schema/index.js'
 
 // Re-export linguistic utilities from linguistic.ts
 export {
@@ -156,6 +176,66 @@ import type {
 import { Verbs } from './types.js'
 
 import { inferNoun, getTypeMeta, conjugate } from './linguistic.js'
+
+// =============================================================================
+// Internal Type Definitions for Type Safety
+// =============================================================================
+
+/**
+ * Result from semantic search with matched type info for union types
+ * @internal
+ */
+interface SemanticMatchResult {
+  id: string
+  type: string
+  score: number
+}
+
+/**
+ * Schema metadata fields that can be present in raw EntitySchema
+ * Used for type-safe access to $fuzzyThreshold and other schema metadata
+ * These are $ prefixed fields that are not FieldDefinitions
+ * @internal
+ */
+interface SchemaMetadata {
+  $fuzzyThreshold?: number
+  $instructions?: string
+}
+
+/**
+ * Hydrated entity with optional matched type info for union type tracking
+ * @internal
+ */
+interface HydratedEntityWithMatchedType extends Record<string, unknown> {
+  $matchedType?: string
+  $matchedTypes?: string[]
+}
+
+/**
+ * Dynamic provider import result type for fs provider
+ * @internal
+ */
+interface FsProviderModule {
+  createFsProvider: (options: { root: string }) => DBProvider
+}
+
+/**
+ * Dynamic provider import result type for sqlite provider
+ * @internal
+ */
+interface SqliteProviderModule {
+  createSqliteProvider: (options: { url: string }) => Promise<DBProvider>
+}
+
+/**
+ * Dynamic provider import result type for clickhouse provider
+ * @internal
+ */
+interface ClickhouseProviderModule {
+  createClickhouseProvider: (options: { mode: string; url: string }) => Promise<DBProvider>
+}
+
+// Note: EntityOperationsMap type removed - using inline type with explanation below
 
 /**
  * Create a Noun definition with type inference
@@ -2218,8 +2298,9 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'fs': {
         try {
-          const { createFsProvider } = await import('@mdxdb/fs' as any)
-          globalProvider = createFsProvider({ root: parsed.root })
+          // Dynamic import with type assertion - module type checked at runtime
+          const fsModule = (await import('@mdxdb/fs')) as unknown as FsProviderModule
+          globalProvider = fsModule.createFsProvider({ root: parsed.root })
 
           // Check file count and warn if approaching threshold
           checkFileCountThreshold(parsed.root)
@@ -2233,15 +2314,16 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'sqlite': {
         try {
-          const { createSqliteProvider } = await import('@mdxdb/sqlite' as any)
+          // Dynamic import with type assertion - module type checked at runtime
+          const sqliteModule = (await import('@mdxdb/sqlite')) as unknown as SqliteProviderModule
 
           if (parsed.remoteUrl) {
             // Remote Turso
-            globalProvider = await createSqliteProvider({ url: parsed.remoteUrl })
+            globalProvider = await sqliteModule.createSqliteProvider({ url: parsed.remoteUrl })
           } else {
             // Local SQLite in .db folder
             const dbPath = `${parsed.root}/.db/index.sqlite`
-            globalProvider = await createSqliteProvider({ url: `file:${dbPath}` })
+            globalProvider = await sqliteModule.createSqliteProvider({ url: `file:${dbPath}` })
           }
         } catch (err) {
           console.warn('@mdxdb/sqlite not available, falling back to memory provider')
@@ -2253,18 +2335,21 @@ async function resolveProvider(): Promise<DBProvider> {
 
       case 'clickhouse': {
         try {
-          const { createClickhouseProvider } = await import('@mdxdb/clickhouse' as any)
+          // Dynamic import with type assertion - module type checked at runtime
+          const chModule = (await import(
+            '@mdxdb/clickhouse'
+          )) as unknown as ClickhouseProviderModule
 
           if (parsed.remoteUrl) {
             // Remote ClickHouse
-            globalProvider = await createClickhouseProvider({
+            globalProvider = await chModule.createClickhouseProvider({
               mode: 'http',
               url: parsed.remoteUrl,
             })
           } else {
             // Local chDB in .db folder
             const dbPath = `${parsed.root}/.db/clickhouse`
-            globalProvider = await createClickhouseProvider({
+            globalProvider = await chModule.createClickhouseProvider({
               mode: 'chdb',
               url: dbPath,
             })
@@ -2910,9 +2995,10 @@ export function DB<TSchema extends DatabaseSchema>(
 
   // Configure provider with embeddings settings if provided
   if (options?.embeddings) {
+    const embeddingsConfig = options.embeddings
     resolveProvider().then((provider) => {
-      if ('setEmbeddingsConfig' in provider) {
-        ;(provider as any).setEmbeddingsConfig(options.embeddings)
+      if (hasEmbeddingsConfig(provider)) {
+        provider.setEmbeddingsConfig(embeddingsConfig)
       }
     })
   }
@@ -2949,30 +3035,35 @@ export function DB<TSchema extends DatabaseSchema>(
   const actionsAPI = {
     async create(options: CreateActionOptions | { type: string; data: unknown; total?: number }) {
       const provider = await resolveProvider()
-      if ('createAction' in provider) {
-        return (provider as any).createAction(options)
+      if (hasActionsAPI(provider)) {
+        return provider.createAction(options)
       }
       throw new Error('Provider does not support actions')
     },
     async get(id: string) {
       const provider = await resolveProvider()
-      if ('getAction' in provider) {
-        return (provider as any).getAction(id)
+      if (hasActionsAPI(provider)) {
+        return provider.getAction(id)
       }
       return null
     },
-    async update(id: string, updates: unknown) {
+    async update(
+      id: string,
+      updates: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>>
+    ) {
       const provider = await resolveProvider()
-      if ('updateAction' in provider) {
-        return (provider as any).updateAction(id, updates)
+      if (hasActionsAPI(provider)) {
+        return provider.updateAction(id, updates)
       }
       throw new Error('Provider does not support actions')
     },
   }
 
   // Create entity operations for each type with promise pipelining
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const entityOperations: Record<string, any> = {}
+  // NOTE: Using Record<string, unknown> here because entity operations types vary by schema.
+  // The actual types are determined at runtime and enforced via wrapEntityOperations.
+  // Attempts to use stricter types conflict with wrapEntityOperations return type.
+  const entityOperations: Record<string, unknown> = {}
 
   // Internal event emitter for draft/resolve events (defined early for use in entity operations)
   const eventHandlersForOps = new Map<string, Set<(data: unknown) => void>>()
@@ -3013,15 +3104,23 @@ export function DB<TSchema extends DatabaseSchema>(
         data: Record<string, unknown>,
         options?: DraftOptions
       ): Promise<unknown> => {
-        const draft = await (baseOps as any).draft(data, options)
-        draft.$type = entityName
+        // baseOps.draft is defined in createEntityOperations
+        if (!baseOps.draft) {
+          throw new Error(`Draft method not available for ${entityName}`)
+        }
+        const draft = await baseOps.draft(data, options)
+        ;(draft as Record<string, unknown>).$type = entityName
         emitInternalEventForOps('draft', draft)
         return draft
       }
       wrappedOps.draft = draftFn
 
       const resolveFn = async (draft: unknown, options?: ResolveOptions): Promise<unknown> => {
-        const resolved = await (baseOps as any).resolve(draft, options)
+        // baseOps.resolve is defined in createEntityOperations
+        if (!baseOps.resolve) {
+          throw new Error(`Resolve method not available for ${entityName}`)
+        }
+        const resolved = await baseOps.resolve(draft as Draft<Record<string, unknown>>, options)
         if (resolved && typeof resolved === 'object') {
           ;(resolved as Record<string, unknown>).$type = entityName
         }
@@ -3118,9 +3217,9 @@ export function DB<TSchema extends DatabaseSchema>(
       const results: Array<{ $id: string; $type: string; $score: number; [key: string]: unknown }> =
         []
 
-      if ('semanticSearch' in provider) {
+      if (hasSemanticSearch(provider)) {
         for (const [typeName] of parsedSchema.entities) {
-          const typeResults = await (provider as any).semanticSearch(typeName, query, options)
+          const typeResults = await provider.semanticSearch(typeName, query, options)
           results.push(...typeResults)
         }
       }
@@ -3202,8 +3301,8 @@ export function DB<TSchema extends DatabaseSchema>(
       // Get provider and delegate - need async resolution
       let unsubscribe = () => {}
       resolveProvider().then((provider) => {
-        if ('on' in provider) {
-          unsubscribe = (provider as any).on(pattern, handler)
+        if (hasEventsAPI(provider)) {
+          unsubscribe = provider.on(pattern, handler)
         }
       })
       return () => unsubscribe()
@@ -3211,8 +3310,8 @@ export function DB<TSchema extends DatabaseSchema>(
 
     async emit(optionsOrType: CreateEventOptions | string, data?: unknown): Promise<DBEvent> {
       const provider = await resolveProvider()
-      if ('emit' in provider) {
-        return (provider as any).emit(optionsOrType, data)
+      if (hasEventsAPI(provider)) {
+        return provider.emit(optionsOrType as CreateEventOptions)
       }
       // Return minimal event if provider doesn't support emit
       const now = new Date()
@@ -3241,16 +3340,16 @@ export function DB<TSchema extends DatabaseSchema>(
 
     async list(options) {
       const provider = await resolveProvider()
-      if ('listEvents' in provider) {
-        return (provider as any).listEvents(options)
+      if (hasEventsAPI(provider)) {
+        return provider.listEvents(options)
       }
       return []
     },
 
     async replay(options) {
       const provider = await resolveProvider()
-      if ('replayEvents' in provider) {
-        await (provider as any).replayEvents(options)
+      if (hasEventsAPI(provider)) {
+        await provider.replayEvents(options)
       }
     },
   }
@@ -3261,24 +3360,24 @@ export function DB<TSchema extends DatabaseSchema>(
 
     async list(options) {
       const provider = await resolveProvider()
-      if ('listActions' in provider) {
-        return (provider as any).listActions(options)
+      if (hasActionsAPI(provider)) {
+        return provider.listActions(options)
       }
       return []
     },
 
     async retry(id) {
       const provider = await resolveProvider()
-      if ('retryAction' in provider) {
-        return (provider as any).retryAction(id)
+      if (hasActionsAPI(provider)) {
+        return provider.retryAction(id)
       }
       throw new Error('Provider does not support actions')
     },
 
     async cancel(id) {
       const provider = await resolveProvider()
-      if ('cancelAction' in provider) {
-        await (provider as any).cancelAction(id)
+      if (hasActionsAPI(provider)) {
+        await provider.cancelAction(id)
       }
     },
 
@@ -3289,30 +3388,30 @@ export function DB<TSchema extends DatabaseSchema>(
   const artifacts: ArtifactsAPI = {
     async get(url, type) {
       const provider = await resolveProvider()
-      if ('getArtifact' in provider) {
-        return (provider as any).getArtifact(url, type)
+      if (hasArtifactsAPI(provider)) {
+        return provider.getArtifact(url, type)
       }
       return null
     },
 
     async set(url, type, data) {
       const provider = await resolveProvider()
-      if ('setArtifact' in provider) {
-        await (provider as any).setArtifact(url, type, data)
+      if (hasArtifactsAPI(provider)) {
+        await provider.setArtifact(url, type, data)
       }
     },
 
     async delete(url, type) {
       const provider = await resolveProvider()
-      if ('deleteArtifact' in provider) {
-        await (provider as any).deleteArtifact(url, type)
+      if (hasArtifactsAPI(provider)) {
+        await provider.deleteArtifact(url, type)
       }
     },
 
     async list(url) {
       const provider = await resolveProvider()
-      if ('listArtifacts' in provider) {
-        return (provider as any).listArtifacts(url)
+      if (hasArtifactsAPI(provider)) {
+        return provider.listArtifacts(url)
       }
       return []
     },
@@ -4124,7 +4223,9 @@ async function resolveBackwardFuzzy(
   provider: DBProvider
 ): Promise<Record<string, unknown>> {
   const resolved = { ...data }
-  const threshold = (entity.schema as any)?.$fuzzyThreshold ?? 0.75
+  // Type-safe access to schema metadata with default fallback
+  const schemaWithMeta = entity.schema as SchemaMetadata | undefined
+  const threshold = schemaWithMeta?.$fuzzyThreshold ?? 0.75
 
   /**
    * Search all union types in parallel and return matches
@@ -4134,17 +4235,17 @@ async function resolveBackwardFuzzy(
     searchQuery: string,
     threshold: number,
     limit: number
-  ): Promise<Array<{ id: string; type: string; score: number }>> {
-    if (!('semanticSearch' in provider)) return []
+  ): Promise<SemanticMatchResult[]> {
+    if (!hasSemanticSearch(provider)) return []
 
     // Search all types in parallel
     const allMatches = await Promise.all(
       types.map(async (type) => {
-        const matches = await (provider as any).semanticSearch(type, searchQuery, {
+        const matches = await provider.semanticSearch(type, searchQuery, {
           minScore: threshold,
           limit,
         })
-        return matches.map((m: any) => ({ id: m.$id, type, score: m.$score }))
+        return matches.map((m): SemanticMatchResult => ({ id: m.$id, type, score: m.$score }))
       })
     )
 
@@ -4172,7 +4273,7 @@ async function resolveBackwardFuzzy(
       const typesToSearch = field.unionTypes || [field.relatedType!]
 
       // Check if provider supports semantic search
-      if ('semanticSearch' in provider) {
+      if (hasSemanticSearch(provider)) {
         if (field.unionTypes && field.unionTypes.length > 0) {
           // Union type - search all types
           const matches = await searchUnionTypes(
@@ -4196,7 +4297,7 @@ async function resolveBackwardFuzzy(
           }
         } else {
           // Non-union type - use standard search
-          const matches = await (provider as any).semanticSearch(field.relatedType!, searchQuery, {
+          const matches = await provider.semanticSearch(field.relatedType!, searchQuery, {
             minScore: threshold,
             limit: field.isArray ? 10 : 1,
           })
@@ -4204,9 +4305,8 @@ async function resolveBackwardFuzzy(
           if (matches.length > 0) {
             if (field.isArray) {
               // For array fields, return all matches above threshold
-              resolved[fieldName] = matches
-                .filter((m: any) => m.$score >= threshold)
-                .map((m: any) => m.$id)
+              // SemanticSearchResult has $id and $score properties
+              resolved[fieldName] = matches.filter((m) => m.$score >= threshold).map((m) => m.$id)
             } else {
               // For single fields, return the best match
               resolved[fieldName] = matches[0].$id
@@ -4264,8 +4364,9 @@ async function resolveForwardFuzzy(
     similarity?: number
     matchedType?: string
   }> = []
-  // Default threshold from entity schema or 0.75
-  const defaultThreshold = (entity.schema as any)?.$fuzzyThreshold ?? 0.75
+  // Type-safe access to schema metadata with default fallback
+  const schemaWithMeta = entity.schema as SchemaMetadata | undefined
+  const defaultThreshold = schemaWithMeta?.$fuzzyThreshold ?? 0.75
 
   /**
    * Search all union types in parallel and return the best match
@@ -4274,17 +4375,21 @@ async function resolveForwardFuzzy(
     types: string[],
     searchQuery: string,
     threshold: number
-  ): Promise<{ id: string; type: string; score: number } | null> {
-    if (!('semanticSearch' in provider)) return null
+  ): Promise<SemanticMatchResult | null> {
+    if (!hasSemanticSearch(provider)) return null
 
-    // Search all types in parallel
+    // Search all types in parallel - results include $matchedType for tracking
+    interface SearchResultWithType extends SemanticSearchResult {
+      $matchedType: string
+    }
+
     const allMatches = await Promise.all(
       types.map(async (type) => {
-        const matches = await (provider as any).semanticSearch(type, searchQuery, {
+        const matches = await provider.semanticSearch(type, searchQuery, {
           minScore: threshold,
           limit: 3,
         })
-        return matches.map((m: any) => ({ ...m, $matchedType: type }))
+        return matches.map((m): SearchResultWithType => ({ ...m, $matchedType: type }))
       })
     )
 
@@ -4292,7 +4397,7 @@ async function resolveForwardFuzzy(
     const flat = allMatches.flat()
     if (flat.length === 0) return null
 
-    const best = flat.reduce((a: any, b: any) => (a.$score > b.$score ? a : b))
+    const best = flat.reduce((a, b) => (a.$score > b.$score ? a : b))
     return best.$score >= threshold
       ? { id: best.$id, type: best.$matchedType, score: best.$score }
       : null
@@ -4599,9 +4704,9 @@ async function resolveReferenceSpec(
 
   if (spec.matchMode === 'fuzzy') {
     // For fuzzy references, try to find an existing entity first
-    if ('semanticSearch' in provider) {
+    if (hasSemanticSearch(provider)) {
       const searchQuery = spec.generatedText || spec.prompt || spec.field
-      const matches = await (provider as any).semanticSearch(spec.type, searchQuery, {
+      const matches = await provider.semanticSearch(spec.type, searchQuery, {
         minScore: 0.5,
         limit: 1,
       })
@@ -4863,11 +4968,11 @@ function createEntityOperations<T>(
       options?: SemanticSearchOptions
     ): Promise<Array<T & { $score: number }>> {
       const provider = await resolveProvider()
-      if ('semanticSearch' in provider) {
-        const results = await (provider as any).semanticSearch(typeName, query, options)
+      if (hasSemanticSearch(provider)) {
+        const results = await provider.semanticSearch(typeName, query, options)
         return Promise.all(
           results.map(
-            (r: Record<string, unknown>) =>
+            (r) =>
               ({
                 ...hydrateEntity(r, entity, schema),
                 $score: r.$score,
@@ -4885,11 +4990,11 @@ function createEntityOperations<T>(
       Array<T & { $rrfScore: number; $ftsRank: number; $semanticRank: number; $score: number }>
     > {
       const provider = await resolveProvider()
-      if ('hybridSearch' in provider) {
-        const results = await (provider as any).hybridSearch(typeName, query, options)
+      if (hasHybridSearch(provider)) {
+        const results = await provider.hybridSearch(typeName, query, options)
         return Promise.all(
           results.map(
-            (r: Record<string, unknown>) =>
+            (r) =>
               ({
                 ...hydrateEntity(r, entity, schema),
                 $rrfScore: r.$rrfScore,
@@ -4983,8 +5088,8 @@ function createEntityOperations<T>(
     },
 
     async resolve(draft: Draft<T>, options?: ResolveOptions): Promise<Resolved<T>> {
-      // Validate that this is actually a draft
-      if ((draft as any).$phase !== 'draft') {
+      // Validate that this is actually a draft - Draft<T> has $phase property
+      if (draft.$phase !== 'draft') {
         throw new Error('Cannot resolve entity: not a draft (missing $phase: "draft")')
       }
 
@@ -5033,7 +5138,7 @@ function createEntityOperations<T>(
       // Add $errors if onError mode is 'skip' (even if empty, to indicate skip mode was used)
       // or if there are actual errors
       if (errors.length > 0 || options?.onError === 'skip') {
-        ;(resolved as any).$errors = errors
+        resolved.$errors = errors
       }
 
       return resolved as Resolved<T>
@@ -5088,10 +5193,14 @@ function hydrateEntity(
                   const provider = await resolveProvider()
                   const result = await provider.get(matchedType, storedId)
                   if (!result) return null
-                  const hydratedResult = hydrateEntity(result, actualRelatedEntity, schema)
+                  const hydratedResult = hydrateEntity(
+                    result,
+                    actualRelatedEntity,
+                    schema
+                  ) as HydratedEntityWithMatchedType
                   // Add $matchedType to the result for union type tracking
                   if (field.unionTypes && field.unionTypes.length > 0) {
-                    ;(hydratedResult as any).$matchedType = matchedType
+                    hydratedResult.$matchedType = matchedType
                   }
                   return hydratedResult
                 })().then(resolve, reject)
@@ -5139,13 +5248,13 @@ function hydrateEntity(
                       const targetEntity = schema.entities.get(targetType)
                       const result = await provider.get(targetType, targetId)
                       if (!result) return null
-                      const hydrated = targetEntity
+                      const hydratedEntity = targetEntity
                         ? hydrateEntity(result, targetEntity, schema)
                         : result
-                      if (hydrated) {
-                        ;(hydrated as any).$matchedType = targetType
+                      if (hydratedEntity) {
+                        ;(hydratedEntity as HydratedEntityWithMatchedType).$matchedType = targetType
                       }
-                      return hydrated
+                      return hydratedEntity
                     })
                   )
                   return results.filter((r) => r !== null)
@@ -5212,13 +5321,13 @@ function hydrateEntity(
                       const targetEntity = schema.entities.get(targetType)
                       const result = await provider.get(targetType, targetId)
                       if (!result) return null
-                      const hydrated = targetEntity
+                      const hydratedEntity = targetEntity
                         ? hydrateEntity(result, targetEntity, schema)
                         : result
-                      if (hydrated) {
-                        ;(hydrated as any).$matchedType = targetType
+                      if (hydratedEntity) {
+                        ;(hydratedEntity as HydratedEntityWithMatchedType).$matchedType = targetType
                       }
-                      return hydrated
+                      return hydratedEntity
                     })
                   )
                   return results.filter((r) => r !== null)
@@ -5288,14 +5397,14 @@ function hydrateEntity(
                       const targetEntity = schema.entities.get(targetType)
                       const result = await provider.get(targetType, targetId)
                       if (!result) return null
-                      const hydrated = targetEntity
+                      const hydratedEntity = targetEntity
                         ? hydrateEntity(result, targetEntity, schema)
                         : result
                       // Add $matchedType for union type tracking
-                      if (hydrated) {
-                        ;(hydrated as any).$matchedType = targetType
+                      if (hydratedEntity) {
+                        ;(hydratedEntity as HydratedEntityWithMatchedType).$matchedType = targetType
                       }
-                      return hydrated
+                      return hydratedEntity
                     })
                   )
                   return results.filter((r) => r !== null)

@@ -22,6 +22,56 @@ import { defineProvider } from '../registry.js'
 
 const CLOUDINARY_API_VERSION = 'v1_1'
 
+// =============================================================================
+// Cloudinary API Response Types
+// =============================================================================
+
+/** Cloudinary error response */
+interface CloudinaryErrorResponse {
+  error?: {
+    message?: string
+  }
+}
+
+/** Cloudinary upload response */
+interface CloudinaryUploadResponse {
+  public_id: string
+  url: string
+  secure_url: string
+  resource_type: string
+  format: string
+  bytes: number
+  width?: number
+  height?: number
+  duration?: number
+  created_at: string
+}
+
+/** Cloudinary resource from API */
+interface CloudinaryResource {
+  public_id: string
+  url: string
+  secure_url: string
+  resource_type: string
+  format: string
+  bytes: number
+  width?: number
+  height?: number
+  duration?: number
+  created_at: string
+}
+
+/** Cloudinary resources list response */
+interface CloudinaryResourcesResponse {
+  resources?: CloudinaryResource[]
+  next_cursor?: string
+}
+
+/** Cloudinary delete response */
+interface CloudinaryDeleteResponse {
+  deleted?: Record<string, string>
+}
+
 /**
  * Cloudinary provider info
  */
@@ -53,7 +103,11 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
     return 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
   }
 
-  function buildTransformUrl(publicId: string, resourceType: string, transforms?: TransformOptions): string {
+  function buildTransformUrl(
+    publicId: string,
+    resourceType: string,
+    transforms?: TransformOptions
+  ): string {
     const protocol = secure ? 'https' : 'http'
     const baseUrl = `${protocol}://res.cloudinary.com/${cloudName}`
 
@@ -125,7 +179,10 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
         formData.append('file', file)
       } else {
         // Buffer - convert to ArrayBuffer for Blob
-        const arrayBuffer = file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer
+        const arrayBuffer = file.buffer.slice(
+          file.byteOffset,
+          file.byteOffset + file.byteLength
+        ) as ArrayBuffer
         const blob = new Blob([arrayBuffer])
         formData.append('file', blob)
       }
@@ -140,7 +197,12 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
         formData.append('tags', options.tags.join(','))
       }
       if (options?.metadata) {
-        formData.append('context', Object.entries(options.metadata).map(([k, v]) => `${k}=${v}`).join('|'))
+        formData.append(
+          'context',
+          Object.entries(options.metadata)
+            .map(([k, v]) => `${k}=${v}`)
+            .join('|')
+        )
       }
 
       try {
@@ -153,11 +215,11 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error((errorData as any)?.error?.message || `Upload failed: HTTP ${response.status}`)
+          const errorData = (await response.json().catch(() => ({}))) as CloudinaryErrorResponse
+          throw new Error(errorData.error?.message || `Upload failed: HTTP ${response.status}`)
         }
 
-        const data = await response.json() as any
+        const data = (await response.json()) as CloudinaryUploadResponse
 
         return {
           id: data.public_id,
@@ -173,9 +235,7 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           createdAt: new Date(data.created_at),
         }
       } catch (error) {
-        throw new Error(
-          error instanceof Error ? error.message : 'Upload failed'
-        )
+        throw new Error(error instanceof Error ? error.message : 'Upload failed')
       }
     },
 
@@ -202,7 +262,7 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
             return null
           }
 
-          const data = await videoResponse.json() as any
+          const data = (await videoResponse.json()) as CloudinaryResource
           return {
             id: data.public_id,
             publicId: data.public_id,
@@ -218,7 +278,7 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           }
         }
 
-        const data = await response.json() as any
+        const data = (await response.json()) as CloudinaryResource
         return {
           id: data.public_id,
           publicId: data.public_id,
@@ -232,7 +292,7 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           duration: data.duration,
           createdAt: new Date(data.created_at),
         }
-      } catch (error) {
+      } catch {
         return null
       }
     },
@@ -250,7 +310,7 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
         })
 
         if (response.ok) {
-          const result = await response.json() as any
+          const result = (await response.json()) as CloudinaryDeleteResponse
           return result.deleted?.[assetId] === 'deleted'
         }
 
@@ -265,12 +325,12 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
         })
 
         if (response.ok) {
-          const result = await response.json() as any
+          const result = (await response.json()) as CloudinaryDeleteResponse
           return result.deleted?.[assetId] === 'deleted'
         }
 
         return false
-      } catch (error) {
+      } catch {
         return false
       }
     },
@@ -301,9 +361,9 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           throw new Error(`List failed: HTTP ${response.status}`)
         }
 
-        const data = await response.json() as any
+        const data = (await response.json()) as CloudinaryResourcesResponse
 
-        const items: MediaAssetData[] = (data.resources || []).map((resource: any) => ({
+        const items: MediaAssetData[] = (data.resources || []).map((resource) => ({
           id: resource.public_id,
           publicId: resource.public_id,
           url: resource.url,
@@ -323,9 +383,7 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           nextCursor: data.next_cursor,
         }
       } catch (error) {
-        throw new Error(
-          error instanceof Error ? error.message : 'List failed'
-        )
+        throw new Error(error instanceof Error ? error.message : 'List failed')
       }
     },
 
