@@ -436,7 +436,7 @@ export function Workflow(
     getState(): WorkflowState {
       // Return a deep copy to prevent mutation
       return structuredClone({
-        current: state.current,
+        ...(state.current !== undefined && { current: state.current }),
         context: state.context,
         history: state.history,
       })
@@ -455,7 +455,7 @@ export function Workflow(
       console.log(`[workflow] ${message}`, data ?? '')
     },
 
-    db: options.db,
+    ...(options.db !== undefined && { db: options.db }),
   }
 
   // Run setup to capture handlers
@@ -530,7 +530,7 @@ export function Workflow(
       name: 'workflow',
       events: eventRegistry,
       schedules: scheduleRegistry,
-      initialContext: options.context,
+      ...(options.context !== undefined && { initialContext: options.context }),
     },
 
     get state() {
