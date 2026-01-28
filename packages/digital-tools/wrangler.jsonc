@@ -1,0 +1,9 @@
+{
+  // digital-tools Worker configuration
+  // The default export (ToolService) extends WorkerEntrypoint
+  // All public methods are automatically exposed via RPC
+  "name": "digital-tools",
+  "main": "dist/worker.js",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"]
+}

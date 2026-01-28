@@ -1,0 +1,24 @@
+{
+  // Wrangler configuration for ai-providers worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+
+  "name": "ai-providers",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // AI binding for Cloudflare Workers AI
+  // Enables real AI Gateway access in tests
+  "ai": {
+    "binding": "AI"
+  },
+
+  // The default export (ProviderService) extends WorkerEntrypoint
+  // All public methods are automatically exposed via RPC
+
+  // Environment variables for AI Gateway
+  // These are loaded from .dev.vars or .env in local development
+  "vars": {
+    // Placeholder - actual values come from .dev.vars
+  }
+}

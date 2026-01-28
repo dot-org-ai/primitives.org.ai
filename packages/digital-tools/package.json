@@ -17,6 +17,10 @@
     "./registry": {
       "import": "./dist/registry.js",
       "types": "./dist/registry.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
     }
   },
   "scripts": {
@@ -31,6 +35,11 @@
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
     "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "vitest": "^2.1.0"
   },
   "keywords": [
     "ai",

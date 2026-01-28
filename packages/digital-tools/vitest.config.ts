@@ -1,9 +1,6 @@
-import { defineConfig } from 'vitest/config'
-import path from 'path'
+import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config'
 
-const packagesDir = path.resolve(__dirname, '..')
-
-export default defineConfig({
+export default defineWorkersConfig({
   test: {
     // CRITICAL: Limit concurrency to prevent resource exhaustion
     maxConcurrency: 1,
@@ -11,10 +8,17 @@ export default defineConfig({
     minWorkers: 1,
     fileParallelism: false,
 
-    environment: 'node',
-    include: ['test/**/*.test.ts'],
-    exclude: ['test/**/*.test.js'],
-    globals: true,
+    poolOptions: {
+      workers: {
+        wrangler: { configPath: './wrangler.jsonc' },
+        miniflare: {
+          compatibilityDate: '2025-01-20',
+          compatibilityFlags: ['nodejs_compat_v2'],
+        },
+      },
+    },
+
+    include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
 
     // Coverage configuration
     coverage: {
@@ -28,21 +32,6 @@ export default defineConfig({
         functions: 60,
         lines: 65,
       },
-    },
-  },
-  resolve: {
-    alias: {
-      // Resolve workspace dependencies to source files for testing
-      // Handle subpath exports first (more specific)
-      'ai-providers/cloudflare': path.resolve(packagesDir, 'ai-providers/src/providers/cloudflare.ts'),
-
-      // Main exports
-      'ai-functions': path.resolve(packagesDir, 'ai-functions/src/index.ts'),
-      '@org.ai/core': path.resolve(packagesDir, 'ai-core/src/index.ts'),
-      'ai-providers': path.resolve(packagesDir, 'ai-providers/src/index.ts'),
-      'language-models': path.resolve(packagesDir, 'language-models/src/index.ts'),
-      'digital-objects': path.resolve(packagesDir, 'digital-objects/src/index.ts'),
-      'ai-database': path.resolve(packagesDir, 'ai-database/src/index.ts'),
     },
   },
 })

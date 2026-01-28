@@ -13,6 +13,10 @@
     "./cloudflare": {
       "import": "./dist/providers/cloudflare.js",
       "types": "./dist/providers/cloudflare.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
     }
   },
   "scripts": {
@@ -21,7 +25,8 @@
     "test": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "ai": "^5.0.0",
@@ -34,8 +39,10 @@
     "@ai-sdk/openai": "^2.0.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250109.0",
     "dotenv": "^16.0.0",
-    "vitest": "^2.0.0"
+    "vitest": "^2.1.0"
   },
   "keywords": [
     "ai",
