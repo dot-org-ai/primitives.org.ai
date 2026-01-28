@@ -19,6 +19,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest",
+    "test:worker": "vitest --config vitest.workers.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "clean": "rm -rf dist"
@@ -27,9 +28,10 @@
     "ai-functions": "workspace:*"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
     "@cloudflare/workers-types": "^4.20250109.0",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.9"
+    "vitest": "3.0.4"
   },
   "keywords": [
     "ai",

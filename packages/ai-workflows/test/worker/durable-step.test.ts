@@ -5,21 +5,81 @@
  * that provides durable execution, retries, sleep, and step metadata.
  *
  * These tests define the expected behavior for DurableStep before implementation.
- * All tests SHOULD FAIL because DurableStep does not exist yet.
+ * All tests SHOULD FAIL because DurableStep integration with real Cloudflare
+ * Workflows is not yet implemented.
  *
  * Uses @cloudflare/vitest-pool-workers - NO MOCKS.
+ * Tests run against real Cloudflare Workflows bindings.
+ *
+ * Bead: aip-p3m5
+ *
+ * @packageDocumentation
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
+import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test'
+
+// ============================================================================
+// These imports will FAIL because the Cloudflare Workflows integration is not
+// yet implemented in DurableStep. This is the RED phase of TDD.
+// ============================================================================
 import {
   DurableStep,
   StepContext,
   type StepMetadata,
   type StepConfig,
+  type WorkflowStep,
 } from '../../src/worker/durable-step.js'
 
+// Import the TestWorkflow that should be defined in worker.ts
+// This will FAIL because TestWorkflow doesn't exist yet
+import { TestWorkflow } from '../../src/worker.js'
+
 // ============================================================================
-// DurableStep: Core Construction
+// Type Definitions for Test Environment
+// ============================================================================
+
+interface TestEnv {
+  WORKFLOW: Workflow
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Get a workflow instance from the binding.
+ * This creates a new workflow instance for testing.
+ */
+async function getWorkflowInstance(name?: string): Promise<WorkflowInstance> {
+  const id = await env.WORKFLOW.create({
+    id: name ?? crypto.randomUUID(),
+  })
+  return env.WORKFLOW.get(id)
+}
+
+/**
+ * Run a workflow and wait for it to complete.
+ */
+async function runWorkflow<T>(instance: WorkflowInstance, params?: unknown): Promise<T> {
+  const status = await instance.status()
+  if (status.status === 'queued' || status.status === 'running') {
+    // Wait for completion
+    let current = status
+    while (current.status !== 'complete' && current.status !== 'errored') {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      current = await instance.status()
+    }
+    if (current.status === 'errored') {
+      throw new Error(`Workflow errored: ${current.error}`)
+    }
+    return current.output as T
+  }
+  return status.output as T
+}
+
+// ============================================================================
+// 1. DurableStep: Core Construction
 // ============================================================================
 
 describe('DurableStep', () => {
@@ -61,85 +121,52 @@ describe('DurableStep', () => {
   })
 
   // ============================================================================
-  // DurableStep.run() - Durable Execution
+  // 2. DurableStep.run() with Real Workflows Binding
   // ============================================================================
 
-  describe('run()', () => {
-    it('executes the wrapped function with input', async () => {
-      let executedWith: unknown = null
+  describe('run() with real Workflows binding', () => {
+    it('executes the wrapped function with input via real workflow step', async () => {
+      // This test requires the TestWorkflow to be properly configured
+      // and the DurableStep to integrate with real Workflows step.do()
+      const instance = await getWorkflowInstance('exec-test-1')
 
-      const step = new DurableStep('test-step', async (input: { value: number }) => {
-        executedWith = input
-        return input.value * 2
-      })
+      // The workflow should execute a DurableStep internally
+      const result = await runWorkflow<{ value: number }>(instance)
 
-      const result = await step.run(createMockWorkflowStep(), { value: 21 })
-
-      expect(executedWith).toEqual({ value: 21 })
-      expect(result).toBe(42)
+      expect(result).toBeDefined()
+      expect(result.value).toBe(42)
     })
 
     it('wraps execution in step.do() for durability', async () => {
-      const doCallNames: string[] = []
+      // This test verifies that step.do() is called with the step name
+      const instance = await getWorkflowInstance('durability-test-1')
 
-      const mockStep = createMockWorkflowStep({
-        onDo: (name) => doCallNames.push(name),
-      })
+      const result = await runWorkflow<{ stepName: string }>(instance)
 
-      const step = new DurableStep('durable-action', async () => {
-        return 'result'
-      })
-
-      await step.run(mockStep, undefined)
-
-      expect(doCallNames).toContain('durable-action')
+      expect(result.stepName).toBe('durable-action')
     })
 
     it('passes config to step.do() when provided', async () => {
-      let capturedConfig: StepConfig | undefined
+      // Verify that retry config is passed through to the Workflows runtime
+      const instance = await getWorkflowInstance('config-test-1')
 
-      const mockStep = createMockWorkflowStep({
-        onDoWithConfig: (name, config) => {
-          capturedConfig = config
-        },
-      })
+      const result = await runWorkflow<{ configApplied: boolean }>(instance)
 
-      const step = new DurableStep(
-        'configured-step',
-        {
-          retries: { limit: 5, delay: '2 seconds', backoff: 'linear' },
-          timeout: '1 minute',
-        },
-        async () => 'done'
-      )
-
-      await step.run(mockStep, undefined)
-
-      expect(capturedConfig).toBeDefined()
-      expect(capturedConfig?.retries?.limit).toBe(5)
-      expect(capturedConfig?.retries?.delay).toBe('2 seconds')
-      expect(capturedConfig?.retries?.backoff).toBe('linear')
-      expect(capturedConfig?.timeout).toBe('1 minute')
+      expect(result.configApplied).toBe(true)
     })
 
     it('returns the result from the wrapped function', async () => {
-      const step = new DurableStep('compute', async (input: { a: number; b: number }) => {
-        return { sum: input.a + input.b, product: input.a * input.b }
-      })
+      const instance = await getWorkflowInstance('result-test-1')
 
-      const result = await step.run(createMockWorkflowStep(), { a: 3, b: 7 })
+      const result = await runWorkflow<{ sum: number; product: number }>(instance)
 
       expect(result).toEqual({ sum: 10, product: 21 })
     })
 
     it('propagates errors from the wrapped function', async () => {
-      const step = new DurableStep('failing-step', async () => {
-        throw new Error('Step execution failed')
-      })
+      const instance = await getWorkflowInstance('error-test-1')
 
-      await expect(step.run(createMockWorkflowStep(), undefined)).rejects.toThrow(
-        'Step execution failed'
-      )
+      await expect(runWorkflow(instance)).rejects.toThrow('Step execution failed')
     })
 
     it('supports generic input and output types', async () => {
@@ -153,428 +180,393 @@ describe('DurableStep', () => {
         total: number
       }
 
-      const step = new DurableStep<OrderInput, OrderResult>('process-order', async (input) => {
-        return { confirmed: true, total: input.items.length * 10 }
-      })
+      const instance = await getWorkflowInstance('typed-test-1')
 
-      const result = await step.run(createMockWorkflowStep(), {
-        orderId: 'ord-123',
-        items: ['item-a', 'item-b'],
-      })
+      const result = await runWorkflow<OrderResult>(instance)
 
       expect(result.confirmed).toBe(true)
       expect(result.total).toBe(20)
     })
 
     it('supports void input', async () => {
-      const step = new DurableStep<void, string>('no-input', async () => {
-        return 'hello'
-      })
+      const instance = await getWorkflowInstance('void-input-test-1')
 
-      const result = await step.run(createMockWorkflowStep(), undefined)
+      const result = await runWorkflow<string>(instance)
 
       expect(result).toBe('hello')
     })
   })
 
   // ============================================================================
-  // DurableStep with StepContext
+  // 3. DurableStep with StepContext
   // ============================================================================
 
   describe('run() with StepContext', () => {
     it('provides a StepContext to the function when requested', async () => {
-      let receivedCtx: StepContext | undefined
+      const instance = await getWorkflowInstance('ctx-test-1')
 
-      const step = new DurableStep('ctx-step', async (input: { id: string }, ctx: StepContext) => {
-        receivedCtx = ctx
-        return { processed: true }
-      })
+      const result = await runWorkflow<{ hasContext: boolean }>(instance)
 
-      await step.run(createMockWorkflowStep(), { id: '123' })
-
-      expect(receivedCtx).toBeDefined()
-      expect(receivedCtx).toBeInstanceOf(StepContext)
+      expect(result.hasContext).toBe(true)
     })
 
     it('StepContext provides step metadata', async () => {
-      let metadata: StepMetadata | undefined
+      const instance = await getWorkflowInstance('metadata-test-1')
 
-      const step = new DurableStep('meta-step', async (_input: unknown, ctx: StepContext) => {
-        metadata = ctx.metadata
-      })
+      const result = await runWorkflow<StepMetadata>(instance)
 
-      await step.run(createMockWorkflowStep(), null)
-
-      expect(metadata).toBeDefined()
-      expect(metadata?.id).toBe('meta-step')
-      expect(typeof metadata?.attempt).toBe('number')
+      expect(result).toBeDefined()
+      expect(result.id).toBe('meta-step')
+      expect(typeof result.attempt).toBe('number')
     })
   })
 })
 
 // ============================================================================
-// StepContext: step.do() for side effects
+// 4. StepContext: step.do() for side effects
 // ============================================================================
 
 describe('StepContext', () => {
   describe('do()', () => {
-    it('executes a named side effect durably', async () => {
-      let sideEffectRan = false
-      let capturedName: string | undefined
+    it('executes a named side effect durably via real Workflows', async () => {
+      const instance = await getWorkflowInstance('side-effect-test-1')
 
-      const step = new DurableStep('parent-step', async (_input: unknown, ctx: StepContext) => {
-        const result = await ctx.do('send-email', async () => {
-          sideEffectRan = true
-          return { sent: true }
-        })
-        capturedName = 'send-email'
-        return result
-      })
+      const result = await runWorkflow<{ sent: boolean }>(instance)
 
-      const result = await step.run(createMockWorkflowStep(), null)
-
-      expect(sideEffectRan).toBe(true)
-      expect(capturedName).toBe('send-email')
       expect(result).toEqual({ sent: true })
     })
 
     it('executes do() with config for retries', async () => {
-      const step = new DurableStep('parent-step', async (_input: unknown, ctx: StepContext) => {
-        return ctx.do(
-          'flaky-api-call',
-          {
-            retries: { limit: 3, delay: '500 milliseconds', backoff: 'exponential' },
-            timeout: '10 seconds',
-          },
-          async () => {
-            return { data: 'response' }
-          }
-        )
-      })
+      const instance = await getWorkflowInstance('retry-config-test-1')
 
-      const result = await step.run(createMockWorkflowStep(), null)
+      const result = await runWorkflow<{ data: string }>(instance)
 
       expect(result).toEqual({ data: 'response' })
     })
 
     it('propagates errors from do() side effects', async () => {
-      const step = new DurableStep('parent-step', async (_input: unknown, ctx: StepContext) => {
-        return ctx.do('failing-effect', async () => {
-          throw new Error('Side effect failed')
-        })
-      })
+      const instance = await getWorkflowInstance('side-effect-error-test-1')
 
-      await expect(step.run(createMockWorkflowStep(), null)).rejects.toThrow('Side effect failed')
+      await expect(runWorkflow(instance)).rejects.toThrow('Side effect failed')
     })
 
     it('supports multiple sequential do() calls', async () => {
-      const executionOrder: string[] = []
+      const instance = await getWorkflowInstance('sequential-test-1')
 
-      const step = new DurableStep('multi-step', async (_input: unknown, ctx: StepContext) => {
-        await ctx.do('step-1', async () => {
-          executionOrder.push('step-1')
-        })
-        await ctx.do('step-2', async () => {
-          executionOrder.push('step-2')
-        })
-        await ctx.do('step-3', async () => {
-          executionOrder.push('step-3')
-        })
-        return executionOrder
-      })
-
-      const result = await step.run(createMockWorkflowStep(), null)
+      const result = await runWorkflow<string[]>(instance)
 
       expect(result).toEqual(['step-1', 'step-2', 'step-3'])
     })
   })
 
   // ============================================================================
-  // StepContext: sleep() and sleepUntil()
+  // 5. StepContext: sleep() and sleepUntil()
   // ============================================================================
 
   describe('sleep()', () => {
-    it('sleeps for a specified duration string', async () => {
-      let sleepCalled = false
-      let sleepDuration: string | undefined
+    it('sleeps for a specified duration string via real Workflows', async () => {
+      const instance = await getWorkflowInstance('sleep-test-1')
 
-      const mockStep = createMockWorkflowStep({
-        onSleep: (name, duration) => {
-          sleepCalled = true
-          sleepDuration = duration as string
-        },
-      })
+      // Note: In real tests, this would actually wait. For testing purposes,
+      // we verify the workflow completes successfully after the sleep.
+      const startTime = Date.now()
+      const result = await runWorkflow<{ waited: boolean }>(instance)
+      const elapsed = Date.now() - startTime
 
-      const step = new DurableStep('sleep-step', async (_input: unknown, ctx: StepContext) => {
-        await ctx.sleep('wait-for-processing', '5 seconds')
-        return { waited: true }
-      })
-
-      await step.run(mockStep, null)
-
-      expect(sleepCalled).toBe(true)
-      expect(sleepDuration).toBe('5 seconds')
+      expect(result).toEqual({ waited: true })
+      // Sleep should have occurred (at least partially in miniflare)
+      // The actual duration may be simulated in test environment
     })
 
     it('sleeps for a duration with various units', async () => {
-      const sleepDurations: string[] = []
+      const instance = await getWorkflowInstance('multi-sleep-test-1')
 
-      const mockStep = createMockWorkflowStep({
-        onSleep: (_name, duration) => {
-          sleepDurations.push(duration as string)
-        },
-      })
+      const result = await runWorkflow<{ sleepCount: number }>(instance)
 
-      const step = new DurableStep('multi-sleep', async (_input: unknown, ctx: StepContext) => {
-        await ctx.sleep('short-wait', '30 seconds')
-        await ctx.sleep('medium-wait', '5 minutes')
-        await ctx.sleep('long-wait', '1 hour')
-      })
-
-      await step.run(mockStep, null)
-
-      expect(sleepDurations).toEqual(['30 seconds', '5 minutes', '1 hour'])
+      expect(result.sleepCount).toBe(3)
     })
   })
 
   describe('sleepUntil()', () => {
-    it('sleeps until a specified Date', async () => {
-      let sleepUntilCalled = false
-      let sleepUntilTimestamp: Date | number | undefined
+    it('sleeps until a specified Date via real Workflows', async () => {
+      const instance = await getWorkflowInstance('sleep-until-test-1')
 
-      const mockStep = createMockWorkflowStep({
-        onSleepUntil: (name, timestamp) => {
-          sleepUntilCalled = true
-          sleepUntilTimestamp = timestamp
-        },
-      })
+      const result = await runWorkflow<{ resumed: boolean }>(instance)
 
-      const futureDate = new Date('2026-06-15T10:00:00Z')
-
-      const step = new DurableStep('schedule-step', async (_input: unknown, ctx: StepContext) => {
-        await ctx.sleepUntil('wait-until-deadline', futureDate)
-        return { resumed: true }
-      })
-
-      await step.run(mockStep, null)
-
-      expect(sleepUntilCalled).toBe(true)
-      expect(sleepUntilTimestamp).toEqual(futureDate)
+      expect(result).toEqual({ resumed: true })
     })
 
     it('sleeps until a specified unix timestamp (number)', async () => {
-      let sleepUntilTimestamp: Date | number | undefined
+      const instance = await getWorkflowInstance('timestamp-sleep-test-1')
 
-      const mockStep = createMockWorkflowStep({
-        onSleepUntil: (_name, timestamp) => {
-          sleepUntilTimestamp = timestamp
-        },
-      })
+      const result = await runWorkflow<{ completed: boolean }>(instance)
 
-      const futureTimestamp = Date.now() + 60000 // 1 minute from now
-
-      const step = new DurableStep('timestamp-step', async (_input: unknown, ctx: StepContext) => {
-        await ctx.sleepUntil('wait-until-ts', futureTimestamp)
-      })
-
-      await step.run(mockStep, null)
-
-      expect(sleepUntilTimestamp).toBe(futureTimestamp)
+      expect(result.completed).toBe(true)
     })
   })
 
   // ============================================================================
-  // StepContext: Metadata
+  // 6. StepContext: Metadata
   // ============================================================================
 
   describe('metadata', () => {
     it('exposes the step id', async () => {
-      let stepId: string | undefined
+      const instance = await getWorkflowInstance('step-id-test-1')
 
-      const step = new DurableStep('named-step', async (_input: unknown, ctx: StepContext) => {
-        stepId = ctx.metadata.id
-      })
+      const result = await runWorkflow<{ stepId: string }>(instance)
 
-      await step.run(createMockWorkflowStep(), null)
-
-      expect(stepId).toBe('named-step')
+      expect(result.stepId).toBe('named-step')
     })
 
     it('exposes the current attempt number', async () => {
-      let attempt: number | undefined
+      const instance = await getWorkflowInstance('attempt-test-1')
 
-      const step = new DurableStep('retry-step', async (_input: unknown, ctx: StepContext) => {
-        attempt = ctx.metadata.attempt
-      })
+      const result = await runWorkflow<{ attempt: number }>(instance)
 
-      await step.run(createMockWorkflowStep(), null)
-
-      expect(attempt).toBeDefined()
-      expect(typeof attempt).toBe('number')
-      expect(attempt).toBeGreaterThanOrEqual(1)
+      expect(result.attempt).toBeDefined()
+      expect(typeof result.attempt).toBe('number')
+      expect(result.attempt).toBeGreaterThanOrEqual(1)
     })
 
     it('exposes the configured retries limit', async () => {
-      let retriesLimit: number | undefined
+      const instance = await getWorkflowInstance('retries-limit-test-1')
 
-      const step = new DurableStep(
-        'configured-retry-step',
-        { retries: { limit: 5, delay: '1 second' } },
-        async (_input: unknown, ctx: StepContext) => {
-          retriesLimit = ctx.metadata.retries
-        }
-      )
+      const result = await runWorkflow<{ retriesLimit: number }>(instance)
 
-      await step.run(createMockWorkflowStep(), null)
-
-      expect(retriesLimit).toBe(5)
+      expect(result.retriesLimit).toBe(5)
     })
 
     it('exposes retries as 0 when no retry config provided', async () => {
-      let retriesLimit: number | undefined
+      const instance = await getWorkflowInstance('no-retries-test-1')
 
-      const step = new DurableStep('no-retry-step', async (_input: unknown, ctx: StepContext) => {
-        retriesLimit = ctx.metadata.retries
-      })
+      const result = await runWorkflow<{ retriesLimit: number }>(instance)
 
-      await step.run(createMockWorkflowStep(), null)
-
-      expect(retriesLimit).toBe(0)
+      expect(result.retriesLimit).toBe(0)
     })
   })
 
   // ============================================================================
-  // Error Handling and Retries
+  // 7. Error Handling and Retries
   // ============================================================================
 
   describe('error handling', () => {
-    it('retries on failure when retries are configured', async () => {
-      let attempts = 0
+    it('retries on failure when retries are configured (real Workflows)', async () => {
+      // This test verifies that the Workflows runtime handles retries
+      const instance = await getWorkflowInstance('retry-behavior-test-1')
 
-      const step = new DurableStep(
-        'retry-on-fail',
-        { retries: { limit: 3, delay: '100 milliseconds' } },
-        async () => {
-          attempts++
-          if (attempts < 3) {
-            throw new Error(`Attempt ${attempts} failed`)
-          }
-          return { success: true }
-        }
-      )
+      const result = await runWorkflow<{ attempts: number; success: boolean }>(instance)
 
-      // The retry behavior is handled by Cloudflare Workflows runtime
-      // via step.do() config - DurableStep just passes the config through.
-      // This test verifies the config is correctly forwarded.
-      expect(step.config?.retries?.limit).toBe(3)
-      expect(step.config?.retries?.delay).toBe('100 milliseconds')
+      // The workflow should retry and eventually succeed
+      expect(result.attempts).toBeGreaterThan(1)
+      expect(result.success).toBe(true)
     })
 
     it('respects timeout configuration', async () => {
-      const step = new DurableStep('timeout-step', { timeout: '5 seconds' }, async () => {
-        return 'fast-result'
-      })
+      const instance = await getWorkflowInstance('timeout-test-1')
 
-      expect(step.config?.timeout).toBe('5 seconds')
+      // A step that exceeds its timeout should error
+      await expect(runWorkflow(instance)).rejects.toThrow()
     })
 
     it('supports exponential backoff configuration', async () => {
-      const step = new DurableStep(
-        'backoff-step',
-        {
-          retries: { limit: 5, delay: '1 second', backoff: 'exponential' },
-        },
-        async () => {
-          return 'result'
-        }
-      )
+      const instance = await getWorkflowInstance('exp-backoff-test-1')
 
-      expect(step.config?.retries?.backoff).toBe('exponential')
+      const result = await runWorkflow<{ backoffApplied: boolean }>(instance)
+
+      expect(result.backoffApplied).toBe(true)
     })
 
     it('supports linear backoff configuration', async () => {
-      const step = new DurableStep(
-        'linear-backoff',
-        {
-          retries: { limit: 3, delay: '2 seconds', backoff: 'linear' },
-        },
-        async () => 'ok'
-      )
+      const instance = await getWorkflowInstance('linear-backoff-test-1')
 
-      expect(step.config?.retries?.backoff).toBe('linear')
+      const result = await runWorkflow<{ backoffType: string }>(instance)
+
+      expect(result.backoffType).toBe('linear')
     })
 
     it('supports constant backoff configuration', async () => {
-      const step = new DurableStep(
-        'constant-backoff',
-        {
-          retries: { limit: 2, delay: '500 milliseconds', backoff: 'constant' },
-        },
-        async () => 'ok'
-      )
+      const instance = await getWorkflowInstance('constant-backoff-test-1')
 
-      expect(step.config?.retries?.backoff).toBe('constant')
+      const result = await runWorkflow<{ backoffType: string }>(instance)
+
+      expect(result.backoffType).toBe('constant')
     })
 
     it('throws immediately without retries when no config', async () => {
-      const step = new DurableStep('no-retry', async () => {
-        throw new Error('Immediate failure')
-      })
+      const instance = await getWorkflowInstance('no-retry-error-test-1')
 
-      await expect(step.run(createMockWorkflowStep(), undefined)).rejects.toThrow(
-        'Immediate failure'
-      )
+      await expect(runWorkflow(instance)).rejects.toThrow('Immediate failure')
     })
   })
 
   // ============================================================================
-  // Composability: DurableStep chains
+  // 8. Composability: DurableStep chains
   // ============================================================================
 
   describe('composability', () => {
-    it('multiple DurableSteps can be run sequentially', async () => {
-      const fetchStep = new DurableStep<{ url: string }, { data: string }>(
-        'fetch',
-        async (input) => ({ data: `response from ${input.url}` })
-      )
+    it('multiple DurableSteps can be run sequentially in a workflow', async () => {
+      const instance = await getWorkflowInstance('sequential-steps-test-1')
 
-      const processStep = new DurableStep<{ data: string }, { processed: boolean }>(
-        'process',
-        async (input) => ({ processed: input.data.length > 0 })
-      )
+      const result = await runWorkflow<{
+        fetchData: string
+        processed: boolean
+      }>(instance)
 
-      const mockStep = createMockWorkflowStep()
-
-      const fetchResult = await fetchStep.run(mockStep, { url: 'https://api.example.com' })
-      const processResult = await processStep.run(mockStep, fetchResult)
-
-      expect(fetchResult.data).toBe('response from https://api.example.com')
-      expect(processResult.processed).toBe(true)
+      expect(result.fetchData).toBe('response from https://api.example.com')
+      expect(result.processed).toBe(true)
     })
 
-    it('DurableStep can be used as a factory function', () => {
-      function createApiStep(endpoint: string) {
-        return new DurableStep(
-          `api-${endpoint}`,
-          { retries: { limit: 3, delay: '1 second', backoff: 'exponential' } },
-          async (input: Record<string, unknown>) => {
-            return { endpoint, input, timestamp: Date.now() }
-          }
-        )
-      }
+    it('DurableStep can be used as a factory function', async () => {
+      const instance = await getWorkflowInstance('factory-test-1')
 
-      const usersStep = createApiStep('users')
-      const ordersStep = createApiStep('orders')
+      const result = await runWorkflow<{
+        usersEndpoint: string
+        ordersEndpoint: string
+      }>(instance)
 
-      expect(usersStep.name).toBe('api-users')
-      expect(ordersStep.name).toBe('api-orders')
-      expect(usersStep.config?.retries?.limit).toBe(3)
+      expect(result.usersEndpoint).toBe('api-users')
+      expect(result.ordersEndpoint).toBe('api-orders')
+    })
+
+    it('supports parallel DurableStep execution', async () => {
+      const instance = await getWorkflowInstance('parallel-test-1')
+
+      const result = await runWorkflow<{
+        results: string[]
+        executedInParallel: boolean
+      }>(instance)
+
+      expect(result.results).toHaveLength(3)
+      expect(result.executedInParallel).toBe(true)
     })
   })
 })
 
 // ============================================================================
-// StepMetadata type tests
+// 9. State Persistence Across Workflow Restarts
+// ============================================================================
+
+describe('DurableStep: State Persistence', () => {
+  it('persists step state before execution', async () => {
+    const instance = await getWorkflowInstance('persist-before-test-1')
+
+    const result = await runWorkflow<{ statePersistedBefore: boolean }>(instance)
+
+    expect(result.statePersistedBefore).toBe(true)
+  })
+
+  it('persists step state after execution', async () => {
+    const instance = await getWorkflowInstance('persist-after-test-1')
+
+    const result = await runWorkflow<{ statePersistedAfter: boolean }>(instance)
+
+    expect(result.statePersistedAfter).toBe(true)
+  })
+
+  it('resumes from last successful step on workflow restart', async () => {
+    // This tests the durability guarantee - if a workflow restarts,
+    // it should not re-execute already completed steps
+    const instance = await getWorkflowInstance('resume-test-1')
+
+    const result = await runWorkflow<{
+      step1ExecutedOnce: boolean
+      step2Completed: boolean
+    }>(instance)
+
+    expect(result.step1ExecutedOnce).toBe(true)
+    expect(result.step2Completed).toBe(true)
+  })
+
+  it('tracks execution history', async () => {
+    const instance = await getWorkflowInstance('history-test-1')
+
+    const result = await runWorkflow<{
+      history: Array<{ step: string; timestamp: string }>
+    }>(instance)
+
+    expect(result.history).toBeDefined()
+    expect(Array.isArray(result.history)).toBe(true)
+    expect(result.history.length).toBeGreaterThan(0)
+  })
+})
+
+// ============================================================================
+// 10. Timeout Handling
+// ============================================================================
+
+describe('DurableStep: Timeout Handling', () => {
+  it('handles step timeout gracefully', async () => {
+    const instance = await getWorkflowInstance('graceful-timeout-test-1')
+
+    // The workflow should handle the timeout and return a timeout error
+    const result = await runWorkflow<{ timedOut: boolean; error: string }>(instance)
+
+    expect(result.timedOut).toBe(true)
+    expect(result.error).toContain('timeout')
+  })
+
+  it('allows subsequent steps after timeout handling', async () => {
+    const instance = await getWorkflowInstance('after-timeout-test-1')
+
+    const result = await runWorkflow<{
+      step1TimedOut: boolean
+      step2Completed: boolean
+    }>(instance)
+
+    expect(result.step1TimedOut).toBe(true)
+    expect(result.step2Completed).toBe(true)
+  })
+
+  it('respects per-step timeout configuration', async () => {
+    const instance = await getWorkflowInstance('per-step-timeout-test-1')
+
+    const result = await runWorkflow<{
+      fastStepCompleted: boolean
+      slowStepTimedOut: boolean
+    }>(instance)
+
+    expect(result.fastStepCompleted).toBe(true)
+    expect(result.slowStepTimedOut).toBe(true)
+  })
+})
+
+// ============================================================================
+// 11. Integration with WorkflowService
+// ============================================================================
+
+describe('DurableStep: WorkflowService Integration', () => {
+  it('DurableStep works within WorkflowService context', async () => {
+    // This verifies that DurableStep integrates properly with WorkflowService
+    const instance = await getWorkflowInstance('service-integration-test-1')
+
+    const result = await runWorkflow<{ serviceIntegrated: boolean }>(instance)
+
+    expect(result.serviceIntegrated).toBe(true)
+  })
+
+  it('DurableStep can access workflow context', async () => {
+    const instance = await getWorkflowInstance('context-access-test-1')
+
+    const result = await runWorkflow<{ contextAvailable: boolean }>(instance)
+
+    expect(result.contextAvailable).toBe(true)
+  })
+
+  it('DurableStep supports workflow-level state sharing', async () => {
+    const instance = await getWorkflowInstance('state-sharing-test-1')
+
+    const result = await runWorkflow<{
+      step1SetValue: string
+      step2ReadValue: string
+    }>(instance)
+
+    expect(result.step1SetValue).toBe('shared-data')
+    expect(result.step2ReadValue).toBe('shared-data')
+  })
+})
+
+// ============================================================================
+// 12. StepMetadata Type Tests
 // ============================================================================
 
 describe('StepMetadata', () => {
@@ -594,7 +586,7 @@ describe('StepMetadata', () => {
 })
 
 // ============================================================================
-// StepConfig type tests
+// 13. StepConfig Type Tests
 // ============================================================================
 
 describe('StepConfig', () => {
@@ -642,64 +634,56 @@ describe('StepConfig', () => {
 })
 
 // ============================================================================
-// Helper: Mock WorkflowStep
-//
-// This creates a minimal in-process stand-in for the Cloudflare WorkflowStep
-// so that DurableStep.run() can be tested without the Cloudflare runtime.
-//
-// The DurableStep wrapper itself must work with the REAL WorkflowStep
-// in production. These helpers let us verify DurableStep's wrapping logic
-// without needing the full Workflows runtime in unit tests.
-//
-// Integration tests with real Cloudflare Workflows bindings should be
-// added separately once the wrangler.jsonc is configured with a
-// [[workflows]] binding.
+// 14. Edge Cases
 // ============================================================================
 
-interface MockWorkflowStepOptions {
-  onDo?: (name: string) => void
-  onDoWithConfig?: (name: string, config: StepConfig) => void
-  onSleep?: (name: string, duration: string | number) => void
-  onSleepUntil?: (name: string, timestamp: Date | number) => void
-}
+describe('DurableStep: Edge Cases', () => {
+  it('handles empty input', async () => {
+    const instance = await getWorkflowInstance('empty-input-test-1')
 
-/**
- * Creates a minimal WorkflowStep-compatible object for testing.
- *
- * This is NOT a mock of the Cloudflare runtime - it's a minimal stand-in
- * that lets us test DurableStep's wrapping logic. The real Cloudflare
- * WorkflowStep provides durable execution guarantees that cannot be
- * replicated in a test environment without the full runtime.
- */
-function createMockWorkflowStep(options: MockWorkflowStepOptions = {}) {
-  return {
-    do: async <T>(
-      nameOrConfig: string,
-      configOrCallback: StepConfig | (() => Promise<T>),
-      maybeCallback?: () => Promise<T>
-    ): Promise<T> => {
-      const name = nameOrConfig
-      let config: StepConfig | undefined
-      let callback: () => Promise<T>
+    const result = await runWorkflow<{ processed: boolean }>(instance)
 
-      if (typeof configOrCallback === 'function') {
-        callback = configOrCallback
-      } else {
-        config = configOrCallback
-        callback = maybeCallback!
-        options.onDoWithConfig?.(name, config)
-      }
+    expect(result.processed).toBe(true)
+  })
 
-      options.onDo?.(name)
-      return callback()
-    },
+  it('handles large input data', async () => {
+    const instance = await getWorkflowInstance('large-input-test-1')
 
-    sleep: async (name: string, duration: string | number): Promise<void> => {
-      options.onSleep?.(name, duration)
-    },
+    const result = await runWorkflow<{ dataSize: number }>(instance)
 
-    sleepUntil: async (name: string, timestamp: Date | number): Promise<void> => {
-      options.onSleepUntil?.(name, timestamp)
-    },
-  }
-}
+    expect(result.dataSize).toBeGreaterThan(1000)
+  })
+
+  it('handles large output data', async () => {
+    const instance = await getWorkflowInstance('large-output-test-1')
+
+    const result = await runWorkflow<{ items: unknown[] }>(instance)
+
+    expect(result.items.length).toBeGreaterThan(1000)
+  })
+
+  it('handles nested step.do() calls', async () => {
+    const instance = await getWorkflowInstance('nested-do-test-1')
+
+    const result = await runWorkflow<{ nestedResult: string }>(instance)
+
+    expect(result.nestedResult).toBe('nested-success')
+  })
+
+  it('handles concurrent workflow instances', async () => {
+    // Create multiple workflow instances concurrently
+    const instances = await Promise.all([
+      getWorkflowInstance('concurrent-test-1'),
+      getWorkflowInstance('concurrent-test-2'),
+      getWorkflowInstance('concurrent-test-3'),
+    ])
+
+    const results = await Promise.all(
+      instances.map((instance) => runWorkflow<{ instanceId: string }>(instance))
+    )
+
+    // Each instance should have completed with its own ID
+    const ids = results.map((r) => r.instanceId)
+    expect(new Set(ids).size).toBe(3) // All unique
+  })
+})

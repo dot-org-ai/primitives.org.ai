@@ -32,19 +32,27 @@ class MockWorkerEntrypoint<T = unknown> {
   protected env!: T
   protected ctx!: unknown
 }
+class MockDurableObject {
+  protected ctx!: any
+  protected env!: any
+  constructor(_state: any, _env: any) {}
+}
 
 // Try to import from cloudflare:workers, fall back to mocks
 let WorkerEntrypoint: typeof MockWorkerEntrypoint
 let RpcTarget: typeof MockRpcTarget
+let DurableObjectBase: typeof MockDurableObject
 
 try {
   // @ts-expect-error - cloudflare:workers is only available in Cloudflare Workers runtime
   const cfWorkers = await import('cloudflare:workers')
   WorkerEntrypoint = cfWorkers.WorkerEntrypoint
   RpcTarget = cfWorkers.RpcTarget
+  DurableObjectBase = cfWorkers.DurableObject
 } catch {
   WorkerEntrypoint = MockWorkerEntrypoint
   RpcTarget = MockRpcTarget
+  DurableObjectBase = MockDurableObject
 }
 import { MemoryProvider } from './memory-provider.js'
 import type { MemoryProviderOptions, EmbeddingProvider } from './memory-provider.js'
@@ -491,6 +499,531 @@ export class DatabaseServiceCore extends RpcTarget {
   clear(): void {
     if ('clear' in this.provider) {
       ;(this.provider as any).clear()
+    }
+  }
+}
+
+// =============================================================================
+// DatabaseDO - Durable Object with SQLite storage for core _data and _rels tables
+// =============================================================================
+
+/**
+ * DatabaseDO - Durable Object using SQLite for the core schema layer.
+ *
+ * Provides two tables:
+ * - `_data`: id TEXT PRIMARY KEY, type TEXT, data TEXT (JSON), created_at TEXT, updated_at TEXT
+ * - `_rels`: from_id TEXT, relation TEXT, to_id TEXT, metadata TEXT (JSON),
+ *            PRIMARY KEY(from_id, relation, to_id)
+ *
+ * Handles HTTP requests for CRUD operations on data records and relationships,
+ * plus graph traversal queries.
+ */
+export class DatabaseDO extends DurableObjectBase {
+  private sql!: SqlStorage
+  private initialized = false
+
+  constructor(state: DurableObjectState, env: unknown) {
+    super(state, env)
+    this.sql = (state as any).storage.sql
+  }
+
+  private ensureSchema(): void {
+    if (this.initialized) return
+
+    // Create _data table
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS _data (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        data TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `)
+
+    // Create _rels table with created_at
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS _rels (
+        from_id TEXT NOT NULL,
+        relation TEXT NOT NULL,
+        to_id TEXT NOT NULL,
+        metadata TEXT,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY(from_id, relation, to_id)
+      )
+    `)
+
+    // Create _meta table for schema versioning
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS _meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `)
+
+    // Set initial schema version
+    this.sql.exec(`
+      INSERT OR IGNORE INTO _meta (key, value) VALUES ('version', '1')
+    `)
+
+    // Create indexes for performance
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS idx_data_type ON _data(type)`)
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS idx_data_created_at ON _data(created_at)`)
+    this.sql.exec(
+      `CREATE INDEX IF NOT EXISTS idx_rels_from_id_relation ON _rels(from_id, relation)`
+    )
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS idx_rels_to_id_relation ON _rels(to_id, relation)`)
+
+    this.initialized = true
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    this.ensureSchema()
+
+    const url = new URL(request.url)
+    const path = url.pathname
+    const method = request.method
+
+    try {
+      // Route: /data (list or insert)
+      if (path === '/data' && method === 'GET') {
+        return this.handleListData(url)
+      }
+      if (path === '/data' && method === 'POST') {
+        return this.handleInsertData(request)
+      }
+
+      // Route: /data/:id (get, update, delete)
+      const dataMatch = path.match(/^\/data\/(.+)$/)
+      if (dataMatch) {
+        const id = decodeURIComponent(dataMatch[1])
+        if (method === 'GET') return this.handleGetData(id)
+        if (method === 'PATCH') return this.handleUpdateData(id, request)
+        if (method === 'DELETE') return this.handleDeleteData(id)
+      }
+
+      // Route: /rels (list or create)
+      if (path === '/rels' && method === 'GET') {
+        return this.handleQueryRels(url)
+      }
+      if (path === '/rels' && method === 'POST') {
+        return this.handleCreateRel(request)
+      }
+
+      // Route: /rels/delete (delete relationship)
+      if (path === '/rels/delete' && method === 'DELETE') {
+        return this.handleDeleteRel(request)
+      }
+
+      // Route: /traverse (graph traversal)
+      if (path === '/traverse' && method === 'GET') {
+        return this.handleTraverse(url)
+      }
+
+      // Route: /meta/indexes (list indexes)
+      if (path === '/meta/indexes' && method === 'GET') {
+        return this.handleGetIndexes()
+      }
+
+      // Route: /meta/version (schema version)
+      if (path === '/meta/version' && method === 'GET') {
+        return this.handleGetVersion()
+      }
+
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    } catch (err: any) {
+      return Response.json({ error: err.message || 'Internal error' }, { status: 500 })
+    }
+  }
+
+  // ===========================================================================
+  // _data handlers
+  // ===========================================================================
+
+  private handleListData(url: URL): Response {
+    const type = url.searchParams.get('type')
+    const limit = url.searchParams.get('limit')
+    const offset = url.searchParams.get('offset')
+
+    let query = 'SELECT * FROM _data'
+    const params: any[] = []
+
+    if (type) {
+      query += ' WHERE type = ?'
+      params.push(type)
+    }
+
+    query += ' ORDER BY rowid ASC'
+
+    if (limit) {
+      query += ' LIMIT ?'
+      params.push(parseInt(limit, 10))
+    }
+    if (offset) {
+      query += ' OFFSET ?'
+      params.push(parseInt(offset, 10))
+    }
+
+    const rows = this.sql.exec(query, ...params).toArray()
+    const results = rows.map((row: any) => this.deserializeDataRow(row))
+    return Response.json(results)
+  }
+
+  private async handleInsertData(request: Request): Promise<Response> {
+    let body: Record<string, any>
+    try {
+      body = (await request.json()) as Record<string, any>
+    } catch (err) {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+
+    const { type, data } = body
+    let { id } = body
+
+    if (!type) {
+      return Response.json({ error: 'type field is required' }, { status: 400 })
+    }
+
+    if (!id) {
+      id = crypto.randomUUID()
+    }
+
+    // Check for duplicate ID
+    const existing = this.sql.exec('SELECT id FROM _data WHERE id = ?', id).toArray()
+    if (existing.length > 0) {
+      return Response.json({ error: 'Record with this id already exists' }, { status: 409 })
+    }
+
+    const now = new Date().toISOString()
+    const dataJson = JSON.stringify(data ?? {})
+
+    this.sql.exec(
+      'INSERT INTO _data (id, type, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      id,
+      type,
+      dataJson,
+      now,
+      now
+    )
+
+    const result = {
+      id,
+      type,
+      data: data ?? {},
+      created_at: now,
+      updated_at: now,
+    }
+    return Response.json(result)
+  }
+
+  private handleGetData(id: string): Response {
+    const rows = this.sql.exec('SELECT * FROM _data WHERE id = ?', id).toArray()
+    if (rows.length === 0) {
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    return Response.json(this.deserializeDataRow(rows[0] as any))
+  }
+
+  private async handleUpdateData(id: string, request: Request): Promise<Response> {
+    const rows = this.sql.exec('SELECT * FROM _data WHERE id = ?', id).toArray()
+    if (rows.length === 0) {
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    const existing = this.deserializeDataRow(rows[0] as any)
+    const body = (await request.json()) as Record<string, any>
+
+    // Merge data fields (shallow merge)
+    const mergedData = { ...existing.data, ...(body.data ?? {}) }
+    const now = new Date().toISOString()
+    const dataJson = JSON.stringify(mergedData)
+
+    this.sql.exec('UPDATE _data SET data = ?, updated_at = ? WHERE id = ?', dataJson, now, id)
+
+    const result = {
+      id: existing.id,
+      type: existing.type,
+      data: mergedData,
+      created_at: existing.created_at,
+      updated_at: now,
+    }
+    return Response.json(result)
+  }
+
+  private handleDeleteData(id: string): Response {
+    const rows = this.sql.exec('SELECT id FROM _data WHERE id = ?', id).toArray()
+    if (rows.length === 0) {
+      return Response.json({ deleted: false })
+    }
+
+    // Delete the record
+    this.sql.exec('DELETE FROM _data WHERE id = ?', id)
+
+    // Cascade: remove relationships involving this id
+    this.sql.exec('DELETE FROM _rels WHERE from_id = ? OR to_id = ?', id, id)
+
+    return Response.json({ deleted: true })
+  }
+
+  // ===========================================================================
+  // _rels handlers
+  // ===========================================================================
+
+  private handleQueryRels(url: URL): Response {
+    const from_id = url.searchParams.get('from_id')
+    const to_id = url.searchParams.get('to_id')
+    const relation = url.searchParams.get('relation')
+
+    let query = 'SELECT * FROM _rels WHERE 1=1'
+    const params: any[] = []
+
+    if (from_id) {
+      query += ' AND from_id = ?'
+      params.push(from_id)
+    }
+    if (to_id) {
+      query += ' AND to_id = ?'
+      params.push(to_id)
+    }
+    if (relation) {
+      query += ' AND relation = ?'
+      params.push(relation)
+    }
+
+    const rows = this.sql.exec(query, ...params).toArray()
+    const results = rows.map((row: any) => this.deserializeRelRow(row))
+    return Response.json(results)
+  }
+
+  private async handleCreateRel(request: Request): Promise<Response> {
+    const body = (await request.json()) as Record<string, any>
+    const { from_id, relation, to_id, metadata } = body
+
+    // Validate required fields
+    if (!from_id || !relation || !to_id) {
+      return Response.json({ error: 'from_id, relation, and to_id are required' }, { status: 400 })
+    }
+
+    const metadataJson = metadata ? JSON.stringify(metadata) : null
+    const now = new Date().toISOString()
+
+    try {
+      this.sql.exec(
+        'INSERT INTO _rels (from_id, relation, to_id, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
+        from_id,
+        relation,
+        to_id,
+        metadataJson,
+        now
+      )
+    } catch (err: any) {
+      // Handle duplicate composite key -- upsert
+      if (err.message && err.message.includes('UNIQUE constraint')) {
+        this.sql.exec(
+          'UPDATE _rels SET metadata = ? WHERE from_id = ? AND relation = ? AND to_id = ?',
+          metadataJson,
+          from_id,
+          relation,
+          to_id
+        )
+        // Re-fetch to get the original created_at
+        const rows = this.sql
+          .exec(
+            'SELECT created_at FROM _rels WHERE from_id = ? AND relation = ? AND to_id = ?',
+            from_id,
+            relation,
+            to_id
+          )
+          .toArray()
+        const result: Record<string, any> = { from_id, relation, to_id }
+        result.metadata = metadata ?? null
+        result.created_at = (rows[0] as any)?.created_at
+        return Response.json(result)
+      } else {
+        throw err
+      }
+    }
+
+    const result: Record<string, any> = { from_id, relation, to_id }
+    result.metadata = metadata ?? null
+    result.created_at = now
+    return Response.json(result)
+  }
+
+  private async handleDeleteRel(request: Request): Promise<Response> {
+    const body = (await request.json()) as Record<string, any>
+    const { from_id, relation, to_id } = body
+
+    const existing = this.sql
+      .exec(
+        'SELECT * FROM _rels WHERE from_id = ? AND relation = ? AND to_id = ?',
+        from_id,
+        relation,
+        to_id
+      )
+      .toArray()
+
+    if (existing.length === 0) {
+      return Response.json({ deleted: false })
+    }
+
+    this.sql.exec(
+      'DELETE FROM _rels WHERE from_id = ? AND relation = ? AND to_id = ?',
+      from_id,
+      relation,
+      to_id
+    )
+    return Response.json({ deleted: true })
+  }
+
+  // ===========================================================================
+  // Traverse handler
+  // ===========================================================================
+
+  private handleTraverse(url: URL): Response {
+    const from_id = url.searchParams.get('from_id')
+    const to_id = url.searchParams.get('to_id')
+    const relationParam = url.searchParams.get('relation')
+    const typeFilter = url.searchParams.get('type')
+
+    // Support multi-hop traversal via comma-separated relations
+    const relations = relationParam ? relationParam.split(',') : []
+
+    if (from_id && relations.length > 0) {
+      // Forward traversal: from_id through one or more relation hops
+      let currentIds: string[] = [from_id]
+
+      for (const rel of relations) {
+        if (currentIds.length === 0) break
+        const placeholders = currentIds.map(() => '?').join(',')
+        const rows = this.sql
+          .exec(
+            `SELECT to_id FROM _rels WHERE from_id IN (${placeholders}) AND relation = ?`,
+            ...currentIds,
+            rel
+          )
+          .toArray()
+        currentIds = [...new Set(rows.map((r: any) => r.to_id as string))]
+      }
+
+      if (currentIds.length === 0) {
+        return Response.json([])
+      }
+
+      // Fetch the actual data records
+      const placeholders = currentIds.map(() => '?').join(',')
+      let query = `SELECT * FROM _data WHERE id IN (${placeholders})`
+      const params: any[] = [...currentIds]
+
+      if (typeFilter) {
+        query += ' AND type = ?'
+        params.push(typeFilter)
+      }
+
+      const records = this.sql.exec(query, ...params).toArray()
+      return Response.json(records.map((r: any) => this.deserializeDataRow(r)))
+    }
+
+    if (to_id && relations.length > 0) {
+      // Reverse traversal: find who points to to_id via relation
+      const rel = relations[0]
+      const rows = this.sql
+        .exec('SELECT from_id FROM _rels WHERE to_id = ? AND relation = ?', to_id, rel)
+        .toArray()
+      const fromIds = [...new Set(rows.map((r: any) => r.from_id as string))]
+
+      if (fromIds.length === 0) {
+        return Response.json([])
+      }
+
+      const placeholders = fromIds.map(() => '?').join(',')
+      let query = `SELECT * FROM _data WHERE id IN (${placeholders})`
+      const params: any[] = [...fromIds]
+
+      if (typeFilter) {
+        query += ' AND type = ?'
+        params.push(typeFilter)
+      }
+
+      const records = this.sql.exec(query, ...params).toArray()
+      return Response.json(records.map((r: any) => this.deserializeDataRow(r)))
+    }
+
+    if (from_id && !relationParam) {
+      // Traverse all outgoing relations from from_id, optionally filter by type
+      const rows = this.sql.exec('SELECT to_id FROM _rels WHERE from_id = ?', from_id).toArray()
+      const toIds = [...new Set(rows.map((r: any) => r.to_id as string))]
+
+      if (toIds.length === 0) {
+        return Response.json([])
+      }
+
+      const placeholders = toIds.map(() => '?').join(',')
+      let query = `SELECT * FROM _data WHERE id IN (${placeholders})`
+      const params: any[] = [...toIds]
+
+      if (typeFilter) {
+        query += ' AND type = ?'
+        params.push(typeFilter)
+      }
+
+      const records = this.sql.exec(query, ...params).toArray()
+      return Response.json(records.map((r: any) => this.deserializeDataRow(r)))
+    }
+
+    return Response.json([])
+  }
+
+  // ===========================================================================
+  // Meta handlers
+  // ===========================================================================
+
+  private handleGetIndexes(): Response {
+    const rows = this.sql
+      .exec(
+        `
+      SELECT name, tbl_name as table_name, sql
+      FROM sqlite_master
+      WHERE type = 'index' AND sql IS NOT NULL
+    `
+      )
+      .toArray()
+    return Response.json(rows)
+  }
+
+  private handleGetVersion(): Response {
+    const rows = this.sql.exec(`SELECT value FROM _meta WHERE key = 'version'`).toArray()
+    if (rows.length === 0) {
+      return Response.json({ version: 1 })
+    }
+    return Response.json({ version: parseInt((rows[0] as any).value, 10) })
+  }
+
+  // ===========================================================================
+  // Helpers
+  // ===========================================================================
+
+  private deserializeDataRow(row: Record<string, any>): Record<string, any> {
+    return {
+      id: row.id,
+      type: row.type,
+      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }
+  }
+
+  private deserializeRelRow(row: Record<string, any>): Record<string, any> {
+    return {
+      from_id: row.from_id,
+      relation: row.relation,
+      to_id: row.to_id,
+      metadata: row.metadata
+        ? typeof row.metadata === 'string'
+          ? JSON.parse(row.metadata)
+          : row.metadata
+        : null,
+      created_at: row.created_at,
     }
   }
 }

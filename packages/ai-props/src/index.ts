@@ -64,3 +64,21 @@ export {
   createValidator,
   assertValidProps,
 } from './validate.js'
+
+// Export MDX utilities
+export {
+  parseMDX,
+  extractComponentSchemas,
+  renderMDXWithProps,
+  streamMDXWithProps,
+  createMDXPropsGenerator,
+  compileMDX,
+  type ParsedMDX,
+  type ComponentSchemas,
+  type MDXPropsGeneratorOptions,
+  type MDXPropsGenerator,
+  type RenderMDXOptions,
+  type StreamMDXOptions,
+  type CompileMDXOptions,
+  type CompiledMDXFunction,
+} from './mdx.js'

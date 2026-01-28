@@ -11,13 +11,10 @@ export default defineWorkersConfig({
     poolOptions: {
       workers: {
         wrangler: { configPath: './wrangler.jsonc' },
-        miniflare: {
-          compatibilityDate: '2025-01-20',
-          compatibilityFlags: ['nodejs_compat_v2'],
-          durableObjects: {
-            DATABASE: 'DatabaseDO',
-          },
-        },
+        // Disable isolated storage for SQLite DO tests
+        // SQLite DOs require non-isolated mode due to how miniflare handles SQLite files
+        isolatedStorage: false,
+        singleWorker: true,
       },
     },
 
