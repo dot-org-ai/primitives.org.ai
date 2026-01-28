@@ -184,7 +184,15 @@ export class ProviderServiceCore extends RpcTarget {
 
       if (provider === 'cloudflare' && this.env.AI) {
         // Use Cloudflare AI binding directly for better performance
-        return cloudflareEmbedding(modelId, this.getConfig(), this.env.AI)
+        const config = this.getConfig()
+        return cloudflareEmbedding(
+          modelId,
+          {
+            accountId: config.cloudflareAccountId,
+            apiToken: config.cloudflareApiToken,
+          },
+          this.env.AI
+        )
       }
     }
 

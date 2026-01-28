@@ -131,7 +131,9 @@ export class LLM {
   private reconnectAttempts = 0
   private eventIdCounter = 0
 
-  readonly config: Required<Omit<LLMConfig, 'autoReconnect' | 'maxReconnectAttempts' | 'reconnectDelay'>> & { autoReconnect: boolean; maxReconnectAttempts: number; reconnectDelay: number }
+  readonly config: Required<
+    Omit<LLMConfig, 'autoReconnect' | 'maxReconnectAttempts' | 'reconnectDelay'>
+  > & { autoReconnect: boolean; maxReconnectAttempts: number; reconnectDelay: number }
 
   constructor(config: LLMConfig) {
     this.config = {
@@ -139,7 +141,7 @@ export class LLM {
       maxReconnectAttempts: config.maxReconnectAttempts ?? 5,
       reconnectDelay: config.reconnectDelay ?? 1000,
       url: config.url,
-      token: config.token
+      token: config.token,
     }
   }
 
@@ -186,27 +188,27 @@ export class LLM {
       // Create WebSocket with auth in subprotocol header (browser-compatible)
       const ws = new WebSocket(this.wsUrl, [`cf-aig-authorization.${this.config.token}`])
 
-      ws.onopen = () => {
+      ws.addEventListener('open', () => {
         this.ws = ws
         this.state = 'connected'
         this.reconnectAttempts = 0
         resolve()
-      }
+      })
 
-      ws.onerror = (event) => {
+      ws.addEventListener('error', () => {
         const error = new Error('WebSocket connection failed')
         if (this.state === 'connecting') {
           reject(error)
         }
-      }
+      })
 
-      ws.onclose = () => {
+      ws.addEventListener('close', () => {
         this.handleDisconnect()
-      }
+      })
 
-      ws.onmessage = (event) => {
-        this.handleMessage(event.data)
-      }
+      ws.addEventListener('message', (event) => {
+        this.handleMessage(event.data as string)
+      })
     })
   }
 
@@ -227,7 +229,11 @@ export class LLM {
     this.pendingRequests.clear()
 
     // Auto-reconnect if enabled
-    if (wasConnected && this.config.autoReconnect && this.reconnectAttempts < this.config.maxReconnectAttempts) {
+    if (
+      wasConnected &&
+      this.config.autoReconnect &&
+      this.reconnectAttempts < this.config.maxReconnectAttempts
+    ) {
       this.reconnectAttempts++
       const delay = this.config.reconnectDelay * this.reconnectAttempts
       setTimeout(() => {
@@ -260,7 +266,7 @@ export class LLM {
           this.pendingRequests.delete(message.eventId)
           const response = new Response(JSON.stringify(message.response.body), {
             status: message.response.status,
-            ...(message.response.headers && { headers: message.response.headers })
+            ...(message.response.headers && { headers: message.response.headers }),
           })
           pending.resolve(response)
         }
@@ -269,11 +275,14 @@ export class LLM {
       case 'universal.stream':
         if (pending.streaming && pending.controller) {
           // Streaming: push chunk to the stream
-          const chunk = typeof message.chunk === 'string' ? message.chunk : JSON.stringify(message.chunk)
+          const chunk =
+            typeof message.chunk === 'string' ? message.chunk : JSON.stringify(message.chunk)
           pending.controller.enqueue(new TextEncoder().encode(chunk))
         } else {
           // Collect chunks for non-streaming mode
-          pending.chunks.push(typeof message.chunk === 'string' ? message.chunk : JSON.stringify(message.chunk))
+          pending.chunks.push(
+            typeof message.chunk === 'string' ? message.chunk : JSON.stringify(message.chunk)
+          )
         }
         break
 
@@ -364,7 +373,9 @@ export class LLM {
     if (init?.headers) {
       const h = init.headers
       if (h instanceof Headers) {
-        h.forEach((value, key) => { headers[key] = value })
+        h.forEach((value, key) => {
+          headers[key] = value
+        })
       } else if (Array.isArray(h)) {
         for (const entry of h) {
           if (entry[0] && entry[1]) {
@@ -387,7 +398,9 @@ export class LLM {
         }
       } else if (init.body instanceof FormData) {
         // Convert FormData to object
-        init.body.forEach((value, key) => { query[key] = value })
+        init.body.forEach((value, key) => {
+          query[key] = value
+        })
       }
     }
 
@@ -402,8 +415,8 @@ export class LLM {
         provider,
         endpoint,
         headers,
-        query
-      }
+        query,
+      },
     }
 
     return new Promise((resolve, reject) => {
@@ -413,7 +426,7 @@ export class LLM {
         const stream = new ReadableStream<Uint8Array>({
           start(c) {
             controller = c
-          }
+          },
         })
 
         this.pendingRequests.set(eventId, {
@@ -421,20 +434,22 @@ export class LLM {
           reject,
           streaming: true,
           chunks: [],
-          controller: controller!
+          controller: controller!,
         })
 
         // Return the streaming response immediately
-        resolve(new Response(stream, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' }
-        }))
+        resolve(
+          new Response(stream, {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream' },
+          })
+        )
       } else {
         this.pendingRequests.set(eventId, {
           resolve,
           reject,
           streaming: false,
-          chunks: []
+          chunks: [],
         })
       }
 
