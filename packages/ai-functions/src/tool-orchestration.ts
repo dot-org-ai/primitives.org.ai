@@ -263,7 +263,7 @@ export class ToolValidator {
       if (error instanceof z.ZodError) {
         return {
           valid: false,
-          errors: error.errors.map(e => `${e.path.join('.')}: ${e.message}`),
+          errors: error.errors.map((e) => `${e.path.join('.')}: ${e.message}`),
         }
       }
       return {
@@ -277,7 +277,7 @@ export class ToolValidator {
    * Validate multiple tool calls at once
    */
   validateAll(calls: ToolCall[]): ValidationResult[] {
-    return calls.map(call => this.validate(call.name, call.arguments))
+    return calls.map((call) => this.validate(call.name, call.arguments))
   }
 }
 
@@ -353,7 +353,7 @@ export class ToolRouter {
    * Route multiple tool calls in parallel
    */
   async routeAllParallel(calls: ToolCall[]): Promise<ToolResult[]> {
-    return Promise.all(calls.map(call => this.route(call)))
+    return Promise.all(calls.map((call) => this.route(call)))
   }
 
   /**
@@ -364,13 +364,13 @@ export class ToolRouter {
       return {
         role: 'tool',
         content: JSON.stringify(result.result),
-        tool_call_id: result.toolCall?.id,
+        ...(result.toolCall?.id !== undefined && { tool_call_id: result.toolCall.id }),
       }
     }
     return {
       role: 'tool',
       content: JSON.stringify({ error: result.error }),
-      tool_call_id: result.toolCall?.id,
+      ...(result.toolCall?.id !== undefined && { tool_call_id: result.toolCall.id }),
       isError: true,
     }
   }
@@ -412,7 +412,10 @@ export class AgenticLoop {
   /**
    * Get tools in AI SDK format
    */
-  getToolsForSDK(): Record<string, { description: string; parameters: unknown; execute: (args: unknown) => Promise<unknown> }> {
+  getToolsForSDK(): Record<
+    string,
+    { description: string; parameters: unknown; execute: (args: unknown) => Promise<unknown> }
+  > {
     const tools: Record<string, any> = {}
     for (const tool of this.options.tools) {
       tools[tool.name] = {
@@ -484,7 +487,7 @@ export class AgenticLoop {
     return {
       name: call.name,
       arguments: call.arguments,
-      error: lastError,
+      ...(lastError !== undefined && { error: lastError }),
       retryCount: retryCount > 0 ? retryCount - 1 : 0,
     }
   }
@@ -517,7 +520,7 @@ export class AgenticLoop {
 
     for (const chunk of chunks) {
       const chunkResults = await Promise.all(
-        chunk.map(call => this.executeToolCall(call, abortSignal))
+        chunk.map((call) => this.executeToolCall(call, abortSignal))
       )
       results.push(...chunkResults)
     }
@@ -576,7 +579,9 @@ export class AgenticLoop {
     let steps = 0
     let stopReason: LoopResult['stopReason'] = 'stop'
     let finalText = ''
-    let totalUsage = trackUsage ? { promptTokens: 0, completionTokens: 0, totalTokens: 0 } : undefined
+    let totalUsage = trackUsage
+      ? { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      : undefined
 
     try {
       while (steps < maxSteps) {
@@ -622,7 +627,7 @@ export class AgenticLoop {
         const toolResults = await this.executeToolCalls(response.toolCalls, abortSignal)
 
         // Check for errors
-        const hasErrors = toolResults.some(r => r.error)
+        const hasErrors = toolResults.some((r) => r.error)
         if (hasErrors && !continueOnError) {
           // Still record the results but note the errors
         }
@@ -656,8 +661,8 @@ export class AgenticLoop {
             stepNumber: steps,
             toolCalls: response.toolCalls.map((tc, i) => ({
               ...tc,
-              result: toolResults[i]?.result,
-              error: toolResults[i]?.error,
+              ...(toolResults[i]?.result !== undefined && { result: toolResults[i]?.result }),
+              ...(toolResults[i]?.error !== undefined && { error: toolResults[i]?.error }),
             })),
             response,
             messages: [...messages],
@@ -697,7 +702,7 @@ export class AgenticLoop {
       toolCalls: allToolCalls,
       toolResults: allToolResults,
       stopReason,
-      usage: totalUsage,
+      ...(totalUsage !== undefined && { usage: totalUsage }),
       messages,
     }
   }
@@ -717,7 +722,9 @@ export class AgenticLoop {
     let steps = 0
     let stopReason: LoopResult['stopReason'] = 'stop'
     let finalText = ''
-    let totalUsage = trackUsage ? { promptTokens: 0, completionTokens: 0, totalTokens: 0 } : undefined
+    let totalUsage = trackUsage
+      ? { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      : undefined
 
     yield { type: 'start', prompt, timestamp: Date.now() }
 
@@ -766,8 +773,8 @@ export class AgenticLoop {
           yield {
             type: 'tool_result',
             toolName: result.name,
-            result: result.result,
-            error: result.error,
+            ...(result.result !== undefined && { result: result.result }),
+            ...(result.error !== undefined && { error: result.error }),
             stepNumber: steps,
             timestamp: Date.now(),
           }
@@ -821,7 +828,7 @@ export class AgenticLoop {
       toolCalls: allToolCalls,
       toolResults: allToolResults,
       stopReason,
-      usage: totalUsage,
+      ...(totalUsage !== undefined && { usage: totalUsage }),
       messages,
     }
   }
@@ -840,7 +847,14 @@ export type LoopStreamEvent =
   | { type: 'step_end'; stepNumber: number; hasToolCalls: boolean; timestamp: number }
   | { type: 'text'; text: string; stepNumber: number; timestamp: number }
   | { type: 'tool_calls'; toolCalls: ToolCall[]; stepNumber: number; timestamp: number }
-  | { type: 'tool_result'; toolName: string; result?: unknown; error?: string; stepNumber: number; timestamp: number }
+  | {
+      type: 'tool_result'
+      toolName: string
+      result?: unknown
+      error?: string
+      stepNumber: number
+      timestamp: number
+    }
   | { type: 'max_steps'; steps: number; timestamp: number }
   | { type: 'aborted'; steps: number; timestamp: number }
   | { type: 'error'; error: string; timestamp: number }
@@ -853,14 +867,12 @@ export type LoopStreamEvent =
 /**
  * Create a tool from a simple function
  */
-export function createTool<TParams extends z.ZodRawShape, TResult>(
-  config: {
-    name: string
-    description: string
-    parameters: TParams
-    execute: (params: z.infer<z.ZodObject<TParams>>) => Promise<TResult>
-  }
-): Tool<z.ZodObject<TParams>, TResult> {
+export function createTool<TParams extends z.ZodRawShape, TResult>(config: {
+  name: string
+  description: string
+  parameters: TParams
+  execute: (params: z.infer<z.ZodObject<TParams>>) => Promise<TResult>
+}): Tool<z.ZodObject<TParams>, TResult> {
   return {
     name: config.name,
     description: config.description,
@@ -891,9 +903,7 @@ export function wrapTool<T extends Tool>(
     ...tool,
     execute: async (params: unknown) => {
       try {
-        const modifiedParams = middleware.before
-          ? await middleware.before(params)
-          : params
+        const modifiedParams = middleware.before ? await middleware.before(params) : params
         const result = await tool.execute(modifiedParams)
         return middleware.after ? await middleware.after(result) : result
       } catch (error) {
@@ -941,10 +951,7 @@ export interface CachedTool extends Tool {
  * - Optional max size with LRU eviction
  * - Manual cache control (clear, destroy)
  */
-export function cachedTool<T extends Tool>(
-  tool: T,
-  options: CachedToolOptions = {}
-): CachedTool {
+export function cachedTool<T extends Tool>(tool: T, options: CachedToolOptions = {}): CachedTool {
   const { ttl = 60000, keyFn = JSON.stringify, cleanupIntervalMs = 0, maxSize = 0 } = options
 
   interface CacheEntry {
@@ -1091,16 +1098,16 @@ export function rateLimitedTool<T extends Tool>(
 /**
  * Create a tool that times out after a specified duration
  */
-export function timeoutTool<T extends Tool>(
-  tool: T,
-  timeoutMs: number
-): Tool {
+export function timeoutTool<T extends Tool>(tool: T, timeoutMs: number): Tool {
   return {
     ...tool,
     execute: async (params: unknown) => {
       let timeoutId: ReturnType<typeof setTimeout> | undefined
       const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error(`Tool '${tool.name}' timed out after ${timeoutMs}ms`)), timeoutMs)
+        timeoutId = setTimeout(
+          () => reject(new Error(`Tool '${tool.name}' timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        )
       })
       try {
         return await Promise.race([tool.execute(params), timeoutPromise])

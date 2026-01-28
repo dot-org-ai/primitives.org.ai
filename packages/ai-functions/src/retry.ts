@@ -83,13 +83,18 @@ export class RateLimitError extends RetryableError {
   constructor(message: string, options?: { retryAfter?: number }) {
     super(message, ErrorCategory.RateLimit)
     this.name = 'RateLimitError'
-    this.retryAfter = options?.retryAfter
+    if (options?.retryAfter !== undefined) {
+      this.retryAfter = options.retryAfter
+    }
   }
 
   /**
    * Create RateLimitError from HTTP response
    */
-  static fromResponse(response: { status: number; headers?: Record<string, string> }): RateLimitError {
+  static fromResponse(response: {
+    status: number
+    headers?: Record<string, string>
+  }): RateLimitError {
     const retryAfterHeader = response.headers?.['retry-after']
     let retryAfter: number | undefined
 
@@ -100,7 +105,10 @@ export class RateLimitError extends RetryableError {
       }
     }
 
-    return new RateLimitError(`Rate limited (${response.status})`, { retryAfter })
+    return new RateLimitError(
+      `Rate limited (${response.status})`,
+      retryAfter !== undefined ? { retryAfter } : undefined
+    )
   }
 }
 
@@ -311,7 +319,9 @@ export interface BatchItemResult<T, R> {
  * Retry policy for executing operations with exponential backoff
  */
 export class RetryPolicy {
-  private readonly options: Required<Omit<RetryOptions, 'shouldRetry'>> & { shouldRetry?: (error: unknown) => boolean }
+  private readonly options: Required<Omit<RetryOptions, 'shouldRetry'>> & {
+    shouldRetry?: (error: unknown) => boolean
+  }
 
   constructor(options: RetryOptions = {}) {
     this.options = {
@@ -322,16 +332,14 @@ export class RetryPolicy {
       jitter: options.jitter ?? 0,
       jitterStrategy: options.jitterStrategy ?? 'equal',
       respectRetryAfter: options.respectRetryAfter ?? true,
-      shouldRetry: options.shouldRetry,
+      ...(options.shouldRetry !== undefined && { shouldRetry: options.shouldRetry }),
     }
   }
 
   /**
    * Execute an operation with retry logic
    */
-  async execute<T>(
-    operation: (info: RetryInfo) => Promise<T>
-  ): Promise<T> {
+  async execute<T>(operation: (info: RetryInfo) => Promise<T>): Promise<T> {
     let lastError: unknown
     let previousDelay = this.options.baseDelay
 
@@ -386,7 +394,7 @@ export class RetryPolicy {
     const attemptCounts = new Map<T, number>()
 
     // Initialize attempt counts
-    items.forEach(item => attemptCounts.set(item, 0))
+    items.forEach((item) => attemptCounts.set(item, 0))
 
     for (let round = 0; round <= this.options.maxRetries && pendingItems.length > 0; round++) {
       // Wait before retry (not on first attempt)
@@ -427,7 +435,7 @@ export class RetryPolicy {
     }
 
     // Return results in original order
-    return items.map(item => finalResults.get(item)!)
+    return items.map((item) => finalResults.get(item)!)
   }
 
   private isRetryable(error: unknown): boolean {
@@ -452,7 +460,7 @@ export class RetryPolicy {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms))
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }
 
