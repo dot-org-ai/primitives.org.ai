@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
     }
   },
   "scripts": {
@@ -23,6 +27,7 @@
     "ai-functions": "workspace:*"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.9"
   },

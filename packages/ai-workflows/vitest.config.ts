@@ -9,7 +9,7 @@ export default defineConfig({
     fileParallelism: false,
 
     globals: true,
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'src/**/*.test.ts'],
 
     // Coverage configuration
     coverage: {
@@ -23,6 +23,12 @@ export default defineConfig({
         functions: 60,
         lines: 65,
       },
+    },
+
+    // Alias for cloudflare:workers mock
+    alias: {
+      'cloudflare:workers': new URL('./test/__mocks__/cloudflare-workers.ts', import.meta.url)
+        .pathname,
     },
   },
 })
