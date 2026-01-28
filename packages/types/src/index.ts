@@ -662,11 +662,11 @@ export const HumanSchema = z.object({
 export function isWorker(v: unknown): v is WorkerType {
   if (typeof v !== 'object' || v === null) return false
   const obj = v as Record<string, unknown>
-  if (typeof obj.$type !== 'string') return false
+  if (typeof obj['$type'] !== 'string') return false
   return (
-    (WorkerTypes as readonly string[]).includes(obj.$type) &&
-    typeof obj.status === 'string' &&
-    WorkerStatus.includes(obj.status as WorkerStatusType)
+    (WorkerTypes as readonly string[]).includes(obj['$type']) &&
+    typeof obj['status'] === 'string' &&
+    WorkerStatus.includes(obj['status'] as WorkerStatusType)
   )
 }
 
@@ -677,11 +677,11 @@ export function isAgent(v: unknown): v is AgentType {
   if (typeof v !== 'object' || v === null) return false
   const obj = v as Record<string, unknown>
   return (
-    obj.$type === AGENT_TYPE &&
-    typeof obj.model === 'string' &&
-    typeof obj.autonomous === 'boolean' &&
-    typeof obj.status === 'string' &&
-    WorkerStatus.includes(obj.status as WorkerStatusType)
+    obj['$type'] === AGENT_TYPE &&
+    typeof obj['model'] === 'string' &&
+    typeof obj['autonomous'] === 'boolean' &&
+    typeof obj['status'] === 'string' &&
+    WorkerStatus.includes(obj['status'] as WorkerStatusType)
   )
 }
 
@@ -692,9 +692,9 @@ export function isHuman(v: unknown): v is HumanType {
   if (typeof v !== 'object' || v === null) return false
   const obj = v as Record<string, unknown>
   return (
-    obj.$type === HUMAN_TYPE &&
-    typeof obj.status === 'string' &&
-    WorkerStatus.includes(obj.status as WorkerStatusType)
+    obj['$type'] === HUMAN_TYPE &&
+    typeof obj['status'] === 'string' &&
+    WorkerStatus.includes(obj['status'] as WorkerStatusType)
   )
 }
 
@@ -725,13 +725,13 @@ export function createAgent(opts: {
     status: 'idle',
     model: opts.model,
     autonomous: opts.autonomous,
-    name: opts.name,
-    provider: opts.provider,
-    systemPrompt: opts.systemPrompt,
-    temperature: opts.temperature,
-    maxTokens: opts.maxTokens,
-    tools: opts.tools,
-    capabilities: opts.capabilities,
+    ...(opts.name !== undefined && { name: opts.name }),
+    ...(opts.provider !== undefined && { provider: opts.provider }),
+    ...(opts.systemPrompt !== undefined && { systemPrompt: opts.systemPrompt }),
+    ...(opts.temperature !== undefined && { temperature: opts.temperature }),
+    ...(opts.maxTokens !== undefined && { maxTokens: opts.maxTokens }),
+    ...(opts.tools !== undefined && { tools: opts.tools }),
+    ...(opts.capabilities !== undefined && { capabilities: opts.capabilities }),
   }
 }
 
@@ -755,14 +755,14 @@ export function createHuman(opts?: {
     $id: `https://schema.org.ai/humans/${++humanCounter}`,
     $type: HUMAN_TYPE,
     status: 'idle',
-    name: opts?.name,
-    email: opts?.email,
-    role: opts?.role,
-    department: opts?.department,
-    manager: opts?.manager,
-    timezone: opts?.timezone,
-    capabilities: opts?.capabilities,
-    availability: opts?.availability,
+    ...(opts?.name !== undefined && { name: opts.name }),
+    ...(opts?.email !== undefined && { email: opts.email }),
+    ...(opts?.role !== undefined && { role: opts.role }),
+    ...(opts?.department !== undefined && { department: opts.department }),
+    ...(opts?.manager !== undefined && { manager: opts.manager }),
+    ...(opts?.timezone !== undefined && { timezone: opts.timezone }),
+    ...(opts?.capabilities !== undefined && { capabilities: opts.capabilities }),
+    ...(opts?.availability !== undefined && { availability: opts.availability }),
   }
 }
 
@@ -942,10 +942,10 @@ export function isTool(value: unknown): value is ToolType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
   return (
-    typeof v.$id === 'string' &&
-    typeof v.$type === 'string' &&
-    v.$type === TOOL_TYPE &&
-    typeof v.name === 'string'
+    typeof v['$id'] === 'string' &&
+    typeof v['$type'] === 'string' &&
+    v['$type'] === TOOL_TYPE &&
+    typeof v['name'] === 'string'
   )
 }
 
@@ -955,7 +955,11 @@ export function isTool(value: unknown): value is ToolType {
 export function isToolParameter(value: unknown): value is ToolParameterType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.name === 'string' && typeof v.type === 'string' && typeof v.required === 'boolean'
+  return (
+    typeof v['name'] === 'string' &&
+    typeof v['type'] === 'string' &&
+    typeof v['required'] === 'boolean'
+  )
 }
 
 /**
@@ -964,7 +968,7 @@ export function isToolParameter(value: unknown): value is ToolParameterType {
 export function isToolExecutionResult(value: unknown): value is ToolExecutionResultType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.success === 'boolean'
+  return typeof v['success'] === 'boolean'
 }
 
 /**
@@ -973,7 +977,11 @@ export function isToolExecutionResult(value: unknown): value is ToolExecutionRes
 export function isToolValidationError(value: unknown): value is ToolValidationErrorType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.field === 'string' && typeof v.message === 'string' && typeof v.code === 'string'
+  return (
+    typeof v['field'] === 'string' &&
+    typeof v['message'] === 'string' &&
+    typeof v['code'] === 'string'
+  )
 }
 
 // ============================================================================
@@ -1023,7 +1031,11 @@ export interface LeanCanvasType extends Thing {
 export function isLeanCanvas(value: unknown): value is LeanCanvasType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.$id === 'string' && typeof v.$type === 'string' && v.$type === LEAN_CANVAS_TYPE
+  return (
+    typeof v['$id'] === 'string' &&
+    typeof v['$type'] === 'string' &&
+    v['$type'] === LEAN_CANVAS_TYPE
+  )
 }
 
 /** Runtime marker for StoryBrand type */
@@ -1078,7 +1090,11 @@ export interface StoryBrandType extends Thing {
 export function isStoryBrand(value: unknown): value is StoryBrandType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.$id === 'string' && typeof v.$type === 'string' && v.$type === STORY_BRAND_TYPE
+  return (
+    typeof v['$id'] === 'string' &&
+    typeof v['$type'] === 'string' &&
+    v['$type'] === STORY_BRAND_TYPE
+  )
 }
 
 /** Runtime marker for Founder type */
@@ -1119,7 +1135,9 @@ export interface FounderType extends Thing {
 export function isFounder(value: unknown): value is FounderType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.$id === 'string' && typeof v.$type === 'string' && v.$type === FOUNDER_TYPE
+  return (
+    typeof v['$id'] === 'string' && typeof v['$type'] === 'string' && v['$type'] === FOUNDER_TYPE
+  )
 }
 
 // ============================================================================
@@ -1175,12 +1193,12 @@ export function isStartup(value: unknown): value is StartupType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
   return (
-    typeof v.$id === 'string' &&
-    typeof v.$type === 'string' &&
-    v.$type === STARTUP_TYPE &&
-    typeof v.name === 'string' &&
-    typeof v.stage === 'string' &&
-    ['idea', 'validating', 'building', 'scaling', 'established'].includes(v.stage as string)
+    typeof v['$id'] === 'string' &&
+    typeof v['$type'] === 'string' &&
+    v['$type'] === STARTUP_TYPE &&
+    typeof v['name'] === 'string' &&
+    typeof v['stage'] === 'string' &&
+    ['idea', 'validating', 'building', 'scaling', 'established'].includes(v['stage'] as string)
   )
 }
 
@@ -1231,5 +1249,5 @@ export interface ICPType extends Thing {
 export function isICP(value: unknown): value is ICPType {
   if (typeof value !== 'object' || value === null) return false
   const v = value as Record<string, unknown>
-  return typeof v.$id === 'string' && typeof v.$type === 'string' && v.$type === ICP_TYPE
+  return typeof v['$id'] === 'string' && typeof v['$type'] === 'string' && v['$type'] === ICP_TYPE
 }
