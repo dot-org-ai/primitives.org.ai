@@ -142,18 +142,20 @@ export class DecisionLogger {
       decisionMaker: input.decisionMaker,
       decision: input.decision,
       context: input.context,
-      reasoning: input.reasoning,
-      metadata: input.metadata,
+      ...(input.reasoning !== undefined && { reasoning: input.reasoning }),
+      ...(input.metadata !== undefined && { metadata: input.metadata }),
       timestamp: new Date(),
       version: 1,
       isOverride,
-      overrideDetails: isOverride && input.context.aiSuggestion && input.context.aiConfidence
-        ? {
+      ...(isOverride &&
+        input.context.aiSuggestion &&
+        input.context.aiConfidence && {
+          overrideDetails: {
             aiRecommendation: input.context.aiSuggestion,
             humanDecision: input.decision,
             aiConfidence: input.context.aiConfidence,
-          }
-        : undefined,
+          },
+        }),
     }
 
     this.decisions.set(id, log)
@@ -169,10 +171,7 @@ export class DecisionLogger {
   /**
    * Update an existing decision (creates new version)
    */
-  updateDecision(
-    id: string,
-    updates: { decision: string; reasoning?: string }
-  ): DecisionLog {
+  updateDecision(id: string, updates: { decision: string; reasoning?: string }): DecisionLog {
     const existing = this.decisions.get(id)
     if (!existing) {
       throw new Error(`Decision not found: ${id}`)
@@ -180,14 +179,15 @@ export class DecisionLogger {
 
     const previousVersion = {
       decision: existing.decision,
-      reasoning: existing.reasoning,
+      ...(existing.reasoning !== undefined && { reasoning: existing.reasoning }),
       timestamp: existing.timestamp,
     }
 
+    const reasoningValue = updates.reasoning ?? existing.reasoning
     const updated: DecisionLog = {
       ...existing,
       decision: updates.decision,
-      reasoning: updates.reasoning || existing.reasoning,
+      ...(reasoningValue !== undefined && { reasoning: reasoningValue }),
       timestamp: new Date(),
       version: existing.version + 1,
       previousVersions: [...(existing.previousVersions || []), previousVersion],
@@ -214,8 +214,7 @@ export class DecisionLogger {
    */
   queryByDateRange(startDate: Date, endDate: Date): DecisionLog[] {
     return Array.from(this.decisions.values()).filter(
-      (log) =>
-        log.context.timestamp >= startDate && log.context.timestamp <= endDate
+      (log) => log.context.timestamp >= startDate && log.context.timestamp <= endDate
     )
   }
 
@@ -226,21 +225,15 @@ export class DecisionLogger {
     let decisions = Array.from(this.decisions.values())
 
     if (filters.decisionMaker) {
-      decisions = decisions.filter(
-        (d) => d.decisionMaker === filters.decisionMaker
-      )
+      decisions = decisions.filter((d) => d.decisionMaker === filters.decisionMaker)
     }
 
     if (filters.startDate) {
-      decisions = decisions.filter(
-        (d) => d.context.timestamp >= filters.startDate!
-      )
+      decisions = decisions.filter((d) => d.context.timestamp >= filters.startDate!)
     }
 
     if (filters.endDate) {
-      decisions = decisions.filter(
-        (d) => d.context.timestamp <= filters.endDate!
-      )
+      decisions = decisions.filter((d) => d.context.timestamp <= filters.endDate!)
     }
 
     const overrideDecisions = decisions.filter((d) => d.isOverride)
@@ -248,8 +241,7 @@ export class DecisionLogger {
     return {
       totalDecisions: decisions.length,
       overrides: overrideDecisions.length,
-      overrideRate:
-        decisions.length > 0 ? overrideDecisions.length / decisions.length : 0,
+      overrideRate: decisions.length > 0 ? overrideDecisions.length / decisions.length : 0,
       overrideDecisions,
     }
   }
@@ -362,7 +354,7 @@ export class FeedbackLoop {
       weight: isCorrection ? 2.0 : 1.0, // Corrections have higher weight
       trainingData: {
         input: input.inputData,
-        correction: input.reasoning,
+        ...(input.reasoning !== undefined && { correction: input.reasoning }),
       },
       timestamp: new Date(),
     }
@@ -385,9 +377,7 @@ export class FeedbackLoop {
     }
 
     const corrections = this.signals.filter((s) => s.type === 'correction')
-    const reinforcements = this.signals.filter(
-      (s) => s.type === 'reinforcement'
-    )
+    const reinforcements = this.signals.filter((s) => s.type === 'reinforcement')
 
     return {
       signals: [...this.signals],
@@ -429,9 +419,7 @@ export class FeedbackLoop {
    */
   getAccuracyMetrics(): AccuracyMetrics {
     const total = this.signals.length
-    const correct = this.signals.filter(
-      (s) => s.type === 'reinforcement'
-    ).length
+    const correct = this.signals.filter((s) => s.type === 'reinforcement').length
 
     return {
       overallAccuracy: total > 0 ? correct / total : 0,
@@ -678,18 +666,13 @@ export class DecisionAnalytics {
   /**
    * Detect decision patterns for a decision maker
    */
-  detectPatterns(options: {
-    decisionMaker?: string
-    minOccurrences?: number
-  }): DecisionPattern[] {
+  detectPatterns(options: { decisionMaker?: string; minOccurrences?: number }): DecisionPattern[] {
     const { decisionMaker, minOccurrences = 3 } = options
     const decisions = this.logger.getAllDecisions()
 
     let filteredDecisions = decisions
     if (decisionMaker) {
-      filteredDecisions = decisions.filter(
-        (d) => d.decisionMaker === decisionMaker
-      )
+      filteredDecisions = decisions.filter((d) => d.decisionMaker === decisionMaker)
     }
 
     const patterns: DecisionPattern[] = []
@@ -697,8 +680,7 @@ export class DecisionAnalytics {
     // Detect consistent rejection pattern
     const rejections = filteredDecisions.filter(
       (d) =>
-        d.decision.toLowerCase().includes('reject') ||
-        d.decision.toLowerCase().includes('denied')
+        d.decision.toLowerCase().includes('reject') || d.decision.toLowerCase().includes('denied')
     )
 
     if (rejections.length >= minOccurrences) {
@@ -713,9 +695,7 @@ export class DecisionAnalytics {
 
     // Detect consistent approval pattern
     const approvals = filteredDecisions.filter(
-      (d) =>
-        d.decision.toLowerCase().includes('approv') ||
-        d.decision.toLowerCase() === 'approved'
+      (d) => d.decision.toLowerCase().includes('approv') || d.decision.toLowerCase() === 'approved'
     )
 
     if (approvals.length >= minOccurrences) {
@@ -735,9 +715,7 @@ export class DecisionAnalytics {
    * Detect time-based patterns
    */
   detectTimePatterns(decisionMaker: string): TimePatterns {
-    const decisions = this.logger
-      .getAllDecisions()
-      .filter((d) => d.decisionMaker === decisionMaker)
+    const decisions = this.logger.getAllDecisions().filter((d) => d.decisionMaker === decisionMaker)
 
     const approvalsByDay: Record<string, number> = {
       Sunday: 0,
@@ -749,15 +727,7 @@ export class DecisionAnalytics {
       Saturday: 0,
     }
 
-    const dayNames = [
-      'Sunday',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-    ]
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
     for (const decision of decisions) {
       if (
@@ -794,9 +764,7 @@ export class DecisionAnalytics {
    * Get consistency score for a decision maker
    */
   getConsistencyScore(decisionMaker: string): number {
-    const decisions = this.logger
-      .getAllDecisions()
-      .filter((d) => d.decisionMaker === decisionMaker)
+    const decisions = this.logger.getAllDecisions().filter((d) => d.decisionMaker === decisionMaker)
 
     if (decisions.length === 0) return 0
 
@@ -820,9 +788,7 @@ export class DecisionAnalytics {
     const decisions = this.logger.getAllDecisions()
 
     const approvals = decisions.filter(
-      (d) =>
-        d.decision.toLowerCase().includes('approv') ||
-        d.decision.toLowerCase() === 'approved'
+      (d) => d.decision.toLowerCase().includes('approv') || d.decision.toLowerCase() === 'approved'
     )
 
     const overrides = decisions.filter((d) => d.isOverride)
@@ -833,15 +799,12 @@ export class DecisionAnalytics {
     )
 
     const avgResponseTime =
-      responseTimes.length > 0
-        ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
-        : 0
+      responseTimes.length > 0 ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length : 0
 
     // Get top decision makers
     const makerCounts: Record<string, number> = {}
     for (const decision of decisions) {
-      makerCounts[decision.decisionMaker] =
-        (makerCounts[decision.decisionMaker] || 0) + 1
+      makerCounts[decision.decisionMaker] = (makerCounts[decision.decisionMaker] || 0) + 1
     }
 
     const topDecisionMakers = Object.entries(makerCounts)
@@ -861,10 +824,7 @@ export class DecisionAnalytics {
   /**
    * Export decision data for training
    */
-  exportForTraining(options: {
-    format?: 'jsonl' | 'json'
-    includeContext?: boolean
-  }): string {
+  exportForTraining(options: { format?: 'jsonl' | 'json'; includeContext?: boolean }): string {
     const { format = 'jsonl', includeContext = false } = options
     const decisions = this.logger.getAllDecisions()
 

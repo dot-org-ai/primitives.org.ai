@@ -259,12 +259,12 @@ export async function is(params: {
     description: params.question,
     options: ['true', 'false'],
     context: params.input,
-    assignee: params.assignee,
-    role: params.role,
-    team: params.team,
-    priority: params.priority,
-    timeout: params.timeout,
-    metadata: params.metadata,
+    ...(params.assignee !== undefined && { assignee: params.assignee }),
+    ...(params.role !== undefined && { role: params.role }),
+    ...(params.team !== undefined && { team: params.team }),
+    ...(params.priority !== undefined && { priority: params.priority }),
+    ...(params.timeout !== undefined && { timeout: params.timeout }),
+    ...(params.metadata !== undefined && { metadata: params.metadata }),
   })
 
   return result === 'true'

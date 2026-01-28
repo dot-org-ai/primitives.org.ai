@@ -86,9 +86,9 @@ export class HumanManager {
       defaultPriority: options.defaultPriority || 'normal',
       escalationPolicies: options.escalationPolicies || [],
       autoEscalate: options.autoEscalate ?? false,
-      retry: options.retry,
-      circuitBreaker: options.circuitBreaker,
-      sla: options.sla,
+      ...(options.retry !== undefined && { retry: options.retry }),
+      ...(options.circuitBreaker !== undefined && { circuitBreaker: options.circuitBreaker }),
+      ...(options.sla !== undefined && { sla: options.sla }),
     }
 
     // Register escalation policies
@@ -108,7 +108,9 @@ export class HumanManager {
     if (options.retry) {
       this.retryPolicy = new HumanRetryPolicy({
         maxRetries: options.retry.maxRetries ?? 5,
-        retryableErrors: options.retry.retryableErrors,
+        ...(options.retry.retryableErrors !== undefined && {
+          retryableErrors: options.retry.retryableErrors,
+        }),
       })
     }
 
@@ -116,17 +118,23 @@ export class HumanManager {
     if (options.circuitBreaker) {
       this.circuitBreaker = new HumanCircuitBreaker({
         failureThreshold: options.circuitBreaker.failureThreshold ?? 5,
-        resetTimeoutMs: options.circuitBreaker.resetTimeoutMs,
-        halfOpenMaxAttempts: options.circuitBreaker.halfOpenMaxAttempts,
+        ...(options.circuitBreaker.resetTimeoutMs !== undefined && {
+          resetTimeoutMs: options.circuitBreaker.resetTimeoutMs,
+        }),
+        ...(options.circuitBreaker.halfOpenMaxAttempts !== undefined && {
+          halfOpenMaxAttempts: options.circuitBreaker.halfOpenMaxAttempts,
+        }),
       })
     }
 
     // Initialize SLA tracker
     if (options.sla) {
       this.slaTracker = new SLATracker({
-        deadlineMs: options.sla.deadlineMs,
-        warningThresholdMs: options.sla.warningThresholdMs,
-        tiers: options.sla.tiers,
+        ...(options.sla.deadlineMs !== undefined && { deadlineMs: options.sla.deadlineMs }),
+        ...(options.sla.warningThresholdMs !== undefined && {
+          warningThresholdMs: options.sla.warningThresholdMs,
+        }),
+        ...(options.sla.tiers !== undefined && { tiers: options.sla.tiers }),
         onWarning: (requestId, ctx) => {
           // Could be extended to emit events or call callbacks
           console.warn(`SLA warning for request ${requestId}: ${ctx.remainingMs}ms remaining`)
@@ -241,16 +249,16 @@ export class HumanManager {
       description: params.description,
       subject: params.subject,
       input: params.input,
-      assignee: params.assignee,
-      role: params.role,
-      team: params.team,
+      ...(params.assignee !== undefined && { assignee: params.assignee }),
+      ...(params.role !== undefined && { role: params.role }),
+      ...(params.team !== undefined && { team: params.team }),
       priority: params.priority || this.options.defaultPriority,
       timeout: params.timeout || this.options.defaultTimeout,
-      escalatesTo: params.escalatesTo,
+      ...(params.escalatesTo !== undefined && { escalatesTo: params.escalatesTo }),
       requiresApproval: params.requiresApproval ?? true,
-      approvers: params.approvers,
+      ...(params.approvers !== undefined && { approvers: params.approvers }),
       currentApproverIndex: 0,
-      metadata: params.metadata,
+      ...(params.metadata !== undefined && { metadata: params.metadata }),
     })
 
     // In a real implementation, this would:
@@ -295,14 +303,14 @@ export class HumanManager {
       description: params.question,
       question: params.question,
       input: { question: params.question, context: params.context },
-      context: params.context,
-      suggestions: params.suggestions,
-      assignee: params.assignee,
-      role: params.role,
-      team: params.team,
+      ...(params.context !== undefined && { context: params.context }),
+      ...(params.suggestions !== undefined && { suggestions: params.suggestions }),
+      ...(params.assignee !== undefined && { assignee: params.assignee }),
+      ...(params.role !== undefined && { role: params.role }),
+      ...(params.team !== undefined && { team: params.team }),
       priority: params.priority || this.options.defaultPriority,
       timeout: params.timeout || this.options.defaultTimeout,
-      metadata: params.metadata,
+      ...(params.metadata !== undefined && { metadata: params.metadata }),
     })
 
     return this.waitForResponse<QuestionRequest, string>(request)
@@ -341,14 +349,14 @@ export class HumanManager {
       description: params.instructions,
       instructions: params.instructions,
       input: params.input,
-      assignee: params.assignee,
-      role: params.role,
-      team: params.team,
+      ...(params.assignee !== undefined && { assignee: params.assignee }),
+      ...(params.role !== undefined && { role: params.role }),
+      ...(params.team !== undefined && { team: params.team }),
       priority: params.priority || this.options.defaultPriority,
       timeout: params.timeout || this.options.defaultTimeout,
-      tools: params.tools,
-      estimatedEffort: params.estimatedEffort,
-      metadata: params.metadata,
+      ...(params.tools !== undefined && { tools: params.tools }),
+      ...(params.estimatedEffort !== undefined && { estimatedEffort: params.estimatedEffort }),
+      ...(params.metadata !== undefined && { metadata: params.metadata }),
     })
 
     return this.waitForResponse<TaskRequest<TInput, TOutput>, TOutput>(request)
@@ -387,14 +395,14 @@ export class HumanManager {
       description: params.description || `Choose from: ${params.options.join(', ')}`,
       input: { options: params.options, context: params.context },
       options: params.options,
-      context: params.context,
-      criteria: params.criteria,
-      assignee: params.assignee,
-      role: params.role,
-      team: params.team,
+      ...(params.context !== undefined && { context: params.context }),
+      ...(params.criteria !== undefined && { criteria: params.criteria }),
+      ...(params.assignee !== undefined && { assignee: params.assignee }),
+      ...(params.role !== undefined && { role: params.role }),
+      ...(params.team !== undefined && { team: params.team }),
       priority: params.priority || this.options.defaultPriority,
       timeout: params.timeout || this.options.defaultTimeout,
-      metadata: params.metadata,
+      ...(params.metadata !== undefined && { metadata: params.metadata }),
     })
 
     return this.waitForResponse<DecisionRequest<TOptions>, TOptions>(request)
@@ -434,14 +442,14 @@ export class HumanManager {
       description: params.description || `Review requested: ${params.reviewType || 'other'}`,
       input: params.content,
       content: params.content,
-      reviewType: params.reviewType,
-      criteria: params.criteria,
-      assignee: params.assignee,
-      role: params.role,
-      team: params.team,
+      ...(params.reviewType !== undefined && { reviewType: params.reviewType }),
+      ...(params.criteria !== undefined && { criteria: params.criteria }),
+      ...(params.assignee !== undefined && { assignee: params.assignee }),
+      ...(params.role !== undefined && { role: params.role }),
+      ...(params.team !== undefined && { team: params.team }),
       priority: params.priority || this.options.defaultPriority,
       timeout: params.timeout || this.options.defaultTimeout,
-      metadata: params.metadata,
+      ...(params.metadata !== undefined && { metadata: params.metadata }),
     })
 
     return this.waitForResponse<ReviewRequest<TContent>, ReviewResponse>(request)
@@ -476,9 +484,9 @@ export class HumanManager {
       title: params.title,
       message: params.message,
       recipient: params.recipient,
-      channels: params.channels,
-      priority: params.priority,
-      data: params.data,
+      ...(params.channels !== undefined && { channels: params.channels }),
+      ...(params.priority !== undefined && { priority: params.priority }),
+      ...(params.data !== undefined && { data: params.data }),
       createdAt: new Date(),
     }
 
@@ -517,11 +525,11 @@ export class HumanManager {
     return {
       id: `queue_${Date.now()}`,
       name: params.name,
-      description: params.description,
+      ...(params.description !== undefined && { description: params.description }),
       items,
-      filters: params.filters,
-      sortBy: params.sortBy,
-      sortDirection: params.sortDirection,
+      ...(params.filters !== undefined && { filters: params.filters }),
+      ...(params.sortBy !== undefined && { sortBy: params.sortBy }),
+      ...(params.sortDirection !== undefined && { sortDirection: params.sortDirection }),
     }
   }
 

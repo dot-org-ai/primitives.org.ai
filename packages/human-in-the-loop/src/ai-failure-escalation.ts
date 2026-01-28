@@ -97,7 +97,10 @@ export interface EscalationConfig {
   /** Cooldown period after escalation */
   cooldownMs?: number
   /** Per-error-code thresholds */
-  thresholds?: Record<string, { consecutiveFailureThreshold?: number; failureRateThreshold?: number }>
+  thresholds?: Record<
+    string,
+    { consecutiveFailureThreshold?: number; failureRateThreshold?: number }
+  >
   /** Callback when escalation is triggered */
   onEscalation?: (event: EscalationEvent) => void
   /** Routing rules for escalation */
@@ -213,69 +216,69 @@ export interface CreatedEscalationRequest {
  */
 const DEFAULT_TIER_MAPPINGS: Record<string, CascadeTierId> = {
   // Code tier (retry/fallback)
-  'rate_limit_exceeded': 'code',
-  'timeout': 'code',
-  'service_unavailable': 'code',
-  'network_error': 'code',
+  rate_limit_exceeded: 'code',
+  timeout: 'code',
+  service_unavailable: 'code',
+  network_error: 'code',
 
   // Generative tier (regenerate)
-  'invalid_output_format': 'generative',
-  'content_filter_triggered': 'generative',
-  'hallucination_detected': 'generative',
-  'parsing_error': 'generative',
+  invalid_output_format: 'generative',
+  content_filter_triggered: 'generative',
+  hallucination_detected: 'generative',
+  parsing_error: 'generative',
 
   // Agentic tier (autonomous problem solving)
-  'reasoning_loop_detected': 'agentic',
-  'context_overflow': 'agentic',
-  'task_complexity_exceeded': 'agentic',
+  reasoning_loop_detected: 'agentic',
+  context_overflow: 'agentic',
+  task_complexity_exceeded: 'agentic',
 
   // Human tier (manual intervention)
-  'safety_violation': 'human',
-  'approval_required': 'human',
-  'data_integrity_error': 'human',
-  'policy_violation': 'human',
+  safety_violation: 'human',
+  approval_required: 'human',
+  data_integrity_error: 'human',
+  policy_violation: 'human',
 }
 
 /**
  * Default category mappings
  */
 const DEFAULT_CATEGORY_MAPPINGS: Record<string, FailureCategory> = {
-  'rate_limit_exceeded': 'recoverable',
-  'timeout': 'recoverable',
-  'service_unavailable': 'recoverable',
-  'network_error': 'recoverable',
-  'invalid_output_format': 'recoverable',
-  'content_filter_triggered': 'recoverable',
-  'hallucination_detected': 'recoverable',
-  'parsing_error': 'recoverable',
-  'reasoning_loop_detected': 'recoverable',
-  'context_overflow': 'recoverable',
-  'task_complexity_exceeded': 'recoverable',
-  'safety_violation': 'critical',
-  'approval_required': 'critical',
-  'data_integrity_error': 'critical',
-  'policy_violation': 'critical',
+  rate_limit_exceeded: 'recoverable',
+  timeout: 'recoverable',
+  service_unavailable: 'recoverable',
+  network_error: 'recoverable',
+  invalid_output_format: 'recoverable',
+  content_filter_triggered: 'recoverable',
+  hallucination_detected: 'recoverable',
+  parsing_error: 'recoverable',
+  reasoning_loop_detected: 'recoverable',
+  context_overflow: 'recoverable',
+  task_complexity_exceeded: 'recoverable',
+  safety_violation: 'critical',
+  approval_required: 'critical',
+  data_integrity_error: 'critical',
+  policy_violation: 'critical',
 }
 
 /**
  * Default severity mappings
  */
 const DEFAULT_SEVERITY_MAPPINGS: Record<string, FailureSeverity> = {
-  'rate_limit_exceeded': 'low',
-  'timeout': 'low',
-  'service_unavailable': 'low',
-  'network_error': 'low',
-  'invalid_output_format': 'medium',
-  'content_filter_triggered': 'medium',
-  'hallucination_detected': 'medium',
-  'parsing_error': 'medium',
-  'reasoning_loop_detected': 'high',
-  'context_overflow': 'high',
-  'task_complexity_exceeded': 'high',
-  'safety_violation': 'critical',
-  'approval_required': 'high',
-  'data_integrity_error': 'critical',
-  'policy_violation': 'critical',
+  rate_limit_exceeded: 'low',
+  timeout: 'low',
+  service_unavailable: 'low',
+  network_error: 'low',
+  invalid_output_format: 'medium',
+  content_filter_triggered: 'medium',
+  hallucination_detected: 'medium',
+  parsing_error: 'medium',
+  reasoning_loop_detected: 'high',
+  context_overflow: 'high',
+  task_complexity_exceeded: 'high',
+  safety_violation: 'critical',
+  approval_required: 'high',
+  data_integrity_error: 'critical',
+  policy_violation: 'critical',
 }
 
 /**
@@ -481,7 +484,7 @@ export class ContextSanitizer {
       }
     }
 
-    if (options?.includeStackTrace && failure.error) {
+    if (options?.includeStackTrace && failure.error?.stack !== undefined) {
       context.stackTrace = failure.error.stack
     }
 
@@ -535,9 +538,7 @@ export class ContextSanitizer {
    */
   private isSensitiveKey(key: string): boolean {
     const lowerKey = key.toLowerCase()
-    return DEFAULT_SENSITIVE_KEYS.some((sensitive) =>
-      lowerKey.includes(sensitive.toLowerCase())
-    )
+    return DEFAULT_SENSITIVE_KEYS.some((sensitive) => lowerKey.includes(sensitive.toLowerCase()))
   }
 
   /**
@@ -627,13 +628,17 @@ export class AutoEscalationTrigger {
   /**
    * Record a failure
    */
-  recordFailure(params: { code: string; requestId: string; context?: Record<string, unknown> }): void {
+  recordFailure(params: {
+    code: string
+    requestId: string
+    context?: Record<string, unknown>
+  }): void {
     const record: FailureRecord = {
       code: params.code,
       requestId: params.requestId,
       timestamp: new Date(),
       success: false,
-      context: params.context,
+      ...(params.context !== undefined && { context: params.context }),
     }
 
     const records = this.failureRecords.get(params.code) || []
@@ -722,8 +727,12 @@ export class AutoEscalationTrigger {
     }
 
     return {
-      consecutiveFailureThreshold: this.config.consecutiveFailureThreshold,
-      failureRateThreshold: this.config.failureRateThreshold,
+      ...(this.config.consecutiveFailureThreshold !== undefined && {
+        consecutiveFailureThreshold: this.config.consecutiveFailureThreshold,
+      }),
+      ...(this.config.failureRateThreshold !== undefined && {
+        failureRateThreshold: this.config.failureRateThreshold,
+      }),
     }
   }
 
@@ -806,18 +815,14 @@ export class EscalationRouter {
    * Get reviewers for a specific tier
    */
   getReviewersForTier(tier: CascadeTierId): ReviewerConfig[] {
-    return Array.from(this.reviewers.values()).filter((r) =>
-      r.tiers.includes(tier)
-    )
+    return Array.from(this.reviewers.values()).filter((r) => r.tiers.includes(tier))
   }
 
   /**
    * Get reviewers by capability
    */
   getReviewersByCapability(capability: string): ReviewerConfig[] {
-    return Array.from(this.reviewers.values()).filter((r) =>
-      r.capabilities?.includes(capability)
-    )
+    return Array.from(this.reviewers.values()).filter((r) => r.capabilities?.includes(capability))
   }
 
   /**
@@ -841,7 +846,9 @@ export class EscalationRouter {
   /**
    * Create an escalation request
    */
-  async createEscalationRequest(params: EscalationRequestParams): Promise<CreatedEscalationRequest> {
+  async createEscalationRequest(
+    params: EscalationRequestParams
+  ): Promise<CreatedEscalationRequest> {
     const reviewers = this.getAvailableReviewers(params.tier)
     const assignee = reviewers[0]?.id || ''
 
@@ -878,7 +885,7 @@ export class EscalationRouter {
         failure: params.failure,
         tier: params.tier,
       },
-      assignee,
+      ...(assignee !== undefined && { assignee }),
       priority: params.priority,
     })
   }

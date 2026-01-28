@@ -20,7 +20,7 @@
  * @packageDocumentation
  */
 
-import { RPC } from 'rpc.do'
+import { RPC, http } from 'rpc.do'
 
 // ==================== Types ====================
 
@@ -242,7 +242,7 @@ export function createHumanReviewClient(
   url: string = DEFAULT_URL,
   options?: HumanReviewClientOptions
 ) {
-  return RPC<HumanReviewAPI>(url, options)
+  return RPC<HumanReviewAPI>(http(url, options?.token))
 }
 
 /**

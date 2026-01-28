@@ -122,11 +122,7 @@ export interface EscalationContext {
  * Error thrown when retries are exhausted
  */
 export class RetryError extends Error {
-  constructor(
-    message: string,
-    public readonly attempts: number,
-    public readonly lastError: Error
-  ) {
+  constructor(message: string, public readonly attempts: number, public readonly lastError: Error) {
     super(message)
     this.name = 'RetryError'
   }
@@ -146,11 +142,7 @@ export class CircuitOpenError extends Error {
  * Error thrown when SLA is violated
  */
 export class SLAViolationError extends Error {
-  constructor(
-    message: string,
-    public readonly requestId: string,
-    public readonly deadline: Date
-  ) {
+  constructor(message: string, public readonly requestId: string, public readonly deadline: Date) {
     super(message)
     this.name = 'SLAViolationError'
   }
@@ -248,7 +240,9 @@ export class ExponentialBackoff {
  * ```
  */
 export class HumanRetryPolicy {
-  readonly config: Required<Omit<RetryConfig, 'onExhausted'>> & { onExhausted?: RetryConfig['onExhausted'] }
+  readonly config: Required<Omit<RetryConfig, 'onExhausted'>> & {
+    onExhausted?: RetryConfig['onExhausted']
+  }
   private attempts = new Map<string, number>()
   private startTimes = new Map<string, number>()
 
@@ -276,11 +270,7 @@ export class HumanRetryPolicy {
   /**
    * Check if a retry should be attempted
    */
-  shouldRetry(
-    currentAttempt: number,
-    error?: Error,
-    overrides?: { maxRetries?: number }
-  ): boolean {
+  shouldRetry(currentAttempt: number, error?: Error, overrides?: { maxRetries?: number }): boolean {
     const maxRetries = overrides?.maxRetries ?? this.config.maxRetries
 
     // Check attempt limit
@@ -295,9 +285,7 @@ export class HumanRetryPolicy {
 
     // Check if error type is retryable
     const errorType = error.message
-    return this.config.retryableErrors.some(
-      (retryable) => errorType.includes(retryable)
-    )
+    return this.config.retryableErrors.some((retryable) => errorType.includes(retryable))
   }
 
   /**
@@ -526,8 +514,8 @@ export class HumanCircuitBreaker {
       successes: this.successes,
       state: this.state,
       failureRate: this.getFailureRate(),
-      lastFailure: this.lastFailure,
-      lastSuccess: this.lastSuccess,
+      ...(this.lastFailure !== undefined && { lastFailure: this.lastFailure }),
+      ...(this.lastSuccess !== undefined && { lastSuccess: this.lastSuccess }),
     }
   }
 
@@ -540,8 +528,8 @@ export class HumanCircuitBreaker {
     this.successes = 0
     this.halfOpenAttempts = 0
     this.lastStateChange = Date.now()
-    this.lastFailure = undefined
-    this.lastSuccess = undefined
+    delete this.lastFailure
+    delete this.lastSuccess
   }
 }
 
@@ -607,7 +595,10 @@ export class SLATracker {
   /**
    * Start tracking a request
    */
-  track(requestId: string, options?: { priority?: Priority }): { deadline: Date; remainingMs: number } {
+  track(
+    requestId: string,
+    options?: { priority?: Priority }
+  ): { deadline: Date; remainingMs: number } {
     const now = new Date()
     const deadlineMs = this.getDeadlineForPriority(options?.priority)
     const deadline = new Date(now.getTime() + deadlineMs)
@@ -615,7 +606,7 @@ export class SLATracker {
     const request: TrackedRequest = {
       requestId,
       deadline,
-      priority: options?.priority,
+      ...(options?.priority !== undefined && { priority: options.priority }),
       startedAt: now,
       violated: false,
       warningEmitted: false,
@@ -702,7 +693,7 @@ export class SLATracker {
       completed,
       violated,
       complianceRate,
-      averageCompletionMs,
+      ...(averageCompletionMs !== undefined && { averageCompletionMs }),
     }
   }
 
@@ -864,11 +855,7 @@ export async function withRetry<T>(
     }
   }
 
-  throw new RetryError(
-    `Operation failed after ${attempts} attempts`,
-    attempts,
-    lastError!
-  )
+  throw new RetryError(`Operation failed after ${attempts} attempts`, attempts, lastError!)
 }
 
 /**
