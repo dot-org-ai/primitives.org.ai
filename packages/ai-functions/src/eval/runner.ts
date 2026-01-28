@@ -49,7 +49,11 @@ export interface RunEvalOptions<TInput, TOutput, TExpected> {
   scorers: Array<{
     name: string
     description?: string
-    scorer: (args: { input: TInput; output: TOutput; expected?: TExpected }) => number | Promise<number>
+    scorer: (args: {
+      input: TInput
+      output: TOutput
+      expected?: TExpected
+    }) => number | Promise<number>
   }>
   models?: EvalModel[]
   tiers?: ModelTier[]
@@ -66,16 +70,18 @@ export async function runEval<TInput, TOutput, TExpected>(
   const { name, cases, task, scorers, concurrency = 3 } = options
 
   // Get models to test
-  const models = options.models ?? createModelVariants({
-    tiers: options.tiers,
-    providers: options.providers,
-  }).map(v => v.input)
+  const models =
+    options.models ??
+    createModelVariants({
+      tiers: options.tiers,
+      providers: options.providers,
+    }).map((v) => v.input)
 
   const results: EvalResult<TOutput>[] = []
   const startTime = Date.now()
 
   console.log(`\n🧪 Running eval: ${name}`)
-  console.log(`   Models: ${models.map(m => m.name).join(', ')}`)
+  console.log(`   Models: ${models.map((m) => m.name).join(', ')}`)
   console.log(`   Cases: ${cases.length}`)
   console.log('')
 
@@ -107,18 +113,18 @@ export async function runEval<TInput, TOutput, TExpected>(
               const score = await s.scorer({
                 input: job.case.input,
                 output,
-                expected: job.case.expected,
+                ...(job.case.expected !== undefined && { expected: job.case.expected }),
               })
               scores.push({
                 name: s.name,
                 score: Math.max(0, Math.min(1, score)),
-                description: s.description,
+                ...(s.description !== undefined && { description: s.description }),
               })
             } catch (err) {
               scores.push({
                 name: s.name,
                 score: 0,
-                description: s.description,
+                ...(s.description !== undefined && { description: s.description }),
                 metadata: { error: String(err) },
               })
             }
@@ -130,15 +136,20 @@ export async function runEval<TInput, TOutput, TExpected>(
           const estimatedPromptTokens = 100
           const estimatedCompletionTokens = 200
           const cost = pricing
-            ? (estimatedPromptTokens * pricing.prompt + estimatedCompletionTokens * pricing.completion) / 1_000_000
+            ? (estimatedPromptTokens * pricing.prompt +
+                estimatedCompletionTokens * pricing.completion) /
+              1_000_000
             : 0
 
-          const avgScore = scores.length > 0
-            ? scores.reduce((sum, s) => sum + s.score, 0) / scores.length
-            : 0
+          const avgScore =
+            scores.length > 0 ? scores.reduce((sum, s) => sum + s.score, 0) / scores.length : 0
 
           const symbol = avgScore >= 0.8 ? '✓' : avgScore >= 0.5 ? '~' : '✗'
-          console.log(`   ${symbol} ${job.model.name} | ${job.case.name} | ${(avgScore * 100).toFixed(0)}% | ${latencyMs}ms`)
+          console.log(
+            `   ${symbol} ${job.model.name} | ${job.case.name} | ${(avgScore * 100).toFixed(
+              0
+            )}% | ${latencyMs}ms`
+          )
 
           return {
             model: job.model,
@@ -155,7 +166,7 @@ export async function runEval<TInput, TOutput, TExpected>(
             model: job.model,
             case: job.case,
             output: null,
-            scores: scorers.map(s => ({ name: s.name, score: 0 })),
+            scores: scorers.map((s) => ({ name: s.name, score: 0 })),
             latencyMs: Date.now() - caseStart,
             cost: 0,
             error: String(err),
@@ -170,10 +181,9 @@ export async function runEval<TInput, TOutput, TExpected>(
   // Calculate summary
   const totalTime = Date.now() - startTime
   const totalCost = results.reduce((sum, r) => sum + r.cost, 0)
-  const allScores = results.flatMap(r => r.scores.map(s => s.score))
-  const avgScore = allScores.length > 0
-    ? allScores.reduce((a, b) => a + b, 0) / allScores.length
-    : 0
+  const allScores = results.flatMap((r) => r.scores.map((s) => s.score))
+  const avgScore =
+    allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : 0
 
   // Group by model
   const byModel: Record<string, { avgScore: number; count: number }> = {}

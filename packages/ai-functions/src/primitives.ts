@@ -130,9 +130,9 @@ async function generateTextContent(
   const result = await generateText({
     model,
     prompt,
-    system: options.system,
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.system !== undefined && { system: options.system }),
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return result.text
 }
@@ -148,9 +148,9 @@ async function generateJsonContent(
     model,
     schema: effectiveSchema,
     prompt,
-    system: options.system,
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.system !== undefined && { system: options.system }),
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return result.object
 }
@@ -166,8 +166,8 @@ async function generateCodeContent(
     schema: { code: `The ${language} implementation code` },
     prompt: `Generate ${language} code for: ${prompt}`,
     system: `You are an expert ${language} developer. Generate clean, well-documented code.`,
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return (result.object as { code: string }).code
 }
@@ -182,8 +182,8 @@ async function generateListContent(
     schema: { items: ['List items'] },
     prompt,
     system: options.system || 'Generate a list of items based on the prompt.',
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return (result.object as { items: string[] }).items
 }
@@ -203,8 +203,8 @@ async function generateListsContent(
     system:
       options.system ||
       'Generate multiple categorized lists. Determine appropriate categories based on the prompt.',
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   const obj = result.object as { categories: string[]; data: string }
   try {
@@ -229,7 +229,7 @@ async function generateBooleanContent(
     prompt,
     system: options.system || 'Answer the question with true or false.',
     temperature: options.temperature ?? 0,
-    maxTokens: options.maxTokens,
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return (result.object as { answer: string }).answer === 'true'
 }
@@ -244,8 +244,8 @@ async function generateSummaryContent(
     schema: { summary: 'A concise summary of the content' },
     prompt: `Summarize the following:\n\n${prompt}`,
     system: options.system || 'Create a clear, concise summary.',
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return (result.object as { summary: string }).summary
 }
@@ -271,11 +271,11 @@ IMPORTANT: Return the extracted items as an array. If the task asks for email ad
       options.system ||
       'You are a precise data extraction assistant. Extract exactly what is requested and return it as an array of items. Be thorough - find ALL matching items in the text.',
     temperature: options.temperature ?? 0, // Use low temperature for extraction tasks
-    maxTokens: options.maxTokens,
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   const obj = result.object as Record<string, unknown>
-  if ('items' in obj && Array.isArray(obj.items)) {
-    return obj.items
+  if ('items' in obj && Array.isArray(obj['items'])) {
+    return obj['items']
   }
   return Object.values(obj).flat() as unknown[]
 }
@@ -290,8 +290,8 @@ async function generateYamlContent(
     schema: { yaml: 'The YAML content' },
     prompt: `Generate YAML for: ${prompt}`,
     system: options.system || 'Generate valid YAML content.',
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return (result.object as { yaml: string }).yaml
 }
@@ -307,8 +307,8 @@ async function generateDiagramContent(
     schema: { diagram: `The ${format} diagram code` },
     prompt: `Generate a ${format} diagram for: ${prompt}`,
     system: options.system || `Generate ${format} diagram syntax.`,
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return (result.object as { diagram: string }).diagram
 }
@@ -324,8 +324,8 @@ async function generateSlidesContent(
     schema: { slides: `Slidev/Marp markdown with ${slideCount} slides` },
     prompt: `Generate a ${slideCount}-slide presentation about: ${prompt}`,
     system: options.system || 'Generate markdown slides in Slidev/Marp format.',
-    temperature: options.temperature,
-    maxTokens: options.maxTokens,
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
   })
   return (result.object as { slides: string }).slides
 }
