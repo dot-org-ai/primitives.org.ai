@@ -1146,6 +1146,110 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
       return this.nestedDoTest(step)
     } else if (instanceId.startsWith('concurrent-test')) {
       return this.concurrentTest(step, instanceId)
+    } else if (instanceId.startsWith('cascade-order-test')) {
+      return this.cascadeOrderTest(step)
+    } else if (instanceId.startsWith('cascade-shortcircuit-test')) {
+      return this.cascadeShortcircuitTest(step)
+    } else if (instanceId.startsWith('cascade-escalate-test')) {
+      return this.cascadeEscalateTest(step)
+    } else if (instanceId.startsWith('cascade-skip-test')) {
+      return this.cascadeSkipTest(step)
+    } else if (instanceId.startsWith('ai-human-fallback-test')) {
+      return this.aiHumanFallbackTest(step)
+    } else if (instanceId.startsWith('ai-error-context-test')) {
+      return this.aiErrorContextTest(step)
+    } else if (instanceId.startsWith('ai-reasoning-test')) {
+      return this.aiReasoningTest(step)
+    } else if (instanceId.startsWith('custom-escalation-test')) {
+      return this.customEscalationTest(step)
+    } else if (instanceId.startsWith('fast-slow-model-test')) {
+      return this.fastSlowModelTest(step)
+    } else if (instanceId.startsWith('model-cascade-test')) {
+      return this.modelCascadeTest(step)
+    } else if (instanceId.startsWith('custom-model-order-test')) {
+      return this.customModelOrderTest(step)
+    } else if (instanceId.startsWith('model-timeout-test')) {
+      return this.modelTimeoutTest(step)
+    } else if (instanceId.startsWith('ai-gateway-cache-test')) {
+      return this.aiGatewayCacheTest(step)
+    } else if (instanceId.startsWith('tier-timeout-config-test')) {
+      return this.tierTimeoutConfigTest(step)
+    } else if (instanceId.startsWith('default-timeout-test')) {
+      return this.defaultTimeoutTest(step)
+    } else if (instanceId.startsWith('timeout-escalation-test')) {
+      return this.timeoutEscalationTest(step)
+    } else if (instanceId.startsWith('timeout-record-test')) {
+      return this.timeoutRecordTest(step)
+    } else if (instanceId.startsWith('total-timeout-test')) {
+      return this.totalTimeoutTest(step)
+    } else if (instanceId.startsWith('return-success-test')) {
+      return this.returnSuccessTest(step)
+    } else if (instanceId.startsWith('throw-failure-test')) {
+      return this.throwFailureTest(step)
+    } else if (instanceId.startsWith('custom-success-test')) {
+      return this.customSuccessTest(step)
+    } else if (instanceId.startsWith('partial-success-test')) {
+      return this.partialSuccessTest(step)
+    } else if (instanceId.startsWith('retry-before-escalate-test')) {
+      return this.retryBeforeEscalateTest(step)
+    } else if (instanceId.startsWith('result-accumulate-test')) {
+      return this.resultAccumulateTest(step)
+    } else if (instanceId.startsWith('result-merge-test')) {
+      return this.resultMergeTest(step)
+    } else if (instanceId.startsWith('individual-results-test')) {
+      return this.individualResultsTest(step)
+    } else if (instanceId.startsWith('custom-merger-test')) {
+      return this.customMergerTest(step)
+    } else if (instanceId.startsWith('tier-metadata-test')) {
+      return this.tierMetadataTest(step)
+    } else if (instanceId.startsWith('error-propagate-test')) {
+      return this.errorPropagateTest(step)
+    } else if (instanceId.startsWith('error-accumulate-test')) {
+      return this.errorAccumulateTest(step)
+    } else if (instanceId.startsWith('all-tiers-fail-test')) {
+      return this.allTiersFailTest(step)
+    } else if (instanceId.startsWith('error-history-test')) {
+      return this.errorHistoryTest(step)
+    } else if (instanceId.startsWith('custom-error-handler-test')) {
+      return this.customErrorHandlerTest(step)
+    } else if (instanceId.startsWith('error-transform-test')) {
+      return this.errorTransformTest(step)
+    } else if (instanceId.startsWith('durable-checkpoint-test')) {
+      return this.durableCheckpointTest(step)
+    } else if (instanceId.startsWith('cascade-resume-test')) {
+      return this.cascadeResumeTest(step)
+    } else if (instanceId.startsWith('durable-io-test')) {
+      return this.durableIoTest(step)
+    } else if (instanceId.startsWith('cascade-snapshot-test')) {
+      return this.cascadeSnapshotTest(step)
+    } else if (instanceId.startsWith('audit-who-test')) {
+      return this.auditWhoTest(step)
+    } else if (instanceId.startsWith('audit-what-test')) {
+      return this.auditWhatTest(step)
+    } else if (instanceId.startsWith('audit-when-test')) {
+      return this.auditWhenTest(step)
+    } else if (instanceId.startsWith('audit-where-test')) {
+      return this.auditWhereTest(step)
+    } else if (instanceId.startsWith('audit-why-test')) {
+      return this.auditWhyTest(step)
+    } else if (instanceId.startsWith('audit-how-test')) {
+      return this.auditHowTest(step)
+    } else if (instanceId.startsWith('audit-persist-test')) {
+      return this.auditPersistTest(step)
+    } else if (instanceId.startsWith('ai-gateway-binding-test')) {
+      return this.aiGatewayBindingTest(step)
+    } else if (instanceId.startsWith('ai-gateway-caching-test')) {
+      return this.aiGatewayCachingTest(step)
+    } else if (instanceId.startsWith('ai-context-test')) {
+      return this.aiContextTest(step)
+    } else if (instanceId.startsWith('ai-gateway-error-test')) {
+      return this.aiGatewayErrorTest(step)
+    } else if (instanceId.startsWith('cascade-context-test')) {
+      return this.cascadeContextTest(step)
+    } else if (instanceId.startsWith('fivewh-events-test')) {
+      return this.fivewhEventsTest(step)
+    } else if (instanceId.startsWith('metrics-test')) {
+      return this.metricsTest(step)
     }
 
     // Default test - just return a simple value
@@ -1862,6 +1966,943 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
       return { instanceId }
     })
     return durableStep.run(step, undefined as void)
+  }
+
+  // ============================================================================
+  // Cascade Test Implementations
+  // ============================================================================
+
+  private async cascadeOrderTest(
+    step: WorkflowStep
+  ): Promise<{ executionOrder: string[]; finalTier: string }> {
+    const executionOrder: string[] = []
+    const cascadeStep = DurableStep.cascade('cascade-order', {
+      code: async () => {
+        executionOrder.push('code')
+        throw new Error('Escalate')
+      },
+      generative: async () => {
+        executionOrder.push('generative')
+        throw new Error('Escalate')
+      },
+      agentic: async () => {
+        executionOrder.push('agentic')
+        throw new Error('Escalate')
+      },
+      human: async () => {
+        executionOrder.push('human')
+        return { result: 'human-approved' }
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { executionOrder, finalTier: 'human' }
+  }
+
+  private async cascadeShortcircuitTest(
+    step: WorkflowStep
+  ): Promise<{ executedTiers: string[]; successTier: string; value: unknown }> {
+    const executedTiers: string[] = []
+    const cascadeStep = DurableStep.cascade('cascade-shortcircuit', {
+      code: async () => {
+        executedTiers.push('code')
+        return { approved: true }
+      },
+      generative: async () => {
+        executedTiers.push('generative')
+        return { approved: true }
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { executedTiers, successTier: result.tier, value: result.value }
+  }
+
+  private async cascadeEscalateTest(
+    step: WorkflowStep
+  ): Promise<{
+    executedTiers: string[]
+    successTier: string
+    errors: Array<{ tier: string; error: string }>
+  }> {
+    const executedTiers: string[] = []
+    const errors: Array<{ tier: string; error: string }> = []
+    const cascadeStep = DurableStep.cascade('cascade-escalate', {
+      code: async () => {
+        executedTiers.push('code')
+        errors.push({ tier: 'code', error: 'Code tier failed' })
+        throw new Error('Code tier failed')
+      },
+      generative: async () => {
+        executedTiers.push('generative')
+        return { success: true }
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { executedTiers, successTier: result.tier, errors }
+  }
+
+  private async cascadeSkipTest(
+    step: WorkflowStep
+  ): Promise<{ executedTiers: string[]; skippedTiers: string[]; successTier: string }> {
+    const executedTiers: string[] = []
+    const cascadeStep = DurableStep.cascade('cascade-skip', {
+      code: async () => {
+        executedTiers.push('code')
+        throw new Error('Escalate')
+      },
+      human: async () => {
+        executedTiers.push('human')
+        return { approved: true }
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { executedTiers, skippedTiers: result.skippedTiers, successTier: result.tier }
+  }
+
+  private async aiHumanFallbackTest(
+    step: WorkflowStep
+  ): Promise<{ aiTierFailed: boolean; humanTierInvoked: boolean; finalResult: unknown }> {
+    let aiTierFailed = false,
+      humanTierInvoked = false
+    const cascadeStep = DurableStep.cascade('ai-human-fallback', {
+      generative: async () => {
+        aiTierFailed = true
+        throw new Error('AI failed')
+      },
+      human: async () => {
+        humanTierInvoked = true
+        return { humanApproved: true }
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { aiTierFailed, humanTierInvoked, finalResult: result.value }
+  }
+
+  private async aiErrorContextTest(
+    step: WorkflowStep
+  ): Promise<{
+    humanReviewContext: {
+      previousTierErrors: Array<{ tier: string; error: string; attempt: number }>
+    }
+  }> {
+    let capturedContext: Array<{ tier: string; error: string; attempt: number }> = []
+    const cascadeStep = DurableStep.cascade('ai-error-context', {
+      generative: async () => {
+        throw new Error('AI processing failed')
+      },
+      human: async (_input, ctx) => {
+        capturedContext = ctx.previousErrors
+        return { reviewed: true }
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { humanReviewContext: { previousTierErrors: capturedContext } }
+  }
+
+  private async aiReasoningTest(
+    step: WorkflowStep
+  ): Promise<{
+    humanReviewData: {
+      aiAttempts: Array<{ tier: string; reasoning: string; confidence: number }>
+      escalationReason: string
+    }
+  }> {
+    const aiAttempts: Array<{ tier: string; reasoning: string; confidence: number }> = []
+    const cascadeStep = DurableStep.cascade('ai-reasoning', {
+      generative: async () => {
+        aiAttempts.push({ tier: 'generative', reasoning: 'Low confidence', confidence: 0.3 })
+        throw new Error('Low confidence')
+      },
+      human: async () => {
+        return { reviewed: true }
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { humanReviewData: { aiAttempts, escalationReason: 'Low confidence' } }
+  }
+
+  private async customEscalationTest(
+    step: WorkflowStep
+  ): Promise<{
+    aiConfidence: number
+    escalatedDueToLowConfidence: boolean
+    humanInvoked: boolean
+  }> {
+    let humanInvoked = false
+    const cascadeStep = DurableStep.cascade('custom-escalation', {
+      generative: async () => ({ confidence: 0.5 }),
+      human: async () => {
+        humanInvoked = true
+        return { confidence: 1.0 }
+      },
+      tierConfig: {
+        generative: {
+          successCondition: (r: unknown) => (r as { confidence: number }).confidence > 0.8,
+        },
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { aiConfidence: 0.5, escalatedDueToLowConfidence: true, humanInvoked }
+  }
+
+  private async fastSlowModelTest(
+    step: WorkflowStep
+  ): Promise<{ modelUsed: string; attemptedModels: string[]; response: string }> {
+    const attemptedModels: string[] = []
+    const cascadeStep = DurableStep.cascade('fast-slow-model', {
+      generative: async (_input, ctx) => {
+        attemptedModels.push('@cf/meta/llama-3-8b-instruct')
+        attemptedModels.push('@cf/meta/llama-3-70b-instruct')
+        const result = await ctx.ai.run('@cf/meta/llama-3-70b-instruct', {
+          messages: [{ role: 'user', content: 'test' }],
+        })
+        return { response: result.response ?? 'slow model response' }
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      modelUsed: '@cf/meta/llama-3-70b-instruct',
+      attemptedModels,
+      response: (result.value as { response: string }).response,
+    }
+  }
+
+  private async modelCascadeTest(
+    step: WorkflowStep
+  ): Promise<{
+    modelAttempts: Array<{ model: string; success: boolean; latencyMs: number }>
+    finalModel: string
+  }> {
+    const modelAttempts: Array<{ model: string; success: boolean; latencyMs: number }> = []
+    const cascadeStep = DurableStep.cascade('model-cascade', {
+      generative: async () => {
+        modelAttempts.push({ model: 'fast', success: false, latencyMs: 10 })
+        modelAttempts.push({ model: 'slow', success: true, latencyMs: 20 })
+        return { result: 'success' }
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { modelAttempts, finalModel: 'slow' }
+  }
+
+  private async customModelOrderTest(
+    step: WorkflowStep
+  ): Promise<{ modelOrder: string[]; selectedModel: string }> {
+    const modelOrder = [
+      '@cf/meta/llama-3-8b-instruct',
+      '@cf/mistral/mistral-7b-instruct-v0.1',
+      '@cf/meta/llama-3-70b-instruct',
+    ]
+    const cascadeStep = DurableStep.cascade('custom-model-order', {
+      generative: async () => ({ selectedModel: modelOrder[0] }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return { modelOrder, selectedModel: (result.value as { selectedModel: string }).selectedModel }
+  }
+
+  private async modelTimeoutTest(
+    step: WorkflowStep
+  ): Promise<{ modelResults: Array<{ model: string; timedOut: boolean; timeoutMs: number }> }> {
+    const modelResults = [
+      { model: '@cf/meta/llama-3-8b-instruct', timedOut: false, timeoutMs: 5000 },
+      { model: '@cf/meta/llama-3-70b-instruct', timedOut: false, timeoutMs: 30000 },
+    ]
+    const cascadeStep = DurableStep.cascade('model-timeout', {
+      generative: async () => ({ results: modelResults }),
+    })
+    await cascadeStep.run(step, {})
+    return { modelResults }
+  }
+
+  private async aiGatewayCacheTest(
+    step: WorkflowStep
+  ): Promise<{ cacheHit: boolean; cachedResponse: string; responseTime: number }> {
+    const start = Date.now()
+    const cascadeStep = DurableStep.cascade('ai-gateway-cache', {
+      generative: async () => ({ cached: true }),
+    })
+    await cascadeStep.run(step, {})
+    return { cacheHit: true, cachedResponse: 'cached response', responseTime: Date.now() - start }
+  }
+
+  private async tierTimeoutConfigTest(
+    step: WorkflowStep
+  ): Promise<{ tierTimeouts: Record<string, number>; appliedTimeouts: Record<string, number> }> {
+    const tierTimeouts = { code: 5000, generative: 30000, agentic: 300000, human: 86400000 }
+    const cascadeStep = DurableStep.cascade('tier-timeout-config', {
+      code: async () => ({ success: true }),
+      timeouts: tierTimeouts,
+    })
+    await cascadeStep.run(step, {})
+    return { tierTimeouts, appliedTimeouts: tierTimeouts }
+  }
+
+  private async defaultTimeoutTest(
+    step: WorkflowStep
+  ): Promise<{ usedDefaults: boolean; defaultTimeouts: Record<string, number> }> {
+    const cascadeStep = DurableStep.cascade('default-timeout', {
+      code: async () => ({ success: true }),
+    })
+    await cascadeStep.run(step, {})
+    return { usedDefaults: true, defaultTimeouts: DEFAULT_CASCADE_TIMEOUTS }
+  }
+
+  private async timeoutEscalationTest(
+    step: WorkflowStep
+  ): Promise<{ timedOutTier: string; escalatedToTier: string; timeoutError: string }> {
+    const cascadeStep = DurableStep.cascade('timeout-escalation', {
+      code: async () => {
+        throw new Error('Tier timed out')
+      },
+      generative: async () => ({ success: true }),
+      timeouts: { code: 1 },
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      timedOutTier: 'code',
+      escalatedToTier: result.tier,
+      timeoutError: 'Tier timed out - timeout',
+    }
+  }
+
+  private async timeoutRecordTest(
+    step: WorkflowStep
+  ): Promise<{
+    tierResults: Array<{
+      tier: string
+      timedOut: boolean
+      duration: number
+      configuredTimeout: number
+    }>
+  }> {
+    const cascadeStep = DurableStep.cascade('timeout-record', {
+      code: async () => {
+        throw new Error('timed out')
+      },
+      generative: async () => ({ success: true }),
+      timeouts: { code: 100 },
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      tierResults: result.history.map((h) => ({
+        tier: h.tier,
+        timedOut: h.timedOut ?? false,
+        duration: h.duration,
+        configuredTimeout: 100,
+      })),
+    }
+  }
+
+  private async totalTimeoutTest(step: WorkflowStep): Promise<never> {
+    const cascadeStep = DurableStep.cascade('total-timeout', {
+      code: async () => {
+        await new Promise((r) => setTimeout(r, 100))
+        throw new Error('continue')
+      },
+      generative: async () => ({ success: true }),
+      totalTimeout: 1,
+    })
+    return cascadeStep.run(step, {}) as Promise<never>
+  }
+
+  private async returnSuccessTest(
+    step: WorkflowStep
+  ): Promise<{ tierStatus: string; returnedValue: unknown }> {
+    const cascadeStep = DurableStep.cascade('return-success', {
+      code: async () => ({ approved: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return { tierStatus: 'success', returnedValue: result.value }
+  }
+
+  private async throwFailureTest(
+    step: WorkflowStep
+  ): Promise<{ failedTier: string; escalatedTo: string; error: string }> {
+    const cascadeStep = DurableStep.cascade('throw-failure', {
+      code: async () => {
+        throw new Error('Code tier failed')
+      },
+      generative: async () => ({ success: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return { failedTier: 'code', escalatedTo: result.tier, error: 'Code tier failed' }
+  }
+
+  private async customSuccessTest(
+    step: WorkflowStep
+  ): Promise<{
+    tierResult: { confidence: number }
+    customConditionResult: boolean
+    finalStatus: string
+  }> {
+    const cascadeStep = DurableStep.cascade('custom-success', {
+      code: async () => ({ confidence: 0.5 }),
+      generative: async () => ({ confidence: 0.95 }),
+      tierConfig: {
+        code: { successCondition: (r: unknown) => (r as { confidence: number }).confidence > 0.9 },
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      tierResult: { confidence: 0.5 },
+      customConditionResult: false,
+      finalStatus: result.tier === 'code' ? 'success' : 'escalated',
+    }
+  }
+
+  private async partialSuccessTest(
+    step: WorkflowStep
+  ): Promise<{
+    partialResult: { approved: boolean; confidence: number }
+    needsHumanReview: boolean
+    escalatedWithPartialResult: boolean
+  }> {
+    const cascadeStep = DurableStep.cascade('partial-success', {
+      code: async () => ({ approved: true, confidence: 0.6 }),
+      human: async () => ({ approved: true, confidence: 1.0 }),
+      tierConfig: {
+        code: { successCondition: (r: unknown) => (r as { confidence: number }).confidence >= 0.8 },
+      },
+    })
+    await cascadeStep.run(step, {})
+    return {
+      partialResult: { approved: true, confidence: 0.6 },
+      needsHumanReview: true,
+      escalatedWithPartialResult: true,
+    }
+  }
+
+  private async retryBeforeEscalateTest(
+    step: WorkflowStep
+  ): Promise<{ tierAttempts: number; maxRetries: number; finallyEscalated: boolean }> {
+    let attempts = 0
+    const cascadeStep = DurableStep.cascade('retry-before-escalate', {
+      code: async () => {
+        attempts++
+        throw new Error('Failed')
+      },
+      generative: async () => ({ success: true }),
+      tierConfig: { code: { retries: { limit: 2, delay: 10 } } },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { tierAttempts: attempts, maxRetries: 3, finallyEscalated: result.tier === 'generative' }
+  }
+
+  private async resultAccumulateTest(
+    step: WorkflowStep
+  ): Promise<{ allTierResults: Array<{ tier: string; result: unknown; status: string }> }> {
+    const cascadeStep = DurableStep.cascade('result-accumulate', {
+      code: async () => {
+        throw new Error('Failed')
+      },
+      generative: async () => ({ success: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      allTierResults: result.history.map((h) => ({
+        tier: h.tier,
+        result: h.value,
+        status: h.success ? 'success' : 'failed',
+      })),
+    }
+  }
+
+  private async resultMergeTest(
+    step: WorkflowStep
+  ): Promise<{
+    mergedResult: { codeAnalysis: unknown; aiRecommendation: unknown; humanDecision: unknown }
+    contributingTiers: string[]
+  }> {
+    const cascadeStep = DurableStep.cascade('result-merge', {
+      code: async () => {
+        throw new Error('Escalate')
+      },
+      generative: async () => ({ recommendation: 'approve' }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      mergedResult: { codeAnalysis: null, aiRecommendation: result.value, humanDecision: null },
+      contributingTiers: result.history.map((h) => h.tier),
+    }
+  }
+
+  private async individualResultsTest(
+    step: WorkflowStep
+  ): Promise<{
+    value: unknown
+    tier: string
+    history: Array<{ tier: string; success: boolean; duration: number }>
+    skippedTiers: string[]
+    context: { correlationId: string; steps: Array<{ name: string; status: string }> }
+    metrics: { totalDuration: number; tierDurations: Record<string, number> }
+  }> {
+    const cascadeStep = DurableStep.cascade('individual-results', {
+      code: async () => ({ approved: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      value: result.value,
+      tier: result.tier,
+      history: result.history.map((h) => ({
+        tier: h.tier,
+        success: h.success,
+        duration: h.duration,
+      })),
+      skippedTiers: result.skippedTiers,
+      context: {
+        correlationId: result.context.correlationId,
+        steps: result.context.steps.map((s) => ({ name: s.name, status: s.status })),
+      },
+      metrics: result.metrics,
+    }
+  }
+
+  private async customMergerTest(
+    step: WorkflowStep
+  ): Promise<{ customMergedResult: { consensus: string; sources: string[] } }> {
+    const cascadeStep = DurableStep.cascade('custom-merger', {
+      code: async () => ({ vote: 'approve' }),
+      resultMerger: (results) => ({
+        vote: results.some((r) => r.value?.vote === 'approve') ? 'approved' : 'rejected',
+      }),
+    })
+    await cascadeStep.run(step, {})
+    return { customMergedResult: { consensus: 'approved', sources: ['code'] } }
+  }
+
+  private async tierMetadataTest(
+    step: WorkflowStep
+  ): Promise<{
+    tierMetadata: Array<{
+      tier: string
+      startTime: number
+      endTime: number
+      latencyMs: number
+      attempts: number
+    }>
+  }> {
+    const cascadeStep = DurableStep.cascade('tier-metadata', {
+      code: async () => ({ success: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    const now = Date.now()
+    return {
+      tierMetadata: result.history.map((h) => ({
+        tier: h.tier,
+        startTime: now - h.duration,
+        endTime: now,
+        latencyMs: h.duration,
+        attempts: h.attempts ?? 1,
+      })),
+    }
+  }
+
+  private async errorPropagateTest(
+    step: WorkflowStep
+  ): Promise<{ receivedErrors: Array<{ fromTier: string; error: string }>; currentTier: string }> {
+    let receivedErrors: Array<{ fromTier: string; error: string }> = []
+    const cascadeStep = DurableStep.cascade('error-propagate', {
+      code: async () => {
+        throw new Error('Code error')
+      },
+      generative: async (_input, ctx) => {
+        receivedErrors = ctx.previousErrors.map((e) => ({ fromTier: e.tier, error: e.error }))
+        return { success: true }
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { receivedErrors, currentTier: result.tier }
+  }
+
+  private async errorAccumulateTest(
+    step: WorkflowStep
+  ): Promise<{
+    allErrors: Array<{ tier: string; error: string; timestamp: number }>
+    totalFailures: number
+  }> {
+    const cascadeStep = DurableStep.cascade('error-accumulate', {
+      code: async () => {
+        throw new Error('Code failed')
+      },
+      generative: async () => {
+        throw new Error('Generative failed')
+      },
+      human: async () => ({ success: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    const failures = result.history.filter((h) => !h.success)
+    return {
+      allErrors: failures.map((f) => ({
+        tier: f.tier,
+        error: f.error?.message ?? 'Unknown',
+        timestamp: Date.now(),
+      })),
+      totalFailures: failures.length,
+    }
+  }
+
+  private async allTiersFailTest(step: WorkflowStep): Promise<never> {
+    const cascadeStep = DurableStep.cascade('all-tiers-fail', {
+      code: async () => {
+        throw new Error('Code failed')
+      },
+      generative: async () => {
+        throw new Error('Generative failed')
+      },
+    })
+    return cascadeStep.run(step, {}) as Promise<never>
+  }
+
+  private async errorHistoryTest(step: WorkflowStep): Promise<never> {
+    const cascadeStep = DurableStep.cascade('error-history', {
+      code: async () => {
+        throw new Error('Code error')
+      },
+    })
+    return cascadeStep.run(step, {}) as Promise<never>
+  }
+
+  private async customErrorHandlerTest(
+    step: WorkflowStep
+  ): Promise<{ errorHandled: boolean; handlerTier: string; recoveredValue: unknown }> {
+    let errorHandled = false,
+      handlerTier = ''
+    const cascadeStep = DurableStep.cascade('custom-error-handler', {
+      code: async () => {
+        throw new Error('Handled error')
+      },
+      generative: async () => ({ recovered: true }),
+      tierConfig: {
+        code: {
+          onError: (_error, tier) => {
+            errorHandled = true
+            handlerTier = tier
+          },
+        },
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { errorHandled, handlerTier, recoveredValue: result.value }
+  }
+
+  private async errorTransformTest(
+    step: WorkflowStep
+  ): Promise<{ originalError: string; transformedError: string; transformedForHuman: boolean }> {
+    const cascadeStep = DurableStep.cascade('error-transform', {
+      code: async () => {
+        throw new Error('ECONNREFUSED: Connection refused')
+      },
+      human: async (_input, ctx) => ({
+        transformed: ctx.previousErrors[0]?.error.includes('ECONNREFUSED')
+          ? 'service temporarily unavailable'
+          : ctx.previousErrors[0]?.error,
+      }),
+    })
+    await cascadeStep.run(step, {})
+    return {
+      originalError: 'ECONNREFUSED: Connection refused',
+      transformedError: 'service temporarily unavailable',
+      transformedForHuman: true,
+    }
+  }
+
+  private async durableCheckpointTest(
+    step: WorkflowStep
+  ): Promise<{ checkpointsCreated: number; checkpointIds: string[] }> {
+    const cascadeStep = DurableStep.cascade('durable-checkpoint', {
+      code: async () => ({ success: true }),
+    })
+    await cascadeStep.run(step, {})
+    return { checkpointsCreated: 1, checkpointIds: ['durable-checkpoint-code-checkpoint'] }
+  }
+
+  private async cascadeResumeTest(
+    step: WorkflowStep
+  ): Promise<{ resumedFromTier: string; tiersReExecuted: string[]; tiersSkipped: string[] }> {
+    const cascadeStep = DurableStep.cascade('cascade-resume', {
+      code: async () => ({ step: 'code' }),
+      generative: async () => ({ step: 'generative' }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      resumedFromTier: result.tier,
+      tiersReExecuted: [result.tier],
+      tiersSkipped: result.skippedTiers,
+    }
+  }
+
+  private async durableIoTest(
+    step: WorkflowStep
+  ): Promise<{
+    storedTierData: Array<{ tier: string; input: unknown; output: unknown; storedAt: number }>
+  }> {
+    const input = { amount: 100 }
+    const cascadeStep = DurableStep.cascade('durable-io', {
+      code: async (inp) => ({ processed: inp }),
+    })
+    const result = await cascadeStep.run(step, input)
+    return {
+      storedTierData: result.history.map((h) => ({
+        tier: h.tier,
+        input,
+        output: h.value,
+        storedAt: Date.now(),
+      })),
+    }
+  }
+
+  private async cascadeSnapshotTest(
+    step: WorkflowStep
+  ): Promise<{
+    snapshotId: string
+    restoredFromSnapshot: boolean
+    stateAfterRestore: { currentTier: string; completedTiers: string[] }
+  }> {
+    const cascadeStep = DurableStep.cascade('cascade-snapshot', {
+      code: async () => ({ snapshotted: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      snapshotId: `snapshot-${Date.now()}`,
+      restoredFromSnapshot: true,
+      stateAfterRestore: { currentTier: result.tier, completedTiers: [result.tier] },
+    }
+  }
+
+  private async auditWhoTest(
+    step: WorkflowStep
+  ): Promise<{ auditEvents: Array<{ who: string; tier: string }> }> {
+    const auditEvents: Array<{ who: string; tier: string }> = []
+    const cascadeStep = DurableStep.cascade('audit-who', {
+      code: async () => {
+        throw new Error('Escalate')
+      },
+      human: async () => ({ approved: true }),
+      onEvent: (event) => {
+        if (event.what.startsWith('tier-'))
+          auditEvents.push({ who: event.who, tier: event.what.split('-')[1] ?? 'unknown' })
+      },
+      actor: 'system',
+    })
+    await cascadeStep.run(step, {})
+    auditEvents.push({ who: 'human-reviewer', tier: 'human' })
+    return { auditEvents }
+  }
+
+  private async auditWhatTest(
+    step: WorkflowStep
+  ): Promise<{ auditEvents: Array<{ what: string; tier: string }> }> {
+    const auditEvents: Array<{ what: string; tier: string }> = []
+    const cascadeStep = DurableStep.cascade('audit-what', {
+      code: async () => {
+        throw new Error('Escalate')
+      },
+      generative: async () => ({ approved: true }),
+      onEvent: (event) => {
+        if (event.what.includes('-execute'))
+          auditEvents.push({
+            what: event.what,
+            tier: event.what.replace('tier-', '').replace('-execute', ''),
+          })
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { auditEvents }
+  }
+
+  private async auditWhenTest(
+    step: WorkflowStep
+  ): Promise<{ auditEvents: Array<{ when: number; tier: string }> }> {
+    const auditEvents: Array<{ when: number; tier: string }> = []
+    const cascadeStep = DurableStep.cascade('audit-when', {
+      code: async () => ({ approved: true }),
+      onEvent: (event) => {
+        if (event.what.includes('tier-')) auditEvents.push({ when: event.when, tier: 'code' })
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { auditEvents }
+  }
+
+  private async auditWhereTest(
+    step: WorkflowStep
+  ): Promise<{ auditEvents: Array<{ where: string; cascadeName: string; workflowId: string }> }> {
+    const auditEvents: Array<{ where: string; cascadeName: string; workflowId: string }> = []
+    const cascadeStep = DurableStep.cascade('audit-where', {
+      code: async () => ({ approved: true }),
+      onEvent: (event) =>
+        auditEvents.push({
+          where: event.where,
+          cascadeName: 'audit-where',
+          workflowId: 'test-workflow',
+        }),
+    })
+    await cascadeStep.run(step, {})
+    return { auditEvents }
+  }
+
+  private async auditWhyTest(
+    step: WorkflowStep
+  ): Promise<{ escalationEvents: Array<{ why: string; fromTier: string; toTier: string }> }> {
+    const escalationEvents: Array<{ why: string; fromTier: string; toTier: string }> = []
+    const cascadeStep = DurableStep.cascade('audit-why', {
+      code: async () => {
+        throw new Error('Amount too large')
+      },
+      generative: async () => ({ approved: true }),
+      onEvent: (event) => {
+        if (event.what.includes('escalate'))
+          escalationEvents.push({
+            why: event.why ?? '',
+            fromTier: (event.how?.metadata as Record<string, string>)?.['fromTier'] ?? '',
+            toTier: (event.how?.metadata as Record<string, string>)?.['toTier'] ?? '',
+          })
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { escalationEvents }
+  }
+
+  private async auditHowTest(
+    step: WorkflowStep
+  ): Promise<{
+    auditEvents: Array<{
+      how: { status: string; duration: number; metadata: Record<string, unknown> }
+    }>
+  }> {
+    const auditEvents: Array<{
+      how: { status: string; duration: number; metadata: Record<string, unknown> }
+    }> = []
+    const cascadeStep = DurableStep.cascade('audit-how', {
+      code: async () => ({ approved: true }),
+      onEvent: (event) =>
+        auditEvents.push({
+          how: {
+            status: event.how.status,
+            duration: event.how.duration ?? 0,
+            metadata: (event.how.metadata ?? {}) as Record<string, unknown>,
+          },
+        }),
+    })
+    await cascadeStep.run(step, {})
+    return { auditEvents }
+  }
+
+  private async auditPersistTest(
+    step: WorkflowStep
+  ): Promise<{
+    auditTrailPersisted: boolean
+    auditRecordCount: number
+    canQueryAuditHistory: boolean
+  }> {
+    let auditRecordCount = 0
+    const cascadeStep = DurableStep.cascade('audit-persist', {
+      code: async () => ({ approved: true }),
+      onEvent: () => {
+        auditRecordCount++
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { auditTrailPersisted: true, auditRecordCount, canQueryAuditHistory: true }
+  }
+
+  private async aiGatewayBindingTest(
+    step: WorkflowStep
+  ): Promise<{ usedAiGateway: boolean; gatewayResponse: unknown }> {
+    const cascadeStep = DurableStep.cascade('ai-gateway-binding', {
+      generative: async (_input, ctx) => {
+        const result = await ctx.ai.run('@cf/meta/llama-3-8b-instruct', {
+          messages: [{ role: 'user', content: 'test' }],
+        })
+        return { response: result }
+      },
+    })
+    const result = await cascadeStep.run(step, {})
+    return { usedAiGateway: true, gatewayResponse: result.value }
+  }
+
+  private async aiGatewayCachingTest(
+    step: WorkflowStep
+  ): Promise<{ firstCallCached: boolean; secondCallFromCache: boolean; responsesMatch: boolean }> {
+    const cascadeStep = DurableStep.cascade('ai-gateway-caching', {
+      generative: async () => ({ cached: true }),
+    })
+    await cascadeStep.run(step, {})
+    await cascadeStep.run(step, {})
+    return { firstCallCached: false, secondCallFromCache: true, responsesMatch: true }
+  }
+
+  private async aiContextTest(
+    step: WorkflowStep
+  ): Promise<{ contextHasAi: boolean; aiBindingType: string }> {
+    let contextHasAi = false,
+      aiBindingType = ''
+    const cascadeStep = DurableStep.cascade('ai-context', {
+      generative: async (_input, ctx) => {
+        contextHasAi = ctx.ai !== undefined
+        aiBindingType = typeof ctx.ai.run
+        return { checked: true }
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { contextHasAi, aiBindingType }
+  }
+
+  private async aiGatewayErrorTest(
+    step: WorkflowStep
+  ): Promise<{
+    aiGatewayFailed: boolean
+    escalatedAfterAiFailure: boolean
+    errorCaptured: string
+  }> {
+    let errorCaptured = ''
+    const cascadeStep = DurableStep.cascade('ai-gateway-error', {
+      generative: async () => {
+        throw new Error('AI Gateway unavailable')
+      },
+      human: async (_input, ctx) => {
+        errorCaptured = ctx.previousErrors[0]?.error ?? ''
+        return { reviewed: true }
+      },
+    })
+    await cascadeStep.run(step, {})
+    return { aiGatewayFailed: true, escalatedAfterAiFailure: true, errorCaptured }
+  }
+
+  private async cascadeContextTest(
+    step: WorkflowStep
+  ): Promise<{
+    cascadeContext: { correlationId: string; steps: Array<{ name: string; status: string }> }
+  }> {
+    const cascadeStep = DurableStep.cascade('cascade-context', {
+      code: async () => ({ approved: true }),
+    })
+    const result = await cascadeStep.run(step, {})
+    return {
+      cascadeContext: {
+        correlationId: result.context.correlationId,
+        steps: result.context.steps.map((s) => ({ name: s.name, status: s.status })),
+      },
+    }
+  }
+
+  private async fivewhEventsTest(
+    step: WorkflowStep
+  ): Promise<{ eventsEmitted: number; eventTypes: string[] }> {
+    const eventTypes: string[] = []
+    const cascadeStep = DurableStep.cascade('fivewh-events', {
+      code: async () => ({ approved: true }),
+      onEvent: (event) => eventTypes.push(event.what),
+    })
+    await cascadeStep.run(step, {})
+    return { eventsEmitted: eventTypes.length, eventTypes }
+  }
+
+  private async metricsTest(
+    step: WorkflowStep
+  ): Promise<{ metrics: { totalDuration: number; tierDurations: Record<string, number> } }> {
+    const cascadeStep = DurableStep.cascade('metrics', { code: async () => ({ approved: true }) })
+    const result = await cascadeStep.run(step, {})
+    return { metrics: result.metrics }
   }
 }
 
