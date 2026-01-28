@@ -1061,7 +1061,6 @@ export function DB<TSchema extends DatabaseSchema>(
             }
             return true
           })
-        console.log('[schema/index.ts] hasReferenceFields:', hasReferenceFields, 'for', entityName)
 
         // Cascade takes priority over two-phase processing when enabled
         // Cascade handles generating related entities through the graph
@@ -1233,13 +1232,10 @@ export function DB<TSchema extends DatabaseSchema>(
           // The draft phase skips prompt fields for entities with $context because
           // those fields need pre-fetched context data to generate properly.
           // generateAIFields handles this context pre-fetching and field generation.
-          console.log('[schema/index.ts] Two-phase path - calling generateAIFields for', entityName)
           const provider = await resolveProvider()
           const entityDefForAI = parsedSchema.entities.get(entityName)
           let finalCleanData = cleanData
-          console.log('[schema/index.ts] entityDefForAI:', entityDefForAI?.name)
           if (entityDefForAI) {
-            console.log('[schema/index.ts] Calling generateAIFields with cleanData:', cleanData)
             finalCleanData = await generateAIFields(
               cleanData,
               entityName,
@@ -1247,7 +1243,6 @@ export function DB<TSchema extends DatabaseSchema>(
               parsedSchema,
               provider
             )
-            console.log('[schema/index.ts] finalCleanData after generateAIFields:', finalCleanData)
           }
 
           // Persist the resolved entity - use type assertion for internal overload dispatch

@@ -576,6 +576,12 @@ function schemaToProperties(schema: EntitySchema): Record<string, NounProperty> 
   const properties: Record<string, NounProperty> = {}
 
   for (const [name, def] of Object.entries(schema)) {
+    // Skip metadata fields (prefixed with $) like $context, $instructions
+    if (name.startsWith('$')) continue
+
+    // Skip if definition is invalid (null, undefined, or empty array)
+    if (!def || (Array.isArray(def) && def.length === 0)) continue
+
     const defStr = Array.isArray(def) ? def[0] : def
     const isOptional = defStr.endsWith('?')
     const isArray = defStr.endsWith('[]') || Array.isArray(def)
@@ -3282,35 +3288,23 @@ export function DB<TSchema extends DatabaseSchema>(
         delete finalData['$errors']
         delete finalData['$type']
 
-        // Generate AI fields for entities with $context dependencies
-        // The draft phase skips prompt fields for entities with $context because
-        // those fields need pre-fetched context data to generate properly.
-        const provider = await resolveProvider()
-        const entityDefForAI = parsedSchema.entities.get(entityName)
-        let processedData = finalData
-        if (entityDefForAI) {
-          processedData = await generateAIFields(
-            finalData,
-            entityName,
-            entityDefForAI,
-            parsedSchema,
-            provider
-          )
-        }
+        // Note: generateAIFields is called by originalCreate (entity-operations.create)
+        // so we don't need to call it here. The originalCreate flow handles:
+        // resolveForwardExact → resolveForwardFuzzy → resolveBackwardFuzzy → generateAIFields → provider.create
 
-        // Call originalCreate with the processed data
+        // Call originalCreate with the resolved data
         // Type assertion to Function is necessary for dynamic method call with spread args
         if (typeof args[0] === 'string') {
           return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
             wrappedOps,
             args[0],
-            processedData,
+            finalData,
             options
           )
         } else {
           return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
             wrappedOps,
-            processedData,
+            finalData,
             options
           )
         }
@@ -5046,9 +5040,19 @@ function createEntityOperations<T>(
         await resolveForwardFuzzy(typeName, resolvedData, entity, schema, provider, entityId)
 
       // Resolve backward fuzzy (<~) fields by semantic search against existing entities
-      const finalData = await resolveBackwardFuzzy(
+      const backwardResolvedData = await resolveBackwardFuzzy(
         typeName,
         fuzzyResolvedData,
+        entity,
+        schema,
+        provider
+      )
+
+      // Generate AI fields for entities with $context dependencies
+      // This handles prompt fields like 'string (compelling title)' that need context
+      const finalData = await generateAIFields(
+        backwardResolvedData,
+        typeName,
         entity,
         schema,
         provider

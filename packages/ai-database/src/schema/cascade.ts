@@ -324,26 +324,53 @@ export async function generateAIFields(
     // Build a combined entity with context data for template resolution
     // Start with entity data (which may have UUIDs for relation fields)
     const combinedEntity: Record<string, unknown> = { ...result }
-    // Override with pre-fetched context data (which has actual entity objects)
-    // This allows {startup.name} to resolve to the actual name, not the UUID
-    for (const [key, value] of contextData) {
-      const topLevelKey = key.split('.')[0]!
-      // Only override if the current value is a UUID (string ID) and we have an object
-      const currentValue = combinedEntity[topLevelKey]
-      const isCurrentUUID = typeof currentValue === 'string' && currentValue.includes('-')
-      if (!combinedEntity[topLevelKey] || isCurrentUUID) {
-        combinedEntity[topLevelKey] = value
+
+    // Sort context keys by length so we process parent paths before nested paths
+    // This ensures 'project' is set before 'project.lead'
+    const sortedKeys = [...contextData.keys()].sort((a, b) => a.length - b.length)
+
+    // First pass: set top-level context objects (replacing UUIDs with full objects)
+    for (const key of sortedKeys) {
+      const value = contextData.get(key)!
+      const pathParts = key.split('.')
+
+      if (pathParts.length === 1) {
+        // Simple path like 'project' - set at top level if currently a UUID
+        const currentValue = combinedEntity[key]
+        const isCurrentUUID = typeof currentValue === 'string' && currentValue.includes('-')
+        if (!combinedEntity[key] || isCurrentUUID) {
+          // Deep copy to allow mutation for nested paths
+          combinedEntity[key] = { ...value }
+        }
+      } else {
+        // Nested path like 'project.lead' - traverse and set nested value
+        // This replaces UUID references with actual entity objects
+        let current = combinedEntity
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          const part = pathParts[i]!
+          if (current[part] && typeof current[part] === 'object') {
+            current = current[part] as Record<string, unknown>
+          } else {
+            // Path doesn't exist or isn't an object, can't set nested value
+            break
+          }
+        }
+        const lastPart = pathParts[pathParts.length - 1]!
+        // Replace UUID with actual entity object
+        if (current && typeof current === 'object') {
+          current[lastPart] = value
+        }
       }
 
-      // For nested context paths like 'startup.icp', also add the leaf entity
-      // as a top-level key so {icp.as} can resolve correctly
-      if (key.includes('.') && typeof value === 'object' && value !== null) {
-        const leafKey = key.split('.').pop()!
+      // Also add leaf entity at top level for direct access (e.g., {lead.name} instead of {project.lead.name})
+      if (pathParts.length > 1 && typeof value === 'object' && value !== null) {
+        const leafKey = pathParts[pathParts.length - 1]!
         if (!combinedEntity[leafKey]) {
           combinedEntity[leafKey] = value
         }
       }
     }
+
     resolvedInstructions = await resolveInstructions(
       instructions,
       combinedEntity,
