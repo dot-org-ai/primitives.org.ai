@@ -1021,7 +1021,6 @@ export function DB<TSchema extends DatabaseSchema>(
 
       const originalCreate = wrappedOps.create
       wrappedOps.create = async (...args: unknown[]): Promise<unknown> => {
-        console.log('[schema/index.ts wrappedOps.create] CALLED for', entityName, 'args:', args)
         let id: string | undefined
         let data: Record<string, unknown>
         let options: CreateEntityOptions | undefined

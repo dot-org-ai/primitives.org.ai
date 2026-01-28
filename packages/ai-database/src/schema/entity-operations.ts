@@ -201,10 +201,8 @@ export function createEntityOperations<T>(
           schema,
           provider
         )
-        console.log('[entity-operations.create] finalData after generateAIFields:', finalData)
 
         const result = await provider.create(typeName, entityId, finalData)
-        console.log('[entity-operations.create] result after provider.create:', result)
 
         for (const rel of pendingRelations) {
           await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId)
