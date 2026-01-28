@@ -13,6 +13,10 @@
     "./ns": {
       "types": "./dist/ns-exports.d.ts",
       "import": "./dist/ns-exports.js"
+    },
+    "./worker": {
+      "types": "./dist/worker-exports.d.ts",
+      "import": "./dist/worker-exports.js"
     }
   },
   "files": [
