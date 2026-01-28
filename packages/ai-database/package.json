@@ -44,6 +44,11 @@
     "digital-objects": "workspace:*",
     "mdxld": "^1.0.1"
   },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.0",
+    "@cloudflare/workers-types": "^4.20250124.0",
+    "vitest": "3.0.4"
+  },
   "peerDependencies": {
     "vitest": "^2.0.0"
   },

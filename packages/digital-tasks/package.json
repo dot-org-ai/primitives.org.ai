@@ -17,6 +17,10 @@
     "./worker": {
       "import": "./dist/worker.js",
       "types": "./dist/worker.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
     }
   },
   "scripts": {
@@ -30,7 +34,8 @@
   "dependencies": {
     "ai-functions": "workspace:*",
     "digital-tools": "workspace:*",
-    "digital-workers": "workspace:*"
+    "digital-workers": "workspace:*",
+    "rpc.do": "^0.1.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

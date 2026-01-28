@@ -21,6 +21,10 @@
     "./worker": {
       "import": "./dist/worker.js",
       "types": "./dist/worker.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
     }
   },
   "scripts": {
@@ -34,6 +38,7 @@
   "dependencies": {
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
+    "rpc.do": "^0.1.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

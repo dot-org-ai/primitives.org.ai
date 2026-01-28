@@ -17,6 +17,10 @@
     "./worker": {
       "types": "./dist/worker-exports.d.ts",
       "import": "./dist/worker-exports.js"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
     }
   },
   "files": [
@@ -58,6 +62,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "rpc.do": "*",
     "zod": "^3.23.0"
   },
   "devDependencies": {

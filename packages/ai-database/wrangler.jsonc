@@ -1,0 +1,24 @@
+{
+  // Wrangler configuration for ai-database worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+  //
+  // The DatabaseDO class is a Durable Object with SQLite storage
+  // that provides the core _data and _rels tables for ai-database
+
+  "name": "ai-database",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // Durable Objects for database storage
+  "durable_objects": {
+    "bindings": [
+      { "name": "DATABASE", "class_name": "DatabaseDO" }
+    ]
+  },
+
+  // Migrations for Durable Objects
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["DatabaseDO"] }
+  ]
+}
