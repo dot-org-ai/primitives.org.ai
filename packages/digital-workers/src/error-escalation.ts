@@ -437,12 +437,15 @@ export function createClassifiedError(
 /**
  * Classify an error automatically
  */
-export function classifyError(error: Error, options: Partial<{
-  tier: CapabilityTier
-  agentId: string
-  taskId: string
-  context: ErrorContext
-}> = {}): ClassifiedError {
+export function classifyError(
+  error: Error,
+  options: Partial<{
+    tier: CapabilityTier
+    agentId: string
+    taskId: string
+    context: ErrorContext
+  }> = {}
+): ClassifiedError {
   const severity = getErrorSeverity(error)
   const category = getErrorCategory(error)
 
@@ -531,9 +534,11 @@ export function createEscalationPolicy(options: EscalationPolicyOptions): Escala
   return {
     maxEscalationDepth: options.maxEscalationDepth ?? 10,
     allowSkipTiers: options.allowSkipTiers ?? false,
-    skipTierThreshold: options.skipTierThreshold,
+    ...(options.skipTierThreshold !== undefined && {
+      skipTierThreshold: options.skipTierThreshold,
+    }),
     rules: options.rules ?? [],
-    tierPolicies: options.tierPolicies,
+    ...(options.tierPolicies !== undefined && { tierPolicies: options.tierPolicies }),
   }
 }
 
@@ -548,7 +553,7 @@ export function getNextEscalationTier(
 
   // Check custom rules first
   const applicableRules = policy.rules
-    .filter(rule => rule.fromTier === currentTier && rule.condition(error))
+    .filter((rule) => rule.fromTier === currentTier && rule.condition(error))
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
 
   if (applicableRules.length > 0) {
@@ -608,17 +613,13 @@ export function shouldEscalate(
   // Filter by time window if specified
   let relevantErrors = errorHistory
   if (timeWindow) {
-    relevantErrors = errorHistory.filter(
-      entry => now - entry.timestamp <= timeWindow
-    )
+    relevantErrors = errorHistory.filter((entry) => now - entry.timestamp <= timeWindow)
   }
 
   // Calculate weighted count if severity multiplier is specified
   if (severityMultiplier) {
     const weightedCount = relevantErrors.reduce((sum, entry) => {
-      const multiplier = entry.severity
-        ? (severityMultiplier[entry.severity] ?? 1)
-        : 1
+      const multiplier = entry.severity ? severityMultiplier[entry.severity] ?? 1 : 1
       return sum + multiplier
     }, 0)
     return weightedCount >= errorCount
@@ -630,10 +631,7 @@ export function shouldEscalate(
 /**
  * Detect circular escalation
  */
-export function detectCircularEscalation(
-  path: EscalationPath,
-  history: CapabilityTier[]
-): boolean {
+export function detectCircularEscalation(path: EscalationPath, history: CapabilityTier[]): boolean {
   // If we're going back to a tier we've already visited, it's circular
   if (history.includes(path.toTier)) {
     return true
@@ -642,7 +640,7 @@ export function detectCircularEscalation(
   // Check for de-escalation (going to a lower tier)
   if (TIER_ORDER[path.toTier] < TIER_ORDER[path.fromTier]) {
     // If we've already been at a tier higher than where we're going, it's circular
-    const maxTierVisited = Math.max(...history.map(t => TIER_ORDER[t]))
+    const maxTierVisited = Math.max(...history.map((t) => TIER_ORDER[t]))
     if (TIER_ORDER[path.toTier] < maxTierVisited) {
       return true
     }
@@ -686,12 +684,7 @@ export function validateEscalationPath(
  * Calculate backoff delay with optional jitter
  */
 export function calculateBackoff(config: RetryConfig, attemptNumber: number): number {
-  const {
-    baseDelayMs,
-    maxDelayMs = Infinity,
-    backoffMultiplier = 2,
-    jitterPercent = 0,
-  } = config
+  const { baseDelayMs, maxDelayMs = Infinity, backoffMultiplier = 2, jitterPercent = 0 } = config
 
   // Calculate exponential delay
   let delay = baseDelayMs * Math.pow(backoffMultiplier, attemptNumber)
@@ -757,9 +750,7 @@ export function selectFallbackAgent(
   agents: AgentForFallback[]
 ): AgentForFallback | null {
   // Filter excluded agents
-  let candidates = agents.filter(
-    a => !config.excludeAgentIds?.includes(a.id)
-  )
+  let candidates = agents.filter((a) => !config.excludeAgentIds?.includes(a.id))
 
   if (candidates.length === 0) {
     return null
@@ -768,9 +759,9 @@ export function selectFallbackAgent(
   switch (config.strategy) {
     case 'capability-match':
       if (config.requiredSkills && config.requiredSkills.length > 0) {
-        candidates = candidates.filter(a => {
+        candidates = candidates.filter((a) => {
           const agentSkills = a.skills ?? []
-          return config.requiredSkills!.every(skill => agentSkills.includes(skill))
+          return config.requiredSkills!.every((skill) => agentSkills.includes(skill))
         })
       }
       return candidates[0] ?? null
@@ -785,7 +776,7 @@ export function selectFallbackAgent(
 
     case 'same-tier':
       if (config.currentTier) {
-        candidates = candidates.filter(a => a.tier === config.currentTier)
+        candidates = candidates.filter((a) => a.tier === config.currentTier)
       }
       return candidates[0] ?? null
 
@@ -849,7 +840,7 @@ export function createRecoveryState(options: RecoveryStateOptions): RecoveryStat
   return {
     errorId: options.errorId,
     tier: options.tier,
-    agentId: options.agentId,
+    ...(options.agentId !== undefined && { agentId: options.agentId }),
     retryState: createRetryState(),
     escalated: false,
     resolved: false,
@@ -886,14 +877,14 @@ export function updateRecoveryState(
         escalated: true,
         escalationPath: [...state.escalationPath, newTier],
         lastAction: 'escalate',
-        isTerminal: update.isTerminal,
+        ...(update.isTerminal !== undefined && { isTerminal: update.isTerminal }),
       }
 
     case 'fallback':
       const oldAgentId = state.agentId
       return {
         ...state,
-        agentId: update.toAgentId,
+        ...(update.toAgentId !== undefined && { agentId: update.toAgentId }),
         fallbackHistory: oldAgentId
           ? [...state.fallbackHistory, oldAgentId]
           : state.fallbackHistory,
@@ -904,7 +895,7 @@ export function updateRecoveryState(
       return {
         ...state,
         resolved: true,
-        resolution: update.resolution,
+        ...(update.resolution !== undefined && { resolution: update.resolution }),
         lastAction: 'resolve',
       }
 
@@ -967,10 +958,7 @@ export function createEscalationEngine(options: EscalationEngineOptions = {}): E
     retriesSuccessful: 0,
   }
 
-  async function handleError(
-    error: Error,
-    opts: HandleErrorOptions
-  ): Promise<EscalationResult> {
+  async function handleError(error: Error, opts: HandleErrorOptions): Promise<EscalationResult> {
     // Classify the error
     const severity = opts.severity ?? getErrorSeverity(error)
     const category = getErrorCategory(error)
@@ -978,11 +966,11 @@ export function createEscalationEngine(options: EscalationEngineOptions = {}): E
     const classifiedError = createClassifiedError(error, {
       severity,
       category,
-      tier: opts.tier,
-      agentId: opts.agentId,
-      taskId: opts.taskId,
-      previousError: opts.previousError,
-      context: opts.context,
+      ...(opts.tier !== undefined && { tier: opts.tier }),
+      ...(opts.agentId !== undefined && { agentId: opts.agentId }),
+      ...(opts.taskId !== undefined && { taskId: opts.taskId }),
+      ...(opts.previousError !== undefined && { previousError: opts.previousError }),
+      ...(opts.context !== undefined && { context: opts.context }),
     })
 
     // Update metrics
@@ -1036,10 +1024,11 @@ export function createEscalationEngine(options: EscalationEngineOptions = {}): E
       } else if (opts.availableAgents && opts.availableAgents.length > 0) {
         // Try fallback
         action = 'fallback'
-        fallbackAgent = selectFallbackAgent(
-          { strategy: 'capability-match', excludeAgentIds: [opts.agentId ?? ''] },
-          opts.availableAgents
-        ) ?? undefined
+        fallbackAgent =
+          selectFallbackAgent(
+            { strategy: 'capability-match', excludeAgentIds: [opts.agentId ?? ''] },
+            opts.availableAgents
+          ) ?? undefined
       } else {
         action = 'degrade'
         degradationLevel = getDegradationLevel(severity)
@@ -1049,10 +1038,11 @@ export function createEscalationEngine(options: EscalationEngineOptions = {}): E
     else {
       if (opts.availableAgents && opts.availableAgents.length > 0) {
         action = 'fallback'
-        fallbackAgent = selectFallbackAgent(
-          { strategy: 'same-tier', currentTier: 'human', excludeAgentIds: [opts.agentId ?? ''] },
-          opts.availableAgents
-        ) ?? undefined
+        fallbackAgent =
+          selectFallbackAgent(
+            { strategy: 'same-tier', currentTier: 'human', excludeAgentIds: [opts.agentId ?? ''] },
+            opts.availableAgents
+          ) ?? undefined
         if (!fallbackAgent) {
           action = 'terminal'
         }
@@ -1065,14 +1055,12 @@ export function createEscalationEngine(options: EscalationEngineOptions = {}): E
       handled: true,
       action,
       classifiedError,
-      retryDelay,
-      escalationPath,
-      fallbackAgent,
-      degradationLevel,
-      preservedContext: opts.context,
-      errorChain: opts.previousError
-        ? buildErrorChain(classifiedError)
-        : undefined,
+      ...(retryDelay !== undefined && { retryDelay }),
+      ...(escalationPath !== undefined && { escalationPath }),
+      ...(fallbackAgent !== undefined && { fallbackAgent }),
+      ...(degradationLevel !== undefined && { degradationLevel }),
+      ...(opts.context !== undefined && { preservedContext: opts.context }),
+      ...(opts.previousError !== undefined && { errorChain: buildErrorChain(classifiedError) }),
     }
   }
 
