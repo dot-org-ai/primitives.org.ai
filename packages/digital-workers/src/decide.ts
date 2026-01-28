@@ -1,21 +1,54 @@
 /**
  * Decision-making functionality for digital workers
+ *
+ * IMPORTANT: Worker-Assisted Decisions vs LLM Judging
+ * ----------------------------------------------------
+ * This module provides structured decision-making that can involve human
+ * decision-makers, NOT simple LLM-based option selection.
+ *
+ * - `digital-workers.decide()` - Structured decision-making with criteria
+ *   evaluation, confidence scoring, and optional human approval routing.
+ *
+ * - `ai-functions.decide()` - LLM as judge - compares options and picks
+ *   the best one based on criteria (curried function pattern).
+ *
+ * Use digital-workers when you need:
+ * - Multi-criteria decision analysis
+ * - Confidence scores and alternative rankings
+ * - Human approval for critical decisions
+ * - Audit trail of decision reasoning
+ *
+ * Use ai-functions when you need:
+ * - Simple "pick the best" comparison
+ * - LLM judging between options
+ * - Curried decision function pattern
+ *
+ * @module
  */
 
 import { generateObject } from 'ai-functions'
 import type { Decision, DecideOptions } from './types.js'
 
 /**
- * Make a decision from a set of options
+ * Make a structured decision with criteria evaluation and optional human routing.
  *
- * Uses AI to evaluate options and make a reasoned decision,
- * or can route to human decision-makers for critical choices.
+ * **Key Difference from ai-functions.decide():**
+ * Unlike `ai-functions.decide()` which is a curried LLM judge function
+ * (e.g., `decide\`criteria\`(optionA, optionB)`), this function provides
+ * comprehensive decision analysis with:
+ * - Multi-criteria scoring
+ * - Confidence levels
+ * - Alternative rankings
+ * - Optional human approval routing via `decide.withApproval()`
  *
- * @param options - Decision options with configuration
- * @returns Promise resolving to decision result
+ * This is a **decision framework**, not a simple LLM comparison primitive.
+ *
+ * @param options - Decision options including choices, context, and criteria
+ * @returns Promise resolving to decision with choice, reasoning, confidence, and alternatives
  *
  * @example
  * ```ts
+ * // Structured decision with criteria evaluation
  * const decision = await decide({
  *   options: ['Option A', 'Option B', 'Option C'],
  *   context: 'We need to choose a technology stack for our new project',
@@ -29,7 +62,8 @@ import type { Decision, DecideOptions } from './types.js'
  *
  * console.log(`Decision: ${decision.choice}`)
  * console.log(`Reasoning: ${decision.reasoning}`)
- * console.log(`Confidence: ${decision.confidence}`)
+ * console.log(`Confidence: ${decision.confidence}`) // 0-1 score
+ * console.log(`Alternatives:`, decision.alternatives)
  * ```
  *
  * @example
@@ -50,23 +84,19 @@ import type { Decision, DecideOptions } from './types.js'
  *   criteria: ['Cost', 'Time to market', 'Risk', 'Scalability'],
  * })
  * ```
+ *
+ * @see {@link ai-functions#decide} for LLM-as-judge option comparison
  */
-export async function decide<T = string>(
-  options: DecideOptions<T>
-): Promise<Decision<T>> {
-  const {
-    options: choices,
-    context,
-    criteria = [],
-    includeReasoning = true,
-  } = options
+export async function decide<T = string>(options: DecideOptions<T>): Promise<Decision<T>> {
+  const { options: choices, context, criteria = [], includeReasoning = true } = options
 
   // Format context for the prompt
-  const contextStr = typeof context === 'string'
-    ? context
-    : context
-    ? JSON.stringify(context, null, 2)
-    : 'No additional context provided'
+  const contextStr =
+    typeof context === 'string'
+      ? context
+      : context
+      ? JSON.stringify(context, null, 2)
+      : 'No additional context provided'
 
   // Format choices for the prompt
   const choicesStr = choices
@@ -92,13 +122,18 @@ export async function decide<T = string>(
           score: 'Score for this alternative from 0-100 (number)',
         },
       ],
-      criteriaScores: criteria.length > 0
-        ? 'Scores for each criterion as object mapping criterion name to score (0-100)'
-        : undefined,
+      criteriaScores:
+        criteria.length > 0
+          ? 'Scores for each criterion as object mapping criterion name to score (0-100)'
+          : undefined,
     },
     system: `You are a decision-making expert. Analyze the options carefully and make the best choice based on the context and criteria provided.
 
-${criteria.length > 0 ? `Evaluation Criteria:\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` : ''}`,
+${
+  criteria.length > 0
+    ? `Evaluation Criteria:\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+    : ''
+}`,
     prompt: `Make a decision based on the following:
 
 Context:
@@ -107,7 +142,11 @@ ${contextStr}
 Options:
 ${choicesStr}
 
-${criteria.length > 0 ? `\nEvaluate each option against these criteria:\n${criteria.join(', ')}` : ''}
+${
+  criteria.length > 0
+    ? `\nEvaluate each option against these criteria:\n${criteria.join(', ')}`
+    : ''
+}
 
 Provide your decision with clear reasoning.`,
   })
@@ -157,9 +196,10 @@ decide.yesNo = async (
 ): Promise<Decision<'yes' | 'no'>> => {
   return decide({
     options: ['yes', 'no'] as const,
-    context: typeof context === 'string'
-      ? `${question}\n\n${context}`
-      : `${question}\n\n${context ? JSON.stringify(context, null, 2) : ''}`,
+    context:
+      typeof context === 'string'
+        ? `${question}\n\n${context}`
+        : `${question}\n\n${context ? JSON.stringify(context, null, 2) : ''}`,
   })
 }
 
@@ -189,11 +229,12 @@ decide.prioritize = async <T = string>(
   context?: string | Record<string, unknown>,
   criteria: string[] = []
 ): Promise<Array<Decision<T> & { rank: number }>> => {
-  const contextStr = typeof context === 'string'
-    ? context
-    : context
-    ? JSON.stringify(context, null, 2)
-    : 'No additional context provided'
+  const contextStr =
+    typeof context === 'string'
+      ? context
+      : context
+      ? JSON.stringify(context, null, 2)
+      : 'No additional context provided'
 
   const itemsStr = items
     .map((item, i) => `${i + 1}. ${typeof item === 'object' ? JSON.stringify(item) : item}`)
@@ -213,7 +254,11 @@ decide.prioritize = async <T = string>(
     },
     system: `You are a prioritization expert. Rank items by priority based on the context and criteria.
 
-${criteria.length > 0 ? `Prioritization Criteria:\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` : ''}`,
+${
+  criteria.length > 0
+    ? `Prioritization Criteria:\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+    : ''
+}`,
     prompt: `Prioritize the following items:
 
 Context:

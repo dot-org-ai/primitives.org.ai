@@ -1,23 +1,50 @@
 /**
  * Task execution functionality for digital workers
+ *
+ * IMPORTANT: Worker Routing vs Direct LLM Calls
+ * ---------------------------------------------
+ * This module provides worker-routed task execution, NOT direct LLM calls.
+ *
+ * - `digital-workers.do()` - Routes tasks to Workers (AI Agents or Humans)
+ *   based on capability matching, load balancing, and escalation policies.
+ *
+ * - `ai-functions.do()` - Directly calls the LLM to describe task execution.
+ *
+ * Use digital-workers when you need:
+ * - Task routing to appropriate workers
+ * - Human-in-the-loop escalation
+ * - Capability-based worker selection
+ * - Retry and timeout handling across workers
+ *
+ * Use ai-functions when you need:
+ * - Direct LLM text generation
+ * - Simple AI task description
+ * - No worker coordination required
+ *
+ * @module
  */
 
 import { define } from 'ai-functions'
 import type { TaskResult, DoOptions } from './types.js'
 
 /**
- * Execute a task
+ * Execute a task by routing to an appropriate Worker (AI Agent or Human).
  *
- * Routes tasks to appropriate workers (AI or human) based on complexity
- * and requirements. Handles retries, timeouts, and background execution.
+ * **Key Difference from ai-functions.do():**
+ * Unlike `ai-functions.do()` which directly calls the LLM to describe what
+ * actions would be taken, this function routes the task to a Worker (Agent
+ * or Human) based on capability matching. The Worker then executes the task
+ * using their specific tools and capabilities.
+ *
+ * This is a **worker coordination primitive**, not a direct LLM primitive.
  *
  * @param task - Description of the task to execute
  * @param options - Execution options (retries, timeout, background, etc.)
- * @returns Promise resolving to task result
+ * @returns Promise resolving to task result with execution details
  *
  * @example
  * ```ts
- * // Execute a simple task
+ * // Route task to appropriate worker based on capability
  * const result = await do('Generate monthly sales report', {
  *   timeout: 60000, // 1 minute
  *   context: {
@@ -33,7 +60,7 @@ import type { TaskResult, DoOptions } from './types.js'
  *
  * @example
  * ```ts
- * // Execute with retries
+ * // Execute with retries across workers
  * const result = await do('Sync data to backup server', {
  *   maxRetries: 3,
  *   timeout: 30000,
@@ -46,7 +73,7 @@ import type { TaskResult, DoOptions } from './types.js'
  *
  * @example
  * ```ts
- * // Execute in background
+ * // Execute in background (worker handles async)
  * const result = await do('Process large dataset', {
  *   background: true,
  *   context: {
@@ -55,17 +82,14 @@ import type { TaskResult, DoOptions } from './types.js'
  *   },
  * })
  * ```
+ *
+ * @see {@link ai-functions#do} for direct LLM task description
  */
 export async function doTask<T = unknown>(
   task: string,
   options: DoOptions = {}
 ): Promise<TaskResult<T>> {
-  const {
-    maxRetries = 0,
-    timeout,
-    background = false,
-    context,
-  } = options
+  const { maxRetries = 0, timeout, background = false, context } = options
 
   const startTime = Date.now()
   const steps: TaskResult<T>['steps'] = []
@@ -99,16 +123,17 @@ Document each step you take for transparency.`,
 
   while (retries <= maxRetries) {
     try {
-      const response = await Promise.race([
+      const response = (await Promise.race([
         taskFn.call({ task, contextInfo: context ? JSON.stringify(context) : '' }),
         timeout
-          ? new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Task timeout')), timeout)
-            )
+          ? new Promise((_, reject) => setTimeout(() => reject(new Error('Task timeout')), timeout))
           : new Promise(() => {}), // Never resolves if no timeout
-      ]) as unknown
+      ])) as unknown
 
-      const typedResponse = response as { result: T; steps?: Array<{ action: string; result: unknown }> }
+      const typedResponse = response as {
+        result: T
+        steps?: Array<{ action: string; result: unknown }>
+      }
 
       // Track steps if provided
       if (typedResponse.steps) {
@@ -140,9 +165,7 @@ Document each step you take for transparency.`,
         })
 
         // Exponential backoff
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.pow(2, retries) * 1000)
-        )
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, retries) * 1000))
       }
     }
   }

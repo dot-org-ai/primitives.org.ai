@@ -108,18 +108,6 @@ export {
   getTimeRemaining,
 } from './goals.js'
 
-// Action primitives
-export {
-  do,
-  doAction,
-  ask,
-  decide,
-  approve,
-  generate,
-  is,
-  notify,
-} from './actions.js'
-
 // Metrics and performance tracking
 export {
   kpi,

@@ -1,5 +1,27 @@
 /**
  * Question/answer functionality for digital workers
+ *
+ * IMPORTANT: Worker Routing vs Direct LLM Calls
+ * ---------------------------------------------
+ * This module provides worker-routed question handling, NOT direct LLM queries.
+ *
+ * - `digital-workers.ask()` - Routes questions to Workers (AI Agents or Humans)
+ *   via communication channels (Slack, email, SMS, etc.) and waits for response.
+ *
+ * - `ai-functions.ask()` - Generates content for human interaction via LLM.
+ *
+ * Use digital-workers when you need:
+ * - To ask a specific person or team via real channels
+ * - Human responses with accountability (who answered)
+ * - Channel-based communication (Slack, email, SMS)
+ * - Team coordination and escalation
+ *
+ * Use ai-functions when you need:
+ * - LLM-generated question/answer content
+ * - Generating UI for human input
+ * - Direct AI text generation
+ *
+ * @module
  */
 
 import { generateObject } from 'ai-functions'
@@ -16,24 +38,31 @@ import type {
 } from './types.js'
 
 /**
- * Ask a question to a worker or team
+ * Route a question to a Worker (AI Agent or Human) via communication channels.
  *
- * Routes questions through the specified channel and waits for a response.
+ * **Key Difference from ai-functions.ask():**
+ * Unlike `ai-functions.ask()` which generates content for human interaction
+ * using the LLM, this function routes the question to an actual Worker (person
+ * or AI agent) via real communication channels (Slack, email, SMS, etc.) and
+ * waits for their response.
  *
- * @param target - The worker or team to ask
+ * This is a **worker communication primitive**, not a direct LLM primitive.
+ *
+ * @param target - The worker or team to ask (routes to their configured channels)
  * @param question - The question to ask
- * @param options - Ask options
- * @returns Promise resolving to the answer
+ * @param options - Ask options including channel, schema, and timeout
+ * @returns Promise resolving to the answer with metadata (who answered, when, via what channel)
  *
  * @example
  * ```ts
- * // Ask a simple question
+ * // Ask a human via Slack
  * const result = await ask(alice, 'What is the company holiday policy?', {
  *   via: 'slack',
  * })
  * console.log(result.answer)
+ * console.log(`Answered by ${result.answeredBy.name} at ${result.answeredAt}`)
  *
- * // Ask with structured response
+ * // Ask with structured response schema
  * const result = await ask(ceo, 'What are our Q1 priorities?', {
  *   via: 'email',
  *   schema: {
@@ -42,6 +71,8 @@ import type {
  *   },
  * })
  * ```
+ *
+ * @see {@link ai-functions#ask} for LLM-generated human interaction content
  */
 export async function ask<T = string>(
   target: ActionTarget,

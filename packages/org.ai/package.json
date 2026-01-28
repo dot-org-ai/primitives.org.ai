@@ -77,6 +77,10 @@
     "./tests": {
       "import": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
+    },
+    "./types": {
+      "import": "./dist/types.js",
+      "types": "./dist/types.d.ts"
     }
   },
   "scripts": {
@@ -86,6 +90,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@org.ai/types": "workspace:^",
     "ai-database": "workspace:^",
     "ai-evaluate": "workspace:^",
     "ai-experiments": "workspace:^",

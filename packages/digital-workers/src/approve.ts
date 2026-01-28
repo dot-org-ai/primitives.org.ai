@@ -1,5 +1,28 @@
 /**
  * Approval request functionality for digital workers
+ *
+ * IMPORTANT: Worker Routing vs LLM Content Generation
+ * ---------------------------------------------------
+ * This module provides real approval workflows, NOT LLM-generated approval content.
+ *
+ * - `digital-workers.approve()` - Routes approval requests to Workers (Humans
+ *   or AI Agents) via communication channels and waits for actual approval.
+ *
+ * - `ai-functions.approve()` - Generates approval request content via LLM
+ *   for use in human interaction UIs.
+ *
+ * Use digital-workers when you need:
+ * - Real approval workflows with actual approvers
+ * - Routing to specific people via Slack, email, SMS
+ * - Approval audit trails (who, when, via what channel)
+ * - Multi-approver workflows (any/all must approve)
+ *
+ * Use ai-functions when you need:
+ * - LLM-generated approval request content
+ * - Generating UI/UX for approval flows
+ * - Approval request templates
+ *
+ * @module
  */
 
 import type {
@@ -14,32 +37,41 @@ import type {
 } from './types.js'
 
 /**
- * Request approval from a worker or team
+ * Route an approval request to a Worker (Human or AI Agent) and wait for response.
  *
- * Routes approval requests through the specified channel and waits for a response.
+ * **Key Difference from ai-functions.approve():**
+ * Unlike `ai-functions.approve()` which generates approval request content
+ * using the LLM, this function routes the request to an actual approver via
+ * real communication channels (Slack, email, SMS) and waits for their response.
+ *
+ * This is a **workflow approval primitive**, not a content generation primitive.
  *
  * @param request - What is being requested for approval
- * @param target - The worker or team to request approval from
- * @param options - Approval options
- * @returns Promise resolving to approval result
+ * @param target - The worker or team to request approval from (routes to their channels)
+ * @param options - Approval options including channel, timeout, and context
+ * @returns Promise resolving to approval result with metadata (who approved, when, notes)
  *
  * @example
  * ```ts
- * // Request approval from a worker
+ * // Request approval from a human via Slack
  * const result = await approve('Expense: $500 for AWS', manager, {
  *   via: 'slack',
  *   context: { amount: 500, category: 'Infrastructure' },
  * })
  *
  * if (result.approved) {
- *   console.log(`Approved by ${result.approvedBy?.name}`)
+ *   console.log(`Approved by ${result.approvedBy?.name} at ${result.approvedAt}`)
  * }
  *
- * // Request approval from a team
+ * // Request approval from a team (routes to lead or available member)
  * const result = await approve('Deploy v2.1.0 to production', opsTeam, {
  *   via: 'slack',
  * })
  * ```
+ *
+ * @see {@link ai-functions#approve} for LLM-generated approval request content
+ * @see {@link approve.all} for multi-approver workflows (all must approve)
+ * @see {@link approve.any} for multi-approver workflows (any can approve)
  */
 export async function approve(
   request: string,

@@ -1,0 +1,38 @@
+{
+  "name": "ai-primitives",
+  "version": "1.0.0",
+  "description": "All AI primitives for building intelligent applications",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ai-functions": "workspace:*",
+    "ai-providers": "workspace:*",
+    "language-models": "workspace:*",
+    "ai-database": "workspace:*",
+    "ai-workflows": "workspace:*",
+    "ai-experiments": "workspace:*",
+    "autonomous-agents": "workspace:*",
+    "digital-workers": "workspace:*",
+    "digital-tasks": "workspace:*",
+    "digital-tools": "workspace:*",
+    "digital-products": "workspace:*",
+    "human-in-the-loop": "workspace:*",
+    "services-as-software": "workspace:*",
+    "business-as-code": "workspace:*",
+    "ai-props": "workspace:*",
+    "ai-evaluate": "workspace:*",
+    "org.ai": "workspace:*"
+  }
+}

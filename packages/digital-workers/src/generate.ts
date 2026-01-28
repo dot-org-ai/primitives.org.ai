@@ -1,5 +1,34 @@
 /**
  * Content generation functionality for digital workers
+ *
+ * IMPORTANT: Worker-Context Generation vs Direct LLM Generation
+ * --------------------------------------------------------------
+ * This module provides content generation within a worker context,
+ * with rich metadata about the generation process.
+ *
+ * - `digital-workers.generate()` - Generates content with full metadata
+ *   (tokens used, duration, model info) and supports multiple content types
+ *   including text, code, structured, image, video, and audio.
+ *
+ * - `ai-functions.generate()` - Core generation primitive that powers all
+ *   ai-functions; lower-level function with type-based dispatch.
+ *
+ * The key difference is context and metadata:
+ * - digital-workers returns `GenerateResult<T>` with content + metadata
+ * - ai-functions returns just the generated content
+ *
+ * Use digital-workers when you need:
+ * - Rich metadata about generation (tokens, duration, model)
+ * - Content type variants (text, code, structured, media)
+ * - Tone, audience, and length modifiers
+ * - Iterative refinement workflows
+ *
+ * Use ai-functions when you need:
+ * - Direct LLM generation without metadata
+ * - Template literal syntax (`ai\`prompt\``)
+ * - Promise pipelining and schema inference
+ *
+ * @module
  */
 
 import { generateObject, generateText } from 'ai-functions'
@@ -7,23 +36,31 @@ import type { SimpleSchema } from 'ai-functions'
 import type { GenerateResult, GenerateOptions } from './types.js'
 
 /**
- * Generate content
+ * Generate content with rich metadata and multiple content type support.
  *
- * Uses AI to generate various types of content including text,
- * code, structured data, images, video, and audio.
+ * **Key Difference from ai-functions.generate():**
+ * Unlike `ai-functions.generate()` which is a lower-level type-dispatch
+ * function, this function returns a `GenerateResult` wrapper with:
+ * - The generated content
+ * - Generation metadata (model, tokens, duration)
+ * - Content type information
+ *
+ * This provides better observability for worker-based content generation.
  *
  * @param prompt - What to generate
- * @param options - Generation options
- * @returns Promise resolving to generated content
+ * @param options - Generation options (type, schema, instructions, model)
+ * @returns Promise resolving to GenerateResult with content and metadata
  *
  * @example
  * ```ts
- * // Generate text content
+ * // Generate text content with metadata
  * const result = await generate('Write a product description for wireless earbuds', {
  *   type: 'text',
  *   instructions: 'Focus on sound quality and battery life. Keep it under 100 words.',
  * })
- * console.log(result.content)
+ * console.log(result.content) // The generated text
+ * console.log(result.metadata.tokens) // Tokens used
+ * console.log(result.metadata.duration) // Generation time in ms
  * ```
  *
  * @example
@@ -52,18 +89,17 @@ import type { GenerateResult, GenerateOptions } from './types.js'
  *   instructions: 'Use TypeScript and hooks. Include prop types.',
  * })
  * console.log(result.content) // TypeScript React component code
+ * console.log(result.metadata.language) // 'typescript'
  * ```
+ *
+ * @see {@link ai-functions#generate} for lower-level type-dispatch generation
+ * @see {@link ai-functions#ai} for template literal generation syntax
  */
 export async function generate<T = string>(
   prompt: string,
   options: GenerateOptions = {}
 ): Promise<GenerateResult<T>> {
-  const {
-    type = 'text',
-    schema,
-    instructions,
-    model = 'sonnet',
-  } = options
+  const { type = 'text', schema, instructions, model = 'sonnet' } = options
 
   const startTime = Date.now()
 
@@ -199,9 +235,7 @@ generate.variations = async <T = string>(
   count: number,
   options: GenerateOptions = {}
 ): Promise<Array<GenerateResult<T>>> => {
-  return Promise.all(
-    Array.from({ length: count }, () => generate<T>(prompt, options))
-  )
+  return Promise.all(Array.from({ length: count }, () => generate<T>(prompt, options)))
 }
 
 /**

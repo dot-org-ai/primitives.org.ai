@@ -6,7 +6,29 @@
  * defines a unified Worker interface that enables workflows to be designed
  * once and executed by any combination of AI and human workers.
  *
- * Package relationships:
+ * ## Worker Routing vs ai-functions Primitives
+ *
+ * **IMPORTANT:** This package exports functions that overlap in name with
+ * `ai-functions` primitives (do, ask, decide, approve, generate, is) but
+ * serve fundamentally different purposes:
+ *
+ * | Function | digital-workers | ai-functions |
+ * |----------|----------------|--------------|
+ * | `do` | Routes tasks to Workers | Direct LLM task description |
+ * | `ask` | Routes questions via Slack/email | LLM content for human UI |
+ * | `decide` | Multi-criteria decision framework | LLM-as-judge comparison |
+ * | `approve` | Real approval workflow via channels | LLM-generated approval content |
+ * | `generate` | Content generation with metadata | Core LLM generation primitive |
+ * | `is` | Type/schema validation with errors | Boolean assertion via LLM |
+ * | `notify` | Real channel delivery | (no equivalent) |
+ *
+ * **digital-workers functions are worker coordination primitives** that route
+ * work to AI Agents or Humans via real communication channels.
+ *
+ * **ai-functions primitives are direct LLM operations** for text generation,
+ * decision-making, and content creation.
+ *
+ * ## Package relationships:
  * - `autonomous-agents` - Implements Worker for AI agents
  * - `human-in-the-loop` - Implements Worker for humans
  * - `ai-workflows` - Uses digital-workers to orchestrate execution
@@ -32,12 +54,13 @@
  *   const worker$ = withWorkers($)
  *
  *   $.on.Expense.submitted(async (expense) => {
+ *     // These route to REAL workers via REAL channels
  *     await worker$.notify(finance, `New expense: ${expense.amount}`)
  *
  *     const approval = await worker$.approve(
  *       `Expense: $${expense.amount}`,
  *       manager,
- *       { via: 'slack' }
+ *       { via: 'slack' }  // Actually sends to Slack!
  *     )
  *
  *     if (approval.approved) {
@@ -72,6 +95,16 @@ export {
 export { Role } from './role.js'
 export { Team } from './team.js'
 export { Goals } from './goals.js'
+
+/**
+ * Worker Routing Functions
+ *
+ * These functions route work to Workers (AI Agents or Humans) via real
+ * communication channels. They are NOT direct LLM primitives.
+ *
+ * For direct LLM primitives, use the identically-named functions from
+ * `ai-functions` instead. See module documentation for comparison table.
+ */
 export { approve } from './approve.js'
 export { ask } from './ask.js'
 export { do } from './do.js'
@@ -79,6 +112,7 @@ export { decide } from './decide.js'
 export { generate } from './generate.js'
 export { is } from './is.js'
 export { notify } from './notify.js'
+
 export { kpis, okrs } from './kpis.js'
 
 // Export verb definitions

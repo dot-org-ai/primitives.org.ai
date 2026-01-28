@@ -17,10 +17,10 @@
  */
 
 // ============================================================================
-// Re-export core primitives from ai-core for backward compatibility
+// Re-export core primitives for backward compatibility
 // ============================================================================
 
-// Types from ai-core
+// Types
 export type {
   AIFunctionDefinition,
   JSONSchema,
@@ -56,12 +56,12 @@ export type {
   DefinedFunction,
   FunctionRegistry,
   AutoDefineResult,
-} from '@org.ai/core'
+} from './types.js'
 
-// Schema exports from ai-core
-export { schema, type SimpleSchema } from '@org.ai/core'
+// Schema exports
+export { schema, type SimpleSchema } from './schema.js'
 
-// Template exports from ai-core
+// Template exports
 export {
   parseTemplate,
   createTemplateFunction,
@@ -73,9 +73,9 @@ export {
   type BatchableFunction,
   type StreamableList,
   type ChainablePromise,
-} from '@org.ai/core'
+} from './template.js'
 
-// AIPromise exports from ai-core
+// AIPromise exports
 export {
   AIPromise,
   isAIPromise,
@@ -93,12 +93,12 @@ export {
   type AIPromiseOptions,
   type StreamingAIPromise,
   type StreamOptions,
-} from '@org.ai/core'
+} from './ai-promise.js'
 
-// Generation exports from ai-core
-export { generateObject, generateText, streamObject, streamText } from '@org.ai/core'
+// Generation exports
+export { generateObject, generateText, streamObject, streamText } from './generate.js'
 
-// Primitives from ai-core
+// Primitives
 export {
   generate,
   type GenerateType,
@@ -125,9 +125,9 @@ export {
   review,
   type HumanOptions,
   type HumanResult,
-} from '@org.ai/core'
+} from './primitives.js'
 
-// Context exports from ai-core (basic version)
+// Context exports
 export {
   configure,
   getContext,
@@ -137,10 +137,10 @@ export {
   getModel,
   getProvider,
   type ExecutionContext,
-} from '@org.ai/core'
+} from './context.js'
 
-// Type guards from ai-core
-export { isZodSchema } from '@org.ai/core'
+// Type guards
+export { isZodSchema } from './type-guards.js'
 
 // ============================================================================
 // Export AI Proxy (the AI class/proxy from ai.ts)
@@ -160,7 +160,7 @@ export {
 } from './ai.js'
 
 // Also export 'ai' primitive as 'aiPrompt' for convenience
-export { ai as aiPrompt } from '@org.ai/core'
+export { ai as aiPrompt } from './primitives.js'
 
 // Export embedding utilities (not in ai-core)
 export * from './embeddings.js'

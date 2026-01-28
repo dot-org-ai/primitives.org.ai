@@ -1,11 +1,8 @@
 /**
  * Execution Context for AI Functions
  *
- * This module extends the core context from @org.ai/core with batch processing
- * and budget tracking features. It re-exports core context functions to provide
- * a single source of truth for context management.
- *
- * Settings flow from environment → global context → local context.
+ * Standalone context module with batch processing and budget tracking features.
+ * Settings flow from environment -> global context -> local context.
  *
  * @example
  * ```ts
@@ -26,21 +23,30 @@
  * @packageDocumentation
  */
 
-// Re-export core context management from @org.ai/core
-// This ensures a single source of truth for globalContext and AsyncLocalStorage
-import {
-  configure as coreConfigure,
-  getContext as coreGetContext,
-  withContext as coreWithContext,
-  getGlobalContext as coreGetGlobalContext,
-  resetContext as coreResetContext,
-  getModel,
-  getProvider as coreGetProvider,
-  type ExecutionContext as CoreExecutionContext,
-} from '@org.ai/core'
-
 import type { BatchProvider } from './batch-queue.js'
 import type { RequestContext as IRequestContext, ModelPricing } from './budget.js'
+
+// ============================================================================
+// Core Types (from template.ts equivalent)
+// ============================================================================
+
+/**
+ * Common options for all AI functions
+ */
+export interface FunctionOptions {
+  /** Model to use (e.g., 'claude-opus-4-5', 'gpt-5-1', 'gemini-3-pro') */
+  model?: string
+  /** Thinking level: 'none', 'low', 'medium', 'high', or token budget number */
+  thinking?: 'none' | 'low' | 'medium' | 'high' | number
+  /** Temperature (0-2) */
+  temperature?: number
+  /** Maximum tokens to generate */
+  maxTokens?: number
+  /** System prompt */
+  system?: string
+  /** Processing mode */
+  mode?: 'default' | 'background'
+}
 
 // ============================================================================
 // Extended Types for Batch Processing
@@ -48,10 +54,10 @@ import type { RequestContext as IRequestContext, ModelPricing } from './budget.j
 
 /** Batch execution mode */
 export type BatchMode =
-  | 'auto'       // Smart selection: immediate < flexThreshold, flex < batchThreshold, batch above
-  | 'immediate'  // Execute immediately (concurrent requests, full price)
-  | 'flex'       // Use flex processing (faster than batch, ~50% discount, minutes)
-  | 'deferred'   // Always use provider batch API (50% discount, up to 24hr)
+  | 'auto' // Smart selection: immediate < flexThreshold, flex < batchThreshold, batch above
+  | 'immediate' // Execute immediately (concurrent requests, full price)
+  | 'flex' // Use flex processing (faster than batch, ~50% discount, minutes)
+  | 'deferred' // Always use provider batch API (50% discount, up to 24hr)
 
 /** Budget configuration for context */
 export interface ContextBudgetConfig {
@@ -66,12 +72,11 @@ export interface ContextBudgetConfig {
 }
 
 /**
- * Extended execution context with batch processing and budget features.
- * Extends the core ExecutionContext from @org.ai/core.
+ * Execution context with batch processing and budget features.
  */
-export interface ExecutionContext extends CoreExecutionContext {
-  /** Batch provider to use (typed more strictly than core's string provider) */
-  provider?: BatchProvider
+export interface ExecutionContext extends FunctionOptions {
+  /** Provider to use (for model resolution) */
+  provider?: BatchProvider | string
   /** Batch execution mode */
   batchMode?: BatchMode
   /** Minimum items to use flex processing (for 'auto' mode, default: 5) */
@@ -89,8 +94,10 @@ export interface ExecutionContext extends CoreExecutionContext {
 }
 
 // ============================================================================
-// Re-export Core Context Functions (with Extended Types)
+// Global Context
 // ============================================================================
+
+let globalContext: ExecutionContext = {}
 
 /**
  * Configure global defaults for AI functions
@@ -106,70 +113,77 @@ export interface ExecutionContext extends CoreExecutionContext {
  * ```
  */
 export function configure(context: ExecutionContext): void {
-  coreConfigure(context)
+  globalContext = { ...globalContext, ...context }
 }
 
 /**
  * Get the current global context
  */
 export function getGlobalContext(): ExecutionContext {
-  return coreGetGlobalContext() as ExecutionContext
+  return { ...globalContext }
 }
 
 /**
  * Reset global context to defaults
  */
 export function resetContext(): void {
-  coreResetContext()
+  globalContext = {}
 }
 
-/**
- * Get the current execution context
- * Merges: environment defaults → global context → local context
- */
-export function getContext(): ExecutionContext {
-  const ctx = coreGetContext() as ExecutionContext
+// ============================================================================
+// Async Local Storage for Execution Context
+// ============================================================================
 
-  // Add batch-specific environment defaults
-  const envBatchContext = getEnvBatchContext()
+// Use AsyncLocalStorage if available (Node.js), otherwise fallback to global
+let asyncLocalStorage: {
+  getStore: () => ExecutionContext | undefined
+  run: <T>(store: ExecutionContext, callback: () => T) => T
+} | null = null
 
-  return {
-    ...envBatchContext,
-    ...ctx,
+// Lazy initialization of AsyncLocalStorage
+let asyncLocalStorageInitialized = false
+
+// Initialize synchronously if possible (for Node.js environments)
+if (typeof process !== 'undefined' && process.versions?.node) {
+  import('async_hooks')
+    .then(({ AsyncLocalStorage }) => {
+      asyncLocalStorage = new AsyncLocalStorage<ExecutionContext>()
+      asyncLocalStorageInitialized = true
+    })
+    .catch(() => {
+      asyncLocalStorageInitialized = true
+    })
+}
+
+// ============================================================================
+// Environment Defaults
+// ============================================================================
+
+function getEnvContext(): ExecutionContext {
+  if (typeof process === 'undefined') return {}
+
+  const context: ExecutionContext = {}
+
+  // Model defaults
+  if (process.env.AI_MODEL) {
+    context.model = process.env.AI_MODEL
   }
+
+  // Provider defaults
+  if (process.env.AI_PROVIDER) {
+    context.provider = process.env.AI_PROVIDER
+  } else if (process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+    context.provider = 'anthropic'
+  } else if (process.env.OPENAI_API_KEY) {
+    context.provider = 'openai'
+  } else if (process.env.CLOUDFLARE_API_TOKEN) {
+    context.provider = 'cloudflare'
+  } else if (process.env.AWS_ACCESS_KEY_ID) {
+    context.provider = 'bedrock'
+  }
+
+  return context
 }
-
-/**
- * Run a function with a specific execution context
- *
- * @example
- * ```ts
- * const posts = await withContext({ provider: 'openai', batchMode: 'deferred' }, async () => {
- *   const titles = await list`10 blog titles`
- *   return titles.map(title => write`blog post: ${title}`)
- * })
- * ```
- */
-export function withContext<T>(
-  context: ExecutionContext,
-  fn: () => T | Promise<T>
-): T | Promise<T> {
-  return coreWithContext(context, fn)
-}
-
-// Re-export getModel unchanged
-export { getModel }
-
-/**
- * Get the effective provider from context (typed as BatchProvider)
- */
-export function getProvider(): BatchProvider {
-  return coreGetProvider() as BatchProvider
-}
-
-// ============================================================================
-// Batch-Specific Environment Defaults
-// ============================================================================
 
 function getEnvBatchContext(): Partial<ExecutionContext> {
   if (typeof process === 'undefined') return {}
@@ -197,6 +211,78 @@ function getEnvBatchContext(): Partial<ExecutionContext> {
   }
 
   return context
+}
+
+// ============================================================================
+// Context Functions
+// ============================================================================
+
+/**
+ * Get the current execution context
+ * Merges: environment defaults -> global context -> local context
+ */
+export function getContext(): ExecutionContext {
+  const envContext = getEnvContext()
+  const envBatchContext = getEnvBatchContext()
+  const localContext = asyncLocalStorage?.getStore()
+
+  return {
+    ...envContext,
+    ...envBatchContext,
+    ...globalContext,
+    ...localContext,
+  }
+}
+
+/**
+ * Run a function with a specific execution context
+ *
+ * @example
+ * ```ts
+ * const posts = await withContext({ provider: 'openai', batchMode: 'deferred' }, async () => {
+ *   const titles = await list`10 blog titles`
+ *   return titles.map(title => write`blog post: ${title}`)
+ * })
+ * ```
+ */
+export function withContext<T>(
+  context: ExecutionContext,
+  fn: () => T | Promise<T>
+): T | Promise<T> {
+  const mergedContext = { ...getContext(), ...context }
+
+  if (asyncLocalStorage) {
+    return asyncLocalStorage.run(mergedContext, fn)
+  }
+
+  // Fallback: temporarily modify global context
+  const previousContext = globalContext
+  globalContext = mergedContext
+  try {
+    return fn()
+  } finally {
+    globalContext = previousContext
+  }
+}
+
+// ============================================================================
+// Context Helpers
+// ============================================================================
+
+/**
+ * Get the effective model from context
+ */
+export function getModel(): string {
+  const ctx = getContext()
+  return ctx.model || 'sonnet'
+}
+
+/**
+ * Get the effective provider from context (typed as BatchProvider)
+ */
+export function getProvider(): BatchProvider {
+  const ctx = getContext()
+  return (ctx.provider || 'openai') as BatchProvider
 }
 
 // ============================================================================

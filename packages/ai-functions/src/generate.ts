@@ -18,10 +18,10 @@ import {
   type GenerateTextResult,
   type StreamObjectResult,
   type StreamTextResult,
-  type LanguageModel
+  type LanguageModel,
 } from 'ai'
 import { schema as convertSchema, type SimpleSchema } from './schema.js'
-import { isZodSchema } from '@org.ai/core'
+import { isZodSchema } from './type-guards.js'
 import type { ZodTypeAny } from 'zod'
 
 type ModelArg = string | LanguageModel
@@ -44,7 +44,11 @@ interface GenerateObjectOptions<T> {
   maxRetries?: number
   abortSignal?: AbortSignal
   headers?: Record<string, string>
-  experimental_telemetry?: { isEnabled?: boolean; functionId?: string; metadata?: Record<string, string> }
+  experimental_telemetry?: {
+    isEnabled?: boolean
+    functionId?: string
+    metadata?: Record<string, string>
+  }
 }
 
 interface GenerateTextOptions {
@@ -65,7 +69,11 @@ interface GenerateTextOptions {
   tools?: Record<string, unknown>
   toolChoice?: 'auto' | 'none' | 'required' | { type: 'tool'; toolName: string }
   maxSteps?: number
-  experimental_telemetry?: { isEnabled?: boolean; functionId?: string; metadata?: Record<string, string> }
+  experimental_telemetry?: {
+    isEnabled?: boolean
+    functionId?: string
+    metadata?: Record<string, string>
+  }
 }
 
 /**
@@ -139,7 +147,7 @@ export async function generateObject<T>(
     ...options,
     model,
     schema,
-    output: 'object'
+    output: 'object',
   } as any) as Promise<GenerateObjectResult<T>>
 }
 
@@ -172,7 +180,7 @@ export async function generateText(
   const model = await resolveModel(options.model)
   return sdkGenerateText({
     ...options,
-    model
+    model,
   } as Parameters<typeof sdkGenerateText>[0])
 }
 
@@ -208,7 +216,7 @@ export async function streamObject<T>(
     ...options,
     model,
     schema,
-    output: 'object'
+    output: 'object',
   } as any) as StreamObjectResult<T, T, never>
 }
 
@@ -235,6 +243,6 @@ export async function streamText(
   const model = await resolveModel(options.model)
   return sdkStreamText({
     ...options,
-    model
+    model,
   } as Parameters<typeof sdkStreamText>[0])
 }

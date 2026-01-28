@@ -1,5 +1,25 @@
 /**
  * Notification functionality for digital workers
+ *
+ * IMPORTANT: Real Channel Delivery vs LLM Generation
+ * ---------------------------------------------------
+ * This module sends real notifications via communication channels,
+ * NOT LLM-generated notification content.
+ *
+ * - `digital-workers.notify()` - Sends actual notifications to Workers
+ *   via real channels (Slack, email, SMS, etc.) with delivery tracking.
+ *
+ * - ai-functions does not have an equivalent `notify` primitive since
+ *   it focuses on LLM operations, not communication channel delivery.
+ *
+ * Use digital-workers.notify() when you need:
+ * - Real notification delivery to people/agents
+ * - Multi-channel delivery (Slack + SMS for urgent)
+ * - Delivery tracking and confirmation
+ * - Priority-based channel selection
+ * - Scheduled notifications
+ *
+ * @module
  */
 
 import type {
@@ -14,30 +34,39 @@ import type {
 } from './types.js'
 
 /**
- * Send a notification to a worker or team
+ * Send a notification to a Worker (Human or AI Agent) via communication channels.
  *
- * Routes notifications through the specified channel(s), falling back
- * to the target's preferred channel if not specified.
+ * **Unique to digital-workers:**
+ * This function sends real notifications via actual communication channels
+ * (Slack, email, SMS, phone, etc.). There is no equivalent in ai-functions
+ * since ai-functions focuses on LLM operations rather than external delivery.
  *
- * @param target - The worker or team to notify
+ * This is a **communication delivery primitive** for worker coordination.
+ *
+ * @param target - The worker or team to notify (routes to their configured channels)
  * @param message - The notification message
- * @param options - Notification options
- * @returns Promise resolving to notification result
+ * @param options - Notification options (channel, priority, metadata)
+ * @returns Promise resolving to NotifyResult with delivery status and metadata
  *
  * @example
  * ```ts
  * // Notify a worker via their preferred channel
- * await notify(alice, 'Deployment completed successfully')
+ * const result = await notify(alice, 'Deployment completed successfully')
+ * console.log(result.sent) // true
+ * console.log(result.via) // ['slack']
  *
  * // Notify via specific channel
  * await notify(alice, 'Urgent: Server down!', { via: 'slack' })
  *
- * // Notify via multiple channels
+ * // Notify via multiple channels (for urgent messages)
  * await notify(alice, 'Critical alert', { via: ['slack', 'sms'] })
  *
- * // Notify a team
+ * // Notify a team (reaches all members via their channels)
  * await notify(engineering, 'Sprint planning tomorrow', { via: 'slack' })
  * ```
+ *
+ * @see {@link notify.alert} for high-priority urgent notifications
+ * @see {@link notify.schedule} for delayed/scheduled notifications
  */
 export async function notify(
   target: ActionTarget,

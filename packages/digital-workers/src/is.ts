@@ -1,5 +1,29 @@
 /**
  * Type validation and checking functionality for digital workers
+ *
+ * IMPORTANT: Schema Validation vs Boolean Assertion
+ * --------------------------------------------------
+ * This module provides comprehensive type/schema validation,
+ * NOT simple boolean assertions.
+ *
+ * - `digital-workers.is()` - Validates values against types or schemas,
+ *   returns detailed validation results with errors and optional coercion.
+ *
+ * - `ai-functions.is()` - Boolean assertion via LLM (e.g., `is\`${x} is valid\``)
+ *   returns true/false based on natural language checking.
+ *
+ * Use digital-workers when you need:
+ * - Type validation with error messages
+ * - Schema validation with field-level errors
+ * - Value coercion (string to number, etc.)
+ * - Structured validation results
+ *
+ * Use ai-functions when you need:
+ * - Natural language boolean checks
+ * - LLM-based semantic validation
+ * - Template literal assertions
+ *
+ * @module
  */
 
 import { generateObject } from 'ai-functions'
@@ -7,26 +31,35 @@ import { schema as convertSchema, type SimpleSchema } from 'ai-functions'
 import type { TypeCheckResult, IsOptions } from './types.js'
 
 /**
- * Check if a value matches an expected type or schema
+ * Validate a value against a type or schema with detailed results.
  *
- * Uses AI-powered validation for complex types and schemas.
- * Can also perform type coercion when enabled.
+ * **Key Difference from ai-functions.is():**
+ * Unlike `ai-functions.is()` which is a boolean assertion using natural
+ * language (e.g., `is\`${email} is valid\`` returns true/false), this
+ * function performs structured type/schema validation and returns a
+ * `TypeCheckResult` with:
+ * - Validation status
+ * - Error messages for invalid fields
+ * - Optionally coerced values
+ *
+ * This is a **validation primitive**, not a boolean assertion primitive.
  *
  * @param value - The value to check
- * @param type - Type name or schema to validate against
- * @param options - Validation options
- * @returns Promise resolving to validation result
+ * @param type - Type name ('email', 'url', 'number') or schema to validate against
+ * @param options - Validation options (coerce, strict)
+ * @returns Promise resolving to TypeCheckResult with valid, value, and errors
  *
  * @example
  * ```ts
- * // Simple type checking
+ * // Simple type checking with result object
  * const result = await is('hello@example.com', 'email')
  * console.log(result.valid) // true
+ * console.log(result.errors) // undefined when valid
  * ```
  *
  * @example
  * ```ts
- * // Schema validation
+ * // Schema validation with detailed errors
  * const result = await is(
  *   { name: 'John', age: 30 },
  *   {
@@ -41,11 +74,13 @@ import type { TypeCheckResult, IsOptions } from './types.js'
  *
  * @example
  * ```ts
- * // With coercion
+ * // With coercion - transforms value to target type
  * const result = await is('123', 'number', { coerce: true })
  * console.log(result.valid) // true
- * console.log(result.value) // 123 (as number)
+ * console.log(result.value) // 123 (as number, not string)
  * ```
+ *
+ * @see {@link ai-functions#is} for natural language boolean assertions
  */
 export async function is(
   value: unknown,
@@ -118,7 +153,11 @@ async function validateSimpleType(
     system: `You are a type validation expert. Determine if a value matches an expected type.
 
 ${coerce ? 'If the value can be coerced to the expected type, provide the coerced value.' : ''}
-${strict ? 'Be strict in your validation - require exact type matches.' : 'Be flexible - allow reasonable type conversions.'}`,
+${
+  strict
+    ? 'Be strict in your validation - require exact type matches.'
+    : 'Be flexible - allow reasonable type conversions.'
+}`,
     prompt: `Validate if this value matches the expected type:
 
 Value: ${JSON.stringify(value)}
@@ -209,10 +248,7 @@ Check if the value matches the schema structure and types.`,
 /**
  * Try to coerce a value to a specific type
  */
-function coerceValue(
-  value: unknown,
-  type: string
-): { success: boolean; value?: unknown } {
+function coerceValue(value: unknown, type: string): { success: boolean; value?: unknown } {
   try {
     switch (type) {
       case 'string':

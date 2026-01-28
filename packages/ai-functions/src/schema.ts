@@ -15,18 +15,18 @@
  */
 
 import { z, type ZodTypeAny } from 'zod'
-import { isZodSchema } from '@org.ai/core'
+import { isZodSchema } from './type-guards.js'
 
 /**
  * Simplified schema types
  */
 export type SimpleSchema =
-  | string                           // z.string().describe(value)
-  | [string]                         // z.array(z.string()).describe(value)
-  | [number]                         // z.array(z.number()).describe(value)
-  | [SimpleSchema]                   // z.array(converted).describe(value)
-  | { [key: string]: SimpleSchema }  // z.object() recursively
-  | ZodTypeAny                       // Pass-through for actual Zod schemas
+  | string // z.string().describe(value)
+  | [string] // z.array(z.string()).describe(value)
+  | [number] // z.array(z.number()).describe(value)
+  | [SimpleSchema] // z.array(converted).describe(value)
+  | { [key: string]: SimpleSchema } // z.object() recursively
+  | ZodTypeAny // Pass-through for actual Zod schemas
 
 /**
  * Convert a simplified schema to a Zod schema
@@ -64,7 +64,7 @@ function convertToZod(input: SimpleSchema): ZodTypeAny {
   if (typeof input === 'string') {
     // Enum syntax: 'option1 | option2 | option3'
     if (input.includes(' | ')) {
-      const options = input.split(' | ').map(s => s.trim())
+      const options = input.split(' | ').map((s) => s.trim())
       return z.enum(options as [string, ...string[]])
     }
 

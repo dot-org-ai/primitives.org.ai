@@ -48,28 +48,6 @@ importers:
         specifier: workspace:*
         version: link:../packages/ai-providers
 
-  packages/ai-core:
-    dependencies:
-      ai:
-        specifier: ^5.0.0
-        version: 5.0.108(zod@3.25.76)
-      ai-providers:
-        specifier: workspace:^
-        version: link:../ai-providers
-      language-models:
-        specifier: workspace:*
-        version: link:../language-models
-      yaml:
-        specifier: ^2.8.0
-        version: 2.8.2
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-    devDependencies:
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
-
   packages/ai-database:
     dependencies:
       '@org.ai/types':
@@ -90,12 +68,6 @@ importers:
 
   packages/ai-evaluate:
     dependencies:
-      ai-functions:
-        specifier: workspace:*
-        version: link:../ai-functions
-      ai-tests:
-        specifier: workspace:*
-        version: link:../ai-tests
       capnweb:
         specifier: ^0.2.0
         version: 0.2.0
@@ -110,6 +82,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: ^2.1.0
         version: 2.1.9(vitest@2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
@@ -128,9 +103,6 @@ importers:
       '@ai-sdk/amazon-bedrock':
         specifier: ^3.0.0
         version: 3.0.68(zod@3.25.76)
-      '@org.ai/core':
-        specifier: workspace:^
-        version: link:../ai-core
       ai:
         specifier: ^5.0.0
         version: 5.0.108(zod@3.25.76)
@@ -166,6 +138,60 @@ importers:
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+
+  packages/ai-primitives:
+    dependencies:
+      ai-database:
+        specifier: workspace:*
+        version: link:../ai-database
+      ai-evaluate:
+        specifier: workspace:*
+        version: link:../ai-evaluate
+      ai-experiments:
+        specifier: workspace:*
+        version: link:../ai-experiments
+      ai-functions:
+        specifier: workspace:*
+        version: link:../ai-functions
+      ai-props:
+        specifier: workspace:*
+        version: link:../ai-props
+      ai-providers:
+        specifier: workspace:*
+        version: link:../ai-providers
+      ai-workflows:
+        specifier: workspace:*
+        version: link:../ai-workflows
+      autonomous-agents:
+        specifier: workspace:*
+        version: link:../autonomous-agents
+      business-as-code:
+        specifier: workspace:*
+        version: link:../business-as-code
+      digital-products:
+        specifier: workspace:*
+        version: link:../digital-products
+      digital-tasks:
+        specifier: workspace:*
+        version: link:../digital-tasks
+      digital-tools:
+        specifier: workspace:*
+        version: link:../digital-tools
+      digital-workers:
+        specifier: workspace:*
+        version: link:../digital-workers
+      human-in-the-loop:
+        specifier: workspace:*
+        version: link:../human-in-the-loop
+      language-models:
+        specifier: workspace:*
+        version: link:../language-models
+      org.ai:
+        specifier: workspace:*
+        version: link:../org.ai
+      services-as-software:
+        specifier: workspace:*
+        version: link:../services-as-software
 
   packages/ai-props:
     dependencies:
@@ -366,6 +392,9 @@ importers:
 
   packages/org.ai:
     dependencies:
+      '@org.ai/types':
+        specifier: workspace:^
+        version: link:../types
       ai-database:
         specifier: workspace:^
         version: link:../ai-database
