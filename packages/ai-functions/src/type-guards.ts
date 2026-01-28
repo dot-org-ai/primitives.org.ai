@@ -16,7 +16,7 @@ import type { ZodTypeAny } from 'zod'
  *
  * @example
  * ```ts
- * import { isZodSchema } from '@org.ai/functions'
+ * import { isZodSchema } from 'ai-functions'
  * import { z } from 'zod'
  *
  * const schema = z.object({ name: z.string() })

@@ -1,4 +1,4 @@
-// @primitives/types - Shared type definitions for AI primitives packages
+// @org.ai/types - Shared type definitions for AI primitives packages
 
 // Runtime markers (for testing that exports exist)
 export const AIFunction = Symbol('AIFunction')

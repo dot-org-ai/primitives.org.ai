@@ -1,5 +1,5 @@
 /**
- * @org.ai/examples - Reference examples for ai-functions
+ * Examples - Reference examples for ai-functions
  *
  * This package contains runnable examples demonstrating:
  * - Basic generation (text, objects, lists)

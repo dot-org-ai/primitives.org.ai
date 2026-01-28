@@ -463,7 +463,7 @@ interface DigitalObjectsProvider {
 ```json
 {
   "dependencies": {
-    "@org.ai/types": "workspace:*"
+    "@org.ai/types": "workspace:*"  // scoped package
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",

@@ -1,7 +1,7 @@
 # TypeScript Review: ai-database Package
 
 **Date:** 2026-01-15
-**Package:** `@org.ai/ai-database`
+**Package:** `ai-database`
 **Location:** `/packages/ai-database`
 **Reviewer:** Claude Code
 

@@ -6,7 +6,7 @@ description: TypeScript type definitions for business-as-code primitives
 Comprehensive type definitions for representing every aspect of a business as code. Install from npm:
 
 ```bash
-npm install @primitives/types
+npm install @org.ai/types
 ```
 
 ## Overview
@@ -32,7 +32,7 @@ import type {
   Invoice,
   Contract,
   Lead
-} from '@primitives/types'
+} from '@org.ai/types'
 
 // Type-safe business entities
 const employee: Employee = {
@@ -90,7 +90,7 @@ export interface EmployeeResource extends EmployeeActions {
 Each module exports a Proxy interface aggregating all resources:
 
 ```typescript
-import type { HRProxy, FinanceProxy, SalesProxy } from '@primitives/types'
+import type { HRProxy, FinanceProxy, SalesProxy } from '@org.ai/types'
 
 // HR operations
 const hr: HRProxy = getHRProxy()

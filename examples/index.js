@@ -1,5 +1,5 @@
 /**
- * @primitives/examples - Real-world examples of digital businesses
+ * @org.ai/examples - Real-world examples of digital businesses
  *
  * This package provides comprehensive, real-world examples of various digital
  * business models implemented using the primitives.org.ai packages:
@@ -19,7 +19,7 @@
  *
  * @example
  * ```ts
- * import { saas, apiPlatform, directory, marketplace, startupStudio, vcFirm } from '@primitives/examples'
+ * import { saas, apiPlatform, directory, marketplace, startupStudio, vcFirm } from '@org.ai/examples'
  *
  * // Access a complete SaaS business model
  * const { business, kpis, okrs, metrics } = saas.getBusinessSummary()

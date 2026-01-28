@@ -350,8 +350,8 @@ These packages have zero dependencies on other workspace packages. They form the
 
 | Package | Internal Deps | External Deps | Purpose |
 |---------|--------------|---------------|---------|
-| `@org.ai/types` | None | None | Shared TypeScript type definitions |
-| `@org.ai/config` | None | eslint, typescript-eslint | Build tooling configuration |
+| `@org.ai/types` | None | None | Shared TypeScript type definitions (scoped) |
+| `@org.ai/config` | None | eslint, typescript-eslint | Build tooling configuration (scoped) |
 | `language-models` | None | None | Model listing and resolution |
 | `ai-workflows` | None | None | Event-driven workflow primitives |
 | `ai-tests` | None | chai | Test assertion utilities |
@@ -441,8 +441,8 @@ Bundle packages for convenience.
 Analysis based on actual package.json dependencies:
 
 **Compliant Packages:**
-- `@org.ai/types`: No workspace deps (Layer 0)
-- `@org.ai/config`: No workspace deps (Layer 0)
+- `@org.ai/types`: No workspace deps (Layer 0, scoped)
+- `@org.ai/config`: No workspace deps (Layer 0, scoped)
 - `language-models`: No workspace deps (Layer 0)
 - `ai-workflows`: No workspace deps (Layer 0)
 - `ai-tests`: No workspace deps (Layer 0)

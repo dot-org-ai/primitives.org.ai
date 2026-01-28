@@ -14,7 +14,7 @@
  *
  * @example Basic usage - creating and tracking an action
  * ```ts
- * import { DB } from '@org.ai/db'
+ * import { DB } from 'ai-database'
  *
  * const { db, actions } = DB({
  *   Lead: { name: 'string', email: 'string', score: 'number' },
@@ -129,11 +129,7 @@
  */
 
 // Re-export action types from schema
-export type {
-  DBAction,
-  ActionsAPI,
-  CreateActionOptions,
-} from './schema.js'
+export type { DBAction, ActionsAPI, CreateActionOptions } from './schema.js'
 
 // Re-export ActionStatus from types for convenience
 export type { ActionStatus } from './types.js'

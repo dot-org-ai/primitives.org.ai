@@ -554,7 +554,7 @@ packages/ai-database/
 ## Appendix B: Dependency Analysis
 
 **Runtime Dependencies:**
-- `@org.ai/types` - Shared type definitions
+- `@org.ai/types` - Shared type definitions (scoped package)
 - `ai-functions` - AI generation primitives
 - `digital-objects` - Storage backend option
 - `mdxld` - MDX/JSON-LD utilities

@@ -44,7 +44,7 @@ pnpm test
 
 Or use Turbo filtering:
 ```bash
-pnpm test --filter=@org.ai/ai-core
+pnpm test --filter=ai-functions
 ```
 
 ### Type Checking

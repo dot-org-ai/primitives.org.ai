@@ -7,8 +7,8 @@
  *
  * @example
  * ```ts
- * import { DB } from '@org.ai/ai-database'
- * import { createDigitalObjectsProvider } from '@org.ai/ai-database'
+ * import { DB } from 'ai-database'
+ * import { createDigitalObjectsProvider } from 'ai-database'
  *
  * const provider = createDigitalObjectsProvider()
  *

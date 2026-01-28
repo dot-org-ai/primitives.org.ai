@@ -2,7 +2,7 @@
 
 **Date**: 2026-01-15
 **Status**: Research Complete
-**Package**: `@org.ai/ai-workflows`
+**Package**: `ai-workflows`
 
 ## Executive Summary
 

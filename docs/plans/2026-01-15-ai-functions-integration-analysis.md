@@ -10,7 +10,7 @@ This document analyzes the `ai-functions` package to understand how it can integ
 
 The `ai-functions` package provides a comprehensive AI primitives library with:
 
-1. **Core Generation Functions** (re-exported from `@org.ai/core`)
+1. **Core Generation Functions**
    - `generate`, `ai`, `write`, `code`, `list`, `lists`, `extract`, `summarize`
    - `is` (boolean classification), `decide` (multi-option selection)
    - `diagram`, `slides`, `image`, `video`

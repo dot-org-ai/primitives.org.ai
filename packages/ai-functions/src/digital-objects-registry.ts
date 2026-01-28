@@ -237,8 +237,8 @@ function dataToDefinition(data: StoredFunctionDefinition): FunctionDefinition {
  *
  * @example
  * ```ts
- * import { createMemoryProvider } from '@org.ai/digital-objects'
- * import { createDigitalObjectsRegistry, defineFunction } from '@org.ai/functions'
+ * import { createMemoryProvider } from 'digital-objects'
+ * import { createDigitalObjectsRegistry, defineFunction } from 'ai-functions'
  *
  * const provider = createMemoryProvider()
  * const registry = await createDigitalObjectsRegistry({ provider })
@@ -693,8 +693,8 @@ export class DigitalObjectsFunctionRegistry implements FunctionRegistry {
  *
  * @example
  * ```ts
- * import { createMemoryProvider } from '@org.ai/digital-objects'
- * import { createDigitalObjectsRegistry } from '@org.ai/functions'
+ * import { createMemoryProvider } from 'digital-objects'
+ * import { createDigitalObjectsRegistry } from 'ai-functions'
  *
  * const provider = createMemoryProvider()
  * const registry = await createDigitalObjectsRegistry({ provider })

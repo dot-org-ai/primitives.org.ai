@@ -1,5 +1,5 @@
 /**
- * @primitives/types
+ * @org.ai/types
  *
  * Comprehensive type definitions for the primitives.org.ai ecosystem.
  * Business-as-Code: Every aspect of a business represented in TypeScript.

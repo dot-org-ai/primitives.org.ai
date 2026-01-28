@@ -478,7 +478,7 @@ const human = createHuman({
 
 This package re-exports from the following workspace packages:
 
-- `@org.ai/types` - Shared type definitions
+- `@org.ai/types` - Shared type definitions (scoped package)
 - `ai-functions` - Core AI primitives
 - `ai-providers` - Provider registry
 - `ai-database` - Database primitives

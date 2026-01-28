@@ -628,7 +628,7 @@ What is your next step?`,
  *
  * @example
  * ```ts
- * import { isPendingHumanResult } from '@org.ai/functions'
+ * import { isPendingHumanResult } from 'ai-functions'
  *
  * const result = await approveRefund({ amount: 500 })
  *

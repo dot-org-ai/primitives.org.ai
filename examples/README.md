@@ -1,9 +1,9 @@
-# @primitives/examples
+# @org.ai/examples
 
 Real-world examples of digital businesses built with primitives.org.ai packages.
 
 ```typescript
-import { saas, marketplace, vcFirm } from '@primitives/examples'
+import { saas, marketplace, vcFirm } from '@org.ai/examples'
 
 // Complete SaaS business model
 const { business, kpis, metrics } = saas.getBusinessSummary()
@@ -18,7 +18,7 @@ console.log(portfolio.unicorns)  // 6
 ## Installation
 
 ```bash
-pnpm add @primitives/examples
+pnpm add @org.ai/examples
 ```
 
 ## Available Examples
@@ -37,7 +37,7 @@ pnpm add @primitives/examples
 ### Import Individual Examples
 
 ```typescript
-import { saas, marketplace, vcFirm } from '@primitives/examples'
+import { saas, marketplace, vcFirm } from '@org.ai/examples'
 
 // Each example is a complete business model
 const saasModel = saas
@@ -46,7 +46,7 @@ const saasModel = saas
 ### List Available Examples
 
 ```typescript
-import { listExamples } from '@primitives/examples'
+import { listExamples } from '@org.ai/examples'
 
 const examples = listExamples()
 // [
@@ -59,7 +59,7 @@ const examples = listExamples()
 ### Dynamic Loading
 
 ```typescript
-import { loadExample } from '@primitives/examples'
+import { loadExample } from '@org.ai/examples'
 
 const example = await loadExample('saas')
 ```
@@ -79,7 +79,7 @@ Every example is a complete business model with:
 ## Example: SaaS Business
 
 ```typescript
-import { saas } from '@primitives/examples'
+import { saas } from '@org.ai/examples'
 
 // Get business overview
 const summary = saas.getBusinessSummary()
@@ -95,7 +95,7 @@ const { products, organization, kpis } = summary
 ## Example: VC Firm
 
 ```typescript
-import { vcFirm } from '@primitives/examples'
+import { vcFirm } from '@org.ai/examples'
 
 const portfolio = vcFirm.getPortfolioSummary()
 console.log(portfolio.aum)        // Assets under management
@@ -107,7 +107,7 @@ console.log(portfolio.irr)        // Internal rate of return
 ## Example: Marketplace
 
 ```typescript
-import { marketplace } from '@primitives/examples'
+import { marketplace } from '@org.ai/examples'
 
 const summary = marketplace.getBusinessSummary()
 console.log(summary.metrics.gmv)         // Gross merchandise value

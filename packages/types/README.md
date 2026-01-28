@@ -79,9 +79,9 @@ type Summarizer = AIFunctionType<Document, Summary>  // Wait, which is which?
 ## Part of the org.ai Ecosystem
 
 This package provides shared types for:
-- [@org.ai/ai-functions](../ai-functions) - AI function primitives
-- [@org.ai/ai-workflows](../ai-workflows) - Workflow orchestration
-- [@org.ai/ai-database](../ai-database) - AI-native database with relationships
+- [ai-functions](../ai-functions) - AI function primitives
+- [ai-workflows](../ai-workflows) - Workflow orchestration
+- [ai-database](../ai-database) - AI-native database with relationships
 - And [more packages](../) in the org.ai monorepo
 
 ## License

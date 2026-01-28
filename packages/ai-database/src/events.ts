@@ -9,7 +9,7 @@
  *
  * @example Basic usage
  * ```ts
- * import { DB } from '@org.ai/db'
+ * import { DB } from 'ai-database'
  *
  * const { db, events } = DB({
  *   Post: { title: 'string', content: 'string' },
@@ -95,12 +95,7 @@
  */
 
 // Re-export event types from schema
-export type {
-  DBEvent,
-  EventsAPI,
-  CreateEventOptions,
-  ActorData,
-} from './schema.js'
+export type { DBEvent, EventsAPI, CreateEventOptions, ActorData } from './schema.js'
 
 /**
  * Standard event types emitted by the database

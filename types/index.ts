@@ -1,5 +1,5 @@
 /**
- * @primitives/types
+ * @org.ai/types
  *
  * Comprehensive type definitions for the primitives.org.ai ecosystem.
  * Business-as-Code: Every aspect of a business represented in TypeScript.
@@ -211,7 +211,10 @@ export function defineAction<TInput, TOutput>(
  * ```
  */
 export function defineEventHandler<TEvent, TProxy = unknown>(
-  handler: (event: TEvent, context: import('@/core/rpc').ExecutionContext<TProxy>) => void | Promise<void>
+  handler: (
+    event: TEvent,
+    context: import('@/core/rpc').ExecutionContext<TProxy>
+  ) => void | Promise<void>
 ): (event: TEvent, context: import('@/core/rpc').ExecutionContext<TProxy>) => void | Promise<void> {
   return handler
 }
