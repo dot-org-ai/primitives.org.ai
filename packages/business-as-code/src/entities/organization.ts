@@ -3,10 +3,16 @@
  *
  * Organizational hierarchy: Organization, Department, Team, Position, Role.
  *
+ * Uses digital-workers Worker type for position holders.
+ *
  * @packageDocumentation
  */
 
 import type { Noun } from 'ai-database'
+import type { Worker as DigitalWorker, WorkerRef } from 'digital-workers'
+
+// Re-export for convenience
+export type { DigitalWorker, WorkerRef }
 
 // =============================================================================
 // Organization
@@ -109,23 +115,9 @@ export const Organization: Noun = {
     },
   },
 
-  actions: [
-    'create',
-    'update',
-    'restructure',
-    'merge',
-    'split',
-    'archive',
-  ],
+  actions: ['create', 'update', 'restructure', 'merge', 'split', 'archive'],
 
-  events: [
-    'created',
-    'updated',
-    'restructured',
-    'merged',
-    'split',
-    'archived',
-  ],
+  events: ['created', 'updated', 'restructured', 'merged', 'split', 'archived'],
 }
 
 // =============================================================================
@@ -164,7 +156,18 @@ export const Department: Noun = {
       type: 'string',
       optional: true,
       description: 'Department type',
-      examples: ['engineering', 'product', 'design', 'marketing', 'sales', 'operations', 'finance', 'hr', 'legal', 'support'],
+      examples: [
+        'engineering',
+        'product',
+        'design',
+        'marketing',
+        'sales',
+        'operations',
+        'finance',
+        'hr',
+        'legal',
+        'support',
+      ],
     },
 
     // Budget
@@ -440,7 +443,17 @@ export const Position: Noun = {
       type: 'string',
       optional: true,
       description: 'Job level',
-      examples: ['intern', 'junior', 'mid', 'senior', 'staff', 'principal', 'director', 'vp', 'c-level'],
+      examples: [
+        'intern',
+        'junior',
+        'mid',
+        'senior',
+        'staff',
+        'principal',
+        'director',
+        'vp',
+        'c-level',
+      ],
     },
     track: {
       type: 'string',

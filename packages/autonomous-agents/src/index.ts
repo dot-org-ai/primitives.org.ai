@@ -69,6 +69,22 @@ export type {
   CommunicationChannel,
 } from './types.js'
 
+// Re-export consolidated org.ai shared types for consumers
+export type {
+  GoalPriority,
+  GoalStatus,
+  GoalCategory,
+  KPITrend,
+  KPIFrequency,
+  KPICategory,
+  KPIHistoryEntry,
+  OKRStatus,
+  KeyResultStatus,
+  MemberType,
+  MemberStatus,
+  MemberAvailability,
+} from 'org.ai/types'
+
 // Agent creation and management
 export { Agent } from './agent.js'
 

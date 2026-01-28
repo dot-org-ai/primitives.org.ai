@@ -44,10 +44,10 @@ interface WorkerInstance {
   name: string
   status: WorkerInstanceStatus
   type: 'agent' | 'human'
-  tier?: string
+  tier?: string | undefined
   createdAt: Date
   updatedAt: Date
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown> | undefined
 }
 
 /**
@@ -107,8 +107,8 @@ interface SetStateOptions {
 interface BroadcastResult {
   workerId: string
   success: boolean
-  messageId?: string
-  error?: string
+  messageId?: string | undefined
+  error?: string | undefined
 }
 
 /**
@@ -119,8 +119,8 @@ interface CoordinationTask<T = unknown> {
   type: 'fanout' | 'pipeline' | 'race' | 'consensus'
   workers: string[]
   status: 'pending' | 'running' | 'completed' | 'failed'
-  result?: T
-  errors?: Error[]
+  result?: T | undefined
+  errors?: Error[] | undefined
 }
 
 /**
@@ -134,8 +134,8 @@ interface ConsensusOptions {
  * Environment bindings
  */
 export interface Env {
-  AI?: unknown
-  WORKER_STATE?: DurableObjectNamespace
+  AI?: unknown | undefined
+  WORKER_STATE?: DurableObjectNamespace | undefined
 }
 
 // =============================================================================
@@ -524,22 +524,24 @@ export class DigitalWorkersServiceCore extends RpcTarget {
 
     // Send initial data to first worker
     const firstWorkerId = workerIds[0]
-    const firstWorker = workerStore.get(firstWorkerId)
+    if (firstWorkerId) {
+      const firstWorker = workerStore.get(firstWorkerId)
 
-    if (firstWorker) {
-      const message: WorkerMessage = {
-        id: generateId(),
-        from: 'system',
-        to: firstWorkerId,
-        type,
-        payload,
-        timestamp: new Date(),
-        acknowledged: firstWorker.status === 'running',
+      if (firstWorker) {
+        const message: WorkerMessage = {
+          id: generateId(),
+          from: 'system',
+          to: firstWorkerId,
+          type,
+          payload,
+          timestamp: new Date(),
+          acknowledged: firstWorker.status === 'running',
+        }
+
+        const messages = messageStore.get(firstWorkerId) ?? []
+        messages.push(message)
+        messageStore.set(firstWorkerId, messages)
       }
-
-      const messages = messageStore.get(firstWorkerId) ?? []
-      messages.push(message)
-      messageStore.set(firstWorkerId, messages)
     }
 
     return task

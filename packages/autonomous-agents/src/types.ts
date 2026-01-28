@@ -3,9 +3,29 @@
  *
  * Primitives for building and orchestrating autonomous AI agents that operate
  * within a company boundary using the digital-workers interface.
+ *
+ * This module defines agent-specific types that are compatible with the
+ * consolidated types from org.ai. For new projects, you can import from
+ * 'org.ai/types' directly for the canonical type definitions.
  */
 
 import type { AIFunctionDefinition, AIGenerateOptions, SimpleSchema } from 'ai-functions'
+
+// Re-export consolidated types from org.ai/types for new code
+// These are prefixed with 'Org' to distinguish from local types
+export type {
+  Role as OrgRole,
+  Team as OrgTeam,
+  TeamMember as OrgTeamMember,
+  Channel as OrgChannel,
+  Goal as OrgGoal,
+  Goals as OrgGoals,
+  GoalPriority as OrgGoalPriority,
+  GoalStatus as OrgGoalStatus,
+  KPI as OrgKPI,
+  OKR as OrgOKR,
+  KeyResult as OrgKeyResult,
+} from 'org.ai/types'
 
 // Re-export for use in other files
 export type { AIFunctionDefinition }

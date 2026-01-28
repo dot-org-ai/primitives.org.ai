@@ -1,8 +1,63 @@
 /**
  * Key Performance Indicators (KPIs) management
+ *
+ * Uses org.ai KPI types for standardized KPI definitions across the ecosystem.
  */
 
 import type { KPIDefinition, TimePeriod } from './types.js'
+import type { KPI as OrgKPI, KPICategory, KPITrend, KPIFrequency, KPIHistoryEntry } from 'org.ai'
+
+// Re-export org.ai KPI types for convenience
+export type { OrgKPI, KPICategory, KPITrend, KPIFrequency, KPIHistoryEntry }
+
+/**
+ * Convert a business-as-code KPIDefinition to an org.ai KPI
+ *
+ * @param definition - Business KPI definition
+ * @param id - Unique identifier for the KPI
+ * @returns org.ai KPI object
+ */
+export function toOrgKPI(definition: KPIDefinition, id: string): OrgKPI {
+  const result: OrgKPI = {
+    id,
+    name: definition.name,
+    value: definition.current ?? 0,
+    target: definition.target ?? 0,
+    unit: definition.unit || '',
+  }
+  if (definition.description !== undefined) result.description = definition.description
+  if (definition.current !== undefined) result.current = definition.current
+  if (definition.category !== undefined) result.category = definition.category as KPICategory
+  if (definition.frequency !== undefined) result.frequency = definition.frequency as KPIFrequency
+  if (definition.dataSource !== undefined) result.dataSource = definition.dataSource
+  if (definition.formula !== undefined) result.formula = definition.formula
+  if (definition.metadata !== undefined) result.metadata = definition.metadata
+  return result
+}
+
+/**
+ * Convert an org.ai KPI to a business-as-code KPIDefinition
+ *
+ * @param kpi - org.ai KPI object
+ * @returns Business KPI definition
+ */
+export function fromOrgKPI(kpi: OrgKPI): KPIDefinition {
+  const result: KPIDefinition = {
+    name: kpi.name,
+    unit: kpi.unit,
+  }
+  if (kpi.description !== undefined) result.description = kpi.description
+  const cat = kpi.category
+  if (cat !== undefined) result.category = cat as NonNullable<KPIDefinition['category']>
+  if (typeof kpi.target === 'number') result.target = kpi.target
+  if (typeof kpi.value === 'number') result.current = kpi.value
+  else if (typeof kpi.current === 'number') result.current = kpi.current
+  if (kpi.frequency !== undefined) result.frequency = kpi.frequency as TimePeriod
+  if (kpi.dataSource !== undefined) result.dataSource = kpi.dataSource
+  if (kpi.formula !== undefined) result.formula = kpi.formula
+  if (kpi.metadata !== undefined) result.metadata = kpi.metadata
+  return result
+}
 
 /**
  * Define Key Performance Indicators for tracking business metrics
@@ -46,7 +101,7 @@ import type { KPIDefinition, TimePeriod } from './types.js'
  * ```
  */
 export function kpis(definitions: KPIDefinition[]): KPIDefinition[] {
-  return definitions.map(kpi => validateAndNormalizeKPI(kpi))
+  return definitions.map((kpi) => validateAndNormalizeKPI(kpi))
 }
 
 /**
@@ -88,7 +143,7 @@ export function meetsTarget(kpi: KPIDefinition): boolean {
   if (kpi.target === undefined || kpi.current === undefined) return false
 
   // For metrics where lower is better (like churn rate)
-  const lowerIsBetter = ['churn', 'cost', 'time', 'error', 'downtime'].some(term =>
+  const lowerIsBetter = ['churn', 'cost', 'time', 'error', 'downtime'].some((term) =>
     kpi.name.toLowerCase().includes(term)
   )
 
@@ -126,14 +181,14 @@ export function getKPIsByCategory(
   kpis: KPIDefinition[],
   category: KPIDefinition['category']
 ): KPIDefinition[] {
-  return kpis.filter(k => k.category === category)
+  return kpis.filter((k) => k.category === category)
 }
 
 /**
  * Get KPIs by frequency
  */
 export function getKPIsByFrequency(kpis: KPIDefinition[], frequency: TimePeriod): KPIDefinition[] {
-  return kpis.filter(k => k.frequency === frequency)
+  return kpis.filter((k) => k.frequency === frequency)
 }
 
 /**
@@ -147,7 +202,7 @@ export function getKPIsOnTarget(kpis: KPIDefinition[]): KPIDefinition[] {
  * Get KPIs that don't meet their targets
  */
 export function getKPIsOffTarget(kpis: KPIDefinition[]): KPIDefinition[] {
-  return kpis.filter(kpi => !meetsTarget(kpi))
+  return kpis.filter((kpi) => !meetsTarget(kpi))
 }
 
 /**
@@ -235,11 +290,10 @@ export function comparePerformance(
   }
 
   const change = current.current - previous.current
-  const changePercent =
-    previous.current !== 0 ? (change / previous.current) * 100 : 0
+  const changePercent = previous.current !== 0 ? (change / previous.current) * 100 : 0
 
   // Determine if change is an improvement
-  const lowerIsBetter = ['churn', 'cost', 'time', 'error', 'downtime'].some(term =>
+  const lowerIsBetter = ['churn', 'cost', 'time', 'error', 'downtime'].some((term) =>
     current.name.toLowerCase().includes(term)
   )
 

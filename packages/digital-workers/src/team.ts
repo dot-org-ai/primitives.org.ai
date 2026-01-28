@@ -4,6 +4,8 @@
 
 import type { WorkerTeam } from './types.js'
 
+// Note: Team type is re-exported from types.ts which imports from org.ai
+
 /**
  * Define a team of workers
  *
@@ -15,7 +17,8 @@ import type { WorkerTeam } from './types.js'
  *
  * @example
  * ```ts
- * const engineeringTeam = Team({
+ * const engineeringTeam = defineTeam({
+ *   id: 'team_eng',
  *   name: 'Engineering',
  *   description: 'Product engineering team',
  *   members: [
@@ -24,18 +27,20 @@ import type { WorkerTeam } from './types.js'
  *     { id: 'ai-reviewer', name: 'Code Reviewer', role: 'Code Reviewer', type: 'ai' },
  *     { id: 'ai-tester', name: 'Test Generator', role: 'Test Engineer', type: 'ai' },
  *   ],
+ *   contacts: { slack: '#engineering', email: 'eng@company.com' },
  *   goals: [
  *     'Ship features on schedule',
  *     'Maintain code quality',
  *     'Reduce technical debt',
  *   ],
- *   lead: 'alice',
+ *   lead: { id: 'alice', type: 'human', name: 'Alice' },
  * })
  * ```
  *
  * @example
  * ```ts
- * const supportTeam = Team({
+ * const supportTeam = defineTeam({
+ *   id: 'team_support',
  *   name: 'Customer Support',
  *   description: '24/7 customer support team',
  *   members: [
@@ -43,16 +48,17 @@ import type { WorkerTeam } from './types.js'
  *     { id: 'support-ai-2', name: 'Support Bot Beta', role: 'Support Agent', type: 'ai' },
  *     { id: 'escalation-human', name: 'Jane', role: 'Senior Support', type: 'human' },
  *   ],
+ *   contacts: { slack: '#support' },
  *   goals: [
  *     'Maintain 95% satisfaction rate',
  *     'Response time under 5 minutes',
  *     'First contact resolution > 80%',
  *   ],
- *   lead: 'escalation-human',
+ *   lead: { id: 'escalation-human', type: 'human', name: 'Jane' },
  * })
  * ```
  */
-export function Team(definition: WorkerTeam): WorkerTeam {
+export function defineTeam(definition: WorkerTeam): WorkerTeam {
   return definition
 }
 
@@ -65,7 +71,7 @@ export function Team(definition: WorkerTeam): WorkerTeam {
  *
  * @example
  * ```ts
- * const updatedTeam = Team.addMember(engineeringTeam, {
+ * const updatedTeam = defineTeam.addMember(engineeringTeam, {
  *   id: 'charlie',
  *   name: 'Charlie',
  *   role: 'Junior Engineer',
@@ -73,10 +79,7 @@ export function Team(definition: WorkerTeam): WorkerTeam {
  * })
  * ```
  */
-Team.addMember = (
-  team: WorkerTeam,
-  member: WorkerTeam['members'][number]
-): WorkerTeam => ({
+defineTeam.addMember = (team: WorkerTeam, member: WorkerTeam['members'][number]): WorkerTeam => ({
   ...team,
   members: [...team.members, member],
 })
@@ -90,10 +93,10 @@ Team.addMember = (
  *
  * @example
  * ```ts
- * const updatedTeam = Team.removeMember(engineeringTeam, 'bob')
+ * const updatedTeam = defineTeam.removeMember(engineeringTeam, 'bob')
  * ```
  */
-Team.removeMember = (team: WorkerTeam, memberId: string): WorkerTeam => ({
+defineTeam.removeMember = (team: WorkerTeam, memberId: string): WorkerTeam => ({
   ...team,
   members: team.members.filter((m) => m.id !== memberId),
 })
@@ -106,11 +109,11 @@ Team.removeMember = (team: WorkerTeam, memberId: string): WorkerTeam => ({
  *
  * @example
  * ```ts
- * const aiMembers = Team.aiMembers(supportTeam)
+ * const aiMembers = defineTeam.aiMembers(supportTeam)
  * console.log(aiMembers) // [Support Bot Alpha, Support Bot Beta]
  * ```
  */
-Team.aiMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 'agent')
+defineTeam.aiMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 'agent')
 
 /**
  * Get all human members of a team
@@ -120,11 +123,11 @@ Team.aiMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 'ag
  *
  * @example
  * ```ts
- * const humans = Team.humanMembers(engineeringTeam)
+ * const humans = defineTeam.humanMembers(engineeringTeam)
  * console.log(humans) // [Alice, Bob]
  * ```
  */
-Team.humanMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 'human')
+defineTeam.humanMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 'human')
 
 /**
  * Get members by role
@@ -135,8 +138,10 @@ Team.humanMembers = (team: WorkerTeam) => team.members.filter((m) => m.type === 
  *
  * @example
  * ```ts
- * const engineers = Team.byRole(engineeringTeam, 'Engineer')
+ * const engineers = defineTeam.byRole(engineeringTeam, 'Engineer')
  * ```
  */
-Team.byRole = (team: WorkerTeam, role: string) =>
-  team.members.filter((m) => m.role === role)
+defineTeam.byRole = (team: WorkerTeam, role: string) => team.members.filter((m) => m.role === role)
+
+// Legacy alias for backward compatibility
+export { defineTeam as Team }

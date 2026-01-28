@@ -25,7 +25,7 @@ import type { Goal, GoalsConfig, Priority } from './types.js'
  *       progress: 45000,
  *       priority: 'high',
  *       deadline: new Date('2024-03-31'),
- *       status: 'active',
+ *       status: 'in-progress',
  *     },
  *     {
  *       id: 'feature-launch',
@@ -34,7 +34,7 @@ import type { Goal, GoalsConfig, Priority } from './types.js'
  *       progress: '60%',
  *       priority: 'high',
  *       deadline: new Date('2024-02-15'),
- *       status: 'active',
+ *       status: 'in-progress',
  *       subgoals: [
  *         {
  *           id: 'feature-design',
@@ -48,7 +48,7 @@ import type { Goal, GoalsConfig, Priority } from './types.js'
  *           description: 'Implement features',
  *           target: '100%',
  *           progress: '80%',
- *           status: 'active',
+ *           status: 'in-progress',
  *         },
  *       ],
  *     },
@@ -94,7 +94,7 @@ export function Goals(config: GoalsConfig): GoalsInstance {
    * Remove a goal
    */
   function removeGoal(goalId: string): boolean {
-    const index = state.goals.findIndex(g => g.id === goalId)
+    const index = state.goals.findIndex((g) => g.id === goalId)
     if (index === -1) return false
     state.goals.splice(index, 1)
     return true
@@ -118,28 +118,28 @@ export function Goals(config: GoalsConfig): GoalsInstance {
    * Get active goals
    */
   function getActiveGoals(): Goal[] {
-    return state.goals.filter(g => g.status === 'active')
+    return state.goals.filter((g) => g.status === 'active')
   }
 
   /**
    * Get completed goals
    */
   function getCompletedGoals(): Goal[] {
-    return state.goals.filter(g => g.status === 'completed')
+    return state.goals.filter((g) => g.status === 'completed')
   }
 
   /**
    * Get blocked goals
    */
   function getBlockedGoals(): Goal[] {
-    return state.goals.filter(g => g.status === 'blocked')
+    return state.goals.filter((g) => g.status === 'blocked')
   }
 
   /**
    * Get goals by priority
    */
   function getGoalsByPriority(priority: Priority): Goal[] {
-    return state.goals.filter(g => g.priority === priority)
+    return state.goals.filter((g) => g.priority === priority)
   }
 
   /**
@@ -207,10 +207,7 @@ export function Goals(config: GoalsConfig): GoalsInstance {
   function getOverallProgress(): number {
     if (state.goals.length === 0) return 0
 
-    const totalProgress = state.goals.reduce(
-      (sum, goal) => sum + calculateProgress(goal),
-      0
-    )
+    const totalProgress = state.goals.reduce((sum, goal) => sum + calculateProgress(goal), 0)
     return totalProgress / state.goals.length
   }
 }
@@ -326,7 +323,7 @@ function isGoalComplete(goal: Goal): boolean {
 
   // Check subgoals
   if (goal.subgoals && goal.subgoals.length > 0) {
-    return goal.subgoals.every(subgoal => isGoalComplete(subgoal))
+    return goal.subgoals.every((subgoal) => isGoalComplete(subgoal))
   }
 
   return false
@@ -396,7 +393,7 @@ export function getGoalsDueSoon(goals: Goal[], days: number = 7): Goal[] {
   const now = new Date()
   const threshold = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
 
-  return goals.filter(goal => {
+  return goals.filter((goal) => {
     if (!goal.deadline || goal.status === 'completed') return false
     return goal.deadline <= threshold && goal.deadline > now
   })
@@ -409,7 +406,7 @@ export function getGoalsByStatus(
   goals: Goal[],
   status: 'active' | 'completed' | 'blocked' | 'cancelled'
 ): Goal[] {
-  return goals.filter(g => g.status === status)
+  return goals.filter((g) => g.status === status)
 }
 
 /**

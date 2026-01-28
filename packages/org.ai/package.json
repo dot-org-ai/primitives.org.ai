@@ -87,10 +87,15 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@org.ai/types": "workspace:^",
+    "zod": "^3.24.0",
     "ai-database": "workspace:^",
     "ai-evaluate": "workspace:^",
     "ai-experiments": "workspace:^",

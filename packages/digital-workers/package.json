@@ -27,6 +27,7 @@
   "dependencies": {
     "ai-functions": "workspace:*",
     "ai-workflows": "workspace:*",
+    "org.ai": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {

@@ -2,10 +2,18 @@
  * KPI and OKR tracking functionality for digital workers
  */
 
-import type { KPI, OKR } from './types.js'
+import type { KPI, OKR, KeyResult } from 'org.ai'
+import type { WorkerKPI, WorkerOKR } from './types.js'
+
+// Re-export KPI, OKR from org.ai for convenience
+export type { KPI, OKR, KeyResult } from 'org.ai'
 
 /**
  * Define and track Key Performance Indicators
+ *
+ * Uses WorkerKPI which has a simpler interface with `current` and `target`
+ * as required number fields. For the full org.ai KPI with `id`, `value`,
+ * `category`, and `history`, use the KPI type directly.
  *
  * @param definition - KPI definition or array of KPIs
  * @returns The defined KPI(s)
@@ -46,9 +54,9 @@ import type { KPI, OKR } from './types.js'
  * ])
  * ```
  */
-export function kpis(definition: KPI): KPI
-export function kpis(definition: KPI[]): KPI[]
-export function kpis(definition: KPI | KPI[]): KPI | KPI[] {
+export function kpis(definition: WorkerKPI): WorkerKPI
+export function kpis(definition: WorkerKPI[]): WorkerKPI[]
+export function kpis(definition: WorkerKPI | WorkerKPI[]): WorkerKPI | WorkerKPI[] {
   return definition
 }
 
@@ -66,9 +74,9 @@ export function kpis(definition: KPI | KPI[]): KPI | KPI[] {
  * console.log(updated.trend) // 'up' (automatically determined)
  * ```
  */
-kpis.update = (kpi: KPI, current: number): KPI => {
+kpis.update = (kpi: WorkerKPI, current: number): WorkerKPI => {
   // Determine trend
-  let trend: KPI['trend'] = 'stable'
+  let trend: WorkerKPI['trend'] = 'stable'
   if (current > kpi.current) {
     trend = 'up'
   } else if (current < kpi.current) {
@@ -94,7 +102,7 @@ kpis.update = (kpi: KPI, current: number): KPI => {
  * const progress = kpis.progress(kpi) // 0.75
  * ```
  */
-kpis.progress = (kpi: Pick<KPI, 'current' | 'target'>): number => {
+kpis.progress = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
   if (kpi.target === 0) return 0
   return Math.min(1, Math.max(0, kpi.current / kpi.target))
 }
@@ -112,7 +120,7 @@ kpis.progress = (kpi: Pick<KPI, 'current' | 'target'>): number => {
  * const onTrack = kpis.onTrack(kpi) // true (85% >= 80%)
  * ```
  */
-kpis.onTrack = (kpi: Pick<KPI, 'current' | 'target'>, threshold = 0.8): boolean => {
+kpis.onTrack = (kpi: Pick<WorkerKPI, 'current' | 'target'>, threshold = 0.8): boolean => {
   return kpis.progress(kpi) >= threshold
 }
 
@@ -128,7 +136,7 @@ kpis.onTrack = (kpi: Pick<KPI, 'current' | 'target'>, threshold = 0.8): boolean 
  * const gap = kpis.gap(kpi) // 25
  * ```
  */
-kpis.gap = (kpi: Pick<KPI, 'current' | 'target'>): number => {
+kpis.gap = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
   return kpi.target - kpi.current
 }
 
@@ -151,7 +159,7 @@ kpis.gap = (kpi: Pick<KPI, 'current' | 'target'>): number => {
  * // "Deployment Frequency: 5/10 deploys/week (50%, trending up)"
  * ```
  */
-kpis.format = (kpi: KPI): string => {
+kpis.format = (kpi: WorkerKPI): string => {
   const progress = kpis.progress(kpi)
   const progressPercent = Math.round(progress * 100)
   const trendEmoji = kpi.trend === 'up' ? '↑' : kpi.trend === 'down' ? '↓' : '→'
@@ -175,17 +183,15 @@ kpis.format = (kpi: KPI): string => {
  * ```
  */
 kpis.compare = (
-  previous: Pick<KPI, 'current' | 'target'>,
-  current: Pick<KPI, 'current' | 'target'>
+  previous: Pick<WorkerKPI, 'current' | 'target'>,
+  current: Pick<WorkerKPI, 'current' | 'target'>
 ): {
   delta: number
   percentChange: number
   improved: boolean
 } => {
   const delta = current.current - previous.current
-  const percentChange = previous.current !== 0
-    ? (delta / previous.current) * 100
-    : 0
+  const percentChange = previous.current !== 0 ? (delta / previous.current) * 100 : 0
 
   // Improved if we got closer to the target
   const previousGap = Math.abs(previous.target - previous.current)
@@ -201,6 +207,10 @@ kpis.compare = (
 
 /**
  * Define OKRs (Objectives and Key Results)
+ *
+ * Uses WorkerOKR which has WorkerRef for owner.
+ * For the full org.ai OKR with `id`, `status`, `period`, etc.,
+ * use the OKR type directly.
  *
  * @param definition - OKR definition
  * @returns The defined OKR
@@ -229,12 +239,12 @@ kpis.compare = (
  *       unit: '%',
  *     },
  *   ],
- *   owner: 'engineering-team',
+ *   owner: { id: 'engineering-team', type: 'agent' },
  *   dueDate: new Date('2024-03-31'),
  * })
  * ```
  */
-export function okrs(definition: OKR): OKR {
+export function okrs(definition: WorkerOKR): WorkerOKR {
   return definition
 }
 
@@ -250,7 +260,7 @@ export function okrs(definition: OKR): OKR {
  * console.log(progress) // 0.67 (67% complete)
  * ```
  */
-okrs.progress = (okr: OKR): number => {
+okrs.progress = (okr: WorkerOKR): number => {
   if (okr.keyResults.length === 0) return 0
 
   const totalProgress = okr.keyResults.reduce((sum, kr) => {
@@ -277,17 +287,11 @@ okrs.progress = (okr: OKR): number => {
  * )
  * ```
  */
-okrs.updateKeyResult = (
-  okr: OKR,
-  keyResultName: string,
-  current: number
-): OKR => {
+okrs.updateKeyResult = (okr: WorkerOKR, keyResultName: string, current: number): WorkerOKR => {
+  const { progress: _progress, ...rest } = okr
   return {
-    ...okr,
-    keyResults: okr.keyResults.map((kr) =>
-      kr.name === keyResultName ? { ...kr, current } : kr
-    ),
-    progress: undefined, // Will be recalculated
+    ...rest,
+    keyResults: okr.keyResults.map((kr) => (kr.name === keyResultName ? { ...kr, current } : kr)),
   }
 }
 
@@ -303,7 +307,7 @@ okrs.updateKeyResult = (
  * const onTrack = okrs.onTrack(engineeringOKR)
  * ```
  */
-okrs.onTrack = (okr: OKR, threshold = 0.7): boolean => {
+okrs.onTrack = (okr: WorkerOKR, threshold = 0.7): boolean => {
   return okrs.progress(okr) >= threshold
 }
 
@@ -323,7 +327,7 @@ okrs.onTrack = (okr: OKR, threshold = 0.7): boolean => {
  * // • Change Failure Rate: 15/5 % (300%)
  * ```
  */
-okrs.format = (okr: OKR): string => {
+okrs.format = (okr: WorkerOKR): string => {
   const progress = okrs.progress(okr)
   const progressPercent = Math.round(progress * 100)
 
@@ -332,12 +336,13 @@ okrs.format = (okr: OKR): string => {
     ...okr.keyResults.map((kr) => {
       const krProgress = kpis.progress(kr)
       const krPercent = Math.round(krProgress * 100)
-      return `  • ${kr.name}: ${kr.current}/${kr.target} ${kr.unit} (${krPercent}%)`
+      return `  - ${kr.name}: ${kr.current}/${kr.target} ${kr.unit} (${krPercent}%)`
     }),
   ]
 
   if (okr.owner) {
-    lines.push(`  Owner: ${okr.owner}`)
+    const ownerDisplay = typeof okr.owner === 'string' ? okr.owner : okr.owner.id
+    lines.push(`  Owner: ${ownerDisplay}`)
   }
 
   if (okr.dueDate) {

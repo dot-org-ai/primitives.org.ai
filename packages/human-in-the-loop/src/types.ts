@@ -4,17 +4,35 @@
 
 import type { AIFunctionDefinition, JSONSchema } from 'ai-functions'
 
+// Re-export consolidated types from org.ai
+export type { Role, Team, Goal, Goals, KPI, OKR, KeyResult } from 'org.ai'
+
+// Import for internal use
+import type { KPI, OKR } from 'org.ai'
+
+/**
+ * KPIs - legacy alias for KPI (kept for backward compatibility)
+ * @deprecated Use KPI from 'org.ai' instead
+ */
+export type KPIs = KPI
+
+/**
+ * OKRs - legacy alias for OKR (kept for backward compatibility)
+ * @deprecated Use OKR from 'org.ai' instead
+ */
+export type OKRs = OKR
+
 /**
  * Status of a human interaction request
  */
 export type HumanRequestStatus =
-  | 'pending'      // Waiting for human response
-  | 'in_progress'  // Being handled by a human
-  | 'completed'    // Completed successfully
-  | 'rejected'     // Rejected or declined
-  | 'timeout'      // Timed out waiting for response
-  | 'escalated'    // Escalated to higher authority
-  | 'cancelled'    // Cancelled before completion
+  | 'pending' // Waiting for human response
+  | 'in_progress' // Being handled by a human
+  | 'completed' // Completed successfully
+  | 'rejected' // Rejected or declined
+  | 'timeout' // Timed out waiting for response
+  | 'escalated' // Escalated to higher authority
+  | 'cancelled' // Cancelled before completion
 
 /**
  * Priority level for human requests
@@ -22,39 +40,7 @@ export type HumanRequestStatus =
 export type Priority = 'low' | 'normal' | 'high' | 'critical'
 
 /**
- * Human role definition
- */
-export interface Role {
-  /** Unique role identifier */
-  id: string
-  /** Role name */
-  name: string
-  /** Role description */
-  description?: string
-  /** Role capabilities/permissions */
-  capabilities?: string[]
-  /** Default escalation role */
-  escalatesTo?: string
-}
-
-/**
- * Team composition
- */
-export interface Team {
-  /** Team identifier */
-  id: string
-  /** Team name */
-  name: string
-  /** Team description */
-  description?: string
-  /** Team members (role IDs or user IDs) */
-  members: string[]
-  /** Team lead */
-  lead?: string
-}
-
-/**
- * Human worker/assignee
+ * Human worker/assignee - human-specific extension with contact channels
  */
 export interface Human {
   /** Unique identifier */
@@ -67,72 +53,13 @@ export interface Human {
   roles?: string[]
   /** Teams the human belongs to */
   teams?: string[]
-  /** Contact channels */
+  /** Contact channels - human-specific for notifications */
   channels?: {
     slack?: string
     email?: string
     sms?: string
     web?: boolean
   }
-}
-
-/**
- * Goals and objectives
- */
-export interface Goals {
-  /** Goal identifier */
-  id: string
-  /** Goals/objectives */
-  objectives: string[]
-  /** Success criteria */
-  successCriteria?: string[]
-  /** Key results */
-  keyResults?: string[]
-  /** Target date */
-  targetDate?: Date
-}
-
-/**
- * Key Performance Indicators
- */
-export interface KPIs {
-  /** KPI identifier */
-  id: string
-  /** Metric name */
-  name: string
-  /** Current value */
-  value: number
-  /** Target value */
-  target?: number
-  /** Unit of measurement */
-  unit?: string
-  /** Trend direction */
-  trend?: 'up' | 'down' | 'stable'
-}
-
-/**
- * Objectives and Key Results
- */
-export interface OKRs {
-  /** OKR identifier */
-  id: string
-  /** Objective statement */
-  objective: string
-  /** Key results */
-  keyResults: Array<{
-    /** Key result description */
-    description: string
-    /** Current progress (0-1) */
-    progress: number
-    /** Target value */
-    target?: number
-    /** Current value */
-    current?: number
-  }>
-  /** Quarter or time period */
-  period?: string
-  /** Owner */
-  owner?: string
 }
 
 /**
@@ -211,7 +138,8 @@ export interface ApprovalResponse {
 /**
  * Question request
  */
-export interface QuestionRequest extends HumanRequest<{ question: string; context?: unknown }, string> {
+export interface QuestionRequest
+  extends HumanRequest<{ question: string; context?: unknown }, string> {
   type: 'question'
   /** The question */
   question: string
@@ -224,7 +152,8 @@ export interface QuestionRequest extends HumanRequest<{ question: string; contex
 /**
  * Task request
  */
-export interface TaskRequest<TInput = unknown, TOutput = unknown> extends HumanRequest<TInput, TOutput> {
+export interface TaskRequest<TInput = unknown, TOutput = unknown>
+  extends HumanRequest<TInput, TOutput> {
   type: 'task'
   /** Task instructions */
   instructions: string
@@ -251,8 +180,7 @@ export interface DecisionRequest<TOptions extends string = string>
 /**
  * Review request
  */
-export interface ReviewRequest<TContent = unknown>
-  extends HumanRequest<TContent, ReviewResponse> {
+export interface ReviewRequest<TContent = unknown> extends HumanRequest<TContent, ReviewResponse> {
   type: 'review'
   /** Content to review */
   content: TContent

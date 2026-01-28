@@ -9,6 +9,18 @@
  * @packageDocumentation
  */
 
+import type { Role as OrgRole, RoleType as OrgRoleType, WorkerType as OrgWorkerType } from 'org.ai'
+import type { Worker, WorkerRef } from 'digital-workers'
+
+// Re-export for convenience
+export type { Worker, WorkerRef } from 'digital-workers'
+export type { OrgRole, OrgRoleType, OrgWorkerType }
+
+/**
+ * Re-exported WorkerType from org.ai (aliased as RoleWorkerType for backward compatibility)
+ */
+export type RoleWorkerType = OrgWorkerType
+
 // =============================================================================
 // Business Role - Bridges Worker Role and Authorization
 // =============================================================================
@@ -43,7 +55,10 @@ export type BusinessRoleType =
   | string
 
 /**
- * Business Role - extends WorkerRole with authorization and task capabilities
+ * Business Role - extends org.ai Role with authorization and task capabilities
+ *
+ * Composes with org.ai Role to provide additional business-specific properties
+ * like authorization permissions, task capabilities, and compensation.
  *
  * @example
  * ```ts
@@ -53,6 +68,9 @@ export type BusinessRoleType =
  *   type: 'manager',
  *   department: 'Engineering',
  *   description: 'Leads engineering team and makes technical decisions',
+ *
+ *   // From org.ai Role
+ *   skills: ['TypeScript', 'Architecture', 'Team Leadership'],
  *
  *   // Business responsibilities
  *   responsibilities: [
@@ -78,27 +96,9 @@ export type BusinessRoleType =
  * }
  * ```
  */
-export interface BusinessRole {
-  /** Unique role identifier */
-  id: string
-
-  /** Role display name */
-  name: string
-
-  /** Role type classification */
+export interface BusinessRole extends Omit<OrgRole, 'permissions'> {
+  /** Role type classification (overrides OrgRole.type with business-specific types) */
   type: BusinessRoleType
-
-  /** Department or team */
-  department?: string
-
-  /** Human-readable description */
-  description?: string
-
-  /** Key responsibilities */
-  responsibilities?: string[]
-
-  /** Required skills */
-  skills?: string[]
 
   /**
    * Authorization permissions by resource type
@@ -106,6 +106,8 @@ export interface BusinessRole {
    * Maps resource types to allowed actions:
    * - 'read', 'edit', 'delete', 'manage' (standard)
    * - 'act:*' or 'act:verb' (domain-specific verbs)
+   *
+   * Note: This differs from OrgRole.permissions which is string[]
    *
    * @example
    * ```ts
@@ -118,32 +120,8 @@ export interface BusinessRole {
    */
   permissions?: Record<string, string[]>
 
-  /** Task types this role can handle */
-  canHandle?: string[]
-
-  /** Task types this role can delegate to others */
-  canDelegate?: string[]
-
-  /** Request types this role can approve */
-  canApprove?: string[]
-
-  /** Escalation path - role to escalate to */
-  escalateTo?: string
-
-  /** Reports to - manager role */
-  reportsTo?: string
-
-  /** Worker type preference: 'ai' | 'human' | 'hybrid' */
-  workerType?: 'ai' | 'human' | 'hybrid'
-
-  /** Level in hierarchy (1 = entry, higher = more senior) */
-  level?: number
-
   /** Compensation band */
   compensationBand?: string
-
-  /** Additional metadata */
-  metadata?: Record<string, unknown>
 }
 
 // =============================================================================
@@ -263,6 +241,8 @@ export interface TaskAssignment {
 
 /**
  * Reference to an assignee (worker, team, or role)
+ *
+ * Compatible with digital-workers WorkerRef for worker assignments.
  */
 export interface AssigneeRef {
   /** Type of assignee */
@@ -271,6 +251,34 @@ export interface AssigneeRef {
   id: string
   /** Display name */
   name?: string
+}
+
+/**
+ * Convert a digital-workers WorkerRef to an AssigneeRef
+ */
+export function workerRefToAssignee(workerRef: WorkerRef): AssigneeRef {
+  const result: AssigneeRef = {
+    type: 'worker',
+    id: workerRef.id,
+  }
+  if (workerRef.name !== undefined) {
+    result.name = workerRef.name
+  }
+  return result
+}
+
+/**
+ * Convert an AssigneeRef to a digital-workers WorkerRef (if type is 'worker')
+ */
+export function assigneeToWorkerRef(assignee: AssigneeRef): WorkerRef | null {
+  if (assignee.type !== 'worker') return null
+  const result: WorkerRef = {
+    id: assignee.id,
+  }
+  if (assignee.name !== undefined) {
+    result.name = assignee.name
+  }
+  return result
 }
 
 // =============================================================================
@@ -559,11 +567,7 @@ export function createBusinessRole(
 /**
  * Check if a role has permission for an action on a resource type
  */
-export function hasPermission(
-  role: BusinessRole,
-  resourceType: string,
-  action: string
-): boolean {
+export function hasPermission(role: BusinessRole, resourceType: string, action: string): boolean {
   if (!role.permissions) return false
 
   // Check wildcard permissions
@@ -623,7 +627,7 @@ export function findRoleForTask(
   rules: TaskRoutingRule[],
   context?: { amount?: number; skills?: string[] }
 ): TaskRoutingRule | undefined {
-  const matchingRules = rules.filter(rule => rule.taskType === taskType)
+  const matchingRules = rules.filter((rule) => rule.taskType === taskType)
 
   if (matchingRules.length === 0) return undefined
 
@@ -633,7 +637,7 @@ export function findRoleForTask(
       if (rule.escalateAbove && context.amount > rule.escalateAbove) {
         // Find the escalated rule
         const escalatedRule = rules.find(
-          r => r.taskType === taskType && r.requiredRole === rule.escalateTo
+          (r) => r.taskType === taskType && r.requiredRole === rule.escalateTo
         )
         if (escalatedRule) return escalatedRule
       }
@@ -651,7 +655,9 @@ export function createTaskAssignment(
   taskId: string,
   taskType: string,
   assignee: AssigneeRef,
-  options?: Partial<Omit<TaskAssignment, 'id' | 'taskId' | 'taskType' | 'assignee' | 'status' | 'assignedAt'>>
+  options?: Partial<
+    Omit<TaskAssignment, 'id' | 'taskId' | 'taskType' | 'assignee' | 'status' | 'assignedAt'>
+  >
 ): TaskAssignment {
   return {
     id: `assign_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,

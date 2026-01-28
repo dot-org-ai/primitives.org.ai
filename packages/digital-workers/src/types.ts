@@ -19,6 +19,12 @@
 import type { SimpleSchema } from 'ai-functions'
 import type { CapabilityTier, CapabilityProfile } from './capability-tiers.js'
 
+// Import consolidated types from org.ai
+import type { Role, Team, Goal, Goals, KPI, OKR, TeamMember, KeyResult } from 'org.ai'
+
+// Re-export org.ai types for convenience
+export type { Role, Team, Goal, Goals, KPI, OKR, TeamMember, KeyResult }
+
 // ============================================================================
 // Worker Types
 // ============================================================================
@@ -32,10 +38,10 @@ export type WorkerType = 'agent' | 'human'
  * Worker status
  */
 export type WorkerStatus =
-  | 'available'    // Ready to accept work
-  | 'busy'         // Currently working
-  | 'away'         // Not available (break, offline)
-  | 'offline'      // Disconnected
+  | 'available' // Ready to accept work
+  | 'busy' // Currently working
+  | 'away' // Not available (break, offline)
+  | 'offline' // Disconnected
 
 // ============================================================================
 // Contact Channel Types
@@ -45,17 +51,17 @@ export type WorkerStatus =
  * Contact channel names - how workers can be reached
  */
 export type ContactChannel =
-  | 'email'      // Email communication
-  | 'slack'      // Slack workspace
-  | 'teams'      // Microsoft Teams
-  | 'discord'    // Discord server
-  | 'phone'      // Voice calls
-  | 'sms'        // SMS text messages
-  | 'whatsapp'   // WhatsApp messaging
-  | 'telegram'   // Telegram messaging
-  | 'web'        // Web UI/dashboard
-  | 'api'        // Programmatic API
-  | 'webhook'    // Webhook callbacks
+  | 'email' // Email communication
+  | 'slack' // Slack workspace
+  | 'teams' // Microsoft Teams
+  | 'discord' // Discord server
+  | 'phone' // Voice calls
+  | 'sms' // SMS text messages
+  | 'whatsapp' // WhatsApp messaging
+  | 'telegram' // Telegram messaging
+  | 'web' // Web UI/dashboard
+  | 'api' // Programmatic API
+  | 'webhook' // Webhook callbacks
 
 /**
  * Email contact - simple string or config object
@@ -259,11 +265,15 @@ export interface WorkerRef {
 // ============================================================================
 
 /**
- * Team - group of workers with shared contacts
+ * WorkerTeam - group of workers with shared contacts
+ *
+ * This is the digital-workers team interface that includes
+ * worker-specific contact channels. For the base Team type,
+ * use Team from org.ai.
  *
  * @example
  * ```ts
- * const engineering: Team = {
+ * const engineering: WorkerTeam = {
  *   id: 'team_eng',
  *   name: 'Engineering',
  *   members: [alice, bob, deployBot],
@@ -274,14 +284,22 @@ export interface WorkerRef {
  * }
  * ```
  */
-export interface Team {
+export interface WorkerTeam {
+  /** Team identifier */
   id: string
+  /** Team name */
   name: string
+  /** Team description */
   description?: string
+  /** Team members as WorkerRefs */
   members: WorkerRef[]
+  /** Worker-specific contact channels */
   contacts: Contacts
+  /** Team lead as WorkerRef */
   lead?: WorkerRef
+  /** Team goals */
   goals?: string[]
+  /** Additional metadata */
   metadata?: Record<string, unknown>
 }
 
@@ -623,9 +641,7 @@ export interface WorkerContext {
   /**
    * Make a decision (AI or human)
    */
-  decide<T = string>(
-    options: DecideOptions<T>
-  ): Promise<DecideResult<T>>
+  decide<T = string>(options: DecideOptions<T>): Promise<DecideResult<T>>
 }
 
 // ============================================================================
@@ -679,53 +695,96 @@ export interface DecideOptions<T = string> {
 // ============================================================================
 
 /**
- * Worker role definition
+ * WorkerRole - extends Role from org.ai with worker-specific requirements
+ *
+ * Inherits all fields from the base Role type (id, name, description, skills,
+ * permissions, tools, outputs, type, department, etc.) and makes responsibilities
+ * required for worker role definitions.
+ *
+ * @example
+ * ```ts
+ * const engineerRole: WorkerRole = {
+ *   id: 'role_engineer',
+ *   name: 'Software Engineer',
+ *   description: 'Builds and maintains software',
+ *   skills: ['typescript', 'react', 'node'],
+ *   responsibilities: ['write code', 'review PRs', 'fix bugs'],
+ * }
+ * ```
  */
-export interface WorkerRole {
-  name: string
-  description: string
+export interface WorkerRole extends Role {
+  /** List of responsibilities (required for worker roles) */
   responsibilities: string[]
-  skills?: string[]
-  permissions?: string[]
-  type?: 'ai' | 'human' | 'hybrid'
 }
 
 /**
- * Worker goals
+ * WorkerGoals - categorized goals with metrics
+ *
+ * Organizes goals by timeframe (short-term, long-term, strategic)
+ * and includes associated KPI metrics for tracking.
+ *
+ * Note: org.ai's Goals is a simpler type (Goal[]). WorkerGoals
+ * provides additional structure for worker/team goal planning
+ * with string-based goals for simplicity.
  */
 export interface WorkerGoals {
+  /** Short-term goals (days to weeks) */
   shortTerm: string[]
+  /** Long-term goals (months to year) */
   longTerm: string[]
+  /** Strategic goals (multi-year vision) */
   strategic?: string[]
-  metrics?: KPI[]
+  /** Associated KPI metrics */
+  metrics?: WorkerKPI[]
 }
 
 /**
- * KPI definition
+ * WorkerKPI - simplified KPI for worker goals
+ *
+ * A simpler KPI interface used in WorkerGoals.metrics.
+ * For the full KPI type with id, category, history, etc.,
+ * use KPI from org.ai.
  */
-export interface KPI {
+export interface WorkerKPI {
+  /** KPI name */
   name: string
+  /** Description of what this measures */
   description: string
+  /** Current value */
   current: number
+  /** Target value */
   target: number
+  /** Unit of measurement */
   unit: string
+  /** Trend direction */
   trend?: 'up' | 'down' | 'stable'
+  /** Measurement period */
   period?: string
 }
 
 /**
- * OKR definition
+ * WorkerOKR - worker-specific OKR definition
+ *
+ * Uses WorkerRef for owner and simplified key results with
+ * required `current` and `target` fields for progress tracking.
+ * For the full org.ai OKR with `id`, `status`, `period`, etc.,
+ * import OKR from 'org.ai' directly.
  */
-export interface OKR {
+export interface WorkerOKR {
+  /** The objective - what you want to achieve */
   objective: string
+  /** Measurable key results */
   keyResults: Array<{
     name: string
     current: number
     target: number
     unit: string
   }>
+  /** Owner as WorkerRef */
   owner?: WorkerRef
+  /** Due date */
   dueDate?: Date
+  /** Overall progress percentage */
   progress?: number
 }
 
@@ -784,13 +843,7 @@ export interface DoOptions {
 /**
  * Content type for generation
  */
-export type GenerationType =
-  | 'text'
-  | 'code'
-  | 'structured'
-  | 'image'
-  | 'video'
-  | 'audio'
+export type GenerationType = 'text' | 'code' | 'structured' | 'image' | 'video' | 'audio'
 
 /**
  * Options for content generation
@@ -842,10 +895,8 @@ export interface TypeCheckResult<T = unknown> {
 }
 
 // ============================================================================
-// Team Alias
+// Team Alias - Backwards Compatibility
 // ============================================================================
 
-/**
- * @deprecated Use Team instead
- */
-export type WorkerTeam = Team
+// WorkerTeam is now the primary type that extends Team from org.ai
+// The base Team type is re-exported from org.ai

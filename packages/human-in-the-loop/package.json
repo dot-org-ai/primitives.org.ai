@@ -25,7 +25,8 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
-    "digital-workers": "workspace:*"
+    "digital-workers": "workspace:*",
+    "org.ai": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

@@ -2,7 +2,9 @@
  * Goals definition for digital workers
  */
 
-import type { WorkerGoals, KPI } from './types.js'
+import type { WorkerGoals, WorkerKPI } from './types.js'
+
+// Note: Goal, Goals types are re-exported from types.ts which imports from org.ai
 
 /**
  * Define worker goals
@@ -15,7 +17,7 @@ import type { WorkerGoals, KPI } from './types.js'
  *
  * @example
  * ```ts
- * const engineeringGoals = Goals({
+ * const engineeringGoals = defineGoals({
  *   shortTerm: [
  *     'Complete Q1 roadmap features',
  *     'Reduce bug backlog by 30%',
@@ -55,7 +57,7 @@ import type { WorkerGoals, KPI } from './types.js'
  *
  * @example
  * ```ts
- * const supportGoals = Goals({
+ * const supportGoals = defineGoals({
  *   shortTerm: [
  *     'Achieve 95% customer satisfaction',
  *     'Reduce average response time to < 5 min',
@@ -78,7 +80,7 @@ import type { WorkerGoals, KPI } from './types.js'
  * })
  * ```
  */
-export function Goals(definition: WorkerGoals): WorkerGoals {
+export function defineGoals(definition: WorkerGoals): WorkerGoals {
   return definition
 }
 
@@ -91,10 +93,10 @@ export function Goals(definition: WorkerGoals): WorkerGoals {
  *
  * @example
  * ```ts
- * const updated = Goals.addShortTerm(engineeringGoals, 'Complete security audit')
+ * const updated = defineGoals.addShortTerm(engineeringGoals, 'Complete security audit')
  * ```
  */
-Goals.addShortTerm = (goals: WorkerGoals, goal: string): WorkerGoals => ({
+defineGoals.addShortTerm = (goals: WorkerGoals, goal: string): WorkerGoals => ({
   ...goals,
   shortTerm: [...goals.shortTerm, goal],
 })
@@ -108,10 +110,10 @@ Goals.addShortTerm = (goals: WorkerGoals, goal: string): WorkerGoals => ({
  *
  * @example
  * ```ts
- * const updated = Goals.addLongTerm(engineeringGoals, 'Build ML platform')
+ * const updated = defineGoals.addLongTerm(engineeringGoals, 'Build ML platform')
  * ```
  */
-Goals.addLongTerm = (goals: WorkerGoals, goal: string): WorkerGoals => ({
+defineGoals.addLongTerm = (goals: WorkerGoals, goal: string): WorkerGoals => ({
   ...goals,
   longTerm: [...goals.longTerm, goal],
 })
@@ -125,10 +127,10 @@ Goals.addLongTerm = (goals: WorkerGoals, goal: string): WorkerGoals => ({
  *
  * @example
  * ```ts
- * const updated = Goals.addStrategic(engineeringGoals, 'Become carbon neutral')
+ * const updated = defineGoals.addStrategic(engineeringGoals, 'Become carbon neutral')
  * ```
  */
-Goals.addStrategic = (goals: WorkerGoals, goal: string): WorkerGoals => ({
+defineGoals.addStrategic = (goals: WorkerGoals, goal: string): WorkerGoals => ({
   ...goals,
   strategic: [...(goals.strategic || []), goal],
 })
@@ -142,7 +144,7 @@ Goals.addStrategic = (goals: WorkerGoals, goal: string): WorkerGoals => ({
  *
  * @example
  * ```ts
- * const updated = Goals.addMetric(engineeringGoals, {
+ * const updated = defineGoals.addMetric(engineeringGoals, {
  *   name: 'Code Quality',
  *   description: 'Code quality score from SonarQube',
  *   current: 85,
@@ -153,7 +155,7 @@ Goals.addStrategic = (goals: WorkerGoals, goal: string): WorkerGoals => ({
  * })
  * ```
  */
-Goals.addMetric = (goals: WorkerGoals, kpi: KPI): WorkerGoals => ({
+defineGoals.addMetric = (goals: WorkerGoals, kpi: WorkerKPI): WorkerGoals => ({
   ...goals,
   metrics: [...(goals.metrics || []), kpi],
 })
@@ -168,22 +170,26 @@ Goals.addMetric = (goals: WorkerGoals, kpi: KPI): WorkerGoals => ({
  *
  * @example
  * ```ts
- * const updated = Goals.updateMetric(engineeringGoals, 'Deployment Frequency', {
+ * const updated = defineGoals.updateMetric(engineeringGoals, 'Deployment Frequency', {
  *   current: 8,
  *   trend: 'up',
  * })
  * ```
  */
-Goals.updateMetric = (
+defineGoals.updateMetric = (
   goals: WorkerGoals,
   name: string,
-  updates: Partial<Omit<KPI, 'name'>>
-): WorkerGoals => ({
-  ...goals,
-  metrics: goals.metrics?.map((kpi) =>
+  updates: Partial<Omit<WorkerKPI, 'name'>>
+): WorkerGoals => {
+  const updatedMetrics = goals.metrics?.map((kpi) =>
     kpi.name === name ? { ...kpi, ...updates } : kpi
-  ),
-})
+  )
+  const result: WorkerGoals = { ...goals }
+  if (updatedMetrics) {
+    result.metrics = updatedMetrics
+  }
+  return result
+}
 
 /**
  * Get progress for a KPI (0-1)
@@ -194,10 +200,10 @@ Goals.updateMetric = (
  * @example
  * ```ts
  * const kpi = { current: 75, target: 100 }
- * const progress = Goals.progress(kpi) // 0.75
+ * const progress = defineGoals.progress(kpi) // 0.75
  * ```
  */
-Goals.progress = (kpi: Pick<KPI, 'current' | 'target'>): number => {
+defineGoals.progress = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
   if (kpi.target === 0) return 0
   return Math.min(1, Math.max(0, kpi.current / kpi.target))
 }
@@ -212,9 +218,12 @@ Goals.progress = (kpi: Pick<KPI, 'current' | 'target'>): number => {
  * @example
  * ```ts
  * const kpi = { current: 85, target: 100 }
- * const onTrack = Goals.onTrack(kpi) // true (85% >= 80% threshold)
+ * const onTrack = defineGoals.onTrack(kpi) // true (85% >= 80% threshold)
  * ```
  */
-Goals.onTrack = (kpi: Pick<KPI, 'current' | 'target'>, threshold = 0.8): boolean => {
-  return Goals.progress(kpi) >= threshold
+defineGoals.onTrack = (kpi: Pick<WorkerKPI, 'current' | 'target'>, threshold = 0.8): boolean => {
+  return defineGoals.progress(kpi) >= threshold
 }
+
+// Legacy alias for backward compatibility
+export { defineGoals as Goals }

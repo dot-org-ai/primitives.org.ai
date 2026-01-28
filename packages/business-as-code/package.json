@@ -21,7 +21,9 @@
   },
   "dependencies": {
     "ai-database": "workspace:*",
-    "ai-functions": "workspace:*"
+    "ai-functions": "workspace:*",
+    "digital-workers": "workspace:*",
+    "org.ai": "workspace:*"
   },
   "keywords": [
     "business",

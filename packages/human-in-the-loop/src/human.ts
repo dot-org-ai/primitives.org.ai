@@ -2,13 +2,9 @@
  * Human-in-the-loop primitives implementation
  */
 
+import type { Role, Team, Goal, KPI, OKR } from 'org.ai'
 import type {
-  Role,
-  Team,
   Human as HumanType,
-  Goals,
-  KPIs,
-  OKRs,
   HumanOptions,
   HumanStore,
   ApprovalRequest,
@@ -570,7 +566,7 @@ export class HumanManager {
   /**
    * Define or update goals
    */
-  defineGoals(goals: Goals): Goals {
+  defineGoals(goals: Goal[]): Goal[] {
     // In a real implementation, this would persist goals
     return goals
   }
@@ -578,17 +574,17 @@ export class HumanManager {
   /**
    * Track KPIs
    */
-  trackKPIs(kpis: KPIs): KPIs {
+  trackKPIs(kpi: KPI): KPI {
     // In a real implementation, this would persist KPIs
-    return kpis
+    return kpi
   }
 
   /**
    * Define or update OKRs
    */
-  defineOKRs(okrs: OKRs): OKRs {
+  defineOKRs(okr: OKR): OKR {
     // In a real implementation, this would persist OKRs
-    return okrs
+    return okr
   }
 
   /**

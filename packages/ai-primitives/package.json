@@ -14,7 +14,12 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "vitest run --config e2e/node/vitest.config.ts",
+    "test:e2e:node": "vitest run --config e2e/node/vitest.config.ts",
+    "test:e2e:browser": "vitest run --config e2e/browser/vitest.config.ts",
+    "test:e2e:worker": "vitest run --config e2e/worker/vitest.config.ts",
+    "test:e2e:all": "pnpm test:e2e:node && pnpm test:e2e:browser && pnpm test:e2e:worker"
   },
   "dependencies": {
     "ai-functions": "workspace:*",

@@ -40,8 +40,8 @@ export function kpi(config: {
   name: string
   description?: string
   value: number | string
-  target?: number | string
-  unit?: string
+  target: number | string
+  unit: string
   frequency?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
 }): KPIInstance {
   const state: KPI = {
@@ -91,16 +91,14 @@ export function kpi(config: {
   }
 
   /**
-   * Get progress towards target
+   * Get progress towards target (as percentage 0-100)
    */
-  function getProgress(): number | null {
-    if (!state.target) return null
-
+  function getProgress(): number {
     if (typeof state.value === 'number' && typeof state.target === 'number') {
       return Math.min(100, (state.value / state.target) * 100)
     }
-
-    return null
+    // For string values, return 0 (cannot calculate numeric progress)
+    return 0
   }
 
   /**
@@ -151,8 +149,8 @@ export interface KPIInstance extends KPI {
   update(value: number | string): void
   /** Add historical data point */
   addHistory(value: number | string, timestamp?: Date): void
-  /** Get progress towards target */
-  getProgress(): number | null
+  /** Get progress towards target (as percentage 0-100) */
+  getProgress(): number
   /** Get trend direction */
   getTrend(): 'up' | 'down' | 'stable'
   /** Get historical data */
@@ -184,18 +182,20 @@ export interface KPIInstance extends KPI {
  * const summary = metrics.getSummary()
  * ```
  */
-export function kpis(configs: Array<{
-  name: string
-  description?: string
-  value: number | string
-  target?: number | string
-  unit?: string
-  frequency?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
-}>): KPIsCollection {
+export function kpis(
+  configs: Array<{
+    name: string
+    description?: string
+    value: number | string
+    target: number | string
+    unit: string
+    frequency?: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+  }>
+): KPIsCollection {
   const kpiMap = new Map<string, KPIInstance>()
 
   // Create KPI instances
-  configs.forEach(config => {
+  configs.forEach((config) => {
     const instance = kpi(config)
     const key = config.name.toLowerCase().replace(/\s+/g, '')
     kpiMap.set(key, instance)
@@ -228,14 +228,14 @@ export function kpis(configs: Array<{
     averageProgress: number
   } {
     const all = getAll()
-    const withTargets = all.filter(k => k.target !== undefined)
-    const onTrack = withTargets.filter(k => {
+    const withTargets = all.filter((k) => k.target !== undefined)
+    const onTrack = withTargets.filter((k) => {
       const progress = k.getProgress()
-      return progress !== null && progress >= 70
+      return progress >= 70
     })
-    const atRisk = withTargets.filter(k => {
+    const atRisk = withTargets.filter((k) => {
       const progress = k.getProgress()
-      return progress !== null && progress < 70
+      return progress < 70
     })
 
     const totalProgress = withTargets.reduce((sum, k) => {
@@ -252,7 +252,7 @@ export function kpis(configs: Array<{
   }
 
   function toJSON(): KPI[] {
-    return getAll().map(k => k.toJSON())
+    return getAll().map((k) => k.toJSON())
   }
 
   return proxy as KPIsCollection
@@ -346,11 +346,8 @@ export function okr(config: {
   /**
    * Update a key result
    */
-  function updateKeyResult(
-    keyResultId: string,
-    updates: Partial<Omit<KeyResult, 'id'>>
-  ): void {
-    const kr = state.keyResults.find(k => k.id === keyResultId)
+  function updateKeyResult(keyResultId: string, updates: Partial<Omit<KeyResult, 'id'>>): void {
+    const kr = state.keyResults.find((k) => k.id === keyResultId)
     if (!kr) {
       throw new Error(`Key result with id ${keyResultId} not found`)
     }
@@ -386,7 +383,7 @@ export function okr(config: {
    * Get a specific key result
    */
   function getKeyResult(keyResultId: string): KeyResult | undefined {
-    return state.keyResults.find(k => k.id === keyResultId)
+    return state.keyResults.find((k) => k.id === keyResultId)
   }
 
   /**
@@ -460,41 +457,40 @@ export interface OKRInstance extends OKR {
  * const summary = objectives.getSummary()
  * ```
  */
-export function okrs(configs: Array<{
-  objective: string
-  description?: string
-  keyResults: KeyResult[]
-  period?: string
-  owner?: string
-}>): OKRsCollection {
-  const okrList = configs.map(config => okr(config))
+export function okrs(
+  configs: Array<{
+    objective: string
+    description?: string
+    keyResults: KeyResult[]
+    period?: string
+    owner?: string
+  }>
+): OKRsCollection {
+  const okrList = configs.map((config) => okr(config))
 
   return {
     getAll() {
       return okrList
     },
     get(id: string) {
-      return okrList.find(o => o.id === id)
+      return okrList.find((o) => o.id === id)
     },
     getByOwner(owner: string) {
-      return okrList.filter(o => o.owner === owner)
+      return okrList.filter((o) => o.owner === owner)
     },
     getSummary() {
-      const totalProgress = okrList.reduce(
-        (sum, o) => sum + o.getProgress(),
-        0
-      )
+      const totalProgress = okrList.reduce((sum, o) => sum + o.getProgress(), 0)
 
       return {
         total: okrList.length,
-        onTrack: okrList.filter(o => o.getProgress() >= 70).length,
-        atRisk: okrList.filter(o => o.getProgress() < 50).length,
-        completed: okrList.filter(o => o.status === 'completed').length,
+        onTrack: okrList.filter((o) => o.getProgress() >= 70).length,
+        atRisk: okrList.filter((o) => o.getProgress() < 50).length,
+        completed: okrList.filter((o) => o.status === 'completed').length,
         averageProgress: okrList.length > 0 ? totalProgress / okrList.length : 0,
       }
     },
     toJSON() {
-      return okrList.map(o => o.toJSON())
+      return okrList.map((o) => o.toJSON())
     },
   }
 }
@@ -568,8 +564,8 @@ export function updateKeyResultStatus(kr: KeyResult): void {
 export function createKeyResult(config: {
   id: string
   description: string
-  current: number | string
-  target: number | string
+  current: number
+  target: number
   unit?: string
 }): KeyResult {
   const kr: KeyResult = {

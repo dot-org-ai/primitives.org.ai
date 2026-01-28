@@ -1,14 +1,16 @@
 {
   "name": "digital-objects",
-  "main": "dist/ns.js",
+  "main": "dist/worker.js",
   "compatibility_date": "2024-09-25",
   "durable_objects": {
     "bindings": [
-      { "name": "NS", "class_name": "NS" }
+      { "name": "NS", "class_name": "NS" },
+      { "name": "DIGITAL_OBJECTS", "class_name": "DigitalObjectsWorker" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_classes": ["NS"] }
+    { "tag": "v1", "new_classes": ["NS"] },
+    { "tag": "v2", "new_classes": ["DigitalObjectsWorker"] }
   ],
   "r2_buckets": [
     { "binding": "STORAGE", "bucket_name": "digital-objects-storage" }

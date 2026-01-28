@@ -45,7 +45,172 @@
 // - Various type guards: isWorker, isAgent, isHuman, isTool, isStartup, etc.
 // - Factory functions: createAgent, createHuman
 
-export * from '@org.ai/types'
+// Re-export from @org.ai/types, excluding WorkerType to avoid conflict with consolidated types
+export {
+  // Runtime markers
+  AIFunction,
+  EventHandler,
+  WorkflowContext,
+  RelationshipOperator,
+  ParsedField,
+  Thing as ThingMarker,
+  ThingsMarker,
+  ListOptionsMarker,
+  ListResultMarker,
+  // Types
+  type AIFunctionType,
+  type EventHandlerType,
+  type WorkflowContextType,
+  type RelationshipOperatorType,
+  type ParsedFieldType,
+  // Thing types
+  type Thing,
+  type ThingDO,
+  // Noun and Verb types
+  type Noun,
+  type Verb,
+  StandardVerbs,
+  type StandardVerb,
+  // Collection types
+  type Things,
+  type ThingsDO,
+  type Collection,
+  THINGS_TYPE,
+  COLLECTION_TYPE,
+  type SortDirection,
+  type SortSpec,
+  type ListOptions,
+  type PaginationInfo,
+  type ListResult,
+  // Event types
+  type Event,
+  type EventWhat,
+  type EventWho,
+  type EventWhen,
+  type EventWhere,
+  type EventWhy,
+  type EventHow,
+  // Field types
+  type FieldType,
+  type FieldConstraints,
+  type FieldDefinition,
+  // Branded ID types
+  type ThingId,
+  type NounId,
+  type VerbId,
+  type ActionId,
+  type EventId,
+  isThingId,
+  isActionId,
+  isEventId,
+  // Worker types (excluding WorkerType to avoid conflict)
+  WorkerStatus,
+  type WorkerStatusType,
+  WORKER_TYPE,
+  AGENT_TYPE,
+  HUMAN_TYPE,
+  WorkerTypes,
+  Worker,
+  Agent,
+  Human,
+  type WorkerType as BaseWorkerType,
+  type AgentType,
+  type HumanType,
+  WorkerSchema,
+  AgentSchema,
+  HumanSchema,
+  isWorker,
+  isAgent,
+  isHuman,
+  createAgent,
+  createHuman,
+  // Tool types
+  TOOL_TYPE,
+  StandardToolTypes,
+  StandardCapabilities,
+  Tool,
+  ToolInput,
+  ToolOutput,
+  ToolParameter,
+  ToolExecutionResult,
+  ToolValidationError,
+  ToolValidationResult,
+  ToolExecutor,
+  ExecutableTool,
+  ValidatableTool,
+  Tools,
+  Toolbox,
+  ToolCapability,
+  type ToolParameterType,
+  type ToolInputType,
+  type ToolOutputType,
+  type ToolExecutionResultType,
+  type ToolValidationErrorType,
+  type ToolValidationResultType,
+  type ToolExecutorType,
+  type ToolCapabilityType,
+  type ToolType,
+  type ExecutableToolType,
+  type ValidatableToolType,
+  type ToolsType,
+  type ToolboxType,
+  type ToolId,
+  ToolId as ToolIdMarker,
+  isToolId,
+  isTool,
+  isToolParameter,
+  isToolExecutionResult,
+  isToolValidationError,
+  // Business model types
+  LeanCanvasMarker,
+  LeanCanvas,
+  LEAN_CANVAS_TYPE,
+  type LeanCanvasType,
+  isLeanCanvas,
+  StoryBrandMarker,
+  StoryBrand,
+  STORY_BRAND_TYPE,
+  type StoryBrandType,
+  isStoryBrand,
+  FounderMarker,
+  Founder,
+  FounderRole,
+  FOUNDER_TYPE,
+  FounderRoles,
+  type FounderRoleType,
+  type FounderType,
+  isFounder,
+  // Startup types
+  Startup,
+  StartupStage,
+  STARTUP_TYPE,
+  type StartupStageType,
+  type StartupType,
+  isStartup,
+  // ICP types
+  ICP,
+  ICP_TYPE,
+  type ICPType,
+  isICP,
+} from '@org.ai/types'
+
+// ============================================================================
+// CONSOLIDATED TYPES - New unified types for org.ai
+// ============================================================================
+// These consolidated types combine the best features from multiple packages:
+// - digital-workers
+// - autonomous-agents
+// - human-in-the-loop
+// - business-as-code
+//
+// Includes:
+// - Role, RoleType, isRole, createRole - Unified role definitions
+// - Team, TeamMember, isTeam, createTeam - Team organization types
+// - Goal, Goals, GoalStatus, GoalCategory, isGoal - Goal tracking types
+// - KPI, KPIDefinition, KPICategory, KPITrend, isKPI - Key performance indicators
+// - OKR, KeyResult, OKRStatus, isOKR - Objectives and key results
+
+export * from './types/index.js'
 
 // ============================================================================
 // PACKAGE RE-EXPORTS - Backward compatibility (deprecated)
@@ -354,22 +519,27 @@ export type {
 
 /** @deprecated Import from 'ai-primitives' instead. */
 // Workflows - event-driven workflows with $ context
+// Note: WorkflowContext and EventHandler are also exported from @org.ai/types
+// These are aliased as WorkflowsContext and WorkflowEventHandler to avoid conflicts
 export { Workflow, on, every, send } from 'ai-workflows'
 export type {
-  WorkflowContext,
+  WorkflowContext as WorkflowsContext,
   WorkflowDefinition,
-  EventHandler,
+  EventHandler as WorkflowEventHandler,
   ScheduleHandler,
 } from 'ai-workflows'
 
 /** @deprecated Import from 'ai-primitives' instead. */
 // Autonomous agents
-export { Agent as AutonomousAgent, Role, Team, Goals } from 'autonomous-agents'
+// Note: Role, Team, Goals, Goal are now exported from consolidated types (./types/index.js)
+// Legacy versions are aliased with 'Legacy' prefix for backward compatibility
+export { Agent as AutonomousAgent } from 'autonomous-agents'
+export { Role as LegacyRole, Team as LegacyTeam, Goals as LegacyGoals } from 'autonomous-agents'
 export type {
   AgentConfig,
   AgentMode,
   AgentStatus,
-  Goal,
+  Goal as LegacyGoal,
   ApprovalRequest,
   ApprovalResult,
 } from 'autonomous-agents'
@@ -436,11 +606,13 @@ export type {
 
 /** @deprecated Import from 'ai-primitives' instead. */
 // Business as code - business logic primitives
+// Note: KPI, OKR, KeyResult are now exported from consolidated types (./types/index.js)
+// Legacy versions are aliased with 'Legacy' prefix for backward compatibility
 export { Business, kpis, okrs, financials } from 'business-as-code'
 export type {
-  KPIDefinition as KPI,
-  OKRDefinition as OKR,
-  KeyResult,
+  KPIDefinition as LegacyKPI,
+  OKRDefinition as LegacyOKR,
+  KeyResult as LegacyKeyResult,
   FinancialMetrics,
 } from 'business-as-code'
 

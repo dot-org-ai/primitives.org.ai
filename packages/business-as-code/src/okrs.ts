@@ -1,8 +1,106 @@
 /**
  * Objectives and Key Results (OKRs) management
+ *
+ * Uses org.ai OKR types for standardized OKR definitions across the ecosystem.
  */
 
 import type { OKRDefinition, KeyResult } from './types.js'
+import type { OKR as OrgOKR, KeyResult as OrgKeyResult, OKRStatus, KeyResultStatus } from 'org.ai'
+
+// Re-export org.ai OKR types for convenience
+export type { OrgOKR, OrgKeyResult, OKRStatus, KeyResultStatus }
+
+/**
+ * Convert a business-as-code KeyResult to an org.ai KeyResult
+ *
+ * @param kr - Business key result
+ * @param id - Optional identifier
+ * @returns org.ai KeyResult object
+ */
+export function toOrgKeyResult(kr: KeyResult, id?: string): OrgKeyResult {
+  const result: OrgKeyResult = {
+    description: kr.description,
+  }
+  if (id !== undefined) result.id = id
+  if (kr.description) result.name = kr.description
+  if (kr.metric !== undefined) result.metric = kr.metric
+  if (kr.startValue !== undefined) result.startValue = kr.startValue
+  if (kr.targetValue !== undefined) {
+    result.targetValue = kr.targetValue
+    result.target = kr.targetValue
+  }
+  if (kr.currentValue !== undefined) {
+    result.currentValue = kr.currentValue
+    result.current = kr.currentValue
+  }
+  if (kr.unit !== undefined) result.unit = kr.unit
+  if (kr.progress !== undefined) result.progress = kr.progress
+  return result
+}
+
+/**
+ * Convert an org.ai KeyResult to a business-as-code KeyResult
+ *
+ * @param kr - org.ai KeyResult object
+ * @returns Business key result
+ */
+export function fromOrgKeyResult(kr: OrgKeyResult): KeyResult {
+  const result: KeyResult = {
+    description: kr.description || kr.name || '',
+    metric: kr.metric || '',
+    targetValue: kr.targetValue ?? kr.target ?? 0,
+  }
+  if (kr.startValue !== undefined) result.startValue = kr.startValue
+  if (kr.currentValue !== undefined) result.currentValue = kr.currentValue
+  else if (kr.current !== undefined) result.currentValue = kr.current
+  if (kr.unit !== undefined) result.unit = kr.unit
+  if (kr.progress !== undefined) result.progress = kr.progress
+  return result
+}
+
+/**
+ * Convert a business-as-code OKRDefinition to an org.ai OKR
+ *
+ * @param definition - Business OKR definition
+ * @param id - Optional unique identifier
+ * @returns org.ai OKR object
+ */
+export function toOrgOKR(definition: OKRDefinition, id?: string): OrgOKR {
+  const result: OrgOKR = {
+    objective: definition.objective,
+    keyResults: definition.keyResults?.map((kr, i) => toOrgKeyResult(kr, `${id}_kr_${i}`)) || [],
+  }
+  if (id !== undefined) result.id = id
+  if (definition.description !== undefined) result.description = definition.description
+  if (definition.owner !== undefined) result.owner = definition.owner
+  if (definition.period !== undefined) result.period = definition.period
+  if (definition.status !== undefined) result.status = definition.status as OKRStatus
+  result.progress = calculateOKRProgress(definition)
+  if (definition.confidence !== undefined) result.confidence = definition.confidence
+  if (definition.metadata !== undefined) result.metadata = definition.metadata
+  return result
+}
+
+/**
+ * Convert an org.ai OKR to a business-as-code OKRDefinition
+ *
+ * @param okr - org.ai OKR object
+ * @returns Business OKR definition
+ */
+export function fromOrgOKR(okr: OrgOKR): OKRDefinition {
+  const result: OKRDefinition = {
+    objective: okr.objective,
+    keyResults: okr.keyResults.map(fromOrgKeyResult),
+  }
+  if (okr.description !== undefined) result.description = okr.description
+  if (okr.owner !== undefined) result.owner = okr.owner
+  if (okr.period !== undefined) result.period = okr.period
+  const st = okr.status
+  if (st !== undefined) result.status = st as NonNullable<OKRDefinition['status']>
+  if (okr.confidence !== undefined) result.confidence = okr.confidence
+  if (okr.metadata !== undefined) result.metadata = okr.metadata
+  return result
+}
 
 /**
  * Define Objectives and Key Results for goal tracking
@@ -51,7 +149,7 @@ import type { OKRDefinition, KeyResult } from './types.js'
  * ```
  */
 export function okrs(definitions: OKRDefinition[]): OKRDefinition[] {
-  return definitions.map(okr => validateAndNormalizeOKR(okr))
+  return definitions.map((okr) => validateAndNormalizeOKR(okr))
 }
 
 /**
@@ -70,7 +168,7 @@ function validateAndNormalizeOKR(okr: OKRDefinition): OKRDefinition {
   }
 
   // Calculate progress for key results if not set
-  const keyResults = okr.keyResults?.map(kr => ({
+  const keyResults = okr.keyResults?.map((kr) => ({
     ...kr,
     progress: kr.progress ?? calculateKeyResultProgress(kr),
   }))
@@ -136,7 +234,7 @@ export function updateKeyResult(
   krDescription: string,
   currentValue: number
 ): OKRDefinition {
-  const keyResults = okr.keyResults?.map(kr => {
+  const keyResults = okr.keyResults?.map((kr) => {
     if (kr.description === krDescription) {
       const updatedKR = { ...kr, currentValue }
       return {
@@ -162,10 +260,7 @@ export function updateKeyResult(
 /**
  * Determine OKR status based on progress and confidence
  */
-function determineOKRStatus(
-  progress: number,
-  confidence: number
-): OKRDefinition['status'] {
+function determineOKRStatus(progress: number, confidence: number): OKRDefinition['status'] {
   if (progress === 0) return 'not-started'
   if (progress === 100) return 'completed'
   if (confidence < 50 || progress < 30) return 'at-risk'
@@ -199,21 +294,21 @@ export function getKeyResultsOnTrack(okr: OKRDefinition): KeyResult[] {
  * Get key results that are at risk
  */
 export function getKeyResultsAtRisk(okr: OKRDefinition): KeyResult[] {
-  return okr.keyResults?.filter(kr => !isKeyResultOnTrack(kr)) || []
+  return okr.keyResults?.filter((kr) => !isKeyResultOnTrack(kr)) || []
 }
 
 /**
  * Get OKRs by owner
  */
 export function getOKRsByOwner(okrs: OKRDefinition[], owner: string): OKRDefinition[] {
-  return okrs.filter(okr => okr.owner === owner)
+  return okrs.filter((okr) => okr.owner === owner)
 }
 
 /**
  * Get OKRs by period
  */
 export function getOKRsByPeriod(okrs: OKRDefinition[], period: string): OKRDefinition[] {
-  return okrs.filter(okr => okr.period === period)
+  return okrs.filter((okr) => okr.period === period)
 }
 
 /**
@@ -223,7 +318,7 @@ export function getOKRsByStatus(
   okrs: OKRDefinition[],
   status: OKRDefinition['status']
 ): OKRDefinition[] {
-  return okrs.filter(okr => okr.status === status)
+  return okrs.filter((okr) => okr.status === status)
 }
 
 /**
@@ -232,9 +327,10 @@ export function getOKRsByStatus(
 export function calculateSuccessRate(okrs: OKRDefinition[]): number {
   if (okrs.length === 0) return 0
 
-  const avgProgress = okrs.reduce((sum, okr) => {
-    return sum + calculateOKRProgress(okr)
-  }, 0) / okrs.length
+  const avgProgress =
+    okrs.reduce((sum, okr) => {
+      return sum + calculateOKRProgress(okr)
+    }, 0) / okrs.length
 
   return avgProgress
 }

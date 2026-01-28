@@ -1,8 +1,73 @@
 /**
  * Business goals definition and tracking
+ *
+ * Uses org.ai Goal types for standardized goal definitions across the ecosystem.
  */
 
 import type { GoalDefinition } from './types.js'
+import type {
+  Goal as OrgGoal,
+  Goals as OrgGoals,
+  GoalStatus,
+  GoalCategory,
+  GoalPriority,
+} from 'org.ai'
+
+// Re-export org.ai goal types for convenience
+export type { OrgGoal, OrgGoals, GoalStatus, GoalCategory, GoalPriority }
+
+/**
+ * Convert a business-as-code GoalDefinition to an org.ai Goal
+ *
+ * @param definition - Business goal definition
+ * @param id - Unique identifier for the goal
+ * @returns org.ai Goal object
+ */
+export function toOrgGoal(definition: GoalDefinition, id: string): OrgGoal {
+  const result: OrgGoal = {
+    id,
+    name: definition.name,
+    description: definition.description || definition.name,
+    target: 100,
+    progress: definition.progress || 0,
+    status: definition.status || 'not-started',
+  }
+  if (definition.targetDate) {
+    result.targetDate = definition.targetDate
+    result.deadline = definition.targetDate
+  }
+  if (definition.owner) result.owner = definition.owner
+  if (definition.category) result.category = definition.category
+  if (definition.metrics) result.metrics = definition.metrics
+  if (definition.dependencies) result.dependencies = definition.dependencies
+  if (definition.metadata) result.metadata = definition.metadata
+  return result
+}
+
+/**
+ * Convert an org.ai Goal to a business-as-code GoalDefinition
+ *
+ * @param goal - org.ai Goal object
+ * @returns Business goal definition
+ */
+export function fromOrgGoal(goal: OrgGoal): GoalDefinition {
+  const result: GoalDefinition = {
+    name: goal.name,
+    progress: typeof goal.progress === 'number' ? goal.progress : 0,
+  }
+  if (goal.description) result.description = goal.description
+  const cat = goal.category
+  if (cat) result.category = cat as NonNullable<GoalDefinition['category']>
+  if (goal.targetDate) result.targetDate = goal.targetDate
+  else if (goal.deadline) result.targetDate = goal.deadline
+  if (goal.owner) result.owner = goal.owner
+  if (goal.metrics) result.metrics = goal.metrics
+  const st = goal.status
+  if (st) result.status = st as NonNullable<GoalDefinition['status']>
+  if (goal.dependencies) result.dependencies = goal.dependencies
+  if (goal.metadata) result.metadata = goal.metadata
+  return result
+}
 
 /**
  * Define a business goal with metrics and tracking
@@ -35,7 +100,7 @@ import type { GoalDefinition } from './types.js'
  * ```
  */
 export function Goals(definitions: GoalDefinition[]): GoalDefinition[] {
-  return definitions.map(goal => validateAndNormalizeGoal(goal))
+  return definitions.map((goal) => validateAndNormalizeGoal(goal))
 }
 
 /**
@@ -125,7 +190,7 @@ export function getGoalsByCategory(
   goals: GoalDefinition[],
   category: GoalDefinition['category']
 ): GoalDefinition[] {
-  return goals.filter(g => g.category === category)
+  return goals.filter((g) => g.category === category)
 }
 
 /**
@@ -135,14 +200,14 @@ export function getGoalsByStatus(
   goals: GoalDefinition[],
   status: GoalDefinition['status']
 ): GoalDefinition[] {
-  return goals.filter(g => g.status === status)
+  return goals.filter((g) => g.status === status)
 }
 
 /**
  * Get goals by owner
  */
 export function getGoalsByOwner(goals: GoalDefinition[], owner: string): GoalDefinition[] {
-  return goals.filter(g => g.owner === owner)
+  return goals.filter((g) => g.owner === owner)
 }
 
 /**
@@ -159,7 +224,7 @@ export function calculateOverallProgress(goals: GoalDefinition[]): number {
  * Check for circular dependencies
  */
 export function hasCircularDependencies(goals: GoalDefinition[]): boolean {
-  const goalMap = new Map(goals.map(g => [g.name, g]))
+  const goalMap = new Map(goals.map((g) => [g.name, g]))
 
   function checkCircular(goalName: string, visited = new Set<string>()): boolean {
     if (visited.has(goalName)) return true
@@ -178,14 +243,14 @@ export function hasCircularDependencies(goals: GoalDefinition[]): boolean {
     return false
   }
 
-  return goals.some(goal => checkCircular(goal.name))
+  return goals.some((goal) => checkCircular(goal.name))
 }
 
 /**
  * Get goals in dependency order
  */
 export function sortByDependencies(goals: GoalDefinition[]): GoalDefinition[] {
-  const goalMap = new Map(goals.map(g => [g.name, g]))
+  const goalMap = new Map(goals.map((g) => [g.name, g]))
   const sorted: GoalDefinition[] = []
   const visited = new Set<string>()
 
@@ -230,7 +295,7 @@ export function validateGoals(goals: GoalDefinition[]): { valid: boolean; errors
     }
 
     if (goal.dependencies) {
-      const goalNames = new Set(goals.map(g => g.name))
+      const goalNames = new Set(goals.map((g) => g.name))
       for (const dep of goal.dependencies) {
         if (!goalNames.has(dep)) {
           errors.push(`Goal ${goal.name} depends on unknown goal: ${dep}`)

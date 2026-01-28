@@ -134,9 +134,10 @@ export class DigitalObjectsService extends RpcTarget {
       object,
       limit: 1,
     })
-    if (actions.length === 0) return false
+    const action = actions[0]
+    if (!action) return false
 
-    return this.provider.deleteAction(actions[0].id)
+    return this.provider.deleteAction(action.id)
   }
 
   /**
@@ -184,9 +185,5 @@ export class DigitalObjectsWorker extends WorkerEntrypoint<Env> {
   }
 }
 
-/**
- * Default export for Cloudflare Workers
- */
-export default {
-  fetch: () => new Response('digital-objects worker - use RPC via service binding'),
-}
+// WorkerEntrypoint IS the default export
+export default DigitalObjectsWorker

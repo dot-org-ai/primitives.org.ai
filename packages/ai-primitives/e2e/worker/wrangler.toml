@@ -1,0 +1,25 @@
+# Wrangler config for E2E worker tests
+#
+# Defines service bindings to the deployed workers that the tests
+# will connect to via RPC (service bindings).
+
+name = "ai-primitives-e2e"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Service bindings to deployed workers
+[[services]]
+binding = "AI_DATABASE"
+service = "ai-database"
+
+[[services]]
+binding = "DIGITAL_OBJECTS"
+service = "digital-objects"
+
+[[services]]
+binding = "AI_PROVIDERS"
+service = "ai-providers"
+
+[[services]]
+binding = "AI_WORKFLOWS"
+service = "ai-workflows"

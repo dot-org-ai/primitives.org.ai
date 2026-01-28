@@ -114,12 +114,7 @@ export {
 } from './business.js'
 
 // Export vision functions
-export {
-  Vision,
-  checkIndicator,
-  calculateProgress,
-  validateVision,
-} from './vision.js'
+export { Vision, checkIndicator, calculateProgress, validateVision } from './vision.js'
 
 // Export goal functions
 export {
@@ -136,6 +131,22 @@ export {
   hasCircularDependencies,
   sortByDependencies,
   validateGoals,
+  // org.ai conversions
+  toOrgGoal,
+  fromOrgGoal,
+} from './goals.js'
+
+// Re-export org.ai goal types
+export type {
+  OrgGoal,
+  OrgGoals,
+  GoalStatus,
+  GoalCategory,
+  GoalPriority,
+  // Aliased versions for backward compatibility
+  GoalStatus as OrgGoalStatus,
+  GoalCategory as OrgGoalCategory,
+  GoalPriority as OrgGoalPriority,
 } from './goals.js'
 
 // Export product functions
@@ -218,7 +229,13 @@ export {
   formatValue,
   comparePerformance,
   validateKPIs,
+  // org.ai conversions
+  toOrgKPI,
+  fromOrgKPI,
 } from './kpis.js'
+
+// Re-export org.ai KPI types
+export type { OrgKPI, KPICategory, KPITrend, KPIFrequency, KPIHistoryEntry } from './kpis.js'
 
 // Export OKR functions
 export {
@@ -239,7 +256,15 @@ export {
   formatKeyResult,
   compareOKRPerformance,
   validateOKRs,
+  // org.ai conversions
+  toOrgOKR,
+  fromOrgOKR,
+  toOrgKeyResult,
+  fromOrgKeyResult,
 } from './okrs.js'
+
+// Re-export org.ai OKR types
+export type { OrgOKR, OrgKeyResult, OKRStatus, KeyResultStatus } from './okrs.js'
 
 // Export financial functions
 export {
@@ -272,13 +297,7 @@ export {
 } from './financials.js'
 
 // Export $ helper and context management
-export {
-  $,
-  createBusinessOperations,
-  updateContext,
-  getContext,
-  resetContext,
-} from './dollar.js'
+export { $, createBusinessOperations, updateContext, getContext, resetContext } from './dollar.js'
 
 // Export SaaS metrics
 export type {
@@ -419,7 +438,14 @@ export type {
   AssigneeRef,
   TaskRoutingRule,
   WorkflowRole,
+  // Re-exported from org.ai and digital-workers
+  OrgRole,
+  OrgRoleType,
+  RoleWorkerType,
 } from './roles.js'
+
+// Re-export Worker types from digital-workers via roles.ts
+export type { Worker, WorkerRef } from './roles.js'
 
 export {
   StandardBusinessRoles,
@@ -431,6 +457,9 @@ export {
   findRoleForTask,
   createTaskAssignment,
   transitionTaskStatus,
+  // Conversion helpers
+  workerRefToAssignee,
+  assigneeToWorkerRef,
 } from './roles.js'
 
 // Export organization (full hierarchy to FGA/RBAC)
@@ -455,11 +484,7 @@ export type {
   ResolvedPermissions,
 } from './organization.js'
 
-export {
-  resolvePermissions,
-  getApprovalChainForRequest,
-  findManager,
-} from './organization.js'
+export { resolvePermissions, getApprovalChainForRequest, findManager } from './organization.js'
 
 // =============================================================================
 // Entity Definitions (Noun pattern with Properties, Actions, Events)

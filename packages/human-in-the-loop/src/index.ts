@@ -48,9 +48,9 @@ export { Human, HumanManager } from './human.js'
 
 // Export helper functions (convenience API)
 export {
-  Role,
-  Team,
-  Goals,
+  defineRole,
+  defineTeam,
+  defineGoals,
   approve,
   ask,
   do,
@@ -63,6 +63,9 @@ export {
   registerHuman,
   getDefaultHuman,
 } from './helpers.js'
+
+// Re-export consolidated types from org.ai for convenience
+export type { Role, Team, Goal, Goals, KPI, OKR, KeyResult } from 'org.ai'
 
 // Export store implementations
 export { InMemoryHumanStore } from './store.js'
@@ -189,17 +192,16 @@ export type {
   DashboardData,
 } from './fallback-resolution.js'
 
-// Export all types
+// Export human-in-the-loop specific types
 export type {
   // Status and enums
   HumanRequestStatus,
   Priority,
 
-  // Core entities
-  Role as RoleType,
-  Team as TeamType,
+  // Human-specific type (with contact channels)
   Human as HumanType,
-  Goals as GoalsType,
+
+  // Legacy aliases (deprecated - use org.ai types directly)
   KPIs,
   OKRs,
 

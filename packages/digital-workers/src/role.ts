@@ -4,6 +4,8 @@
 
 import type { WorkerRole } from './types.js'
 
+// Note: Role type is re-exported from types.ts which imports from org.ai
+
 /**
  * Define a worker role
  *
@@ -15,7 +17,7 @@ import type { WorkerRole } from './types.js'
  *
  * @example
  * ```ts
- * const engineer = Role({
+ * const engineer = defineRole({
  *   name: 'Software Engineer',
  *   description: 'Builds and maintains software systems',
  *   responsibilities: [
@@ -31,7 +33,7 @@ import type { WorkerRole } from './types.js'
  *
  * @example
  * ```ts
- * const supportAgent = Role({
+ * const supportAgent = defineRole({
  *   name: 'Customer Support Agent',
  *   description: 'Assists customers with inquiries and issues',
  *   responsibilities: [
@@ -44,11 +46,13 @@ import type { WorkerRole } from './types.js'
  * })
  * ```
  */
-export function Role(definition: Omit<WorkerRole, 'type'> & { type?: WorkerRole['type'] }): WorkerRole {
+export function defineRole(
+  definition: Omit<WorkerRole, 'type'> & { type?: WorkerRole['type'] }
+): WorkerRole {
   return {
-    type: 'hybrid', // Default to hybrid (can be AI or human)
     ...definition,
-  }
+    type: definition.type ?? 'hybrid',
+  } as WorkerRole
 }
 
 /**
@@ -56,7 +60,7 @@ export function Role(definition: Omit<WorkerRole, 'type'> & { type?: WorkerRole[
  *
  * @example
  * ```ts
- * const dataAnalyst = Role.ai({
+ * const dataAnalyst = defineRole.ai({
  *   name: 'Data Analyst',
  *   description: 'Analyzes data and generates insights',
  *   responsibilities: [
@@ -67,17 +71,18 @@ export function Role(definition: Omit<WorkerRole, 'type'> & { type?: WorkerRole[
  * })
  * ```
  */
-Role.ai = (definition: Omit<WorkerRole, 'type'>): WorkerRole => ({
-  ...definition,
-  type: 'ai',
-})
+defineRole.ai = (definition: Omit<WorkerRole, 'type'>): WorkerRole =>
+  ({
+    ...definition,
+    type: 'ai',
+  } as WorkerRole)
 
 /**
  * Create a human-specific role
  *
  * @example
  * ```ts
- * const manager = Role.human({
+ * const manager = defineRole.human({
  *   name: 'Engineering Manager',
  *   description: 'Leads engineering team and makes strategic decisions',
  *   responsibilities: [
@@ -89,17 +94,18 @@ Role.ai = (definition: Omit<WorkerRole, 'type'>): WorkerRole => ({
  * })
  * ```
  */
-Role.human = (definition: Omit<WorkerRole, 'type'>): WorkerRole => ({
-  ...definition,
-  type: 'human',
-})
+defineRole.human = (definition: Omit<WorkerRole, 'type'>): WorkerRole =>
+  ({
+    ...definition,
+    type: 'human',
+  } as WorkerRole)
 
 /**
  * Create a hybrid role (can be AI or human)
  *
  * @example
  * ```ts
- * const contentWriter = Role.hybrid({
+ * const contentWriter = defineRole.hybrid({
  *   name: 'Content Writer',
  *   description: 'Creates written content for various channels',
  *   responsibilities: [
@@ -110,7 +116,11 @@ Role.human = (definition: Omit<WorkerRole, 'type'>): WorkerRole => ({
  * })
  * ```
  */
-Role.hybrid = (definition: Omit<WorkerRole, 'type'>): WorkerRole => ({
-  ...definition,
-  type: 'hybrid',
-})
+defineRole.hybrid = (definition: Omit<WorkerRole, 'type'>): WorkerRole =>
+  ({
+    ...definition,
+    type: 'hybrid',
+  } as WorkerRole)
+
+// Legacy alias for backward compatibility
+export { defineRole as Role }

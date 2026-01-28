@@ -3,15 +3,13 @@
  */
 
 import type {
-  Role,
-  Team,
-  Goals,
-  KPIs,
-  OKRs,
-  Human as HumanType,
-  ApprovalResponse,
-  ReviewResponse,
-} from './types.js'
+  Role as RoleType,
+  Team as TeamType,
+  Goal as GoalType,
+  KPI as KPIType,
+  OKR as OKRType,
+} from 'org.ai'
+import type { Human as HumanType, ApprovalResponse } from './types.js'
 import { Human } from './human.js'
 
 /**
@@ -24,15 +22,16 @@ const defaultHuman = Human()
  *
  * @example
  * ```ts
- * const techLead = Role({
+ * const techLead = defineRole({
  *   id: 'tech-lead',
  *   name: 'Tech Lead',
- *   capabilities: ['approve-prs', 'deploy-prod'],
- *   escalatesTo: 'engineering-manager',
+ *   description: 'Technical leadership role',
+ *   skills: ['code-review', 'architecture'],
+ *   escalateTo: 'engineering-manager',
  * })
  * ```
  */
-export function Role(role: Role): Role {
+export function defineRole(role: RoleType): RoleType {
   return defaultHuman.defineRole(role)
 }
 
@@ -41,15 +40,14 @@ export function Role(role: Role): Role {
  *
  * @example
  * ```ts
- * const engineering = Team({
+ * const engineering = defineTeam({
  *   id: 'engineering',
  *   name: 'Engineering Team',
- *   members: ['alice', 'bob', 'charlie'],
- *   lead: 'alice',
+ *   members: [{ id: 'alice', name: 'Alice', type: 'human' }],
  * })
  * ```
  */
-export function Team(team: Team): Team {
+export function defineTeam(team: TeamType): TeamType {
   return defaultHuman.defineTeam(team)
 }
 
@@ -58,17 +56,18 @@ export function Team(team: Team): Team {
  *
  * @example
  * ```ts
- * const q1Goals = Goals({
+ * const q1Goals = defineGoals([{
  *   id: 'q1-2024',
- *   objectives: [
- *     'Launch v2.0',
- *     'Improve performance by 50%',
- *   ],
+ *   name: 'Q1 Goals',
+ *   description: 'Launch v2.0 and improve performance',
+ *   target: 100,
+ *   progress: 0,
+ *   status: 'not-started',
  *   targetDate: new Date('2024-03-31'),
- * })
+ * }])
  * ```
  */
-export function Goals(goals: Goals): Goals {
+export function defineGoals(goals: GoalType[]): GoalType[] {
   return defaultHuman.defineGoals(goals)
 }
 
@@ -312,8 +311,8 @@ export async function notify(params: {
  * })
  * ```
  */
-export function kpis(kpis: KPIs): KPIs {
-  return defaultHuman.trackKPIs(kpis)
+export function kpis(kpi: KPIType): KPIType {
+  return defaultHuman.trackKPIs(kpi)
 }
 
 /**
@@ -343,8 +342,8 @@ export function kpis(kpis: KPIs): KPIs {
  * })
  * ```
  */
-export function okrs(okrs: OKRs): OKRs {
-  return defaultHuman.defineOKRs(okrs)
+export function okrs(okr: OKRType): OKRType {
+  return defaultHuman.defineOKRs(okr)
 }
 
 /**

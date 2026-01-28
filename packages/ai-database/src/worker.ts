@@ -516,12 +516,8 @@ export class DatabaseService extends WorkerEntrypoint<Env> {
   }
 }
 
-/**
- * Default export for Cloudflare Workers
- */
-export default {
-  fetch: () => new Response('ai-database worker - use RPC via service binding'),
-}
+// WorkerEntrypoint IS the default export
+export default DatabaseService
 
 // Export aliases
 export { DatabaseService as DatabaseWorker }
