@@ -308,21 +308,21 @@ export interface BuildWorkerOptions {
 export function buildWorkerTemplate(options: BuildWorkerOptions = {}): string {
   if (options.dev) {
     return generateDevWorkerCode({
-      module: options.module,
-      tests: options.tests,
-      script: options.script,
-      sdk: options.sdk,
-      imports: options.imports,
-      fetch: options.fetch,
+      ...(options.module !== undefined && { module: options.module }),
+      ...(options.tests !== undefined && { tests: options.tests }),
+      ...(options.script !== undefined && { script: options.script }),
+      ...(options.sdk !== undefined && { sdk: options.sdk }),
+      ...(options.imports !== undefined && { imports: options.imports }),
+      ...(options.fetch !== undefined && { fetch: options.fetch }),
     })
   }
   return generateWorkerCode({
-    module: options.module,
-    tests: options.tests,
-    script: options.script,
-    sdk: options.sdk,
-    imports: options.imports,
-    fetch: options.fetch,
+    ...(options.module !== undefined && { module: options.module }),
+    ...(options.tests !== undefined && { tests: options.tests }),
+    ...(options.script !== undefined && { script: options.script }),
+    ...(options.sdk !== undefined && { sdk: options.sdk }),
+    ...(options.imports !== undefined && { imports: options.imports }),
+    ...(options.fetch !== undefined && { fetch: options.fetch }),
   })
 }
 

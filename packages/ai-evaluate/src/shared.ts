@@ -48,10 +48,13 @@ export function extractPackageName(specifier: string, index: number): string {
   if (specifier.includes('://')) {
     // Full URL - extract from path
     const match = specifier.match(/esm\.sh\/(@?[^@/]+)/)
-    pkgName = match ? match[1].replace(/^@/, '').replace(/-/g, '_') : `pkg${index}`
+    pkgName = match?.[1]?.replace(/^@/, '').replace(/-/g, '_') ?? `pkg${index}`
   } else {
     // Bare package name - extract before @ version
-    pkgName = specifier.split('@')[0].replace(/^@/, '').replace(/-/g, '_').replace(/\//g, '_')
+    const baseName = specifier.split('@')[0]
+    pkgName = baseName
+      ? baseName.replace(/^@/, '').replace(/-/g, '_').replace(/\//g, '_')
+      : `pkg${index}`
   }
   return pkgName
 }

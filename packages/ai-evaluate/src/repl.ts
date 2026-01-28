@@ -124,9 +124,9 @@ export async function createReplSession(
       {
         module: config.prelude,
         script: 'return Object.keys(module)',
-        sdk: config.sdk,
-        timeout: config.timeout,
-        fetch: config.allowNetwork === false ? null : undefined,
+        ...(config.sdk !== undefined && { sdk: config.sdk }),
+        ...(config.timeout !== undefined && { timeout: config.timeout }),
+        ...(config.allowNetwork === false && { fetch: null }),
       },
       env
     )
@@ -165,9 +165,9 @@ export async function createReplSession(
         {
           module: preludeModule + '\n' + contextModule,
           script,
-          sdk: config?.sdk,
-          timeout: config?.timeout,
-          fetch: config?.allowNetwork === false ? null : undefined,
+          ...(config?.sdk !== undefined && { sdk: config.sdk }),
+          ...(config?.timeout !== undefined && { timeout: config.timeout }),
+          ...(config?.allowNetwork === false && { fetch: null }),
         },
         env
       )

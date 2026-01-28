@@ -161,7 +161,7 @@ function startIdleCleanup(): void {
     // Find idle instances beyond the idle timeout
     for (let i = pool.length - 1; i >= 0; i--) {
       const item = pool[i]
-      if (!item.inUse && now - item.lastUsed > poolConfig.maxIdleTime) {
+      if (item && !item.inUse && now - item.lastUsed > poolConfig.maxIdleTime) {
         // Keep at least one warm instance
         if (pool.filter((p) => !p.inUse && !toDispose.includes(p)).length > 1) {
           toDispose.push(item)

@@ -16,17 +16,17 @@ function isLogEntry(value: unknown): value is LogEntry {
 
   // Check level is one of the allowed values
   const validLevels = ['log', 'warn', 'error', 'info', 'debug']
-  if (typeof obj.level !== 'string' || !validLevels.includes(obj.level)) {
+  if (typeof obj['level'] !== 'string' || !validLevels.includes(obj['level'])) {
     return false
   }
 
   // Check message is a string
-  if (typeof obj.message !== 'string') {
+  if (typeof obj['message'] !== 'string') {
     return false
   }
 
   // Check timestamp is a number
-  if (typeof obj.timestamp !== 'number') {
+  if (typeof obj['timestamp'] !== 'number') {
     return false
   }
 
@@ -44,20 +44,20 @@ function isTestResult(value: unknown): value is TestResult {
   const obj = value as Record<string, unknown>
 
   // Check required fields
-  if (typeof obj.name !== 'string') {
+  if (typeof obj['name'] !== 'string') {
     return false
   }
 
-  if (typeof obj.passed !== 'boolean') {
+  if (typeof obj['passed'] !== 'boolean') {
     return false
   }
 
-  if (typeof obj.duration !== 'number') {
+  if (typeof obj['duration'] !== 'number') {
     return false
   }
 
   // Check optional error field
-  if (obj.error !== undefined && typeof obj.error !== 'string') {
+  if (obj['error'] !== undefined && typeof obj['error'] !== 'string') {
     return false
   }
 
@@ -75,32 +75,32 @@ function isTestResults(value: unknown): value is TestResults {
   const obj = value as Record<string, unknown>
 
   // Check required numeric fields
-  if (typeof obj.total !== 'number') {
+  if (typeof obj['total'] !== 'number') {
     return false
   }
 
-  if (typeof obj.passed !== 'number') {
+  if (typeof obj['passed'] !== 'number') {
     return false
   }
 
-  if (typeof obj.failed !== 'number') {
+  if (typeof obj['failed'] !== 'number') {
     return false
   }
 
-  if (typeof obj.skipped !== 'number') {
+  if (typeof obj['skipped'] !== 'number') {
     return false
   }
 
-  if (typeof obj.duration !== 'number') {
+  if (typeof obj['duration'] !== 'number') {
     return false
   }
 
   // Check tests array
-  if (!Array.isArray(obj.tests)) {
+  if (!Array.isArray(obj['tests'])) {
     return false
   }
 
-  for (const test of obj.tests) {
+  for (const test of obj['tests']) {
     if (!isTestResult(test)) {
       return false
     }
@@ -125,31 +125,31 @@ export function isEvaluateResult(value: unknown): value is EvaluateResult {
   const obj = value as Record<string, unknown>
 
   // Check required fields
-  if (typeof obj.success !== 'boolean') {
+  if (typeof obj['success'] !== 'boolean') {
     return false
   }
 
-  if (typeof obj.duration !== 'number') {
+  if (typeof obj['duration'] !== 'number') {
     return false
   }
 
   // Check logs is an array of valid LogEntry objects
-  if (!Array.isArray(obj.logs)) {
+  if (!Array.isArray(obj['logs'])) {
     return false
   }
 
-  for (const log of obj.logs) {
+  for (const log of obj['logs']) {
     if (!isLogEntry(log)) {
       return false
     }
   }
 
   // Check optional fields have correct types if present
-  if (obj.error !== undefined && typeof obj.error !== 'string') {
+  if (obj['error'] !== undefined && typeof obj['error'] !== 'string') {
     return false
   }
 
-  if (obj.testResults !== undefined && !isTestResults(obj.testResults)) {
+  if (obj['testResults'] !== undefined && !isTestResults(obj['testResults'])) {
     return false
   }
 
@@ -174,27 +174,28 @@ export function assertEvaluateResult(value: unknown): asserts value is EvaluateR
   const obj = value as Record<string, unknown>
 
   // Validate required field: success
-  if (typeof obj.success !== 'boolean') {
+  if (typeof obj['success'] !== 'boolean') {
     throw new Error(
-      `Invalid EvaluateResult: 'success' must be a boolean, got ${typeof obj.success}`
+      `Invalid EvaluateResult: 'success' must be a boolean, got ${typeof obj['success']}`
     )
   }
 
   // Validate required field: duration
-  if (typeof obj.duration !== 'number') {
+  if (typeof obj['duration'] !== 'number') {
     throw new Error(
-      `Invalid EvaluateResult: 'duration' must be a number, got ${typeof obj.duration}`
+      `Invalid EvaluateResult: 'duration' must be a number, got ${typeof obj['duration']}`
     )
   }
 
   // Validate required field: logs
-  if (!Array.isArray(obj.logs)) {
-    throw new Error(`Invalid EvaluateResult: 'logs' must be an array, got ${typeof obj.logs}`)
+  if (!Array.isArray(obj['logs'])) {
+    throw new Error(`Invalid EvaluateResult: 'logs' must be an array, got ${typeof obj['logs']}`)
   }
 
   // Validate each log entry
-  for (let i = 0; i < obj.logs.length; i++) {
-    const log = obj.logs[i]
+  const logs = obj['logs']
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i]
     if (typeof log !== 'object' || log === null) {
       throw new Error(
         `Invalid EvaluateResult: logs[${i}] must be an object, got ${
@@ -206,85 +207,102 @@ export function assertEvaluateResult(value: unknown): asserts value is EvaluateR
     const logObj = log as Record<string, unknown>
     const validLevels = ['log', 'warn', 'error', 'info', 'debug']
 
-    if (typeof logObj.level !== 'string' || !validLevels.includes(logObj.level)) {
+    if (typeof logObj['level'] !== 'string' || !validLevels.includes(logObj['level'])) {
       throw new Error(
         `Invalid EvaluateResult: logs[${i}].level must be one of ${validLevels.join(', ')}, got '${
-          logObj.level
+          logObj['level']
         }'`
       )
     }
 
-    if (typeof logObj.message !== 'string') {
+    if (typeof logObj['message'] !== 'string') {
       throw new Error(
-        `Invalid EvaluateResult: logs[${i}].message must be a string, got ${typeof logObj.message}`
+        `Invalid EvaluateResult: logs[${i}].message must be a string, got ${typeof logObj[
+          'message'
+        ]}`
       )
     }
 
-    if (typeof logObj.timestamp !== 'number') {
+    if (typeof logObj['timestamp'] !== 'number') {
       throw new Error(
-        `Invalid EvaluateResult: logs[${i}].timestamp must be a number, got ${typeof logObj.timestamp}`
+        `Invalid EvaluateResult: logs[${i}].timestamp must be a number, got ${typeof logObj[
+          'timestamp'
+        ]}`
       )
     }
   }
 
   // Validate optional field: error
-  if (obj.error !== undefined && typeof obj.error !== 'string') {
+  if (obj['error'] !== undefined && typeof obj['error'] !== 'string') {
     throw new Error(
-      `Invalid EvaluateResult: 'error' must be a string if present, got ${typeof obj.error}`
+      `Invalid EvaluateResult: 'error' must be a string if present, got ${typeof obj['error']}`
     )
   }
 
   // Validate optional field: testResults
-  if (obj.testResults !== undefined) {
-    if (typeof obj.testResults !== 'object' || obj.testResults === null) {
+  if (obj['testResults'] !== undefined) {
+    if (typeof obj['testResults'] !== 'object' || obj['testResults'] === null) {
       throw new Error(
         `Invalid EvaluateResult: 'testResults' must be an object if present, got ${
-          obj.testResults === null ? 'null' : typeof obj.testResults
+          obj['testResults'] === null ? 'null' : typeof obj['testResults']
         }`
       )
     }
 
-    const testResults = obj.testResults as Record<string, unknown>
+    const testResults = obj['testResults'] as Record<string, unknown>
 
-    if (typeof testResults.total !== 'number') {
+    if (typeof testResults['total'] !== 'number') {
       throw new Error(
-        `Invalid EvaluateResult: testResults.total must be a number, got ${typeof testResults.total}`
+        `Invalid EvaluateResult: testResults.total must be a number, got ${typeof testResults[
+          'total'
+        ]}`
       )
     }
 
-    if (typeof testResults.passed !== 'number') {
+    if (typeof testResults['passed'] !== 'number') {
       throw new Error(
-        `Invalid EvaluateResult: testResults.passed must be a number, got ${typeof testResults.passed}`
+        `Invalid EvaluateResult: testResults.passed must be a number, got ${typeof testResults[
+          'passed'
+        ]}`
       )
     }
 
-    if (typeof testResults.failed !== 'number') {
+    if (typeof testResults['failed'] !== 'number') {
       throw new Error(
-        `Invalid EvaluateResult: testResults.failed must be a number, got ${typeof testResults.failed}`
+        `Invalid EvaluateResult: testResults.failed must be a number, got ${typeof testResults[
+          'failed'
+        ]}`
       )
     }
 
-    if (typeof testResults.skipped !== 'number') {
+    if (typeof testResults['skipped'] !== 'number') {
       throw new Error(
-        `Invalid EvaluateResult: testResults.skipped must be a number, got ${typeof testResults.skipped}`
+        `Invalid EvaluateResult: testResults.skipped must be a number, got ${typeof testResults[
+          'skipped'
+        ]}`
       )
     }
 
-    if (typeof testResults.duration !== 'number') {
+    if (typeof testResults['duration'] !== 'number') {
       throw new Error(
-        `Invalid EvaluateResult: testResults.duration must be a number, got ${typeof testResults.duration}`
+        `Invalid EvaluateResult: testResults.duration must be a number, got ${typeof testResults[
+          'duration'
+        ]}`
       )
     }
 
-    if (!Array.isArray(testResults.tests)) {
+    if (!Array.isArray(testResults['tests'])) {
       throw new Error(
-        `Invalid EvaluateResult: testResults.tests must be an array, got ${typeof testResults.tests}`
+        `Invalid EvaluateResult: testResults.tests must be an array, got ${typeof testResults[
+          'tests'
+        ]}`
       )
     }
 
     // Validate each test result
-    for (let i = 0; i < testResults.tests.length; i++) {
-      const test = testResults.tests[i]
+    const tests = testResults['tests']
+    for (let i = 0; i < tests.length; i++) {
+      const test = tests[i]
       if (typeof test !== 'object' || test === null) {
         throw new Error(
           `Invalid EvaluateResult: testResults.tests[${i}] must be an object, got ${
@@ -295,27 +313,35 @@ export function assertEvaluateResult(value: unknown): asserts value is EvaluateR
 
       const testObj = test as Record<string, unknown>
 
-      if (typeof testObj.name !== 'string') {
+      if (typeof testObj['name'] !== 'string') {
         throw new Error(
-          `Invalid EvaluateResult: testResults.tests[${i}].name must be a string, got ${typeof testObj.name}`
+          `Invalid EvaluateResult: testResults.tests[${i}].name must be a string, got ${typeof testObj[
+            'name'
+          ]}`
         )
       }
 
-      if (typeof testObj.passed !== 'boolean') {
+      if (typeof testObj['passed'] !== 'boolean') {
         throw new Error(
-          `Invalid EvaluateResult: testResults.tests[${i}].passed must be a boolean, got ${typeof testObj.passed}`
+          `Invalid EvaluateResult: testResults.tests[${i}].passed must be a boolean, got ${typeof testObj[
+            'passed'
+          ]}`
         )
       }
 
-      if (typeof testObj.duration !== 'number') {
+      if (typeof testObj['duration'] !== 'number') {
         throw new Error(
-          `Invalid EvaluateResult: testResults.tests[${i}].duration must be a number, got ${typeof testObj.duration}`
+          `Invalid EvaluateResult: testResults.tests[${i}].duration must be a number, got ${typeof testObj[
+            'duration'
+          ]}`
         )
       }
 
-      if (testObj.error !== undefined && typeof testObj.error !== 'string') {
+      if (testObj['error'] !== undefined && typeof testObj['error'] !== 'string') {
         throw new Error(
-          `Invalid EvaluateResult: testResults.tests[${i}].error must be a string if present, got ${typeof testObj.error}`
+          `Invalid EvaluateResult: testResults.tests[${i}].error must be a string if present, got ${typeof testObj[
+            'error'
+          ]}`
         )
       }
     }

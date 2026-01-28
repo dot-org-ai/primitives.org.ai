@@ -177,7 +177,7 @@ async function prefetchModules(imports: string[]): Promise<Record<string, string
           const urlObj = new URL(url)
           const pathParts = urlObj.pathname.slice(1).split('/')
           const pkgSpec = pathParts[0] // e.g., "lodash@4.17.21"
-          const pkgName = pkgSpec.split('@')[0]
+          const pkgName = pkgSpec?.split('@')[0] ?? 'pkg'
           fetchUrl = `${urlObj.origin}/${pkgSpec}/es2022/${pkgName}.bundle.mjs`
         }
 
@@ -233,9 +233,9 @@ async function evaluateSimple(
   }
 
   const workerCode = generateSimpleWorkerCode({
-    module: options.module,
-    script: options.script,
-    imports: options.imports,
+    ...(options.module !== undefined && { module: options.module }),
+    ...(options.script !== undefined && { script: options.script }),
+    ...(options.imports !== undefined && { imports: options.imports }),
   })
 
   const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -272,12 +272,12 @@ async function evaluateWithWorkerLoader(
   start: number
 ): Promise<EvaluateResult> {
   const workerCode = generateWorkerCode({
-    module: options.module,
-    tests: options.tests,
-    script: options.script,
-    sdk: options.sdk,
-    imports: options.imports,
-    fetch: options.fetch,
+    ...(options.module !== undefined && { module: options.module }),
+    ...(options.tests !== undefined && { tests: options.tests }),
+    ...(options.script !== undefined && { script: options.script }),
+    ...(options.sdk !== undefined && { sdk: options.sdk }),
+    ...(options.imports !== undefined && { imports: options.imports }),
+    ...(options.fetch !== undefined && { fetch: options.fetch }),
   })
   const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
