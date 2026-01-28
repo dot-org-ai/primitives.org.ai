@@ -762,7 +762,7 @@ export class DigitalWorkersServiceCore extends RpcTarget {
       sent: !isUnreachable && targets.length > 0,
       messageId,
       via: channels,
-      recipients: targets.length > 1 ? targets : undefined,
+      ...(targets.length > 1 && { recipients: targets }),
       sentAt,
       jobId,
     }
@@ -866,7 +866,7 @@ Respond only with valid JSON.`
     }))
 
     return {
-      choice: choices[choiceIndex] ?? choices[0],
+      choice: choices[choiceIndex] ?? choices[0]!,
       reasoning,
       confidence,
       alternatives,

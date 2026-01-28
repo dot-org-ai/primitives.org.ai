@@ -137,8 +137,7 @@ async function validateSimpleType(
 
     return {
       valid: isValid,
-      value: isValid ? value : undefined,
-      errors: isValid ? undefined : [`Value is not a valid ${type}`],
+      ...(isValid ? { value } : { errors: [`Value is not a valid ${type}`] }),
     }
   }
 
@@ -175,7 +174,7 @@ Determine if the value is valid for this type.`,
   return {
     valid: validation.valid,
     value: coerce && validation.coercedValue !== undefined ? validation.coercedValue : value,
-    errors: validation.valid ? undefined : validation.errors,
+    ...(!validation.valid && { errors: validation.errors }),
   }
 }
 
@@ -240,7 +239,7 @@ Check if the value matches the schema structure and types.`,
     return {
       valid: validation.valid,
       value: coerce && validation.coercedValue !== undefined ? validation.coercedValue : value,
-      errors: validation.valid ? undefined : validation.errors,
+      ...(!validation.valid && { errors: validation.errors }),
     }
   }
 }
@@ -302,8 +301,7 @@ is.email = async (value: unknown): Promise<TypeCheckResult> => {
 
   return {
     valid,
-    value: valid ? value : undefined,
-    errors: valid ? undefined : ['Invalid email format'],
+    ...(valid ? { value } : { errors: ['Invalid email format'] }),
   }
 }
 
@@ -346,10 +344,11 @@ is.date = async (value: unknown, options: IsOptions = {}): Promise<TypeCheckResu
   const { coerce } = options
 
   if (value instanceof Date) {
+    const isValid = !isNaN(value.getTime())
     return {
-      valid: !isNaN(value.getTime()),
+      valid: isValid,
       value,
-      errors: isNaN(value.getTime()) ? ['Invalid date'] : undefined,
+      ...(!isValid && { errors: ['Invalid date'] }),
     }
   }
 
@@ -396,8 +395,7 @@ is.custom = async (
     const valid = await validator(value)
     return {
       valid,
-      value: valid ? value : undefined,
-      errors: valid ? undefined : ['Custom validation failed'],
+      ...(valid ? { value } : { errors: ['Custom validation failed'] }),
     }
   } catch (error) {
     return {

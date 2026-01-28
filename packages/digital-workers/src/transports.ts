@@ -151,16 +151,16 @@ export function getTeamTransports(team: Team): Transport[] {
 
   // Add team-level contacts
   const contacts = team.contacts
-  if (contacts.email) transports.add('email')
-  if (contacts.slack) transports.add('slack')
-  if (contacts.teams) transports.add('teams')
-  if (contacts.discord) transports.add('discord')
-  if (contacts.phone) transports.add('voice')
-  if (contacts.sms) transports.add('sms')
-  if (contacts.whatsapp) transports.add('whatsapp')
-  if (contacts.telegram) transports.add('telegram')
-  if (contacts.web) transports.add('web')
-  if (contacts.webhook) transports.add('webhook')
+  if (contacts?.['email']) transports.add('email')
+  if (contacts?.['slack']) transports.add('slack')
+  if (contacts?.['teams']) transports.add('teams')
+  if (contacts?.['discord']) transports.add('discord')
+  if (contacts?.['phone']) transports.add('voice')
+  if (contacts?.['sms']) transports.add('sms')
+  if (contacts?.['whatsapp']) transports.add('whatsapp')
+  if (contacts?.['telegram']) transports.add('telegram')
+  if (contacts?.['web']) transports.add('web')
+  if (contacts?.['webhook']) transports.add('webhook')
 
   return Array.from(transports)
 }
@@ -196,7 +196,11 @@ export function resolveAddress(contacts: Contacts, channel: ContactChannel): Add
   switch (channel) {
     case 'email':
       const emailContact = contact as { address: string; name?: string }
-      return { transport, value: emailContact.address, name: emailContact.name }
+      return {
+        transport,
+        value: emailContact.address,
+        ...(emailContact.name !== undefined && { name: emailContact.name }),
+      }
     case 'phone':
     case 'sms':
     case 'whatsapp':
@@ -418,7 +422,7 @@ export function buildApprovePayload(action: ApproveActionData): MessagePayload {
     to: resolveActionTarget(action.object),
     body: action.request,
     type: 'approval',
-    timeout: action.timeout,
+    ...(action.timeout !== undefined && { timeout: action.timeout }),
     actions: [
       { id: 'approve', label: 'Approve', style: 'primary', value: true },
       { id: 'reject', label: 'Reject', style: 'danger', value: false },
@@ -498,12 +502,18 @@ export function toDigitalToolsMessage(
  * Convert digital-tools Message to worker notification format
  */
 export function fromDigitalToolsMessage(message: Record<string, unknown>): Partial<MessagePayload> {
+  const to = message['to'] as string | string[]
+  const from = message['from'] as string | undefined
+  const subject = message['subject'] as string | undefined
+  const body = message['body'] as string
+  const html = message['html'] as string | undefined
+  const metadata = message['metadata'] as Record<string, unknown> | undefined
   return {
-    to: message.to as string | string[],
-    from: message.from as string | undefined,
-    subject: message.subject as string | undefined,
-    body: message.body as string,
-    html: message.html as string | undefined,
-    metadata: message.metadata as Record<string, unknown> | undefined,
+    to,
+    body,
+    ...(from !== undefined && { from }),
+    ...(subject !== undefined && { subject }),
+    ...(html !== undefined && { html }),
+    ...(metadata !== undefined && { metadata }),
   }
 }

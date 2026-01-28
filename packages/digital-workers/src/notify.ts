@@ -95,7 +95,10 @@ export async function notify(
   const delivery = await Promise.all(
     channels.map(async (channel) => {
       try {
-        await sendToChannel(channel, message, contacts, { priority, metadata })
+        await sendToChannel(channel, message, contacts, {
+          priority,
+          ...(metadata !== undefined && { metadata }),
+        })
         return { channel, status: 'sent' as const }
       } catch (error) {
         return {
