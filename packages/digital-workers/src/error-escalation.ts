@@ -424,13 +424,13 @@ export function createClassifiedError(
     original,
     severity: options.severity,
     category: options.category,
-    tier: options.tier,
-    agentId: options.agentId,
-    taskId: options.taskId,
     timestamp: new Date(),
-    stack: original.stack,
-    previousError: options.previousError,
-    context: options.context,
+    ...(original.stack !== undefined && { stack: original.stack }),
+    ...(options.tier !== undefined && { tier: options.tier }),
+    ...(options.agentId !== undefined && { agentId: options.agentId }),
+    ...(options.taskId !== undefined && { taskId: options.taskId }),
+    ...(options.previousError !== undefined && { previousError: options.previousError }),
+    ...(options.context !== undefined && { context: options.context }),
   }
 }
 

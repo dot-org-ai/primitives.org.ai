@@ -16,13 +16,7 @@ import type { Worker, WorkerRef } from './types.js'
 /**
  * Message type for agent-to-agent communication
  */
-export type MessageType =
-  | 'request'
-  | 'response'
-  | 'notification'
-  | 'handoff'
-  | 'ack'
-  | 'error'
+export type MessageType = 'request' | 'response' | 'notification' | 'handoff' | 'ack' | 'error'
 
 /**
  * Message priority levels
@@ -60,12 +54,7 @@ export interface AgentMessage<T = unknown> {
 /**
  * Message delivery status
  */
-export type DeliveryStatus =
-  | 'pending'
-  | 'delivered'
-  | 'acknowledged'
-  | 'failed'
-  | 'expired'
+export type DeliveryStatus = 'pending' | 'delivered' | 'acknowledged' | 'failed' | 'expired'
 
 /**
  * Message envelope with delivery metadata
@@ -132,13 +121,7 @@ export interface HandoffRequest {
 /**
  * Handoff status
  */
-export type HandoffStatus =
-  | 'pending'
-  | 'accepted'
-  | 'rejected'
-  | 'completed'
-  | 'expired'
-  | 'failed'
+export type HandoffStatus = 'pending' | 'accepted' | 'rejected' | 'completed' | 'expired' | 'failed'
 
 /**
  * Handoff result
@@ -173,9 +156,7 @@ export type CoordinationPattern =
 /**
  * Message handler function type
  */
-export type MessageHandler<T = unknown> = (
-  message: AgentMessage<T>
-) => void | Promise<void>
+export type MessageHandler<T = unknown> = (message: AgentMessage<T>) => void | Promise<void>
 
 /**
  * Subscription options
@@ -315,10 +296,7 @@ export class AgentMessageBus {
   /**
    * Deliver message to subscribers with queue handling
    */
-  private async deliverMessage<T>(
-    message: AgentMessage<T>,
-    subs: Subscription[]
-  ): Promise<void> {
+  private async deliverMessage<T>(message: AgentMessage<T>, subs: Subscription[]): Promise<void> {
     const matchingSubs = subs.filter((sub) => this.matchesFilter(message, sub.options))
 
     if (matchingSubs.length === 0) {
@@ -369,13 +347,9 @@ export class AgentMessageBus {
   /**
    * Subscribe to messages for an agent
    */
-  subscribe(
-    agentId: string,
-    handler: MessageHandler,
-    options?: SubscribeOptions
-  ): () => void {
+  subscribe(agentId: string, handler: MessageHandler, options?: SubscribeOptions): () => void {
     const subs = this.subscriptions.get(agentId) ?? []
-    const subscription: Subscription = { handler, options }
+    const subscription: Subscription = { handler, ...(options !== undefined && { options }) }
     subs.push(subscription)
     this.subscriptions.set(agentId, subs)
 
@@ -447,7 +421,7 @@ export class AgentMessageBus {
       request,
       status: 'pending',
       previousAttempts: request.previousAttempt ? [request.previousAttempt] : [],
-      originalMessage,
+      ...(originalMessage !== undefined && { originalMessage }),
     }
 
     // Setup timeout if specified
@@ -515,16 +489,12 @@ export class AgentMessageBus {
   ): MessageEnvelope[] {
     let messages = this.storedMessages
       .filter(
-        (s) =>
-          s.envelope.message.recipient === agentId ||
-          s.envelope.message.sender === agentId
+        (s) => s.envelope.message.recipient === agentId || s.envelope.message.sender === agentId
       )
       .map((s) => s.envelope)
 
     if (options?.from) {
-      messages = messages.filter(
-        (m) => m.message.timestamp >= options.from!
-      )
+      messages = messages.filter((m) => m.message.timestamp >= options.from!)
     }
 
     if (options?.to) {
@@ -543,9 +513,7 @@ export class AgentMessageBus {
    */
   clearMessages(options?: { olderThan?: Date }): void {
     if (options?.olderThan) {
-      this.storedMessages = this.storedMessages.filter(
-        (s) => s.storedAt >= options.olderThan!
-      )
+      this.storedMessages = this.storedMessages.filter((s) => s.storedAt >= options.olderThan!)
     } else {
       this.storedMessages = []
     }
@@ -574,10 +542,7 @@ export class AgentMessageBus {
   /**
    * Create a failed envelope
    */
-  private createFailedEnvelope<T>(
-    message: AgentMessage<T>,
-    error: string
-  ): MessageEnvelope<T> {
+  private createFailedEnvelope<T>(message: AgentMessage<T>, error: string): MessageEnvelope<T> {
     return {
       message,
       deliveryAttempts: 0,
@@ -668,10 +633,10 @@ export async function sendToAgent<T>(
     recipient: resolveAgentId(recipient),
     payload,
     timestamp: new Date(),
-    priority: options?.priority,
-    ttl: options?.ttl,
-    correlationId: options?.correlationId,
-    metadata: options?.metadata,
+    ...(options?.priority !== undefined && { priority: options.priority }),
+    ...(options?.ttl !== undefined && { ttl: options.ttl }),
+    ...(options?.correlationId !== undefined && { correlationId: options.correlationId }),
+    ...(options?.metadata !== undefined && { metadata: options.metadata }),
   }
 
   return bus.send(message)
@@ -759,23 +724,26 @@ export async function requestFromAgent<TReq, TRes>(
       timestamp: new Date(),
       correlationId: messageId,
       replyTo: senderId,
-      priority: options?.priority,
-      ttl: options?.ttl,
-      metadata: options?.metadata,
+      ...(options?.priority !== undefined && { priority: options.priority }),
+      ...(options?.ttl !== undefined && { ttl: options.ttl }),
+      ...(options?.metadata !== undefined && { metadata: options.metadata }),
     }
 
-    bus.send(message).then((envelope) => {
-      // Fail fast if delivery failed (recipient not found, etc.)
-      if (envelope.status === 'failed') {
+    bus
+      .send(message)
+      .then((envelope) => {
+        // Fail fast if delivery failed (recipient not found, etc.)
+        if (envelope.status === 'failed') {
+          clearTimeout(timeoutId)
+          unsubscribe?.()
+          reject(new Error(envelope.error ?? 'Message delivery failed'))
+        }
+      })
+      .catch((error) => {
         clearTimeout(timeoutId)
         unsubscribe?.()
-        reject(new Error(envelope.error ?? 'Message delivery failed'))
-      }
-    }).catch((error) => {
-      clearTimeout(timeoutId)
-      unsubscribe?.()
-      reject(error)
-    })
+        reject(error)
+      })
   })
 }
 
@@ -799,8 +767,8 @@ export function onMessage<T = unknown>(
   options?: OnMessageOptions
 ): () => void {
   return bus.subscribe(agentId, handler as MessageHandler, {
-    from: options?.from,
-    types: options?.types,
+    ...(options?.from !== undefined && { from: options.from }),
+    ...(options?.types !== undefined && { types: options.types }),
   })
 }
 
@@ -862,8 +830,8 @@ export async function requestResponse<TReq, TRes>(
   options: RequestResponseOptions<TReq>
 ): Promise<AgentMessage<TRes>> {
   return requestFromAgent<TReq, TRes>(bus, options.from, options.to, options.payload, {
-    timeout: options.timeout,
-    priority: options.priority,
+    ...(options.timeout !== undefined && { timeout: options.timeout }),
+    ...(options.priority !== undefined && { priority: options.priority }),
   })
 }
 
@@ -913,13 +881,10 @@ export async function fanOut<TReq, TRes>(
       const agentId = resolveAgentId(agent)
 
       try {
-        const response = await requestFromAgent<TReq, TRes>(
-          bus,
-          fromId,
-          agentId,
-          options.payload,
-          { timeout, correlationId }
-        )
+        const response = await requestFromAgent<TReq, TRes>(bus, fromId, agentId, options.payload, {
+          timeout,
+          correlationId,
+        })
 
         return {
           agentId,
@@ -960,10 +925,7 @@ export interface FanInOptions<T> {
 /**
  * Execute fan-in pattern - collect responses from multiple agents
  */
-export async function fanIn<T>(
-  bus: AgentMessageBus,
-  options: FanInOptions<T>
-): Promise<T[]> {
+export async function fanIn<T>(bus: AgentMessageBus, options: FanInOptions<T>): Promise<T[]> {
   const results = await Promise.all(
     options.sources.map((source) => {
       const sourceId = resolveAgentId(source)
@@ -1002,13 +964,9 @@ export async function pipeline<T>(
   for (const stage of options.stages) {
     const stageId = resolveAgentId(stage)
 
-    lastResponse = await requestFromAgent<T, T>(
-      bus,
-      initiatorId,
-      stageId,
-      currentPayload,
-      { timeout: options.stageTimeout }
-    )
+    lastResponse = await requestFromAgent<T, T>(bus, initiatorId, stageId, currentPayload, {
+      ...(options.stageTimeout !== undefined && { timeout: options.stageTimeout }),
+    })
 
     currentPayload = lastResponse.payload
   }
@@ -1056,11 +1014,11 @@ export async function initiateHandoff(
     fromAgent: fromAgentId,
     toAgent: toAgentId,
     context: options.context,
-    reason: options.reason,
     timestamp: new Date(),
-    timeout: options.timeout,
-    previousAttempt: options.previousAttempt,
-    onTimeout: options.onTimeout,
+    ...(options.reason !== undefined && { reason: options.reason }),
+    ...(options.timeout !== undefined && { timeout: options.timeout }),
+    ...(options.previousAttempt !== undefined && { previousAttempt: options.previousAttempt }),
+    ...(options.onTimeout !== undefined && { onTimeout: options.onTimeout }),
   }
 
   // Register handoff in bus
@@ -1167,7 +1125,7 @@ export async function rejectHandoff(
       payload: {
         action: 'rejected',
         handoffId,
-        reason: options?.reason,
+        ...(options?.reason !== undefined && { reason: options.reason }),
       },
       timestamp: new Date(),
       correlationId: handoffId,
@@ -1176,7 +1134,11 @@ export async function rejectHandoff(
     await bus.send(rejectMessage)
   }
 
-  return { handoffId, status: 'rejected', reason: options?.reason }
+  return {
+    handoffId,
+    status: 'rejected',
+    ...(options?.reason !== undefined && { reason: options.reason }),
+  }
 }
 
 /**

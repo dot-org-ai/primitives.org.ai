@@ -16,7 +16,7 @@
  * @packageDocumentation
  */
 
-import { RPC } from 'rpc.do'
+import { RPC, http } from 'rpc.do'
 
 // ==================== Types ====================
 
@@ -203,7 +203,7 @@ export function createDigitalWorkersClient(
   url: string = DEFAULT_URL,
   options?: DigitalWorkersClientOptions
 ) {
-  return RPC<DigitalWorkersAPI>(url, options)
+  return RPC<DigitalWorkersAPI>(http(url, options?.token))
 }
 
 /**

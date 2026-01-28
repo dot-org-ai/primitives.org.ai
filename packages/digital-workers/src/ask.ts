@@ -93,9 +93,9 @@ export async function ask<T = string>(
 
   // Send the question and wait for response
   const response = await sendQuestion<T>(channel, question, contacts, {
-    schema,
-    timeout,
-    context,
+    ...(schema !== undefined && { schema }),
+    ...(timeout !== undefined && { timeout }),
+    ...(context !== undefined && { context }),
     recipient,
   })
 
@@ -128,9 +128,13 @@ ask.ai = async <T = string>(
       model: 'sonnet',
       schema,
       prompt: question,
-      system: context
-        ? `Use the following context to answer the question:\n\n${JSON.stringify(context, null, 2)}`
-        : undefined,
+      ...(context !== undefined && {
+        system: `Use the following context to answer the question:\n\n${JSON.stringify(
+          context,
+          null,
+          2
+        )}`,
+      }),
     })
     return result.object as T
   }
@@ -139,9 +143,13 @@ ask.ai = async <T = string>(
     model: 'sonnet',
     schema: { answer: 'The answer to the question' },
     prompt: question,
-    system: context
-      ? `Use the following context to answer the question:\n\n${JSON.stringify(context, null, 2)}`
-      : undefined,
+    ...(context !== undefined && {
+      system: `Use the following context to answer the question:\n\n${JSON.stringify(
+        context,
+        null,
+        2
+      )}`,
+    }),
   })
 
   return (result.object as { answer: T }).answer

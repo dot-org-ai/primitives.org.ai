@@ -332,9 +332,10 @@ decide.withApproval = async <T = string>(
     }
   )
 
+  const approvedBy = approval.approvedBy?.id ?? approval.approvedBy?.name
   return {
     ...decision,
     approved: approval.approved,
-    approvedBy: approval.approvedBy?.id ?? approval.approvedBy?.name,
+    ...(approvedBy !== undefined && { approvedBy }),
   }
 }

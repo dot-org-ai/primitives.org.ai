@@ -399,7 +399,7 @@ export function createCapabilityProfile(input: {
   if (complexityRating < config.minComplexity || complexityRating > config.maxComplexity) {
     throw new Error(
       `Complexity rating ${complexityRating} is outside bounds for ${tier} tier ` +
-      `(${config.minComplexity}-${config.maxComplexity})`
+        `(${config.minComplexity}-${config.maxComplexity})`
     )
   }
 
@@ -409,7 +409,7 @@ export function createCapabilityProfile(input: {
     if (!allowedTools.has(tool)) {
       throw new Error(
         `Tool '${tool}' is not allowed at ${tier} tier. ` +
-        `Allowed tools: ${config.allowedTools.join(', ')}`
+          `Allowed tools: ${config.allowedTools.join(', ')}`
       )
     }
   }
@@ -419,8 +419,8 @@ export function createCapabilityProfile(input: {
     tier,
     complexityRating,
     tools,
-    description,
-    constraints,
+    ...(description !== undefined && { description }),
+    ...(constraints !== undefined && { constraints }),
   }
 }
 
@@ -500,7 +500,7 @@ export class TierRegistry {
     const result: CapabilityProfile[] = []
     for (const profile of this.profiles.values()) {
       const profileTools = new Set(profile.tools)
-      const hasAllTools = requiredTools.every(tool => profileTools.has(tool))
+      const hasAllTools = requiredTools.every((tool) => profileTools.has(tool))
       if (hasAllTools) {
         result.push(profile)
       }

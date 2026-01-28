@@ -241,7 +241,7 @@ doTask.sequence = async <T = unknown>(
     results.push(result)
 
     // Stop if a task fails (unless we're continuing on error)
-    if (!result.success && !options.context?.continueOnError) {
+    if (!result.success && !options.context?.['continueOnError']) {
       break
     }
   }

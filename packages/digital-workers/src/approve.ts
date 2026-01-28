@@ -92,8 +92,8 @@ export async function approve(
 
   // Send the approval request and wait for response
   const response = await sendApprovalRequest(channel, request, contacts, {
-    timeout,
-    context,
+    ...(timeout !== undefined && { timeout }),
+    ...(context !== undefined && { context }),
     approver,
     escalate,
   })
@@ -102,7 +102,7 @@ export async function approve(
     approved: response.approved,
     approvedBy: approver,
     approvedAt: new Date(),
-    notes: response.notes,
+    ...(response.notes !== undefined && { notes: response.notes }),
     via: channel,
   }
 }

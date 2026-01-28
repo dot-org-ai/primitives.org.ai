@@ -119,11 +119,14 @@ export async function handleAsk<T = string>(
   }
 
   // Send question and wait for response
-  const answer = await sendQuestion<T>(channel, question, contacts, { schema, timeout })
+  const answer = await sendQuestion<T>(channel, question, contacts, {
+    ...(schema !== undefined && { schema }),
+    ...(timeout !== undefined && { timeout }),
+  })
 
   const result: AskResult<T> = {
     answer,
-    answeredBy: recipient,
+    ...(recipient !== undefined && { answeredBy: recipient }),
     answeredAt: new Date(),
     via: channel,
   }
@@ -156,16 +159,16 @@ export async function handleApprove(
 
   // Send approval request and wait for response
   const response = await sendApprovalRequest(channel, request, contacts, {
-    context,
-    timeout,
-    escalate,
+    ...(context !== undefined && { context }),
+    ...(timeout !== undefined && { timeout }),
+    ...(escalate !== undefined && { escalate }),
   })
 
   const result: ApprovalResult = {
     approved: response.approved,
-    approvedBy: approver,
+    ...(approver !== undefined && { approvedBy: approver }),
     approvedAt: new Date(),
-    notes: response.notes,
+    ...(response.notes !== undefined && { notes: response.notes }),
     via: channel,
   }
 
@@ -218,7 +221,9 @@ export async function handleDo<T = unknown>(
       })
 
       // Execute the task (this would integrate with agent execution)
-      result = await executeTask<T>(target, instruction, { timeout })
+      result = await executeTask<T>(target, instruction, {
+        ...(timeout !== undefined && { timeout }),
+      })
 
       steps.push({
         action: 'complete',
@@ -249,7 +254,7 @@ export async function handleDo<T = unknown>(
   const failResult: DoResult<T> = {
     result: undefined as T,
     success: false,
-    error: lastError?.message,
+    ...(lastError !== undefined && { error: lastError.message }),
     duration: Date.now() - startTime,
     steps,
   }
@@ -289,12 +294,12 @@ export function registerWorkerActions($: WorkflowContext): void {
   // The $ context provides event registration via $.on[Namespace][event]
   const on = $.on as Record<string, Record<string, (handler: unknown) => void>>
 
-  if (on.Worker) {
-    on.Worker.notify?.(handleNotify)
-    on.Worker.ask?.(handleAsk)
-    on.Worker.approve?.(handleApprove)
-    on.Worker.decide?.(handleDecide)
-    on.Worker.do?.(handleDo)
+  if (on['Worker']) {
+    on['Worker']['notify']?.(handleNotify)
+    on['Worker']['ask']?.(handleAsk)
+    on['Worker']['approve']?.(handleApprove)
+    on['Worker']['decide']?.(handleDecide)
+    on['Worker']['do']?.(handleDo)
   }
 }
 
@@ -355,10 +360,15 @@ export function withWorkers($: WorkflowContext): WorkflowContext & WorkerContext
       options: ApproveOptions = {}
     ): Promise<ApprovalResult> {
       // Convert ActionTarget to a suitable actor reference
-      const actor: string | WorkerRef = typeof target === 'string'
-        ? target
-        : 'id' in target
-          ? { id: target.id, type: 'type' in target ? target.type : undefined, name: 'name' in target ? target.name : undefined }
+      const actor: string | WorkerRef =
+        typeof target === 'string'
+          ? target
+          : 'id' in target
+          ? {
+              id: target.id,
+              ...('type' in target && target.type !== undefined && { type: target.type }),
+              ...('name' in target && target.name !== undefined && { name: target.name }),
+            }
           : 'system'
 
       return $.do<ApprovalResult>('Worker.approve', {
@@ -370,9 +380,7 @@ export function withWorkers($: WorkflowContext): WorkflowContext & WorkerContext
       } as ApproveActionData)
     },
 
-    async decide<T = string>(
-      options: DecideOptions<T>
-    ): Promise<DecideResult<T>> {
+    async decide<T = string>(options: DecideOptions<T>): Promise<DecideResult<T>> {
       return $.do<DecideResult<T>>('Worker.decide', {
         actor: 'ai',
         object: 'decision',
@@ -407,7 +415,9 @@ export async function notify(
   const delivery = await Promise.all(
     channels.map(async (channel) => {
       try {
-        await sendToChannel(channel, message, contacts, { priority: options.priority })
+        await sendToChannel(channel, message, contacts, {
+          ...(options.priority !== undefined && { priority: options.priority }),
+        })
         return { channel, status: 'sent' as const }
       } catch (error) {
         return { channel, status: 'failed' as const, error: String(error) }
@@ -444,7 +454,7 @@ export async function ask<T = string>(
 
   return {
     answer,
-    answeredBy: recipients[0],
+    ...(recipients[0] !== undefined && { answeredBy: recipients[0] }),
     answeredAt: new Date(),
     via: channel,
   }
@@ -469,9 +479,9 @@ export async function approve(
 
   return {
     approved: response.approved,
-    approvedBy: recipients[0],
+    ...(recipients[0] !== undefined && { approvedBy: recipients[0] }),
     approvedAt: new Date(),
-    notes: response.notes,
+    ...(response.notes !== undefined && { notes: response.notes }),
     via: channel,
   }
 }
@@ -479,9 +489,7 @@ export async function approve(
 /**
  * Make a decision (standalone, non-durable)
  */
-export async function decide<T = string>(
-  options: DecideOptions<T>
-): Promise<DecideResult<T>> {
+export async function decide<T = string>(options: DecideOptions<T>): Promise<DecideResult<T>> {
   return makeDecision(options.options, options.context, options.criteria)
 }
 
