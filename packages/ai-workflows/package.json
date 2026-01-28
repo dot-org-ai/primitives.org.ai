@@ -11,8 +11,8 @@
       "types": "./dist/index.d.ts"
     },
     "./worker": {
-      "import": "./dist/worker.js",
-      "types": "./dist/worker.d.ts"
+      "import": "./dist/worker/index.js",
+      "types": "./dist/worker/index.d.ts"
     }
   },
   "scripts": {

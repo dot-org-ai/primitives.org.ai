@@ -140,6 +140,8 @@ export { createDefaultNLQueryGenerator, matchesFilter, applyFilters } from './nl
 export {
   createEntityOperations,
   createEdgeEntityOperations,
+  createNounEntityOperations,
+  createVerbEntityOperations,
   type EntityOperations,
   type EntityOperationsConfig,
 } from './entity-operations.js'
@@ -280,6 +282,8 @@ import { resolveBackwardFuzzy, resolveForwardFuzzy, getFuzzyThreshold } from './
 import {
   createEntityOperations,
   createEdgeEntityOperations,
+  createNounEntityOperations,
+  createVerbEntityOperations,
   type EntityOperations,
 } from './entity-operations.js'
 import { createNLQueryFn } from './nl-query.js'
@@ -645,7 +649,122 @@ export function DB<TSchema extends DatabaseSchema>(
 ): DBResult<TSchema> {
   const parsedSchema = parseSchema(schema)
 
-  // Add Edge entity to the parsed schema
+  // Add system entities to the parsed schema (Noun, Verb, Edge)
+
+  // Noun entity - represents type definitions
+  const nounEntity: ParsedEntity = {
+    name: 'Noun',
+    fields: new Map([
+      [
+        'name',
+        { name: 'name', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'singular',
+        { name: 'singular', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'plural',
+        { name: 'plural', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'slug',
+        { name: 'slug', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'slugPlural',
+        {
+          name: 'slugPlural',
+          type: 'string',
+          isArray: false,
+          isOptional: false,
+          isRelation: false,
+        },
+      ],
+      [
+        'description',
+        {
+          name: 'description',
+          type: 'string',
+          isArray: false,
+          isOptional: true,
+          isRelation: false,
+        },
+      ],
+      [
+        'properties',
+        { name: 'properties', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'relationships',
+        {
+          name: 'relationships',
+          type: 'json',
+          isArray: false,
+          isOptional: true,
+          isRelation: false,
+        },
+      ],
+      [
+        'actions',
+        { name: 'actions', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'events',
+        { name: 'events', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'metadata',
+        { name: 'metadata', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+    ]),
+  }
+  parsedSchema.entities.set('Noun', nounEntity)
+
+  // Verb entity - represents action definitions
+  const verbEntity: ParsedEntity = {
+    name: 'Verb',
+    fields: new Map([
+      [
+        'action',
+        { name: 'action', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'actor',
+        { name: 'actor', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      ['act', { name: 'act', type: 'string', isArray: false, isOptional: true, isRelation: false }],
+      [
+        'activity',
+        { name: 'activity', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'result',
+        { name: 'result', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'reverse',
+        { name: 'reverse', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'inverse',
+        { name: 'inverse', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'description',
+        {
+          name: 'description',
+          type: 'string',
+          isArray: false,
+          isOptional: true,
+          isRelation: false,
+        },
+      ],
+    ]),
+  }
+  parsedSchema.entities.set('Verb', verbEntity)
+
+  // Edge entity - represents relationships
   const edgeEntity: ParsedEntity = {
     name: 'Edge',
     fields: new Map([
@@ -701,11 +820,29 @@ export function DB<TSchema extends DatabaseSchema>(
   // Collect all edge records from the schema
   const allEdgeRecords: Array<Record<string, unknown>> = []
   for (const [entityName, entity] of parsedSchema.entities) {
-    if (entityName !== 'Edge') {
+    // Only create edge records for user-defined entities (not system entities)
+    if (entityName !== 'Edge' && entityName !== 'Noun' && entityName !== 'Verb') {
       const edgeRecords = createEdgeRecords(entityName, schema[entityName] ?? {}, entity)
       allEdgeRecords.push(...edgeRecords)
     }
   }
+
+  // Collect all noun records from the schema (user-defined entities only)
+  const allNounRecords: Array<Record<string, unknown>> = []
+  for (const [entityName, entity] of parsedSchema.entities) {
+    // Only create noun records for user-defined entities (not system entities)
+    if (entityName !== 'Edge' && entityName !== 'Noun' && entityName !== 'Verb') {
+      const nounRecord = createNounRecord(entityName, schema[entityName])
+      allNounRecords.push(nounRecord)
+    }
+  }
+
+  // Collect all verb records from the standard verbs
+  const allVerbRecords: Array<Record<string, unknown>> = Object.values(Verbs).map((verb) => ({
+    ...verb,
+    $id: verb.action,
+    $type: 'Verb',
+  }))
 
   // Build and set schema relation info for batch loading
   // Maps entityType -> fieldName -> relatedType
@@ -819,12 +956,29 @@ export function DB<TSchema extends DatabaseSchema>(
 
   for (const [entityName, entity] of parsedSchema.entities) {
     if (entityName === 'Edge') {
+      // Edge entity - auto-generated from schema relationships
       const edgeOps = createEdgeEntityOperations(allEdgeRecords, resolveProvider)
       const wrappedEdgeOps = wrapEntityOperations(entityName, edgeOps, actionsAPI) as Record<
         string,
         unknown
       >
       entityOperations[entityName] = makeCallableEntityOps(wrappedEdgeOps, entityName)
+    } else if (entityName === 'Noun') {
+      // Noun entity - auto-generated from schema entity types
+      const nounOps = createNounEntityOperations(allNounRecords)
+      const wrappedNounOps = wrapEntityOperations(entityName, nounOps, actionsAPI) as Record<
+        string,
+        unknown
+      >
+      entityOperations[entityName] = makeCallableEntityOps(wrappedNounOps, entityName)
+    } else if (entityName === 'Verb') {
+      // Verb entity - standard verbs with conjugation forms
+      const verbOps = createVerbEntityOperations(allVerbRecords)
+      const wrappedVerbOps = wrapEntityOperations(entityName, verbOps, actionsAPI) as Record<
+        string,
+        unknown
+      >
+      entityOperations[entityName] = makeCallableEntityOps(wrappedVerbOps, entityName)
     } else {
       const baseOps = createEntityOperations(entityName, entity, parsedSchema)
       const wrappedOps = wrapEntityOperations(entityName, baseOps, actionsAPI)

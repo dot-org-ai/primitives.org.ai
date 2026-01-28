@@ -2,10 +2,24 @@
  * DurableStep - Wrapper for Cloudflare Workflows step semantics
  *
  * Provides durable execution, retries, sleep, and step metadata
- * by wrapping Cloudflare Workflows' step.do() primitive.
+ * by wrapping Cloudflare Workflows' step.do() primitive. This is the
+ * foundation for building reliable, resumable workflow steps.
+ *
+ * ## Features
+ *
+ * - **Durable Execution**: Steps are persisted and can resume after failures
+ * - **Automatic Retries**: Configure retry behavior with backoff strategies
+ * - **Timeout Support**: Set per-step timeouts for long-running operations
+ * - **Step Context**: Access to nested durable operations and sleep
+ * - **Type Safety**: Full TypeScript generics for input/output types
+ *
+ * ## Basic Usage
  *
  * @example
- * ```ts
+ * ```typescript
+ * import { DurableStep } from 'ai-workflows/worker'
+ *
+ * // Simple step with type inference
  * const fetchData = new DurableStep('fetch-data', async (input: { url: string }) => {
  *   const response = await fetch(input.url)
  *   return response.json()
@@ -22,6 +36,23 @@
  *
  * // Run with workflow step
  * const result = await fetchData.run(step, { url: 'https://api.example.com' })
+ * ```
+ *
+ * ## Using StepContext
+ *
+ * @example
+ * ```typescript
+ * const complexStep = new DurableStep('complex', async (input, ctx) => {
+ *   // Access step metadata
+ *   console.log(`Attempt ${ctx.metadata.attempt} of step ${ctx.metadata.id}`)
+ *
+ *   // Nested durable operation
+ *   const result = await ctx.do('fetch-api', async () => {
+ *     return fetch('https://api.example.com').then(r => r.json())
+ *   })
+ *
+ *   return result
+ * })
  * ```
  *
  * @packageDocumentation

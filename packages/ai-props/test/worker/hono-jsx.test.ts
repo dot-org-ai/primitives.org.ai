@@ -57,6 +57,7 @@ import {
 // Import existing ai-props modules
 import { PropsServiceCore } from '../../src/worker.js'
 import { generateProps } from '../../src/generate.js'
+import { clearCache } from '../../src/cache.js'
 
 // ============================================================================
 // Type definitions for expected hono/jsx integration interfaces
@@ -1080,6 +1081,8 @@ describe('hono/jsx integration with PropsServiceCore', () => {
   let service: PropsServiceCore
 
   beforeEach(() => {
+    // Clear local cache to avoid stale responses
+    clearCache()
     service = new PropsServiceCore()
   })
 
@@ -1089,7 +1092,13 @@ describe('hono/jsx integration with PropsServiceCore', () => {
       description: 'Component description',
     }
 
-    const result = await service.generate({ schema })
+    // Add unique context to ensure fresh cache key at AI Gateway level
+    const context = {
+      testId: `rpc-test-${Date.now()}`,
+      purpose: 'hono/jsx integration test',
+    }
+
+    const result = await service.generate({ schema, context })
 
     expect(result.props).toBeDefined()
     expect(result.props.title).toBeDefined()

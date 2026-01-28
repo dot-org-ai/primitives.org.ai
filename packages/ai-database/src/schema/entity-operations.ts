@@ -532,6 +532,218 @@ export function createEntityOperations<T>(
  * @param getProvider - Function to get the database provider
  * @returns EntityOperations for Edge type
  */
+/**
+ * Create specialized operations for the Noun entity type
+ *
+ * Noun entities are auto-generated from schema entity types and have
+ * restricted write operations (no manual create/update/delete).
+ *
+ * @param nounRecords - Noun records derived from the schema entity types
+ * @returns EntityOperations for Noun type
+ */
+export function createNounEntityOperations(
+  nounRecords: Array<Record<string, unknown>>
+): EntityOperations<Record<string, unknown>> {
+  return {
+    async get(id: string) {
+      // Find by name (type name)
+      return nounRecords.find((n) => n.name === id || n.$id === id) ?? null
+    },
+
+    async list(options?: ListOptions) {
+      let results = [...nounRecords]
+      if (options?.where) {
+        for (const [key, value] of Object.entries(options.where)) {
+          results = results.filter((n) => n[key] === value)
+        }
+      }
+      if (options?.limit) {
+        results = results.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit)
+      }
+      return results.map((n) => ({
+        ...n,
+        $id: n.$id || n.name,
+        $type: 'Noun',
+      }))
+    },
+
+    async find(where: Record<string, unknown>) {
+      let results = [...nounRecords]
+      for (const [key, value] of Object.entries(where)) {
+        results = results.filter((n) => n[key] === value)
+      }
+      return results.map((n) => ({
+        ...n,
+        $id: n.$id || n.name,
+        $type: 'Noun',
+      }))
+    },
+
+    async search(query: string) {
+      const queryLower = query.toLowerCase()
+      return nounRecords
+        .filter(
+          (n) =>
+            String(n.name).toLowerCase().includes(queryLower) ||
+            String(n.singular).toLowerCase().includes(queryLower) ||
+            String(n.plural).toLowerCase().includes(queryLower) ||
+            String(n.description || '')
+              .toLowerCase()
+              .includes(queryLower)
+        )
+        .map((n) => ({
+          ...n,
+          $id: n.$id || n.name,
+          $type: 'Noun',
+        }))
+    },
+
+    async create() {
+      throw new Error('Cannot manually create Noun records - they are auto-generated from schema')
+    },
+
+    async update() {
+      throw new Error('Cannot manually update Noun records - they are auto-generated from schema')
+    },
+
+    async upsert() {
+      throw new Error('Cannot manually upsert Noun records - they are auto-generated from schema')
+    },
+
+    async delete() {
+      throw new Error('Cannot manually delete Noun records - they are auto-generated from schema')
+    },
+
+    async forEach(
+      optionsOrCallback: ListOptions | ((entity: Record<string, unknown>) => void | Promise<void>),
+      maybeCallback?: (entity: Record<string, unknown>) => void | Promise<void>
+    ) {
+      const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
+      const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!
+      const items = await this.list(options)
+      for (const item of items) {
+        await callback(item)
+      }
+    },
+
+    async semanticSearch() {
+      return []
+    },
+
+    async hybridSearch() {
+      return []
+    },
+  }
+}
+
+/**
+ * Create specialized operations for the Verb entity type
+ *
+ * Verb entities are the standard verb definitions (create, update, delete, etc.)
+ * and any custom verbs defined through the verbs API.
+ *
+ * @param verbRecords - Verb records with conjugation forms
+ * @returns EntityOperations for Verb type
+ */
+export function createVerbEntityOperations(
+  verbRecords: Array<Record<string, unknown>>
+): EntityOperations<Record<string, unknown>> {
+  return {
+    async get(id: string) {
+      // Find by action name
+      return verbRecords.find((v) => v.action === id || v.$id === id) ?? null
+    },
+
+    async list(options?: ListOptions) {
+      let results = [...verbRecords]
+      if (options?.where) {
+        for (const [key, value] of Object.entries(options.where)) {
+          results = results.filter((v) => v[key] === value)
+        }
+      }
+      if (options?.limit) {
+        results = results.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit)
+      }
+      return results.map((v) => ({
+        ...v,
+        $id: v.$id || v.action,
+        $type: 'Verb',
+      }))
+    },
+
+    async find(where: Record<string, unknown>) {
+      let results = [...verbRecords]
+      for (const [key, value] of Object.entries(where)) {
+        results = results.filter((v) => v[key] === value)
+      }
+      return results.map((v) => ({
+        ...v,
+        $id: v.$id || v.action,
+        $type: 'Verb',
+      }))
+    },
+
+    async search(query: string) {
+      const queryLower = query.toLowerCase()
+      return verbRecords
+        .filter(
+          (v) =>
+            String(v.action).toLowerCase().includes(queryLower) ||
+            String(v.actor || '')
+              .toLowerCase()
+              .includes(queryLower) ||
+            String(v.activity || '')
+              .toLowerCase()
+              .includes(queryLower) ||
+            String(v.description || '')
+              .toLowerCase()
+              .includes(queryLower)
+        )
+        .map((v) => ({
+          ...v,
+          $id: v.$id || v.action,
+          $type: 'Verb',
+        }))
+    },
+
+    async create() {
+      throw new Error('Cannot manually create Verb records - use verbs.define() instead')
+    },
+
+    async update() {
+      throw new Error('Cannot manually update Verb records - use verbs.define() instead')
+    },
+
+    async upsert() {
+      throw new Error('Cannot manually upsert Verb records - use verbs.define() instead')
+    },
+
+    async delete() {
+      throw new Error('Cannot manually delete Verb records')
+    },
+
+    async forEach(
+      optionsOrCallback: ListOptions | ((entity: Record<string, unknown>) => void | Promise<void>),
+      maybeCallback?: (entity: Record<string, unknown>) => void | Promise<void>
+    ) {
+      const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
+      const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!
+      const items = await this.list(options)
+      for (const item of items) {
+        await callback(item)
+      }
+    },
+
+    async semanticSearch() {
+      return []
+    },
+
+    async hybridSearch() {
+      return []
+    },
+  }
+}
+
 export function createEdgeEntityOperations(
   schemaEdgeRecords: Array<Record<string, unknown>>,
   getProvider: () => Promise<DBProvider>

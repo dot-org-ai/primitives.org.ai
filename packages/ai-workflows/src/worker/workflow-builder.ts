@@ -7,16 +7,64 @@
  * - Scheduled execution
  * - Type-safe execution context
  *
+ * ## Features
+ *
+ * - **Fluent API**: Chain methods for intuitive workflow definition
+ * - **Step Dependencies**: Declare execution order with `.dependsOn()`
+ * - **Event Triggers**: React to domain events with `.on('Noun.event')`
+ * - **Schedule Triggers**: Run on intervals with `.every()`
+ * - **Error Handling**: Per-step error handlers with `.onError()`
+ * - **Parallel Execution**: Steps without dependencies run concurrently
+ * - **Cycle Detection**: Automatically detects circular dependencies
+ *
+ * ## Basic Usage
+ *
  * @example
- * ```ts
+ * ```typescript
+ * import { WorkflowBuilder } from 'ai-workflows/worker'
+ *
  * const workflow = WorkflowBuilder.create('order-process')
- *   .step('validate', validateOrder)
- *   .step('charge', chargePayment).dependsOn('validate')
+ *   .step('validate', async (input) => {
+ *     return { valid: true }
+ *   })
+ *   .step('charge', async (input, ctx) => {
+ *     const validation = ctx.getStepResult<{ valid: boolean }>('validate')
+ *     if (!validation.valid) throw new Error('Invalid order')
+ *     return { charged: true }
+ *   }).dependsOn('validate')
  *   .step('fulfill', fulfillOrder).dependsOn('charge')
  *   .on('Order.placed').do('validate')
  *   .build()
  *
- * await workflow.execute({ orderId: 'order-123' })
+ * // Execute the workflow
+ * const results = await workflow.execute({ orderId: 'order-123' })
+ * ```
+ *
+ * ## With DurableStep
+ *
+ * @example
+ * ```typescript
+ * import { WorkflowBuilder, DurableStep } from 'ai-workflows/worker'
+ *
+ * const fetchData = new DurableStep('fetch-data', async ({ url }) => {
+ *   return fetch(url).then(r => r.json())
+ * })
+ *
+ * const workflow = WorkflowBuilder.create('data-pipeline')
+ *   .step(fetchData)
+ *   .step('process', processData).dependsOn('fetch-data')
+ *   .build()
+ * ```
+ *
+ * ## Scheduled Workflows
+ *
+ * @example
+ * ```typescript
+ * const workflow = WorkflowBuilder.create('daily-report')
+ *   .step('generate', generateReport)
+ *   .step('send', sendReport).dependsOn('generate')
+ *   .every('day').at('9am').do('generate')
+ *   .build()
  * ```
  *
  * @packageDocumentation

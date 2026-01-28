@@ -2482,6 +2482,212 @@ function createEdgeEntityOperations(
   }
 }
 
+/**
+ * Create specialized operations for the Noun entity type
+ *
+ * Noun entities are auto-generated from schema entity types and have
+ * restricted write operations (no manual create/update/delete).
+ */
+function createNounEntityOperations(
+  nounRecords: Array<Record<string, unknown>>
+): EntityOperations<Record<string, unknown>> {
+  return {
+    async get(id: string) {
+      // Find by name (type name)
+      return nounRecords.find((n) => n.name === id || n.$id === id) ?? null
+    },
+
+    async list(options?: ListOptions) {
+      let results = [...nounRecords]
+      if (options?.where) {
+        for (const [key, value] of Object.entries(options.where)) {
+          results = results.filter((n) => n[key] === value)
+        }
+      }
+      if (options?.limit) {
+        results = results.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit)
+      }
+      return results.map((n) => ({
+        ...n,
+        $id: n.$id || n.name,
+        $type: 'Noun',
+      }))
+    },
+
+    async find(where: Record<string, unknown>) {
+      let results = [...nounRecords]
+      for (const [key, value] of Object.entries(where)) {
+        results = results.filter((n) => n[key] === value)
+      }
+      return results.map((n) => ({
+        ...n,
+        $id: n.$id || n.name,
+        $type: 'Noun',
+      }))
+    },
+
+    async search(query: string) {
+      const queryLower = query.toLowerCase()
+      return nounRecords
+        .filter(
+          (n) =>
+            String(n.name).toLowerCase().includes(queryLower) ||
+            String(n.singular).toLowerCase().includes(queryLower) ||
+            String(n.plural).toLowerCase().includes(queryLower) ||
+            String(n.description || '')
+              .toLowerCase()
+              .includes(queryLower)
+        )
+        .map((n) => ({
+          ...n,
+          $id: n.$id || n.name,
+          $type: 'Noun',
+        }))
+    },
+
+    async create() {
+      throw new Error('Cannot manually create Noun records - they are auto-generated from schema')
+    },
+
+    async update() {
+      throw new Error('Cannot manually update Noun records - they are auto-generated from schema')
+    },
+
+    async upsert() {
+      throw new Error('Cannot manually upsert Noun records - they are auto-generated from schema')
+    },
+
+    async delete() {
+      throw new Error('Cannot manually delete Noun records - they are auto-generated from schema')
+    },
+
+    async forEach(
+      optionsOrCallback: ListOptions | ((entity: Record<string, unknown>) => void | Promise<void>),
+      maybeCallback?: (entity: Record<string, unknown>) => void | Promise<void>
+    ) {
+      const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
+      const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!
+      const items = await this.list(options)
+      for (const item of items) {
+        await callback(item)
+      }
+    },
+
+    async semanticSearch() {
+      return []
+    },
+
+    async hybridSearch() {
+      return []
+    },
+  }
+}
+
+/**
+ * Create specialized operations for the Verb entity type
+ *
+ * Verb entities are the standard verb definitions (create, update, delete, etc.)
+ * and any custom verbs defined through the verbs API.
+ */
+function createVerbEntityOperations(
+  verbRecords: Array<Record<string, unknown>>
+): EntityOperations<Record<string, unknown>> {
+  return {
+    async get(id: string) {
+      // Find by action name
+      return verbRecords.find((v) => v.action === id || v.$id === id) ?? null
+    },
+
+    async list(options?: ListOptions) {
+      let results = [...verbRecords]
+      if (options?.where) {
+        for (const [key, value] of Object.entries(options.where)) {
+          results = results.filter((v) => v[key] === value)
+        }
+      }
+      if (options?.limit) {
+        results = results.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit)
+      }
+      return results.map((v) => ({
+        ...v,
+        $id: v.$id || v.action,
+        $type: 'Verb',
+      }))
+    },
+
+    async find(where: Record<string, unknown>) {
+      let results = [...verbRecords]
+      for (const [key, value] of Object.entries(where)) {
+        results = results.filter((v) => v[key] === value)
+      }
+      return results.map((v) => ({
+        ...v,
+        $id: v.$id || v.action,
+        $type: 'Verb',
+      }))
+    },
+
+    async search(query: string) {
+      const queryLower = query.toLowerCase()
+      return verbRecords
+        .filter(
+          (v) =>
+            String(v.action).toLowerCase().includes(queryLower) ||
+            String(v.actor || '')
+              .toLowerCase()
+              .includes(queryLower) ||
+            String(v.activity || '')
+              .toLowerCase()
+              .includes(queryLower) ||
+            String(v.description || '')
+              .toLowerCase()
+              .includes(queryLower)
+        )
+        .map((v) => ({
+          ...v,
+          $id: v.$id || v.action,
+          $type: 'Verb',
+        }))
+    },
+
+    async create() {
+      throw new Error('Cannot manually create Verb records - use verbs.define() instead')
+    },
+
+    async update() {
+      throw new Error('Cannot manually update Verb records - use verbs.define() instead')
+    },
+
+    async upsert() {
+      throw new Error('Cannot manually upsert Verb records - use verbs.define() instead')
+    },
+
+    async delete() {
+      throw new Error('Cannot manually delete Verb records')
+    },
+
+    async forEach(
+      optionsOrCallback: ListOptions | ((entity: Record<string, unknown>) => void | Promise<void>),
+      maybeCallback?: (entity: Record<string, unknown>) => void | Promise<void>
+    ) {
+      const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
+      const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!
+      const items = await this.list(options)
+      for (const item of items) {
+        await callback(item)
+      }
+    },
+
+    async semanticSearch() {
+      return []
+    },
+
+    async hybridSearch() {
+      return []
+    },
+  }
+}
+
 // =============================================================================
 // DB Factory
 // =============================================================================
@@ -2548,7 +2754,122 @@ export function DB<TSchema extends DatabaseSchema>(
     }
   }
 
-  // Add Edge entity to the parsed schema for querying edge metadata
+  // Add system entities to the parsed schema (Noun, Verb, Edge)
+
+  // Noun entity - represents type definitions
+  const nounEntity: ParsedEntity = {
+    name: 'Noun',
+    fields: new Map([
+      [
+        'name',
+        { name: 'name', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'singular',
+        { name: 'singular', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'plural',
+        { name: 'plural', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'slug',
+        { name: 'slug', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'slugPlural',
+        {
+          name: 'slugPlural',
+          type: 'string',
+          isArray: false,
+          isOptional: false,
+          isRelation: false,
+        },
+      ],
+      [
+        'description',
+        {
+          name: 'description',
+          type: 'string',
+          isArray: false,
+          isOptional: true,
+          isRelation: false,
+        },
+      ],
+      [
+        'properties',
+        { name: 'properties', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'relationships',
+        {
+          name: 'relationships',
+          type: 'json',
+          isArray: false,
+          isOptional: true,
+          isRelation: false,
+        },
+      ],
+      [
+        'actions',
+        { name: 'actions', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'events',
+        { name: 'events', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'metadata',
+        { name: 'metadata', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+    ]),
+  }
+  parsedSchema.entities.set('Noun', nounEntity)
+
+  // Verb entity - represents action definitions
+  const verbEntity: ParsedEntity = {
+    name: 'Verb',
+    fields: new Map([
+      [
+        'action',
+        { name: 'action', type: 'string', isArray: false, isOptional: false, isRelation: false },
+      ],
+      [
+        'actor',
+        { name: 'actor', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      ['act', { name: 'act', type: 'string', isArray: false, isOptional: true, isRelation: false }],
+      [
+        'activity',
+        { name: 'activity', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'result',
+        { name: 'result', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'reverse',
+        { name: 'reverse', type: 'json', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'inverse',
+        { name: 'inverse', type: 'string', isArray: false, isOptional: true, isRelation: false },
+      ],
+      [
+        'description',
+        {
+          name: 'description',
+          type: 'string',
+          isArray: false,
+          isOptional: true,
+          isRelation: false,
+        },
+      ],
+    ]),
+  }
+  parsedSchema.entities.set('Verb', verbEntity)
+
+  // Edge entity - represents relationships
   const edgeEntity: ParsedEntity = {
     name: 'Edge',
     fields: new Map([
@@ -2596,14 +2917,33 @@ export function DB<TSchema extends DatabaseSchema>(
     })
   }
 
-  // Collect all edge records from the schema
+  // System entity names for filtering
+  const systemEntityNames = new Set(['Noun', 'Verb', 'Edge'])
+
+  // Collect all edge records from the schema (user-defined entities only)
   const allEdgeRecords: Array<Record<string, unknown>> = []
   for (const [entityName, entity] of parsedSchema.entities) {
-    if (entityName !== 'Edge') {
+    if (!systemEntityNames.has(entityName)) {
       const edgeRecords = createEdgeRecords(entityName, schema[entityName] ?? {}, entity)
       allEdgeRecords.push(...edgeRecords)
     }
   }
+
+  // Collect all noun records from the schema (user-defined entities only)
+  const allNounRecords: Array<Record<string, unknown>> = []
+  for (const [entityName] of parsedSchema.entities) {
+    if (!systemEntityNames.has(entityName)) {
+      const nounRecord = createNounRecord(entityName, schema[entityName])
+      allNounRecords.push(nounRecord)
+    }
+  }
+
+  // Collect all verb records from the standard verbs
+  const allVerbRecords: Array<Record<string, unknown>> = Object.values(Verbs).map((verb) => ({
+    ...verb,
+    $id: verb.action,
+    $type: 'Verb',
+  }))
 
   // Create Actions API early so it can be injected into entity operations
   const actionsAPI = {
@@ -2655,6 +2995,14 @@ export function DB<TSchema extends DatabaseSchema>(
       // Special handling for Edge entity - query from in-memory edge records + runtime edges
       const edgeOps = createEdgeEntityOperations(allEdgeRecords, resolveProvider)
       entityOperations[entityName] = wrapEntityOperations(entityName, edgeOps, actionsAPI)
+    } else if (entityName === 'Noun') {
+      // Noun entity - auto-generated from schema entity types
+      const nounOps = createNounEntityOperations(allNounRecords)
+      entityOperations[entityName] = wrapEntityOperations(entityName, nounOps, actionsAPI)
+    } else if (entityName === 'Verb') {
+      // Verb entity - standard verbs with conjugation forms
+      const verbOps = createVerbEntityOperations(allVerbRecords)
+      entityOperations[entityName] = wrapEntityOperations(entityName, verbOps, actionsAPI)
     } else {
       const baseOps = createEntityOperations(entityName, entity, parsedSchema)
       // Wrap with DBPromise for chainable queries, inject actions for forEach persistence
