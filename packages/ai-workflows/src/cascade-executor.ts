@@ -445,7 +445,8 @@ export class CascadeExecutor<T = unknown> {
         attempts++
 
         // Check if it's a timeout error
-        const isTimeout = lastError.message.includes('timed out') || lastError.name === 'TimeoutError'
+        const isTimeout =
+          lastError.message.includes('timed out') || lastError.name === 'TimeoutError'
 
         // If we've exhausted retries or it's a total timeout, stop
         if (attempts > maxRetries || lastError instanceof CascadeTimeoutError) {
@@ -506,7 +507,7 @@ export class CascadeExecutor<T = unknown> {
     return {
       tier,
       success: false,
-      error: lastError,
+      ...(lastError !== undefined && { error: lastError }),
       duration,
     }
   }

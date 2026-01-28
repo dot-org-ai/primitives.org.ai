@@ -16,11 +16,20 @@
  *   functionality via service bindings
  *
  * - **WorkflowServiceCore**: Core RPC-enabled service for workflow
- *   creation, lifecycle, and event emission
+ *   creation, lifecycle, event emission, and state persistence
+ *
+ * - **WorkflowStateAdapter**: Persistent storage for workflow state using
+ *   ai-database, with optimistic locking, checkpoints, and snapshots
  *
  * @example
  * ```typescript
- * import { DurableStep, WorkflowBuilder, WorkflowService } from 'ai-workflows/worker'
+ * import {
+ *   DurableStep,
+ *   WorkflowBuilder,
+ *   WorkflowService,
+ *   WorkflowServiceCore,
+ *   WorkflowStateAdapter
+ * } from 'ai-workflows/worker'
  *
  * // Create a durable step
  * const fetchData = new DurableStep('fetch-data', async (input: { url: string }) => {
@@ -37,6 +46,42 @@
  *
  * // Export WorkflowService as your worker entrypoint
  * export { WorkflowService }
+ * ```
+ *
+ * @example State Persistence with WorkflowServiceCore
+ * ```typescript
+ * import { DB } from 'ai-database'
+ * import { WorkflowServiceCore } from 'ai-workflows/worker'
+ *
+ * // Create database and service with persistence
+ * const { db } = DB({ WorkflowState: { status: 'string' } })
+ * const service = new WorkflowServiceCore(db)
+ *
+ * // Create workflow and persist state
+ * const workflow = service.create('order-processor')
+ * await service.persistState(workflow.id, {
+ *   workflowId: workflow.id,
+ *   status: 'running',
+ *   currentStep: 'validate-order',
+ *   context: { orderId: 'order-123' }
+ * })
+ *
+ * // Save step checkpoint
+ * await service.saveCheckpoint(workflow.id, 'validate-order', {
+ *   stepId: 'validate-order',
+ *   status: 'completed',
+ *   result: { valid: true },
+ *   attempt: 1
+ * })
+ *
+ * // Query workflows by status
+ * const runningWorkflows = await service.queryByStatus('running')
+ *
+ * // Create snapshot before risky operation
+ * const snapshotId = await service.createSnapshot(workflow.id, 'before-payment')
+ *
+ * // Restore if something goes wrong
+ * await service.restoreSnapshot(workflow.id, snapshotId)
  * ```
  *
  * @packageDocumentation
@@ -88,6 +133,19 @@ export {
   type Env,
   type WorkflowInstanceInfo,
 } from '../worker.js'
+
+// =============================================================================
+// WorkflowStateAdapter - Persistent workflow state storage
+// =============================================================================
+
+export {
+  WorkflowStateAdapter,
+  type PersistedWorkflowState,
+  type StepCheckpoint,
+  type WorkflowHistoryEntry as StateHistoryEntry,
+  type SnapshotInfo,
+  type DatabaseConnection,
+} from './state-adapter.js'
 
 // =============================================================================
 // Types - Re-export commonly needed types from main package

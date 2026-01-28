@@ -197,7 +197,10 @@ function correlationIdToTraceId(correlationId: string): string {
  */
 function traceIdToCorrelationId(traceId: string): string {
   // Convert 32 hex chars to UUID format
-  return `${traceId.slice(0, 8)}-${traceId.slice(8, 12)}-${traceId.slice(12, 16)}-${traceId.slice(16, 20)}-${traceId.slice(20, 32)}`
+  return `${traceId.slice(0, 8)}-${traceId.slice(8, 12)}-${traceId.slice(12, 16)}-${traceId.slice(
+    16,
+    20
+  )}-${traceId.slice(20, 32)}`
 }
 
 /**
@@ -208,13 +211,15 @@ export function createCascadeContext(options: CascadeContextOptions = {}): Casca
 
   // Handle restoration from serialized format
   if (fromSerialized) {
-    const restoredSteps: CascadeStep[] = fromSerialized.steps.map((s) => createRestoredStep(s, name))
+    const restoredSteps: CascadeStep[] = fromSerialized.steps.map((s) =>
+      createRestoredStep(s, name)
+    )
 
     const ctx: CascadeContext = {
       correlationId: fromSerialized.correlationId,
       spanId: fromSerialized.spanId,
-      parentId: fromSerialized.parentId,
-      name: fromSerialized.name,
+      ...(fromSerialized.parentId !== undefined && { parentId: fromSerialized.parentId }),
+      ...(fromSerialized.name !== undefined && { name: fromSerialized.name }),
       depth: fromSerialized.depth,
       steps: restoredSteps,
       path: fromSerialized.path,
@@ -241,7 +246,7 @@ export function createCascadeContext(options: CascadeContextOptions = {}): Casca
         correlationId,
         spanId: newSpanId,
         parentId: parsed.parentId,
-        name,
+        ...(name !== undefined && { name }),
         depth: 0,
         steps: [],
         path: [],
@@ -279,13 +284,13 @@ export function createCascadeContext(options: CascadeContextOptions = {}): Casca
   const ctx: CascadeContext = {
     correlationId,
     spanId,
-    parentId,
-    name,
+    ...(parentId !== undefined && { parentId }),
+    ...(name !== undefined && { name }),
     depth,
     steps,
     path,
     createdAt,
-    parent,
+    ...(parent !== undefined && { parent }),
     get fullPath() {
       if (this.parent) {
         return [...this.parent.fullPath, ...this.path]
@@ -308,10 +313,10 @@ function createRestoredStep(serialized: SerializedCascadeStep, contextName?: str
   const step: CascadeStep = {
     name: serialized.name,
     startedAt: serialized.startedAt,
-    completedAt: serialized.completedAt,
-    duration: serialized.duration,
+    ...(serialized.completedAt !== undefined && { completedAt: serialized.completedAt }),
+    ...(serialized.duration !== undefined && { duration: serialized.duration }),
     status: serialized.status,
-    metadata: serialized.metadata ? { ...serialized.metadata } : undefined,
+    ...(serialized.metadata !== undefined && { metadata: { ...serialized.metadata } }),
     complete: () => {
       step.status = 'completed'
       step.completedAt = Date.now()
@@ -327,15 +332,15 @@ function createRestoredStep(serialized: SerializedCascadeStep, contextName?: str
       step.metadata = { ...step.metadata, ...data }
     },
     to5WHEvent: () => ({
-      who: (step.metadata?.actor as string) || 'system',
-      what: (step.metadata?.action as string) || step.name,
+      who: (step.metadata?.['actor'] as string) || 'system',
+      what: (step.metadata?.['action'] as string) || step.name,
       when: step.startedAt,
       where: contextName || 'unknown',
-      why: step.metadata?.reason as string,
+      ...(step.metadata?.['reason'] !== undefined && { why: step.metadata['reason'] as string }),
       how: {
-        duration: step.duration,
+        ...(step.duration !== undefined && { duration: step.duration }),
         status: step.status,
-        metadata: step.metadata,
+        ...(step.metadata !== undefined && { metadata: step.metadata }),
       },
     }),
   }
@@ -356,7 +361,7 @@ export function recordStep(
     name,
     startedAt,
     status: 'running',
-    metadata: metadata ? { ...metadata } : undefined,
+    ...(metadata !== undefined && { metadata: { ...metadata } }),
     complete: () => {
       step.status = 'completed'
       step.completedAt = Date.now()
@@ -373,15 +378,15 @@ export function recordStep(
       step.metadata = { ...step.metadata, ...data }
     },
     to5WHEvent: () => ({
-      who: (step.metadata?.actor as string) || 'system',
-      what: (step.metadata?.action as string) || name,
+      who: (step.metadata?.['actor'] as string) || 'system',
+      what: (step.metadata?.['action'] as string) || name,
       when: startedAt,
       where: ctx.name || 'cascade',
-      why: step.metadata?.reason as string,
+      ...(step.metadata?.['reason'] !== undefined && { why: step.metadata['reason'] as string }),
       how: {
-        duration: step.duration,
+        ...(step.duration !== undefined && { duration: step.duration }),
         status: step.status,
-        metadata: step.metadata,
+        ...(step.metadata !== undefined && { metadata: step.metadata }),
       },
     }),
   }
@@ -408,16 +413,16 @@ function serializeContext(ctx: CascadeContext): SerializedCascadeContext {
   return {
     correlationId: ctx.correlationId,
     spanId: ctx.spanId,
-    parentId: ctx.parentId,
-    name: ctx.name,
+    ...(ctx.parentId !== undefined && { parentId: ctx.parentId }),
+    ...(ctx.name !== undefined && { name: ctx.name }),
     depth: ctx.depth,
     steps: ctx.steps.map((step) => ({
       name: step.name,
       startedAt: step.startedAt,
-      completedAt: step.completedAt,
-      duration: step.duration,
+      ...(step.completedAt !== undefined && { completedAt: step.completedAt }),
+      ...(step.duration !== undefined && { duration: step.duration }),
       status: step.status,
-      metadata: step.metadata,
+      ...(step.metadata !== undefined && { metadata: step.metadata }),
     })),
     path: ctx.path,
     createdAt: ctx.createdAt,
@@ -438,7 +443,8 @@ function formatContext(ctx: CascadeContext): string {
   lines.push(`  Depth: ${ctx.depth}`)
   lines.push(`  Steps:`)
   for (const step of ctx.steps) {
-    const status = step.status === 'completed' ? '[OK]' : step.status === 'failed' ? '[FAIL]' : '[...]'
+    const status =
+      step.status === 'completed' ? '[OK]' : step.status === 'failed' ? '[FAIL]' : '[...]'
     const duration = step.duration ? ` (${step.duration}ms)` : ''
     lines.push(`    ${status} ${step.name}${duration}`)
   }
@@ -464,7 +470,8 @@ function formatContextTree(ctx: CascadeContext): string {
     const indent = '  '.repeat(i)
     lines.push(`${indent}${context.name || 'cascade'} (depth: ${context.depth})`)
     for (const step of context.steps) {
-      const status = step.status === 'completed' ? '[OK]' : step.status === 'failed' ? '[FAIL]' : '[...]'
+      const status =
+        step.status === 'completed' ? '[OK]' : step.status === 'failed' ? '[FAIL]' : '[...]'
       const duration = step.duration ? ` (${step.duration}ms)` : ''
       lines.push(`${indent}  ${status} ${step.name}${duration}`)
     }

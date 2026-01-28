@@ -115,8 +115,9 @@ export const timerRegistry = {
 declare const global: typeof globalThis
 
 function registerGlobalFunctions(target: typeof globalThis) {
-  (target as unknown as Record<string, unknown>).getActiveWorkflowTimerCount = getActiveTimerCount;
-  (target as unknown as Record<string, unknown>).clearAllWorkflowTimers = clearAllTimers
+  ;(target as unknown as Record<string, unknown>)['getActiveWorkflowTimerCount'] =
+    getActiveTimerCount
+  ;(target as unknown as Record<string, unknown>)['clearAllWorkflowTimers'] = clearAllTimers
 }
 
 // Register on globalThis (standard)

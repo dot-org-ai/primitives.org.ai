@@ -230,7 +230,7 @@ export type WorkflowDefinition = BuiltWorkflow<unknown, unknown>
 function parseDuration(duration: string | number): number {
   if (typeof duration === 'number') return duration
   const match = duration.match(/^(\d+)(ms|s|m|h)?$/)
-  if (!match) return parseInt(duration, 10)
+  if (!match || match[1] === undefined) return parseInt(duration, 10)
   const value = parseInt(match[1], 10)
   const unit = match[2] || 'ms'
   switch (unit) {
@@ -499,7 +499,7 @@ export class WorkflowBuilder<TInput = unknown, TOutput = unknown> {
       loop: {
         condition,
         body,
-        options,
+        ...(options !== undefined && { options }),
       },
     })
     this._lastOpWasConfig = false
@@ -520,7 +520,7 @@ export class WorkflowBuilder<TInput = unknown, TOutput = unknown> {
       forEach: {
         itemsSelector,
         body,
-        options,
+        ...(options !== undefined && { options }),
       },
     })
     this._lastOpWasConfig = false
@@ -585,18 +585,20 @@ export class WorkflowBuilder<TInput = unknown, TOutput = unknown> {
       const targetStepIndex =
         this._lastConfigStepIndex >= 0 ? this._lastConfigStepIndex : lastStepIndex
       const targetStep = this._steps[targetStepIndex]
-      if (targetStep.errorHandler) {
-        // Chain error handlers
-        const previousHandler = targetStep.errorHandler
-        targetStep.errorHandler = async (error, ctx) => {
-          try {
-            return await previousHandler(error, ctx)
-          } catch (e) {
-            return await handler(e as Error, ctx)
+      if (targetStep) {
+        if (targetStep.errorHandler) {
+          // Chain error handlers
+          const previousHandler = targetStep.errorHandler
+          targetStep.errorHandler = async (error, ctx) => {
+            try {
+              return await previousHandler(error, ctx)
+            } catch (e) {
+              return await handler(e as Error, ctx)
+            }
           }
+        } else {
+          targetStep.errorHandler = handler
         }
-      } else {
-        targetStep.errorHandler = handler
       }
     }
     return this
@@ -621,7 +623,10 @@ export class WorkflowBuilder<TInput = unknown, TOutput = unknown> {
       this._lastConfigStepIndex = -1
     } else if (this._lastDirectlyConfiguredStep === lastStepIndex) {
       // Same step was already configured - still step level for this step
-      this._steps[lastStepIndex].timeout = timeout
+      const lastStep = this._steps[lastStepIndex]
+      if (lastStep) {
+        lastStep.timeout = timeout
+      }
       this._lastConfigStepIndex = lastStepIndex
     } else if (
       this._lastDirectlyConfiguredStep === lastStepIndex - 1 ||
@@ -632,7 +637,10 @@ export class WorkflowBuilder<TInput = unknown, TOutput = unknown> {
       const unconfiguredStepsCount = lastStepIndex - this._lastDirectlyConfiguredStep
       if (unconfiguredStepsCount === 1) {
         // Only one step since last config - apply to that step
-        this._steps[lastStepIndex].timeout = timeout
+        const lastStep = this._steps[lastStepIndex]
+        if (lastStep) {
+          lastStep.timeout = timeout
+        }
         this._lastConfigStepIndex = lastStepIndex
         this._lastDirectlyConfiguredStep = lastStepIndex
       } else {
@@ -658,7 +666,10 @@ export class WorkflowBuilder<TInput = unknown, TOutput = unknown> {
   retry(config: RetryConfig): WorkflowBuilder<TInput, TOutput> {
     if (this._steps.length > 0 && !this._lastOpWasConfig) {
       // Apply to last step
-      this._steps[this._steps.length - 1].retry = config
+      const lastStep = this._steps[this._steps.length - 1]
+      if (lastStep) {
+        lastStep.retry = config
+      }
       this._lastConfigStepIndex = this._steps.length - 1
     } else {
       // Apply as workflow default

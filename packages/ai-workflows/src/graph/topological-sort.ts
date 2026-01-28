@@ -86,9 +86,7 @@ export class MissingNodeError extends Error {
   referencedBy: string
 
   constructor(missingNode: string, referencedBy: string) {
-    super(
-      `Missing dependency '${missingNode}' referenced by '${referencedBy}'`
-    )
+    super(`Missing dependency '${missingNode}' referenced by '${referencedBy}'`)
     this.name = 'MissingNodeError'
     this.missingNode = missingNode
     this.referencedBy = referencedBy
@@ -168,9 +166,7 @@ export function topologicalSortKahn(
 
   // Start with nodes that have no dependencies (in-degree 0)
   // Sort alphabetically for determinism
-  const queue: string[] = [...nodeSet]
-    .filter((id) => inDegreesCopy.get(id) === 0)
-    .sort()
+  const queue: string[] = [...nodeSet].filter((id) => inDegreesCopy.get(id) === 0).sort()
 
   while (queue.length > 0) {
     // Sort queue for deterministic ordering
@@ -293,7 +289,7 @@ export function topologicalSortDFS(
   return {
     order: hasCycle ? order : order, // DFS produces correct order
     hasCycle,
-    cyclePath,
+    ...(cyclePath !== undefined && { cyclePath }),
   }
 }
 
@@ -318,7 +314,9 @@ export function topologicalSort(
     // Kahn's algorithm doesn't provide cycle path, so detect it separately
     if (result.hasCycle) {
       const dfsResult = topologicalSortDFS(nodes, options)
-      result.cyclePath = dfsResult.cyclePath
+      if (dfsResult.cyclePath !== undefined) {
+        result = { ...result, cyclePath: dfsResult.cyclePath }
+      }
     }
   } else {
     result = topologicalSortDFS(nodes, options)

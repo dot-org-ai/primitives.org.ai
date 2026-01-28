@@ -54,7 +54,7 @@ export function registerEventHandler(
     event,
     handler,
     source: handler.toString(),
-    dependencies,
+    ...(dependencies !== undefined && { dependencies }),
   })
 }
 
@@ -105,20 +105,19 @@ export function createTypedOnProxy(registerCallback: OnProxyRegistrationCallback
       return (handler: EventHandler, dependencies?: DependencyConfig) => {
         registerCallback(noun, event, handler, dependencies)
       }
-    }
+    },
   })
 
   // Create typed handler for the top-level proxy (noun accessors)
   const onHandler: OnProxyHandler = {
-    get(
-      _target: Record<string, NounEventProxy>,
-      noun: string,
-      _receiver: unknown
-    ): NounEventProxy {
+    get(_target: Record<string, NounEventProxy>, noun: string, _receiver: unknown): NounEventProxy {
       // Return a proxy for the event level with typed handler
-      const eventTarget: Record<string, (handler: EventHandler, dependencies?: DependencyConfig) => void> = {}
+      const eventTarget: Record<
+        string,
+        (handler: EventHandler, dependencies?: DependencyConfig) => void
+      > = {}
       return new Proxy(eventTarget, createNounHandler(noun)) as NounEventProxy
-    }
+    },
   }
 
   // Create and return the typed OnProxy

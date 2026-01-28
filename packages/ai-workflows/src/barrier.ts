@@ -250,11 +250,12 @@ export class Barrier<T = unknown> {
    * Get current progress information
    */
   getProgress(): BarrierProgress<T> {
+    const latestValue = this._arrived[this._arrived.length - 1]
     return {
       arrived: this._arrived.length,
       expected: this._expected,
       percentage: Math.round((this._arrived.length / this._expected) * 100),
-      latest: this._arrived[this._arrived.length - 1],
+      ...(latestValue !== undefined && { latest: latestValue }),
     }
   }
 

@@ -190,7 +190,6 @@ export interface StepChain {
   /** Declare dependencies for this step */
   dependsOn(step: string, options?: DependencyOptions): StepChain
   dependsOn(steps: string[]): StepChain
-  dependsOn(...steps: string[]): StepChain
   /** Set timeout for this step */
   timeout(duration: string | number): StepChain
   /** Set retry configuration */
@@ -284,7 +283,9 @@ class WorkflowBuilderImpl
       throw new Error('Workflow name is required')
     }
     this._name = name
-    this._config = config
+    if (config !== undefined) {
+      this._config = config
+    }
   }
 
   get name(): string {
@@ -309,7 +310,7 @@ class WorkflowBuilderImpl
 
     if (nameOrStep instanceof DurableStep) {
       name = nameOrStep.name
-      fn = nameOrStep.fn as (input: TI, ctx: ExecutionContext) => Promise<TO>
+      fn = nameOrStep.fn as unknown as (input: TI, ctx: ExecutionContext) => Promise<TO>
       stepConfig = nameOrStep.config
       durableStep = nameOrStep
     } else {
@@ -330,14 +331,14 @@ class WorkflowBuilderImpl
     const stepDef: StepDefinition<TI, TO> = {
       name,
       fn,
-      config: stepConfig,
+      ...(stepConfig !== undefined && { config: stepConfig }),
       dependencies: [],
       durableStep:
         durableStep ??
         new DurableStep(
           name,
           stepConfig ?? {},
-          fn as (input: TI, ctx?: StepContext) => Promise<TO>
+          fn as unknown as (input: TI, ctx?: StepContext) => Promise<TO>
         ),
     }
 
@@ -375,7 +376,10 @@ class WorkflowBuilderImpl
 
     // Add dependencies
     for (const depName of dependencyNames) {
-      currentStepDef.dependencies.push({ name: depName, options: dependencyOptions })
+      currentStepDef.dependencies.push({
+        name: depName,
+        ...(dependencyOptions !== undefined && { options: dependencyOptions }),
+      })
     }
 
     return this
@@ -525,7 +529,7 @@ class WorkflowBuilderImpl
       this._eventTriggers.push({
         event: this._currentEvent,
         stepName,
-        filter: this._currentFilter ?? undefined,
+        ...(this._currentFilter !== null && { filter: this._currentFilter }),
       })
 
       this._currentEvent = null
@@ -550,9 +554,9 @@ class WorkflowBuilderImpl
 
       this._scheduleTriggers.push({
         schedule: this._currentSchedule,
-        value: this._currentScheduleValue ?? undefined,
-        time: this._currentTime ?? undefined,
-        timezone: this._currentTimezone ?? undefined,
+        ...(this._currentScheduleValue !== null && { value: this._currentScheduleValue }),
+        ...(this._currentTime !== null && { time: this._currentTime }),
+        ...(this._currentTimezone !== null && { timezone: this._currentTimezone }),
         stepName,
       })
 
@@ -617,7 +621,7 @@ class WorkflowBuilderImpl
       }),
       dependencyGraph: new Map(dependencyGraph),
       executionOrder,
-      metadata: this._config,
+      ...(this._config !== undefined && { metadata: this._config }),
       isCloudflareCompatible: true,
       execute: async (input?: unknown) => {
         return this.executeWorkflow(steps, dependencyGraph, executionOrder, input)
@@ -790,7 +794,9 @@ export class WorkflowBuilder {
 
   private constructor(name: string, config?: WorkflowBuilderConfig) {
     this.name = name
-    this.config = config
+    if (config !== undefined) {
+      this.config = config
+    }
     this.impl = new WorkflowBuilderImpl(name, config)
   }
 
@@ -848,7 +854,6 @@ export class WorkflowBuilder {
    */
   dependsOn(step: string, options?: DependencyOptions): WorkflowBuilder
   dependsOn(steps: string[]): WorkflowBuilder
-  dependsOn(...steps: string[]): WorkflowBuilder
   dependsOn(stepOrSteps: string | string[], options?: DependencyOptions): WorkflowBuilder {
     this.impl.dependsOn(stepOrSteps, options)
     return this

@@ -160,6 +160,63 @@ export {
   type SkipCondition,
 } from './cascade-executor.js'
 
+// DurableStep - Cloudflare Workflows step wrapper
+export {
+  DurableStep,
+  StepContext as DurableStepContext,
+  type StepConfig,
+  type StepMetadata,
+  type RetryConfig as DurableRetryConfig,
+  type WorkflowStep,
+  type StepFunction as DurableStepFunction,
+  // Cascade types
+  DurableCascadeStep,
+  AllTiersFailed,
+  CascadeTimeout,
+  DEFAULT_CASCADE_TIMEOUTS,
+  CASCADE_TIER_ORDER,
+  type CascadeTier,
+  type CascadeConfig as DurableCascadeConfig,
+  type CascadeTierConfig,
+  type CascadeTierResult,
+  type CascadeResult as DurableCascadeResult,
+  type CascadeContext as DurableCascadeContext,
+  type CascadeTierContext,
+  type AiBinding,
+  type HumanReviewRequest,
+  type CodeTierHandler,
+  type AiTierHandler,
+  type HumanTierHandler,
+} from './worker/durable-step.js'
+
+// WorkflowBuilder DSL - Fluent API for building durable workflows
+export {
+  workflow,
+  WorkflowBuilder,
+  type StepDefinition,
+  type StepChain,
+  type ConditionalChain,
+  type LoopChain,
+  type BuiltWorkflow,
+  type StepContext,
+  type RetryConfig,
+  type StepFunction,
+  type ConditionFunction,
+  type ErrorHandler,
+  type LoopOptions,
+  type ForEachOptions,
+} from './workflow-builder.js'
+
+// WorkflowStateAdapter - Persistent state storage
+export {
+  WorkflowStateAdapter,
+  type PersistedWorkflowState,
+  type StepCheckpoint,
+  type WorkflowHistoryEntry as StateHistoryEntry,
+  type SnapshotInfo,
+  type DatabaseConnection,
+} from './worker/state-adapter.js'
+
 // Types
 export type {
   EventHandler,

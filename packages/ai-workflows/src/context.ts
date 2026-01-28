@@ -2,7 +2,15 @@
  * Workflow context implementation
  */
 
-import type { WorkflowContext, WorkflowState, WorkflowHistoryEntry, OnProxy, EveryProxy, EveryProxyTarget, ScheduleHandler } from './types.js'
+import type {
+  WorkflowContext,
+  WorkflowState,
+  WorkflowHistoryEntry,
+  OnProxy,
+  EveryProxy,
+  EveryProxyTarget,
+  ScheduleHandler,
+} from './types.js'
 
 /**
  * Event bus interface (imported from send.ts to avoid circular dependency)
@@ -30,12 +38,15 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
   // Create no-op proxies for on/every (these are used in send context, not workflow setup)
   const noOpOnProxy = new Proxy({} as OnProxy, {
     get() {
-      return new Proxy({}, {
-        get() {
-          return () => {}
+      return new Proxy(
+        {},
+        {
+          get() {
+            return () => {}
+          },
         }
-      })
-    }
+      )
+    },
   })
 
   // Cast to EveryProxy is safe: Proxy handler implements all EveryProxy behaviors dynamically
@@ -46,7 +57,7 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
       get() {
         return () => () => {}
       },
-      apply() {}
+      apply() {},
     }
   ) as EveryProxy
 
@@ -65,7 +76,7 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
       const eventId = crypto.randomUUID()
       addHistory({ type: 'event', name: event, data })
       // Fire async but don't await - guaranteed delivery via event bus
-      eventBus.emit(event, { ...data as object, _eventId: eventId }).catch(err => {
+      eventBus.emit(event, { ...(data as object), _eventId: eventId }).catch((err) => {
         console.error(`[workflow] Failed to send event ${event}:`, err)
       })
       return eventId
@@ -87,7 +98,7 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
     getState(): WorkflowState {
       // Return a deep copy to prevent mutation
       return {
-        current: workflowState.current,
+        ...(workflowState.current !== undefined && { current: workflowState.current }),
         context: { ...workflowState.context },
         history: [...workflowState.history],
       }
@@ -112,7 +123,9 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
  * Create an isolated workflow context (not connected to event bus)
  * Useful for testing or standalone execution
  */
-export function createIsolatedContext(): WorkflowContext & { getEmittedEvents: () => Array<{ event: string; data: unknown }> } {
+export function createIsolatedContext(): WorkflowContext & {
+  getEmittedEvents: () => Array<{ event: string; data: unknown }>
+} {
   const emittedEvents: Array<{ event: string; data: unknown }> = []
 
   const ctx = createWorkflowContext({

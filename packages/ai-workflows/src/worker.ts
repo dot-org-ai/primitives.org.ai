@@ -29,13 +29,8 @@
  * @packageDocumentation
  */
 
-import {
-  WorkerEntrypoint,
-  RpcTarget,
-  WorkflowEntrypoint,
-  WorkflowEvent,
-  WorkflowStep,
-} from 'cloudflare:workers'
+import { WorkerEntrypoint, RpcTarget, WorkflowEntrypoint, WorkflowStep } from 'cloudflare:workers'
+import type { WorkflowEvent } from 'cloudflare:workers'
 import type {
   WorkflowContext,
   WorkflowState,
@@ -46,7 +41,14 @@ import type {
   ScheduleInterval,
   ParsedEvent,
 } from './types.js'
-import { DurableStep, StepContext, type StepConfig } from './worker/durable-step.js'
+import {
+  DurableStep,
+  StepContext,
+  type StepConfig,
+  DEFAULT_CASCADE_TIMEOUTS,
+  AllTiersFailed,
+  CascadeTimeout,
+} from './worker/durable-step.js'
 import { Workflow, parseEvent, createTestContext } from './workflow.js'
 import { registerEventHandler, getEventHandlers, clearEventHandlers } from './on.js'
 import {
@@ -58,13 +60,20 @@ import {
   formatInterval,
 } from './every.js'
 import { send, getEventBus } from './send.js'
+import {
+  WorkflowStateAdapter,
+  type DatabaseConnection,
+  type PersistedWorkflowState,
+  type StepCheckpoint,
+  type SnapshotInfo,
+} from './worker/state-adapter.js'
 
 /**
  * Environment bindings for the worker
  */
 export interface Env {
-  // Future: Add Durable Object binding for workflow persistence
-  // WORKFLOW_DO?: DurableObjectNamespace
+  // Database binding for workflow state persistence
+  DB?: DatabaseConnection
 }
 
 /**
@@ -109,10 +118,348 @@ function generateWorkflowId(): string {
  *
  * Exposes all required methods as RPC-callable methods.
  * This is the core service class that can be instantiated directly.
+ *
+ * ## State Persistence
+ *
+ * The service supports optional state persistence via WorkflowStateAdapter.
+ * When a database connection is provided, workflow state is automatically
+ * persisted across restarts and can be queried.
+ *
+ * @example
+ * ```typescript
+ * // With state persistence
+ * import { DB } from 'ai-database'
+ * import { WorkflowServiceCore } from 'ai-workflows/worker'
+ *
+ * const { db } = DB({ WorkflowState: { status: 'string' } })
+ * const service = new WorkflowServiceCore(db)
+ *
+ * // Create and persist workflow
+ * const workflow = service.create('order-processor')
+ * await service.persistState(workflow.id, { status: 'running' })
+ *
+ * // Query workflows by status
+ * const running = await service.queryByStatus('running')
+ * ```
  */
 export class WorkflowServiceCore extends RpcTarget {
-  constructor() {
+  private stateAdapter: WorkflowStateAdapter | null = null
+
+  /**
+   * Create a WorkflowServiceCore instance
+   *
+   * @param database - Optional database connection for state persistence
+   */
+  constructor(database?: DatabaseConnection) {
     super()
+    if (database) {
+      this.stateAdapter = new WorkflowStateAdapter(database)
+    }
+  }
+
+  // ==================== State Persistence ====================
+
+  /**
+   * Check if state persistence is enabled
+   *
+   * @returns True if a database connection was provided
+   */
+  hasStatePersistence(): boolean {
+    return this.stateAdapter !== null
+  }
+
+  /**
+   * Get the state adapter for direct access
+   *
+   * @returns WorkflowStateAdapter or null if persistence is not enabled
+   */
+  getStateAdapter(): WorkflowStateAdapter | null {
+    return this.stateAdapter
+  }
+
+  /**
+   * Persist workflow state to the database
+   *
+   * Saves the current state of a workflow. If the workflow doesn't exist,
+   * creates a new record. If it exists, updates the existing record.
+   *
+   * @param workflowId - The workflow ID
+   * @param state - Partial state to save (merged with existing)
+   * @throws Error if state persistence is not enabled
+   *
+   * @example
+   * ```typescript
+   * await service.persistState('wf-123', {
+   *   status: 'running',
+   *   currentStep: 'process-payment',
+   *   context: { orderId: 'order-1' }
+   * })
+   * ```
+   */
+  async persistState(workflowId: string, state: Partial<PersistedWorkflowState>): Promise<void> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    await this.stateAdapter.save(workflowId, state)
+  }
+
+  /**
+   * Load persisted workflow state from the database
+   *
+   * @param workflowId - The workflow ID to load
+   * @returns The persisted state or null if not found
+   * @throws Error if state persistence is not enabled
+   *
+   * @example
+   * ```typescript
+   * const state = await service.loadPersistedState('wf-123')
+   * if (state) {
+   *   console.log(`Workflow status: ${state.status}`)
+   *   console.log(`Current step: ${state.currentStep}`)
+   * }
+   * ```
+   */
+  async loadPersistedState(workflowId: string): Promise<PersistedWorkflowState | null> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.load(workflowId)
+  }
+
+  /**
+   * Save a checkpoint for a workflow step
+   *
+   * Checkpoints track the execution state of individual steps within a workflow.
+   * They enable resumption from the last successful step after failures.
+   *
+   * @param workflowId - The workflow ID
+   * @param stepId - The step ID
+   * @param checkpoint - Checkpoint data including status and result
+   * @throws Error if state persistence is not enabled
+   *
+   * @example
+   * ```typescript
+   * await service.saveCheckpoint('wf-123', 'process-payment', {
+   *   stepId: 'process-payment',
+   *   status: 'completed',
+   *   result: { transactionId: 'tx-456' },
+   *   attempt: 1,
+   *   completedAt: new Date()
+   * })
+   * ```
+   */
+  async saveCheckpoint(
+    workflowId: string,
+    stepId: string,
+    checkpoint: StepCheckpoint
+  ): Promise<void> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    await this.stateAdapter.checkpoint(workflowId, stepId, checkpoint)
+  }
+
+  /**
+   * Get a checkpoint for a workflow step
+   *
+   * @param workflowId - The workflow ID
+   * @param stepId - The step ID
+   * @returns The checkpoint or null if not found
+   * @throws Error if state persistence is not enabled
+   */
+  async getCheckpoint(workflowId: string, stepId: string): Promise<StepCheckpoint | null> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.getCheckpoint(workflowId, stepId)
+  }
+
+  /**
+   * Update state with optimistic locking
+   *
+   * Only updates if the current version matches expectedVersion.
+   * Use this for concurrent updates to prevent lost writes.
+   *
+   * @param workflowId - The workflow ID
+   * @param expectedVersion - Expected current version
+   * @param state - State updates to apply
+   * @returns true if updated, false if version mismatch (concurrent modification)
+   * @throws Error if state persistence is not enabled
+   *
+   * @example
+   * ```typescript
+   * const state = await service.loadPersistedState('wf-123')
+   * const success = await service.updateStateWithVersion(
+   *   'wf-123',
+   *   state.version,
+   *   { status: 'completed' }
+   * )
+   * if (!success) {
+   *   console.log('Concurrent modification detected, retrying...')
+   * }
+   * ```
+   */
+  async updateStateWithVersion(
+    workflowId: string,
+    expectedVersion: number,
+    state: Partial<PersistedWorkflowState>
+  ): Promise<boolean> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.updateWithVersion(workflowId, expectedVersion, state)
+  }
+
+  /**
+   * Query workflows by status
+   *
+   * @param status - Status to filter by ('pending', 'running', 'completed', 'failed', 'paused')
+   * @returns Array of workflows matching the status
+   * @throws Error if state persistence is not enabled
+   *
+   * @example
+   * ```typescript
+   * const runningWorkflows = await service.queryByStatus('running')
+   * console.log(`${runningWorkflows.length} workflows currently running`)
+   * ```
+   */
+  async queryByStatus(status: PersistedWorkflowState['status']): Promise<PersistedWorkflowState[]> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.queryByStatus(status)
+  }
+
+  /**
+   * Query multiple workflows by their IDs
+   *
+   * @param workflowIds - Array of workflow IDs to query
+   * @returns Array of found workflows (non-existent IDs are excluded)
+   * @throws Error if state persistence is not enabled
+   */
+  async queryByIds(workflowIds: string[]): Promise<PersistedWorkflowState[]> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.queryByIds(workflowIds)
+  }
+
+  /**
+   * Delete persisted workflow state
+   *
+   * @param workflowId - The workflow ID to delete
+   * @returns true if deleted, false if not found
+   * @throws Error if state persistence is not enabled
+   */
+  async deletePersistedState(workflowId: string): Promise<boolean> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.delete(workflowId)
+  }
+
+  /**
+   * List all persisted workflows with pagination
+   *
+   * @param options - Pagination options (limit, offset)
+   * @returns Array of workflows
+   * @throws Error if state persistence is not enabled
+   *
+   * @example
+   * ```typescript
+   * // Get first 10 workflows
+   * const workflows = await service.listPersistedWorkflows({ limit: 10, offset: 0 })
+   *
+   * // Get next page
+   * const nextPage = await service.listPersistedWorkflows({ limit: 10, offset: 10 })
+   * ```
+   */
+  async listPersistedWorkflows(options?: {
+    limit?: number
+    offset?: number
+  }): Promise<PersistedWorkflowState[]> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.listAll(options)
+  }
+
+  /**
+   * Create a snapshot of current workflow state
+   *
+   * Snapshots allow point-in-time recovery of workflow state.
+   * Useful before executing risky operations.
+   *
+   * @param workflowId - The workflow ID
+   * @param label - Optional human-readable label
+   * @returns Snapshot ID
+   * @throws Error if state persistence is not enabled or workflow not found
+   *
+   * @example
+   * ```typescript
+   * const snapshotId = await service.createSnapshot('wf-123', 'before-payment')
+   * // ... execute risky operation ...
+   * // If something goes wrong:
+   * await service.restoreSnapshot('wf-123', snapshotId)
+   * ```
+   */
+  async createSnapshot(workflowId: string, label?: string): Promise<string> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.createSnapshot(workflowId, label)
+  }
+
+  /**
+   * Restore workflow state from a snapshot
+   *
+   * @param workflowId - The workflow ID
+   * @param snapshotId - The snapshot ID to restore from
+   * @throws Error if state persistence is not enabled or snapshot not found
+   */
+  async restoreSnapshot(workflowId: string, snapshotId: string): Promise<void> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    await this.stateAdapter.restoreSnapshot(workflowId, snapshotId)
+  }
+
+  /**
+   * Get all snapshots for a workflow
+   *
+   * @param workflowId - The workflow ID
+   * @returns Array of snapshot metadata
+   * @throws Error if state persistence is not enabled
+   */
+  async getSnapshots(workflowId: string): Promise<SnapshotInfo[]> {
+    if (!this.stateAdapter) {
+      throw new Error(
+        'State persistence is not enabled. Provide a database connection to the constructor.'
+      )
+    }
+    return this.stateAdapter.getSnapshots(workflowId)
   }
 
   // ==================== Workflow Creation ====================
@@ -604,12 +951,15 @@ export class WorkflowServiceCore extends RpcTarget {
     }
 
     if (schedule in scheduleMap) {
-      return scheduleMap[schedule]
+      const result = scheduleMap[schedule]
+      if (result) {
+        return result
+      }
     }
 
     // Handle numeric intervals like "5 minutes"
     const match = schedule.match(/^(\d+)\s*(second|minute|hour|day|week)s?$/)
-    if (match) {
+    if (match && match[1] !== undefined && match[2] !== undefined) {
       const value = parseInt(match[1], 10)
       const type = match[2] as 'second' | 'minute' | 'hour' | 'day' | 'week'
       return { type, value }
@@ -697,7 +1047,10 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
    * Main workflow entry point
    * Routes to different test scenarios based on the workflow instance ID
    */
-  async run(event: WorkflowEvent<TestWorkflowParams>, step: WorkflowStep): Promise<unknown> {
+  override async run(
+    event: WorkflowEvent<TestWorkflowParams>,
+    step: WorkflowStep
+  ): Promise<unknown> {
     // Get the workflow instance ID from the event or use a default
     // WorkflowEvent provides instanceId property
     const instanceId = (event as unknown as { instanceId?: string }).instanceId ?? 'default'
@@ -907,7 +1260,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
       'meta-step',
       { retries: { limit: 5 } },
       async (_input, ctx) => {
-        return ctx.metadata
+        return ctx!.metadata
       }
     )
     return durableStep.run(step, undefined as void)
@@ -918,7 +1271,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
    */
   private async sideEffectTest(step: WorkflowStep): Promise<{ sent: boolean }> {
     const durableStep = new DurableStep('send-email-step', async (_input, ctx) => {
-      const result = await ctx.do('send-email', async () => {
+      const result = await ctx!.do('send-email', async () => {
         return { sent: true }
       })
       return result
@@ -931,7 +1284,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
    */
   private async retryConfigTest(step: WorkflowStep): Promise<{ data: string }> {
     const durableStep = new DurableStep('fetch-step', async (_input, ctx) => {
-      const result = await ctx.do(
+      const result = await ctx!.do(
         'fetch-api',
         { retries: { limit: 3, delay: '100ms' } },
         async () => {
@@ -952,7 +1305,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
       'failing-effect-step',
       { retries: { limit: 0 } },
       async (_input, ctx) => {
-        return ctx.do('fail-effect', { retries: { limit: 0 } }, async () => {
+        return ctx!.do('fail-effect', { retries: { limit: 0 } }, async () => {
           throw new Error('Side effect failed')
         })
       }
@@ -966,9 +1319,9 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
   private async sequentialTest(step: WorkflowStep): Promise<string[]> {
     const durableStep = new DurableStep('sequential-step', async (_input, ctx) => {
       const results: string[] = []
-      results.push(await ctx.do('step-1', async () => 'step-1'))
-      results.push(await ctx.do('step-2', async () => 'step-2'))
-      results.push(await ctx.do('step-3', async () => 'step-3'))
+      results.push(await ctx!.do('step-1', async () => 'step-1'))
+      results.push(await ctx!.do('step-2', async () => 'step-2'))
+      results.push(await ctx!.do('step-3', async () => 'step-3'))
       return results
     })
     return durableStep.run(step, undefined as void)
@@ -1033,7 +1386,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
    */
   private async stepIdTest(step: WorkflowStep): Promise<{ stepId: string }> {
     const durableStep = new DurableStep('named-step', async (_input, ctx) => {
-      return { stepId: ctx.metadata.id }
+      return { stepId: ctx!.metadata.id }
     })
     return durableStep.run(step, undefined as void)
   }
@@ -1043,7 +1396,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
    */
   private async attemptTest(step: WorkflowStep): Promise<{ attempt: number }> {
     const durableStep = new DurableStep('attempt-step', async (_input, ctx) => {
-      return { attempt: ctx.metadata.attempt }
+      return { attempt: ctx!.metadata.attempt }
     })
     return durableStep.run(step, undefined as void)
   }
@@ -1056,7 +1409,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
       'retries-step',
       { retries: { limit: 5 } },
       async (_input, ctx) => {
-        return { retriesLimit: ctx.metadata.retries }
+        return { retriesLimit: ctx!.metadata.retries }
       }
     )
     return durableStep.run(step, undefined as void)
@@ -1067,7 +1420,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
    */
   private async noRetriesTest(step: WorkflowStep): Promise<{ retriesLimit: number }> {
     const durableStep = new DurableStep('no-retries-step', async (_input, ctx) => {
-      return { retriesLimit: ctx.metadata.retries }
+      return { retriesLimit: ctx!.metadata.retries }
     })
     return durableStep.run(step, undefined as void)
   }
@@ -1490,7 +1843,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
    */
   private async nestedDoTest(step: WorkflowStep): Promise<{ nestedResult: string }> {
     const durableStep = new DurableStep('outer-step', async (_input, ctx) => {
-      const innerResult = await ctx.do('inner-step', async () => {
+      const innerResult = await ctx!.do('inner-step', async () => {
         return 'nested-success'
       })
       return { nestedResult: innerResult }
