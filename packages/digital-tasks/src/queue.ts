@@ -88,10 +88,16 @@ class InMemoryTaskQueue implements TaskQueue {
     if (options.status && options.status !== task.status) {
       events.push({
         id: `evt_${Date.now()}_status`,
-        type: options.status === 'completed' ? 'completed' :
-              options.status === 'failed' ? 'failed' :
-              options.status === 'in_progress' ? 'started' :
-              options.status === 'blocked' ? 'blocked' : 'progress',
+        type:
+          options.status === 'completed'
+            ? 'completed'
+            : options.status === 'failed'
+            ? 'failed'
+            : options.status === 'in_progress'
+            ? 'started'
+            : options.status === 'blocked'
+            ? 'blocked'
+            : 'progress',
         timestamp: new Date(),
         message: `Status changed from ${task.status} to ${options.status}`,
       })
@@ -102,11 +108,24 @@ class InMemoryTaskQueue implements TaskQueue {
     if (options.progress) {
       progressUpdate = {
         percent: options.progress.percent ?? task.progress?.percent ?? 0,
-        step: options.progress.step ?? task.progress?.step,
-        totalSteps: options.progress.totalSteps ?? task.progress?.totalSteps,
-        currentStep: options.progress.currentStep ?? task.progress?.currentStep,
-        estimatedTimeRemaining: options.progress.estimatedTimeRemaining ?? task.progress?.estimatedTimeRemaining,
         updatedAt: new Date(),
+      }
+      const step = options.progress.step ?? task.progress?.step
+      if (step !== undefined) {
+        progressUpdate.step = step
+      }
+      const totalSteps = options.progress.totalSteps ?? task.progress?.totalSteps
+      if (totalSteps !== undefined) {
+        progressUpdate.totalSteps = totalSteps
+      }
+      const currentStep = options.progress.currentStep ?? task.progress?.currentStep
+      if (currentStep !== undefined) {
+        progressUpdate.currentStep = currentStep
+      }
+      const estTime =
+        options.progress.estimatedTimeRemaining ?? task.progress?.estimatedTimeRemaining
+      if (estTime !== undefined) {
+        progressUpdate.estimatedTimeRemaining = estTime
       }
     }
 
@@ -157,9 +176,7 @@ class InMemoryTaskQueue implements TaskQueue {
 
     // Filter by tags
     if (options.tags && options.tags.length > 0) {
-      results = results.filter(
-        (t) => t.tags && options.tags!.some((tag) => t.tags!.includes(tag))
-      )
+      results = results.filter((t) => t.tags && options.tags!.some((tag) => t.tags!.includes(tag)))
     }
 
     // Filter by project
@@ -232,7 +249,11 @@ class InMemoryTaskQueue implements TaskQueue {
     // Find first task the worker can handle
     for (const task of queuedTasks) {
       // Check if worker type is allowed
-      if (task.allowedWorkers && !task.allowedWorkers.includes(worker.type) && !task.allowedWorkers.includes('any')) {
+      if (
+        task.allowedWorkers &&
+        !task.allowedWorkers.includes(worker.type) &&
+        !task.allowedWorkers.includes('any')
+      ) {
         continue
       }
 
@@ -289,14 +310,17 @@ class InMemoryTaskQueue implements TaskQueue {
     const task = await this.get(taskId)
     if (!task) return
 
+    const event: Omit<TaskEvent, 'id' | 'timestamp'> = {
+      type: 'completed',
+      message: 'Task completed successfully',
+      data: { output },
+    }
+    if (task.assignment?.worker !== undefined) {
+      event.actor = task.assignment.worker
+    }
     await this.update(taskId, {
       status: 'completed',
-      event: {
-        type: 'completed',
-        actor: task.assignment?.worker,
-        message: 'Task completed successfully',
-        data: { output },
-      },
+      event,
     })
 
     // Update task output separately since it's not in UpdateTaskOptions
@@ -328,7 +352,9 @@ class InMemoryTaskQueue implements TaskQueue {
           })
 
           // Unblock if all dependencies satisfied
-          const allSatisfied = updatedDeps.filter((d) => d.type === 'blocked_by').every((d) => d.satisfied)
+          const allSatisfied = updatedDeps
+            .filter((d) => d.type === 'blocked_by')
+            .every((d) => d.satisfied)
           if (allSatisfied && otherTask.status === 'blocked') {
             await this.update(otherTask.id, {
               status: 'queued',
@@ -347,14 +373,17 @@ class InMemoryTaskQueue implements TaskQueue {
     const task = await this.get(taskId)
     if (!task) return
 
+    const event: Omit<TaskEvent, 'id' | 'timestamp'> = {
+      type: 'failed',
+      message: `Task failed: ${error}`,
+      data: { error },
+    }
+    if (task.assignment?.worker !== undefined) {
+      event.actor = task.assignment.worker
+    }
     await this.update(taskId, {
       status: 'failed',
-      event: {
-        type: 'failed',
-        actor: task.assignment?.worker,
-        message: `Task failed: ${error}`,
-        data: { error },
-      },
+      event,
     })
   }
 
@@ -401,13 +430,18 @@ class InMemoryTaskQueue implements TaskQueue {
       }
     }
 
-    return {
+    const stats: TaskQueueStats = {
       total: tasks.length,
       byStatus,
       byPriority,
-      avgWaitTime: waitTimeCount > 0 ? totalWaitTime / waitTimeCount : undefined,
-      avgCompletionTime: completionTimeCount > 0 ? totalCompletionTime / completionTimeCount : undefined,
     }
+    if (waitTimeCount > 0) {
+      stats.avgWaitTime = totalWaitTime / waitTimeCount
+    }
+    if (completionTimeCount > 0) {
+      stats.avgCompletionTime = totalCompletionTime / completionTimeCount
+    }
+    return stats
   }
 }
 

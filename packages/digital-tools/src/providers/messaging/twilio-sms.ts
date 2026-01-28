@@ -56,13 +56,18 @@ export function createTwilioSmsProvider(config: ProviderConfig): SmsProvider {
   ): Promise<any> {
     const url = `${TWILIO_API_URL}/Accounts/${accountSid}${path}`
 
+    const headers: Record<string, string> = {
+      Authorization: getAuthHeader(),
+    }
+    if (body) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    }
+
+    const bodyStr = body?.toString()
     const response = await fetch(url, {
       method,
-      headers: {
-        Authorization: getAuthHeader(),
-        ...(body && { 'Content-Type': 'application/x-www-form-urlencoded' }),
-      },
-      body: body?.toString(),
+      headers,
+      ...(bodyStr !== undefined && { body: bodyStr }),
     })
 
     return response.json()
@@ -72,10 +77,10 @@ export function createTwilioSmsProvider(config: ProviderConfig): SmsProvider {
     info: twilioSmsInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      accountSid = cfg.accountSid as string
-      authToken = cfg.authToken as string
-      defaultFrom = cfg.defaultFrom as string | undefined
-      messagingServiceSid = cfg.messagingServiceSid as string | undefined
+      accountSid = cfg['accountSid'] as string
+      authToken = cfg['authToken'] as string
+      defaultFrom = cfg['defaultFrom'] as string | undefined
+      messagingServiceSid = cfg['messagingServiceSid'] as string | undefined
 
       if (!accountSid || !authToken) {
         throw new Error('Twilio account SID and auth token are required')
@@ -112,7 +117,10 @@ export function createTwilioSmsProvider(config: ProviderConfig): SmsProvider {
       if (!from && !messagingServiceSid) {
         return {
           success: false,
-          error: { code: 'MISSING_FROM', message: 'From number or messaging service SID is required' },
+          error: {
+            code: 'MISSING_FROM',
+            message: 'From number or messaging service SID is required',
+          },
         }
       }
 
@@ -164,7 +172,10 @@ export function createTwilioSmsProvider(config: ProviderConfig): SmsProvider {
       if (!from && !messagingServiceSid) {
         return {
           success: false,
-          error: { code: 'MISSING_FROM', message: 'From number or messaging service SID is required' },
+          error: {
+            code: 'MISSING_FROM',
+            message: 'From number or messaging service SID is required',
+          },
         }
       }
 
@@ -240,10 +251,16 @@ export function createTwilioSmsProvider(config: ProviderConfig): SmsProvider {
         params.append('From', options.from)
       }
       if (options?.since) {
-        params.append('DateSent>', options.since.toISOString().split('T')[0])
+        const sincePart = options.since.toISOString().split('T')[0]
+        if (sincePart) {
+          params.append('DateSent>', sincePart)
+        }
       }
       if (options?.until) {
-        params.append('DateSent<', options.until.toISOString().split('T')[0])
+        const untilPart = options.until.toISOString().split('T')[0]
+        if (untilPart) {
+          params.append('DateSent<', untilPart)
+        }
       }
 
       const queryString = params.toString()
@@ -281,6 +298,9 @@ function mapTwilioStatus(status: string): SmsStatus['status'] {
 }
 
 function mapTwilioMessage(msg: any): SmsData {
+  const sentAt = msg.date_sent ? new Date(msg.date_sent) : undefined
+  const deliveredAt = msg.status === 'delivered' ? new Date(msg.date_updated) : undefined
+
   return {
     id: msg.sid,
     to: msg.to,
@@ -288,8 +308,8 @@ function mapTwilioMessage(msg: any): SmsData {
     body: msg.body,
     status: msg.status,
     direction: msg.direction === 'inbound' ? 'inbound' : 'outbound',
-    sentAt: msg.date_sent ? new Date(msg.date_sent) : undefined,
-    deliveredAt: msg.status === 'delivered' ? new Date(msg.date_updated) : undefined,
+    ...(sentAt !== undefined && { sentAt }),
+    ...(deliveredAt !== undefined && { deliveredAt }),
   }
 }
 

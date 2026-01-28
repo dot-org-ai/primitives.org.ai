@@ -243,7 +243,7 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
     const response = await fetch(url.toString(), {
       method,
       headers,
-      body: requestBody,
+      ...(requestBody !== undefined && { body: requestBody }),
     })
 
     if (!response.ok) {
@@ -299,11 +299,11 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       }
 
       if (invoice.dueDate) {
-        data.due_date = Math.floor(invoice.dueDate.getTime() / 1000)
+        data['due_date'] = Math.floor(invoice.dueDate.getTime() / 1000)
       }
 
       if (invoice.memo) {
-        data.description = invoice.memo
+        data['description'] = invoice.memo
       }
 
       // Create the invoice
@@ -337,14 +337,16 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
         status: mapStripeInvoiceStatus(updatedInvoice.status),
         currency: updatedInvoice.currency,
         subtotal: updatedInvoice.subtotal / 100,
-        tax: updatedInvoice.tax ? updatedInvoice.tax / 100 : undefined,
+        ...(updatedInvoice.tax !== undefined && { tax: updatedInvoice.tax / 100 }),
         total: updatedInvoice.total / 100,
         amountDue: updatedInvoice.amount_due / 100,
         amountPaid: updatedInvoice.amount_paid / 100,
-        dueDate: updatedInvoice.due_date ? new Date(updatedInvoice.due_date * 1000) : undefined,
-        paidAt: updatedInvoice.status_transitions?.paid_at
-          ? new Date(updatedInvoice.status_transitions.paid_at * 1000)
-          : undefined,
+        ...(updatedInvoice.due_date !== undefined && {
+          dueDate: new Date(updatedInvoice.due_date * 1000),
+        }),
+        ...(updatedInvoice.status_transitions?.paid_at !== undefined && {
+          paidAt: new Date(updatedInvoice.status_transitions.paid_at * 1000),
+        }),
         url: updatedInvoice.hosted_invoice_url,
         createdAt: new Date(updatedInvoice.created * 1000),
       }
@@ -361,14 +363,14 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
           status: mapStripeInvoiceStatus(invoice.status),
           currency: invoice.currency,
           subtotal: invoice.subtotal / 100,
-          tax: invoice.tax ? invoice.tax / 100 : undefined,
+          ...(invoice.tax !== undefined && { tax: invoice.tax / 100 }),
           total: invoice.total / 100,
           amountDue: invoice.amount_due / 100,
           amountPaid: invoice.amount_paid / 100,
-          dueDate: invoice.due_date ? new Date(invoice.due_date * 1000) : undefined,
-          paidAt: invoice.status_transitions?.paid_at
-            ? new Date(invoice.status_transitions.paid_at * 1000)
-            : undefined,
+          ...(invoice.due_date !== undefined && { dueDate: new Date(invoice.due_date * 1000) }),
+          ...(invoice.status_transitions?.paid_at !== undefined && {
+            paidAt: new Date(invoice.status_transitions.paid_at * 1000),
+          }),
           url: invoice.hosted_invoice_url,
           createdAt: new Date(invoice.created * 1000),
         }
@@ -384,11 +386,11 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       const data: Record<string, unknown> = {}
 
       if (updates.dueDate) {
-        data.due_date = Math.floor(updates.dueDate.getTime() / 1000)
+        data['due_date'] = Math.floor(updates.dueDate.getTime() / 1000)
       }
 
       if (updates.memo) {
-        data.description = updates.memo
+        data['description'] = updates.memo
       }
 
       const invoice = await stripeRequestWithParams<any>(`/invoices/${invoiceId}`, {
@@ -403,14 +405,14 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
         status: mapStripeInvoiceStatus(invoice.status),
         currency: invoice.currency,
         subtotal: invoice.subtotal / 100,
-        tax: invoice.tax ? invoice.tax / 100 : undefined,
+        ...(invoice.tax !== undefined && { tax: invoice.tax / 100 }),
         total: invoice.total / 100,
         amountDue: invoice.amount_due / 100,
         amountPaid: invoice.amount_paid / 100,
-        dueDate: invoice.due_date ? new Date(invoice.due_date * 1000) : undefined,
-        paidAt: invoice.status_transitions?.paid_at
-          ? new Date(invoice.status_transitions.paid_at * 1000)
-          : undefined,
+        ...(invoice.due_date !== undefined && { dueDate: new Date(invoice.due_date * 1000) }),
+        ...(invoice.status_transitions?.paid_at !== undefined && {
+          paidAt: new Date(invoice.status_transitions.paid_at * 1000),
+        }),
         url: invoice.hosted_invoice_url,
         createdAt: new Date(invoice.created * 1000),
       }
@@ -420,19 +422,19 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       const params: Record<string, string> = {}
 
       if (options.limit) {
-        params.limit = String(options.limit)
+        params['limit'] = String(options.limit)
       }
 
       if (options.cursor) {
-        params.starting_after = options.cursor
+        params['starting_after'] = options.cursor
       }
 
       if (options.customerId) {
-        params.customer = options.customerId
+        params['customer'] = options.customerId
       }
 
       if (options.status) {
-        params.status = options.status
+        params['status'] = options.status
       }
 
       const response = await stripeRequest<any>('/invoices', { params })
@@ -502,11 +504,11 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       }
 
       if (payment.customerId) {
-        data.customer = payment.customerId
+        data['customer'] = payment.customerId
       }
 
       if (payment.description) {
-        data.description = payment.description
+        data['description'] = payment.description
       }
 
       // For Stripe, we create a PaymentIntent
@@ -552,15 +554,15 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       const params: Record<string, string> = {}
 
       if (options.limit) {
-        params.limit = String(options.limit)
+        params['limit'] = String(options.limit)
       }
 
       if (options.cursor) {
-        params.starting_after = options.cursor
+        params['starting_after'] = options.cursor
       }
 
       if (options.customerId) {
-        params.customer = options.customerId
+        params['customer'] = options.customerId
       }
 
       const response = await stripeRequest<any>('/payment_intents', { params })
@@ -588,7 +590,7 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       }
 
       if (amount !== undefined) {
-        data.amount = Math.round(amount * 100)
+        data['amount'] = Math.round(amount * 100)
       }
 
       const refund = await stripeRequestWithParams<any>('/refunds', {
@@ -611,15 +613,15 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       }
 
       if (customer.email) {
-        data.email = customer.email
+        data['email'] = customer.email
       }
 
       if (customer.phone) {
-        data.phone = customer.phone
+        data['phone'] = customer.phone
       }
 
       if (customer.address) {
-        data.address = {
+        data['address'] = {
           line1: customer.address.line1,
           line2: customer.address.line2,
           city: customer.address.city,
@@ -639,7 +641,7 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
         name: stripeCustomer.name,
         email: stripeCustomer.email,
         phone: stripeCustomer.phone,
-        balance: stripeCustomer.balance ? stripeCustomer.balance / 100 : undefined,
+        ...(stripeCustomer.balance !== undefined && { balance: stripeCustomer.balance / 100 }),
         createdAt: new Date(stripeCustomer.created * 1000),
       }
     },
@@ -653,7 +655,7 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
           name: customer.name,
           email: customer.email,
           phone: customer.phone,
-          balance: customer.balance ? customer.balance / 100 : undefined,
+          ...(customer.balance !== undefined && { balance: customer.balance / 100 }),
           createdAt: new Date(customer.created * 1000),
         }
       } catch (error) {
@@ -667,11 +669,11 @@ export function createStripeProvider(config: ProviderConfig): FinanceProvider {
       const params: Record<string, string> = {}
 
       if (options.limit) {
-        params.limit = String(options.limit)
+        params['limit'] = String(options.limit)
       }
 
       if (options.cursor) {
-        params.starting_after = options.cursor
+        params['starting_after'] = options.cursor
       }
 
       const response = await stripeRequest<any>('/customers', { params })

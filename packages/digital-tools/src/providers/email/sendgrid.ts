@@ -47,7 +47,7 @@ export function createSendGridProvider(config: ProviderConfig): EmailProvider {
 
     async initialize(cfg: ProviderConfig): Promise<void> {
       apiKey = cfg.apiKey as string
-      defaultFrom = cfg.defaultFrom as string | undefined
+      defaultFrom = cfg['defaultFrom'] as string | undefined
 
       if (!apiKey) {
         throw new Error('SendGrid API key is required')
@@ -111,11 +111,11 @@ export function createSendGridProvider(config: ProviderConfig): EmailProvider {
       }
 
       if (options.replyTo) {
-        body.reply_to = { email: options.replyTo }
+        body['reply_to'] = { email: options.replyTo }
       }
 
       if (options.attachments?.length) {
-        body.attachments = options.attachments.map((att) => ({
+        body['attachments'] = options.attachments.map((att) => ({
           content: typeof att.content === 'string' ? att.content : att.content.toString('base64'),
           filename: att.filename,
           type: att.contentType,
@@ -125,11 +125,11 @@ export function createSendGridProvider(config: ProviderConfig): EmailProvider {
       }
 
       if (options.sendAt) {
-        body.send_at = Math.floor(options.sendAt.getTime() / 1000)
+        body['send_at'] = Math.floor(options.sendAt.getTime() / 1000)
       }
 
       if (options.trackOpens !== undefined || options.trackClicks !== undefined) {
-        body.tracking_settings = {
+        body['tracking_settings'] = {
           ...(options.trackOpens !== undefined && {
             open_tracking: { enable: options.trackOpens },
           }),
@@ -140,11 +140,11 @@ export function createSendGridProvider(config: ProviderConfig): EmailProvider {
       }
 
       if (options.tags?.length) {
-        body.categories = options.tags
+        body['categories'] = options.tags
       }
 
       if (options.metadata) {
-        body.custom_args = options.metadata
+        body['custom_args'] = options.metadata
       }
 
       try {
@@ -158,8 +158,11 @@ export function createSendGridProvider(config: ProviderConfig): EmailProvider {
         })
 
         if (response.ok || response.status === 202) {
-          const messageId = response.headers.get('X-Message-Id') || undefined
-          return { success: true, messageId }
+          const messageId = response.headers.get('X-Message-Id')
+          return {
+            success: true,
+            ...(messageId !== null && { messageId }),
+          }
         }
 
         const errorData = await response.json().catch(() => ({}))

@@ -185,7 +185,7 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      body: body ? JSON.stringify(body) : undefined,
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     })
 
     if (!response.ok) {
@@ -288,12 +288,12 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
             id: f.id,
             name: f.name,
             sheets: [], // Would need separate API call to get sheets
-            createdAt: f.createdTime ? new Date(f.createdTime) : undefined,
-            modifiedAt: f.modifiedTime ? new Date(f.modifiedTime) : undefined,
+            ...(f.createdTime && { createdAt: new Date(f.createdTime) }),
+            ...(f.modifiedTime && { modifiedAt: new Date(f.modifiedTime) }),
             url: `https://docs.google.com/spreadsheets/d/${f.id}`,
           })) || [],
         hasMore: !!data.nextPageToken,
-        nextCursor: data.nextPageToken,
+        ...(data.nextPageToken !== undefined && { nextCursor: data.nextPageToken }),
       }
     },
 
@@ -308,12 +308,14 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
 
     async getSheet(spreadsheetId: string, sheetId: string | number): Promise<SheetData | null> {
       try {
-        const spreadsheet = await sheetsApi(`/${spreadsheetId}?includeGridData=true`)
+        const spreadsheet = await sheetsApi<GoogleSpreadsheet>(
+          `/${spreadsheetId}?includeGridData=true`
+        )
 
         const sheet =
           typeof sheetId === 'number'
-            ? spreadsheet.sheets.find((s: any) => s.properties.sheetId === sheetId)
-            : spreadsheet.sheets.find((s: any) => s.properties.title === sheetId)
+            ? spreadsheet.sheets?.find((s) => s.properties.sheetId === sheetId)
+            : spreadsheet.sheets?.find((s) => s.properties.title === sheetId)
 
         if (!sheet) return null
 
@@ -340,8 +342,12 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
           rowCount: sheet.properties.gridProperties?.rowCount || 0,
           columnCount: sheet.properties.gridProperties?.columnCount || 0,
           data,
-          frozenRows: sheet.properties.gridProperties?.frozenRowCount,
-          frozenColumns: sheet.properties.gridProperties?.frozenColumnCount,
+          ...(sheet.properties.gridProperties?.frozenRowCount !== undefined && {
+            frozenRows: sheet.properties.gridProperties.frozenRowCount,
+          }),
+          ...(sheet.properties.gridProperties?.frozenColumnCount !== undefined && {
+            frozenColumns: sheet.properties.gridProperties.frozenColumnCount,
+          }),
         }
       } catch {
         return null
@@ -370,9 +376,13 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
         ],
       }
 
-      const data = await sheetsApi(`/${spreadsheetId}:batchUpdate`, 'POST', body)
+      const data = await sheetsApi<GoogleBatchUpdateResponse>(
+        `/${spreadsheetId}:batchUpdate`,
+        'POST',
+        body
+      )
 
-      const reply = data.replies[0].addSheet
+      const reply = data.replies[0]!.addSheet!
       return {
         id: reply.properties.sheetId.toString(),
         name: reply.properties.title,
@@ -389,8 +399,8 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
 
         if (isNaN(actualSheetId)) {
           // Look up by name
-          const spreadsheet = await sheetsApi(`/${spreadsheetId}`)
-          const sheet = spreadsheet.sheets.find((s: any) => s.properties.title === sheetId)
+          const spreadsheet = await sheetsApi<GoogleSpreadsheet>(`/${spreadsheetId}`)
+          const sheet = spreadsheet.sheets?.find((s) => s.properties.title === sheetId)
           if (!sheet) return false
           actualSheetId = sheet.properties.sheetId
         }
@@ -421,8 +431,8 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
         let actualSheetId = typeof sheetId === 'number' ? sheetId : parseInt(sheetId, 10)
 
         if (isNaN(actualSheetId)) {
-          const spreadsheet = await sheetsApi(`/${spreadsheetId}`)
-          const sheet = spreadsheet.sheets.find((s: any) => s.properties.title === sheetId)
+          const spreadsheet = await sheetsApi<GoogleSpreadsheet>(`/${spreadsheetId}`)
+          const sheet = spreadsheet.sheets?.find((s) => s.properties.title === sheetId)
           if (!sheet) return false
           actualSheetId = sheet.properties.sheetId
         }
@@ -441,7 +451,7 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
           ],
         }
 
-        await sheetsApi(`/${spreadsheetId}:batchUpdate`, 'POST', body)
+        await sheetsApi<GoogleBatchUpdateResponse>(`/${spreadsheetId}:batchUpdate`, 'POST', body)
         return true
       } catch {
         return false
@@ -449,7 +459,7 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
     },
 
     async readRange(spreadsheetId: string, range: string): Promise<CellValue[][]> {
-      const data = await sheetsApi(
+      const data = await sheetsApi<GoogleValueRange>(
         `/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`
       )
 
@@ -465,14 +475,14 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
         values,
       }
 
-      const data = await sheetsApi(
+      const data = await sheetsApi<GoogleValueUpdateResponse>(
         `/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
         'PUT',
         body
       )
 
       return {
-        updatedRange: data.updatedRange,
+        updatedRange: data.updatedRange || range,
         updatedRows: data.updatedRows || 0,
         updatedColumns: data.updatedColumns || 0,
         updatedCells: data.updatedCells || 0,
@@ -488,7 +498,7 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
         values,
       }
 
-      const data = await sheetsApi(
+      const data = await sheetsApi<GoogleValueUpdateResponse>(
         `/${spreadsheetId}/values/${encodeURIComponent(
           range
         )}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
@@ -514,12 +524,12 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
 
     async batchRead(spreadsheetId: string, ranges: string[]): Promise<Map<string, CellValue[][]>> {
       const params = ranges.map((r) => `ranges=${encodeURIComponent(r)}`).join('&')
-      const data = await sheetsApi(
+      const data = await sheetsApi<GoogleBatchGetResponse>(
         `/${spreadsheetId}/values:batchGet?${params}&valueRenderOption=UNFORMATTED_VALUE`
       )
 
       const result = new Map<string, CellValue[][]>()
-      data.valueRanges?.forEach((vr: any) => {
+      data.valueRanges?.forEach((vr) => {
         result.set(vr.range, vr.values || [])
       })
 
@@ -538,7 +548,11 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
         })),
       }
 
-      const response = await sheetsApi(`/${spreadsheetId}/values:batchUpdate`, 'POST', body)
+      const response = await sheetsApi<GoogleBatchValueUpdateResponse>(
+        `/${spreadsheetId}/values:batchUpdate`,
+        'POST',
+        body
+      )
 
       return {
         updatedRange: 'batch',
@@ -576,21 +590,20 @@ export function createGoogleSheetsProvider(config: ProviderConfig): SpreadsheetP
   }
 }
 
-function mapSpreadsheet(data: any): SpreadsheetData {
+function mapSpreadsheet(data: GoogleSpreadsheet): SpreadsheetData {
   return {
     id: data.spreadsheetId,
     name: data.properties.title,
     sheets:
-      data.sheets?.map((s: any) => ({
+      data.sheets?.map((s) => ({
         id: s.properties.sheetId.toString(),
         name: s.properties.title,
         index: s.properties.index,
-        rowCount: s.properties.gridProperties?.rowCount,
-        columnCount: s.properties.gridProperties?.columnCount,
+        rowCount: s.properties.gridProperties?.rowCount ?? 0,
+        columnCount: s.properties.gridProperties?.columnCount ?? 0,
       })) || [],
-    createdAt: undefined, // Not available from Sheets API
-    modifiedAt: undefined,
-    url: data.spreadsheetUrl,
+    // createdAt and modifiedAt not available from Sheets API
+    ...(data.spreadsheetUrl !== undefined && { url: data.spreadsheetUrl }),
   }
 }
 

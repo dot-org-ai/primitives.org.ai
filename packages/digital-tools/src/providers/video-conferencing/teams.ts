@@ -166,10 +166,7 @@ export function createTeamsProvider(config: ProviderConfig): VideoConferencingPr
   /**
    * Make authenticated API request
    */
-  async function apiRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = await getAccessToken()
     const url = endpoint.startsWith('http') ? endpoint : `${GRAPH_API_URL}${endpoint}`
 
@@ -185,7 +182,9 @@ export function createTeamsProvider(config: ProviderConfig): VideoConferencingPr
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(
-        `Microsoft Graph API error: ${response.status} - ${(errorData as any)?.error?.message || response.statusText}`
+        `Microsoft Graph API error: ${response.status} - ${
+          (errorData as any)?.error?.message || response.statusText
+        }`
       )
     }
 
@@ -230,9 +229,9 @@ export function createTeamsProvider(config: ProviderConfig): VideoConferencingPr
 
     async initialize(cfg: ProviderConfig): Promise<void> {
       accessToken = cfg.accessToken as string
-      clientId = cfg.clientId as string | undefined
-      clientSecret = cfg.clientSecret as string | undefined
-      tenantId = cfg.tenantId as string | undefined
+      clientId = cfg['clientId'] as string | undefined
+      clientSecret = cfg['clientSecret'] as string | undefined
+      tenantId = cfg['tenantId'] as string | undefined
 
       if (!accessToken) {
         throw new Error('Microsoft Teams requires accessToken')
@@ -319,14 +318,14 @@ export function createTeamsProvider(config: ProviderConfig): VideoConferencingPr
 
       const body: Record<string, unknown> = {}
 
-      if (updates.topic) body.subject = updates.topic
+      if (updates.topic) body['subject'] = updates.topic
 
       if (updates.startTime) {
         const endTime = new Date(
           updates.startTime.getTime() + (updates.duration || current.duration || 60) * 60000
         )
-        body.startDateTime = updates.startTime.toISOString()
-        body.endDateTime = endTime.toISOString()
+        body['startDateTime'] = updates.startTime.toISOString()
+        body['endDateTime'] = endTime.toISOString()
       }
 
       const response = await apiRequest<GraphOnlineMeeting>(
@@ -376,11 +375,13 @@ export function createTeamsProvider(config: ProviderConfig): VideoConferencingPr
       return {
         items: response.value.map(convertMeeting),
         hasMore: !!response['@odata.nextLink'],
-        nextCursor: response['@odata.nextLink'],
+        ...(response['@odata.nextLink'] !== undefined && {
+          nextCursor: response['@odata.nextLink'],
+        }),
       }
     },
 
-    endMeeting: async function(meetingId: string): Promise<boolean> {
+    endMeeting: async function (meetingId: string): Promise<boolean> {
       // Microsoft Teams doesn't support programmatically ending meetings
       // We can delete the meeting instead
       return await this.deleteMeeting!(meetingId)

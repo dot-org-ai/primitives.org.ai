@@ -579,8 +579,8 @@ function schemaToProperties(schema: EntitySchema): Record<string, NounProperty> 
     // Skip metadata fields (prefixed with $) like $context, $instructions
     if (name.startsWith('$')) continue
 
-    // Skip if definition is invalid (null, undefined, or empty array)
-    if (!def || (Array.isArray(def) && def.length === 0)) continue
+    // Skip if definition is invalid (null, undefined)
+    if (!def) continue
 
     const defStr = Array.isArray(def) ? def[0] : def
     const isOptional = defStr.endsWith('?')

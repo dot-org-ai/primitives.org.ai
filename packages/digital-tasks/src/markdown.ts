@@ -49,6 +49,7 @@ import type {
   ParallelGroup,
   SequentialGroup,
   ExecutionMode,
+  CreateProjectOptions,
 } from './project.js'
 import { task, parallel, sequential, createProject } from './project.js'
 
@@ -61,8 +62,8 @@ import { task, parallel, sequential, createProject } from './project.js'
  */
 const STATUS_MARKERS: Record<string, TaskStatus> = {
   ' ': 'pending',
-  'x': 'completed',
-  'X': 'completed',
+  x: 'completed',
+  X: 'completed',
   '-': 'in_progress',
   '~': 'blocked',
   '!': 'failed',
@@ -93,7 +94,7 @@ const PRIORITY_MARKERS: Record<string, TaskPriority> = {
   '!': 'urgent',
   '^': 'high',
   '': 'normal',
-  'v': 'low',
+  v: 'low',
 }
 
 // ============================================================================
@@ -135,20 +136,23 @@ function parseLine(line: string): ParsedLine {
   const raw = line
 
   // Count leading spaces for indent (2 spaces = 1 level)
-  const leadingSpaces = line.match(/^(\s*)/)?.[1].length || 0
+  const leadingSpacesMatch = line.match(/^(\s*)/)
+  const leadingSpaces = leadingSpacesMatch?.[1]?.length ?? 0
   const indent = Math.floor(leadingSpaces / 2)
   const trimmed = line.slice(leadingSpaces)
 
   // Check for heading
   const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/)
   if (headingMatch) {
+    const matchedHashes = headingMatch[1]!
+    const matchedTitle = headingMatch[2]!
     return {
       indent,
       isTask: false,
       isOrdered: false,
-      title: headingMatch[2].trim(),
+      title: matchedTitle.trim(),
       isHeading: true,
-      headingLevel: headingMatch[1].length,
+      headingLevel: matchedHashes.length,
       raw,
     }
   }
@@ -156,8 +160,8 @@ function parseLine(line: string): ParsedLine {
   // Check for unordered task: - [ ] or - [x] etc.
   const unorderedMatch = trimmed.match(/^[-*]\s+\[([^\]]*)\]\s*(.*)$/)
   if (unorderedMatch) {
-    const marker = unorderedMatch[1]
-    let title = unorderedMatch[2].trim()
+    const marker = unorderedMatch[1]!
+    let title = unorderedMatch[2]!.trim()
     let priority: TaskPriority = 'normal'
 
     // Check for priority marker at start of title
@@ -179,7 +183,7 @@ function parseLine(line: string): ParsedLine {
       indent,
       isTask: true,
       isOrdered: false,
-      status: STATUS_MARKERS[marker] || 'pending',
+      status: STATUS_MARKERS[marker] ?? 'pending',
       priority,
       title,
       isHeading: false,
@@ -190,8 +194,9 @@ function parseLine(line: string): ParsedLine {
   // Check for ordered task: 1. [ ] or 1. [x] etc.
   const orderedMatch = trimmed.match(/^(\d+)\.\s+\[([^\]]*)\]\s*(.*)$/)
   if (orderedMatch) {
-    const marker = orderedMatch[2]
-    let title = orderedMatch[3].trim()
+    const orderNum = orderedMatch[1]!
+    const marker = orderedMatch[2]!
+    let title = orderedMatch[3]!.trim()
     let priority: TaskPriority = 'normal'
 
     // Check for priority marker
@@ -213,8 +218,8 @@ function parseLine(line: string): ParsedLine {
       indent,
       isTask: true,
       isOrdered: true,
-      orderNumber: parseInt(orderedMatch[1], 10),
-      status: STATUS_MARKERS[marker] || 'pending',
+      orderNumber: parseInt(orderNum, 10),
+      status: STATUS_MARKERS[marker] ?? 'pending',
       priority,
       title,
       isHeading: false,
@@ -247,7 +252,7 @@ function parseTasksAtIndent(
   let modeSet = false
 
   while (index < lines.length) {
-    const line = lines[index]
+    const line = lines[index]!
 
     // Stop if we've gone back to a lower indent level
     if (line.indent < baseIndent && (line.isTask || line.isHeading)) {
@@ -269,20 +274,21 @@ function parseTasksAtIndent(
       }
 
       // Parse subtasks
-      const { tasks: subtasks, nextIndex } = parseTasksAtIndent(
-        lines,
-        index + 1,
-        baseIndent + 1
-      )
+      const { tasks: subtasks, nextIndex } = parseTasksAtIndent(lines, index + 1, baseIndent + 1)
 
-      const taskDef = task(line.title, {
-        priority: line.priority,
-        subtasks: subtasks.length > 0 ? subtasks : undefined,
+      const taskOptions: Partial<Omit<TaskDefinition, '__type' | 'title'>> = {
         metadata: {
           _originalStatus: line.status,
           _lineNumber: index,
         },
-      })
+      }
+      if (line.priority !== undefined) {
+        taskOptions.priority = line.priority
+      }
+      if (subtasks.length > 0) {
+        taskOptions.subtasks = subtasks
+      }
+      const taskDef = task(line.title, taskOptions)
 
       tasks.push(taskDef)
       index = nextIndex
@@ -324,9 +330,9 @@ export function parseMarkdown(markdown: string): Project {
   const allTasks: TaskNode[] = []
 
   // Find project name from first h1
-  const h1Index = lines.findIndex(l => l.isHeading && l.headingLevel === 1)
+  const h1Index = lines.findIndex((l) => l.isHeading && l.headingLevel === 1)
   if (h1Index !== -1) {
-    projectName = lines[h1Index].title
+    projectName = lines[h1Index]!.title
   }
 
   // Process sections and tasks
@@ -334,7 +340,7 @@ export function parseMarkdown(markdown: string): Project {
   let index = 0
 
   while (index < lines.length) {
-    const line = lines[index]
+    const line = lines[index]!
 
     // New section (h2)
     if (line.isHeading && line.headingLevel === 2) {
@@ -353,7 +359,7 @@ export function parseMarkdown(markdown: string): Project {
 
       const modeMatch = sectionName.match(/\((parallel|sequential)\)\s*$/i)
       if (modeMatch) {
-        sectionMode = modeMatch[1].toLowerCase() as ExecutionMode
+        sectionMode = modeMatch[1]!.toLowerCase() as ExecutionMode
         sectionName = sectionName.replace(/\s*\((parallel|sequential)\)\s*$/i, '')
       }
 
@@ -396,11 +402,15 @@ export function parseMarkdown(markdown: string): Project {
     }
   }
 
-  return createProject({
+  const projectOptions: CreateProjectOptions = {
     name: projectName,
-    description: projectDescription,
     tasks: allTasks,
-  })
+  }
+  if (projectDescription !== undefined) {
+    projectOptions.description = projectDescription
+  }
+
+  return createProject(projectOptions)
 }
 
 // ============================================================================
@@ -435,13 +445,13 @@ function serializeTaskNode(
 
   if (node.__type === 'task') {
     const taskDef = node as TaskDefinition
-    const status = (taskDef.metadata?._originalStatus as TaskStatus) || 'pending'
+    const status = (taskDef.metadata?.['_originalStatus'] as TaskStatus) || 'pending'
     const marker = options.includeStatus !== false ? STATUS_TO_MARKER[status] : ' '
 
     let prefix: string
     if (isSequential) {
       // Use numbered list for sequential
-      const num = (taskDef.metadata?._sequenceNumber as number) || 1
+      const num = (taskDef.metadata?.['_sequenceNumber'] as number) || 1
       prefix = `${num}. [${marker}]`
     } else {
       // Use bullet for parallel
@@ -450,11 +460,16 @@ function serializeTaskNode(
 
     let title = taskDef.title
     if (options.includePriority && taskDef.priority && taskDef.priority !== 'normal') {
-      const priorityMarker = taskDef.priority === 'critical' ? '!!'
-        : taskDef.priority === 'urgent' ? '!'
-        : taskDef.priority === 'high' ? '^'
-        : taskDef.priority === 'low' ? 'v'
-        : ''
+      const priorityMarker =
+        taskDef.priority === 'critical'
+          ? '!!'
+          : taskDef.priority === 'urgent'
+          ? '!'
+          : taskDef.priority === 'high'
+          ? '^'
+          : taskDef.priority === 'low'
+          ? 'v'
+          : ''
       title = `${priorityMarker}${title}`
     }
 
@@ -471,7 +486,7 @@ function serializeTaskNode(
     let seqNum = 1
     for (const child of group.tasks) {
       if (child.__type === 'task') {
-        (child as TaskDefinition).metadata = {
+        ;(child as TaskDefinition).metadata = {
           ...(child as TaskDefinition).metadata,
           _sequenceNumber: seqNum++,
         }
@@ -483,7 +498,7 @@ function serializeTaskNode(
     let seqNum = 1
     for (const child of group.tasks) {
       if (child.__type === 'task') {
-        (child as TaskDefinition).metadata = {
+        ;(child as TaskDefinition).metadata = {
           ...(child as TaskDefinition).metadata,
           _sequenceNumber: seqNum++,
         }
@@ -558,10 +573,7 @@ export function toMarkdown(project: Project, options: SerializeOptions = {}): st
  * Update task statuses in a project from markdown
  * (Useful for syncing when markdown is edited externally)
  */
-export function syncStatusFromMarkdown(
-  project: Project,
-  markdown: string
-): Project {
+export function syncStatusFromMarkdown(project: Project, markdown: string): Project {
   const parsed = parseMarkdown(markdown)
 
   // Build a map of task titles to statuses from parsed markdown
@@ -570,7 +582,7 @@ export function syncStatusFromMarkdown(
   function collectStatuses(node: TaskNode) {
     if (node.__type === 'task') {
       const taskDef = node as TaskDefinition
-      const status = taskDef.metadata?._originalStatus as TaskStatus
+      const status = taskDef.metadata?.['_originalStatus'] as TaskStatus
       if (status) {
         statusMap.set(taskDef.title, status)
       }
@@ -590,14 +602,17 @@ export function syncStatusFromMarkdown(
     if (node.__type === 'task') {
       const taskDef = node as TaskDefinition
       const newStatus = statusMap.get(taskDef.title)
-      return {
+      const result: TaskDefinition = {
         ...taskDef,
         metadata: {
           ...taskDef.metadata,
-          _originalStatus: newStatus || taskDef.metadata?._originalStatus,
+          _originalStatus: newStatus || taskDef.metadata?.['_originalStatus'],
         },
-        subtasks: taskDef.subtasks?.map(updateStatuses),
       }
+      if (taskDef.subtasks) {
+        result.subtasks = taskDef.subtasks.map(updateStatuses)
+      }
+      return result
     } else if (node.__type === 'parallel') {
       const group = node as ParallelGroup
       return {

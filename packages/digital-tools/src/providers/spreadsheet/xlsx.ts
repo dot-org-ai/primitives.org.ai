@@ -69,7 +69,13 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
     return `xlsx_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
   }
 
-  function parseRange(range: string): { sheet?: string; startRow: number; startCol: number; endRow: number; endCol: number } {
+  function parseRange(range: string): {
+    sheet?: string
+    startRow: number
+    startCol: number
+    endRow: number
+    endCol: number
+  } {
     // Parse A1 notation like "Sheet1!A1:C10" or just "A1:C10"
     let sheetName: string | undefined
     let cellRange = range
@@ -85,7 +91,7 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
     const endCell = end ? parseCell(end) : startCell
 
     return {
-      sheet: sheetName,
+      ...(sheetName !== undefined && { sheet: sheetName }),
       startRow: startCell.row,
       startCol: startCell.col,
       endRow: endCell.row,
@@ -125,7 +131,7 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
     info: xlsxInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      basePath = (cfg.basePath as string) || './spreadsheets'
+      basePath = (cfg['basePath'] as string) || './spreadsheets'
     },
 
     async healthCheck(): Promise<ProviderHealth> {
@@ -252,12 +258,16 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
         rowCount: sheet.data.length,
         columnCount: sheet.data[0]?.length || 0,
         data: sheet.data,
-        frozenRows: sheet.frozenRows,
-        frozenColumns: sheet.frozenColumns,
+        ...(sheet.frozenRows !== undefined && { frozenRows: sheet.frozenRows }),
+        ...(sheet.frozenColumns !== undefined && { frozenColumns: sheet.frozenColumns }),
       }
     },
 
-    async addSheet(spreadsheetId: string, name: string, options?: AddSheetOptions): Promise<SheetData> {
+    async addSheet(
+      spreadsheetId: string,
+      name: string,
+      options?: AddSheetOptions
+    ): Promise<SheetData> {
       const workbook = spreadsheets.get(spreadsheetId)
       if (!workbook) {
         throw new Error(`Spreadsheet ${spreadsheetId} not found`)
@@ -309,7 +319,11 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
       return deleted
     },
 
-    async renameSheet(spreadsheetId: string, sheetId: string | number, name: string): Promise<boolean> {
+    async renameSheet(
+      spreadsheetId: string,
+      sheetId: string | number,
+      name: string
+    ): Promise<boolean> {
       const workbook = spreadsheets.get(spreadsheetId)
       if (!workbook) return false
 
@@ -364,7 +378,11 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
       return result
     },
 
-    async writeRange(spreadsheetId: string, range: string, values: CellValue[][]): Promise<UpdateResult> {
+    async writeRange(
+      spreadsheetId: string,
+      range: string,
+      values: CellValue[][]
+    ): Promise<UpdateResult> {
       const workbook = spreadsheets.get(spreadsheetId)
       if (!workbook) {
         throw new Error(`Spreadsheet ${spreadsheetId} not found`)
@@ -402,14 +420,20 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
       const endCol = startCol + (values[0]?.length || 0) - 1
 
       return {
-        updatedRange: `${sheetName || sheet.name}!${colToLetter(startCol)}${startRow}:${colToLetter(endCol)}${endRow}`,
+        updatedRange: `${sheetName || sheet.name}!${colToLetter(startCol)}${startRow}:${colToLetter(
+          endCol
+        )}${endRow}`,
         updatedRows: values.length,
         updatedColumns: values[0]?.length || 0,
         updatedCells,
       }
     },
 
-    async appendRows(spreadsheetId: string, range: string, values: CellValue[][]): Promise<AppendResult> {
+    async appendRows(
+      spreadsheetId: string,
+      range: string,
+      values: CellValue[][]
+    ): Promise<AppendResult> {
       const workbook = spreadsheets.get(spreadsheetId)
       if (!workbook) {
         throw new Error(`Spreadsheet ${spreadsheetId} not found`)
@@ -446,7 +470,9 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
 
       return {
         spreadsheetId,
-        updatedRange: `${sheetName || sheet.name}!${colToLetter(startCol)}${startRow}:${colToLetter(endCol)}${endRow}`,
+        updatedRange: `${sheetName || sheet.name}!${colToLetter(startCol)}${startRow}:${colToLetter(
+          endCol
+        )}${endRow}`,
         updatedRows: values.length,
       }
     },
@@ -486,7 +512,10 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
       return result
     },
 
-    async batchWrite(spreadsheetId: string, data: Array<{ range: string; values: CellValue[][] }>): Promise<UpdateResult> {
+    async batchWrite(
+      spreadsheetId: string,
+      data: Array<{ range: string; values: CellValue[][] }>
+    ): Promise<UpdateResult> {
       let totalCells = 0
       let totalRows = 0
       let totalCols = 0
@@ -525,7 +554,11 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
       return Buffer.from(content, 'utf-8')
     },
 
-    async import(file: Buffer, format: 'xlsx' | 'csv', options?: ImportOptions): Promise<SpreadsheetData> {
+    async import(
+      file: Buffer,
+      format: 'xlsx' | 'csv',
+      options?: ImportOptions
+    ): Promise<SpreadsheetData> {
       // In a real implementation, this would use SheetJS to parse the file
       // For now, create an empty spreadsheet
       const name = options?.name || `Imported_${Date.now()}`
@@ -537,6 +570,4 @@ export function createXlsxProvider(config: ProviderConfig): SpreadsheetProvider 
 /**
  * XLSX provider definition
  */
-export const xlsxProvider = defineProvider(xlsxInfo, async (config) =>
-  createXlsxProvider(config)
-)
+export const xlsxProvider = defineProvider(xlsxInfo, async (config) => createXlsxProvider(config))

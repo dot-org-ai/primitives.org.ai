@@ -11,6 +11,7 @@ import type {
   WorkerRef,
   TaskResult,
   TaskDependency,
+  TaskProgress,
 } from './types.js'
 import { taskQueue } from './queue.js'
 
@@ -72,18 +73,36 @@ export async function createTask<TInput = unknown, TOutput = unknown>(
     function: options.function,
     status: options.scheduledFor ? 'pending' : 'queued',
     priority: options.priority || 'normal',
-    input: options.input,
     allowedWorkers,
-    dependencies,
-    scheduledFor: options.scheduledFor,
-    deadline: options.deadline,
-    timeout: options.timeout,
-    tags: options.tags,
-    parentId: options.parentId,
-    projectId: options.projectId,
-    metadata: options.metadata,
     createdAt: now,
     events: [],
+  }
+  if (options.input !== undefined) {
+    task.input = options.input
+  }
+  if (dependencies !== undefined) {
+    task.dependencies = dependencies
+  }
+  if (options.scheduledFor !== undefined) {
+    task.scheduledFor = options.scheduledFor
+  }
+  if (options.deadline !== undefined) {
+    task.deadline = options.deadline
+  }
+  if (options.timeout !== undefined) {
+    task.timeout = options.timeout
+  }
+  if (options.tags !== undefined) {
+    task.tags = options.tags
+  }
+  if (options.parentId !== undefined) {
+    task.parentId = options.parentId
+  }
+  if (options.projectId !== undefined) {
+    task.projectId = options.projectId
+  }
+  if (options.metadata !== undefined) {
+    task.metadata = options.metadata
   }
 
   // Auto-assign if specified
@@ -97,9 +116,7 @@ export async function createTask<TInput = unknown, TOutput = unknown>(
 
   // Check if blocked by dependencies
   if (dependencies && dependencies.length > 0) {
-    const hasPendingDeps = dependencies.some(
-      (d) => d.type === 'blocked_by' && !d.satisfied
-    )
+    const hasPendingDeps = dependencies.some((d) => d.type === 'blocked_by' && !d.satisfied)
     if (hasPendingDeps) {
       task.status = 'blocked'
     }
@@ -121,10 +138,7 @@ export async function getTask(id: string): Promise<AnyTask | undefined> {
 /**
  * Start working on a task
  */
-export async function startTask(
-  taskId: string,
-  worker: WorkerRef
-): Promise<AnyTask | undefined> {
+export async function startTask(taskId: string, worker: WorkerRef): Promise<AnyTask | undefined> {
   const task = await taskQueue.get(taskId)
   if (!task) return undefined
 
@@ -153,12 +167,15 @@ export async function updateProgress(
   percent: number,
   step?: string
 ): Promise<AnyTask | undefined> {
+  const progressUpdate: Partial<TaskProgress> = {
+    percent,
+    updatedAt: new Date(),
+  }
+  if (step !== undefined) {
+    progressUpdate.step = step
+  }
   return taskQueue.update(taskId, {
-    progress: {
-      percent,
-      step,
-      updatedAt: new Date(),
-    },
+    progress: progressUpdate,
     event: {
       type: 'progress',
       message: step || `Progress: ${percent}%`,
@@ -188,28 +205,27 @@ export async function completeTask<TOutput>(
 
   await taskQueue.complete(taskId, output)
 
+  const metadata: TaskResult<TOutput>['metadata'] = {
+    duration: task.startedAt ? Date.now() - task.startedAt.getTime() : 0,
+    startedAt: task.startedAt || new Date(),
+    completedAt: new Date(),
+  }
+  if (task.assignment?.worker !== undefined) {
+    metadata.worker = task.assignment.worker
+  }
+
   return {
     taskId,
     success: true,
     output,
-    metadata: {
-      duration: task.startedAt
-        ? Date.now() - task.startedAt.getTime()
-        : 0,
-      startedAt: task.startedAt || new Date(),
-      completedAt: new Date(),
-      worker: task.assignment?.worker,
-    },
+    metadata,
   }
 }
 
 /**
  * Fail a task with error
  */
-export async function failTask(
-  taskId: string,
-  error: string | Error
-): Promise<TaskResult> {
+export async function failTask(taskId: string, error: string | Error): Promise<TaskResult> {
   const task = await taskQueue.get(taskId)
   if (!task) {
     return {
@@ -226,6 +242,15 @@ export async function failTask(
 
   await taskQueue.fail(taskId, errorMessage)
 
+  const failMetadata: TaskResult['metadata'] = {
+    duration: task.startedAt ? Date.now() - task.startedAt.getTime() : 0,
+    startedAt: task.startedAt || new Date(),
+    completedAt: new Date(),
+  }
+  if (task.assignment?.worker !== undefined) {
+    failMetadata.worker = task.assignment.worker
+  }
+
   return {
     taskId,
     success: false,
@@ -234,24 +259,14 @@ export async function failTask(
       message: errorMessage,
       details: error instanceof Error ? { stack: error.stack } : undefined,
     },
-    metadata: {
-      duration: task.startedAt
-        ? Date.now() - task.startedAt.getTime()
-        : 0,
-      startedAt: task.startedAt || new Date(),
-      completedAt: new Date(),
-      worker: task.assignment?.worker,
-    },
+    metadata: failMetadata,
   }
 }
 
 /**
  * Cancel a task
  */
-export async function cancelTask(
-  taskId: string,
-  reason?: string
-): Promise<boolean> {
+export async function cancelTask(taskId: string, reason?: string): Promise<boolean> {
   const task = await taskQueue.get(taskId)
   if (!task) return false
 
@@ -274,13 +289,14 @@ export async function addComment(
   comment: string,
   author?: WorkerRef
 ): Promise<AnyTask | undefined> {
-  return taskQueue.update(taskId, {
-    event: {
-      type: 'comment',
-      actor: author,
-      message: comment,
-    },
-  })
+  const event: Omit<import('./types.js').TaskEvent, 'id' | 'timestamp'> = {
+    type: 'comment',
+    message: comment,
+  }
+  if (author !== undefined) {
+    event.actor = author
+  }
+  return taskQueue.update(taskId, { event })
 }
 
 /**
@@ -329,22 +345,37 @@ export async function waitForTask(
     }
 
     if (task.status === 'completed') {
+      const completedMeta: TaskResult['metadata'] = {
+        duration:
+          task.completedAt && task.startedAt
+            ? task.completedAt.getTime() - task.startedAt.getTime()
+            : 0,
+        startedAt: task.startedAt || task.createdAt,
+        completedAt: task.completedAt || new Date(),
+      }
+      if (task.assignment?.worker !== undefined) {
+        completedMeta.worker = task.assignment.worker
+      }
       return {
         taskId,
         success: true,
         output: task.output,
-        metadata: {
-          duration: task.completedAt && task.startedAt
-            ? task.completedAt.getTime() - task.startedAt.getTime()
-            : 0,
-          startedAt: task.startedAt || task.createdAt,
-          completedAt: task.completedAt || new Date(),
-          worker: task.assignment?.worker,
-        },
+        metadata: completedMeta,
       }
     }
 
     if (task.status === 'failed') {
+      const failedMeta: TaskResult['metadata'] = {
+        duration:
+          task.completedAt && task.startedAt
+            ? task.completedAt.getTime() - task.startedAt.getTime()
+            : 0,
+        startedAt: task.startedAt || task.createdAt,
+        completedAt: task.completedAt || new Date(),
+      }
+      if (task.assignment?.worker !== undefined) {
+        failedMeta.worker = task.assignment.worker
+      }
       return {
         taskId,
         success: false,
@@ -352,14 +383,7 @@ export async function waitForTask(
           code: 'TASK_FAILED',
           message: task.error || 'Task failed',
         },
-        metadata: {
-          duration: task.completedAt && task.startedAt
-            ? task.completedAt.getTime() - task.startedAt.getTime()
-            : 0,
-          startedAt: task.startedAt || task.createdAt,
-          completedAt: task.completedAt || new Date(),
-          worker: task.assignment?.worker,
-        },
+        metadata: failedMeta,
       }
     }
 

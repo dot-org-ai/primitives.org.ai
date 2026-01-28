@@ -17,7 +17,7 @@
  * @packageDocumentation
  */
 
-import { RPC } from 'rpc.do'
+import { RPC, http } from 'rpc.do'
 
 // ============================================================================
 // Types (mirrored from worker.ts for client-side use)
@@ -247,7 +247,7 @@ export function createTaskClient(
   url: string = DEFAULT_URL,
   options?: TaskClientOptions
 ): TaskServiceAPI {
-  return RPC<TaskServiceAPI>(url, options)
+  return RPC<TaskServiceAPI>(http(url, options?.token))
 }
 
 /**

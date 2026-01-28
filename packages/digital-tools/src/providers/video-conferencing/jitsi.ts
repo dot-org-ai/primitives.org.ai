@@ -136,14 +136,14 @@ export function createJitsiProvider(config: ProviderConfig): VideoConferencingPr
     return {
       id: meeting.id,
       topic: meeting.topic,
-      startTime: meeting.startTime,
-      duration: meeting.duration,
-      timezone: meeting.timezone,
-      agenda: meeting.agenda,
+      ...(meeting.startTime !== undefined && { startTime: meeting.startTime }),
+      ...(meeting.duration !== undefined && { duration: meeting.duration }),
+      ...(meeting.timezone !== undefined && { timezone: meeting.timezone }),
+      ...(meeting.agenda !== undefined && { agenda: meeting.agenda }),
       joinUrl: meeting.joinUrl,
       hostId: meeting.hostId,
       status: meeting.status,
-      password: meeting.password,
+      ...(meeting.password !== undefined && { password: meeting.password }),
       createdAt: meeting.createdAt,
     }
   }
@@ -152,9 +152,9 @@ export function createJitsiProvider(config: ProviderConfig): VideoConferencingPr
     info: jitsiInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      serverUrl = (cfg.serverUrl as string) || DEFAULT_JITSI_SERVER
-      jwtSecret = cfg.jwtSecret as string | undefined
-      hostId = (cfg.hostId as string) || 'default-host'
+      serverUrl = (cfg['serverUrl'] as string) || DEFAULT_JITSI_SERVER
+      jwtSecret = cfg['jwtSecret'] as string | undefined
+      hostId = (cfg['hostId'] as string) || 'default-host'
 
       // Remove trailing slash from server URL
       serverUrl = serverUrl.replace(/\/$/, '')
@@ -202,14 +202,14 @@ export function createJitsiProvider(config: ProviderConfig): VideoConferencingPr
       const storedMeeting: StoredMeeting = {
         id,
         topic: meeting.topic,
-        startTime: meeting.startTime,
-        duration: meeting.duration,
-        timezone: meeting.timezone,
-        agenda: meeting.agenda,
+        ...(meeting.startTime !== undefined && { startTime: meeting.startTime }),
+        ...(meeting.duration !== undefined && { duration: meeting.duration }),
+        ...(meeting.timezone !== undefined && { timezone: meeting.timezone }),
+        ...(meeting.agenda !== undefined && { agenda: meeting.agenda }),
         joinUrl,
         hostId,
         status: 'waiting',
-        password: meeting.password,
+        ...(meeting.password !== undefined && { password: meeting.password }),
         createdAt: new Date(),
         roomName,
       }
@@ -285,7 +285,7 @@ export function createJitsiProvider(config: ProviderConfig): VideoConferencingPr
       return {
         items: paginatedItems.map(convertMeeting),
         hasMore: offset + limit < items.length,
-        nextCursor: offset + limit < items.length ? (offset + limit).toString() : undefined,
+        ...(offset + limit < items.length && { nextCursor: (offset + limit).toString() }),
       }
     },
 

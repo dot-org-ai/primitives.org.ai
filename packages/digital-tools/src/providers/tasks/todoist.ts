@@ -100,10 +100,7 @@ export function createTodoistProvider(config: ProviderConfig): TaskProvider {
   /**
    * Make authenticated request to Todoist API
    */
-  async function todoistRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  async function todoistRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${TODOIST_API_URL}${endpoint}`, {
       ...options,
       headers: {
@@ -134,7 +131,7 @@ export function createTodoistProvider(config: ProviderConfig): TaskProvider {
       id: project.id,
       name: project.name,
       color: project.color,
-      parentId: project.parent_id,
+      ...(project.parent_id !== undefined && { parentId: project.parent_id }),
     }
   }
 
@@ -154,9 +151,9 @@ export function createTodoistProvider(config: ProviderConfig): TaskProvider {
       content: task.content,
       description: task.description,
       projectId: task.project_id,
-      parentId: task.parent_id,
+      ...(task.parent_id !== undefined && { parentId: task.parent_id }),
       priority: task.priority,
-      dueDate,
+      ...(dueDate !== undefined && { dueDate }),
       completed: task.is_completed,
       labels: task.labels,
       createdAt: new Date(task.created_at),
@@ -224,33 +221,33 @@ export function createTodoistProvider(config: ProviderConfig): TaskProvider {
       }
 
       if (task.description) {
-        body.description = task.description
+        body['description'] = task.description
       }
 
       if (task.projectId) {
-        body.project_id = task.projectId
+        body['project_id'] = task.projectId
       }
 
       if (task.parentId) {
-        body.parent_id = task.parentId
+        body['parent_id'] = task.parentId
       }
 
       if (task.priority) {
-        body.priority = task.priority
+        body['priority'] = task.priority
       }
 
       if (task.dueDate) {
-        body.due_date = task.dueDate.toISOString().split('T')[0]
+        body['due_date'] = task.dueDate.toISOString().split('T')[0]
       } else if (task.dueString) {
-        body.due_string = task.dueString
+        body['due_string'] = task.dueString
       }
 
       if (task.labels && task.labels.length > 0) {
-        body.labels = task.labels
+        body['labels'] = task.labels
       }
 
       if (task.assigneeId) {
-        body.assignee_id = task.assigneeId
+        body['assignee_id'] = task.assigneeId
       }
 
       const created = await todoistRequest<TodoistTask>('/tasks', {
@@ -274,36 +271,33 @@ export function createTodoistProvider(config: ProviderConfig): TaskProvider {
       }
     },
 
-    async updateTask(
-      taskId: string,
-      updates: Partial<CreateTaskOptions>
-    ): Promise<TaskData> {
+    async updateTask(taskId: string, updates: Partial<CreateTaskOptions>): Promise<TaskData> {
       const body: Record<string, unknown> = {}
 
       if (updates.content !== undefined) {
-        body.content = updates.content
+        body['content'] = updates.content
       }
 
       if (updates.description !== undefined) {
-        body.description = updates.description
+        body['description'] = updates.description
       }
 
       if (updates.priority !== undefined) {
-        body.priority = updates.priority
+        body['priority'] = updates.priority
       }
 
       if (updates.dueDate) {
-        body.due_date = updates.dueDate.toISOString().split('T')[0]
+        body['due_date'] = updates.dueDate.toISOString().split('T')[0]
       } else if (updates.dueString) {
-        body.due_string = updates.dueString
+        body['due_string'] = updates.dueString
       }
 
       if (updates.labels !== undefined) {
-        body.labels = updates.labels
+        body['labels'] = updates.labels
       }
 
       if (updates.assigneeId !== undefined) {
-        body.assignee_id = updates.assigneeId
+        body['assignee_id'] = updates.assigneeId
       }
 
       await todoistRequest<void>(`/tasks/${taskId}`, {

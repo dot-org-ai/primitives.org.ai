@@ -151,10 +151,7 @@ export function createGoogleMeetProvider(config: ProviderConfig): VideoConferenc
   /**
    * Make authenticated API request
    */
-  async function apiRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = await getAccessToken()
     const url = `${CALENDAR_API_URL}${endpoint}`
 
@@ -170,7 +167,9 @@ export function createGoogleMeetProvider(config: ProviderConfig): VideoConferenc
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(
-        `Google Calendar API error: ${response.status} - ${(errorData as any)?.error?.message || response.statusText}`
+        `Google Calendar API error: ${response.status} - ${
+          (errorData as any)?.error?.message || response.statusText
+        }`
       )
     }
 
@@ -190,8 +189,8 @@ export function createGoogleMeetProvider(config: ProviderConfig): VideoConferenc
       topic: event.summary,
       startTime,
       duration,
-      timezone: event.start.timeZone,
-      agenda: event.description,
+      ...(event.start.timeZone !== undefined && { timezone: event.start.timeZone }),
+      ...(event.description !== undefined && { agenda: event.description }),
       joinUrl: event.hangoutLink || event.conferenceData?.entryPoints?.[0]?.uri || '',
       hostId: event.creator?.id || event.creator?.email || '',
       status: event.status === 'confirmed' ? 'waiting' : 'finished',
@@ -204,8 +203,8 @@ export function createGoogleMeetProvider(config: ProviderConfig): VideoConferenc
 
     async initialize(cfg: ProviderConfig): Promise<void> {
       accessToken = cfg.accessToken as string
-      clientId = cfg.clientId as string | undefined
-      clientSecret = cfg.clientSecret as string | undefined
+      clientId = cfg['clientId'] as string | undefined
+      clientSecret = cfg['clientSecret'] as string | undefined
       refreshToken = cfg.refreshToken as string | undefined
 
       if (!accessToken) {
@@ -213,8 +212,8 @@ export function createGoogleMeetProvider(config: ProviderConfig): VideoConferenc
       }
 
       // Override calendar ID if provided
-      if (cfg.calendarId) {
-        calendarId = cfg.calendarId as string
+      if (cfg['calendarId']) {
+        calendarId = cfg['calendarId'] as string
       }
     },
 
@@ -309,18 +308,18 @@ export function createGoogleMeetProvider(config: ProviderConfig): VideoConferenc
 
       const body: Record<string, unknown> = {}
 
-      if (updates.topic) body.summary = updates.topic
-      if (updates.agenda !== undefined) body.description = updates.agenda
+      if (updates.topic) body['summary'] = updates.topic
+      if (updates.agenda !== undefined) body['description'] = updates.agenda
 
       if (updates.startTime) {
         const endTime = new Date(
           updates.startTime.getTime() + (updates.duration || current.duration || 60) * 60000
         )
-        body.start = {
+        body['start'] = {
           dateTime: updates.startTime.toISOString(),
           timeZone: updates.timezone || current.timezone || 'UTC',
         }
-        body.end = {
+        body['end'] = {
           dateTime: endTime.toISOString(),
           timeZone: updates.timezone || current.timezone || 'UTC',
         }
@@ -373,18 +372,16 @@ export function createGoogleMeetProvider(config: ProviderConfig): VideoConferenc
       )
 
       // Filter to only events with Meet links
-      const meetEvents = response.items.filter(
-        (event) => event.hangoutLink || event.conferenceData
-      )
+      const meetEvents = response.items.filter((event) => event.hangoutLink || event.conferenceData)
 
       return {
         items: meetEvents.map(convertEvent),
         hasMore: !!response.nextPageToken,
-        nextCursor: response.nextPageToken,
+        ...(response.nextPageToken !== undefined && { nextCursor: response.nextPageToken }),
       }
     },
 
-    endMeeting: async function(meetingId: string): Promise<boolean> {
+    endMeeting: async function (meetingId: string): Promise<boolean> {
       // Google Meet doesn't support programmatically ending meetings
       // We can delete the calendar event instead
       return await this.deleteMeeting!(meetingId)

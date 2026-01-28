@@ -266,16 +266,13 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
   /**
    * Make authenticated request to Notion API
    */
-  async function notionRequest(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<Response> {
+  async function notionRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
     const url = endpoint.startsWith('http') ? endpoint : `${NOTION_API_URL}${endpoint}`
 
     return fetch(url, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${integrationToken}`,
+        Authorization: `Bearer ${integrationToken}`,
         'Notion-Version': NOTION_VERSION,
         'Content-Type': 'application/json',
         ...options.headers,
@@ -289,16 +286,21 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
   function convertNotionPage(notionPage: NotionPage): PageData {
     const title = extractTitle(notionPage)
     const parentId = notionPage.parent?.page_id || notionPage.parent?.database_id || undefined
+    const icon = notionPage.icon?.emoji || notionPage.icon?.external?.url
+    const cover = notionPage.cover?.external?.url || notionPage.cover?.file?.url
 
     return {
       id: notionPage.id,
       title,
-      content: undefined, // Content requires separate API call
-      parentId,
-      spaceId: notionPage.parent?.workspace ? 'workspace' : parentId,
+      ...(parentId !== undefined && { parentId }),
+      ...(notionPage.parent?.workspace
+        ? { spaceId: 'workspace' }
+        : parentId !== undefined
+        ? { spaceId: parentId }
+        : {}),
       url: notionPage.url,
-      icon: notionPage.icon?.emoji || notionPage.icon?.external?.url || undefined,
-      cover: notionPage.cover?.external?.url || notionPage.cover?.file?.url || undefined,
+      ...(icon !== undefined && { icon }),
+      ...(cover !== undefined && { cover }),
       createdAt: new Date(notionPage.created_time),
       updatedAt: new Date(notionPage.last_edited_time),
       createdBy: notionPage.created_by?.id,
@@ -355,7 +357,10 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
   /**
    * Build parent object for page creation
    */
-  function buildParent(parentId?: string, spaceId?: string): { page_id: string } | { database_id: string } {
+  function buildParent(
+    parentId?: string,
+    spaceId?: string
+  ): { page_id: string } | { database_id: string } {
     const targetParent = parentId || spaceId || defaultParentId || defaultDatabaseId
 
     if (!targetParent) {
@@ -375,9 +380,9 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
     info: notionInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      integrationToken = cfg.integrationToken as string
-      defaultParentId = cfg.defaultParentId as string | undefined
-      defaultDatabaseId = cfg.defaultDatabaseId as string | undefined
+      integrationToken = cfg['integrationToken'] as string
+      defaultParentId = cfg['defaultParentId'] as string | undefined
+      defaultDatabaseId = cfg['defaultDatabaseId'] as string | undefined
 
       if (!integrationToken) {
         throw new Error('Notion integration token is required')
@@ -450,17 +455,19 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to create page: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to create page: ${errorData?.message || response.statusText}`)
         }
 
-        const notionPage = await response.json() as NotionPage
+        const notionPage = (await response.json()) as NotionPage
         return convertNotionPage(notionPage)
       } catch (error) {
         throw new Error(
-          `Failed to create Notion page: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to create Notion page: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
         )
       }
     },
@@ -474,13 +481,13 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         }
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to get page: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to get page: ${errorData?.message || response.statusText}`)
         }
 
-        const notionPage = await response.json() as NotionPage
+        const notionPage = (await response.json()) as NotionPage
         return convertNotionPage(notionPage)
       } catch (error) {
         if (error instanceof Error && error.message.includes('404')) {
@@ -516,17 +523,19 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to update page: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to update page: ${errorData?.message || response.statusText}`)
         }
 
-        const notionPage = await response.json() as NotionPage
+        const notionPage = (await response.json()) as NotionPage
         return convertNotionPage(notionPage)
       } catch (error) {
         throw new Error(
-          `Failed to update Notion page: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to update Notion page: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
         )
       }
     },
@@ -539,16 +548,18 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to delete page: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to delete page: ${errorData?.message || response.statusText}`)
         }
 
         return true
       } catch (error) {
         throw new Error(
-          `Failed to delete Notion page: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to delete Notion page: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
         )
       }
     },
@@ -558,7 +569,9 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
       const parentId = options?.parentId || options?.spaceId || defaultDatabaseId
 
       if (!parentId) {
-        throw new Error('Parent ID, space ID, or default database must be provided for listing pages')
+        throw new Error(
+          'Parent ID, space ID, or default database must be provided for listing pages'
+        )
       }
 
       try {
@@ -576,19 +589,19 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to list pages: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to list pages: ${errorData?.message || response.statusText}`)
         }
 
-        const data = await response.json() as NotionPaginatedResponse<NotionPage>
+        const data = (await response.json()) as NotionPaginatedResponse<NotionPage>
         const pages = data.results.map(convertNotionPage)
 
         return {
           items: pages,
           hasMore: data.has_more,
-          nextCursor: data.next_cursor || undefined,
+          ...(data.next_cursor !== null && { nextCursor: data.next_cursor }),
         }
       } catch (error) {
         throw new Error(
@@ -597,7 +610,10 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
       }
     },
 
-    async searchPages(query: string, options?: PaginationOptions): Promise<PaginatedResult<PageData>> {
+    async searchPages(
+      query: string,
+      options?: PaginationOptions
+    ): Promise<PaginatedResult<PageData>> {
       try {
         const body: NotionSearchBody = {
           query,
@@ -618,23 +634,25 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to search pages: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to search pages: ${errorData?.message || response.statusText}`)
         }
 
-        const data = await response.json() as NotionPaginatedResponse<NotionPage>
+        const data = (await response.json()) as NotionPaginatedResponse<NotionPage>
         const pages = data.results.map(convertNotionPage)
 
         return {
           items: pages,
           hasMore: data.has_more,
-          nextCursor: data.next_cursor || undefined,
+          ...(data.next_cursor !== null && { nextCursor: data.next_cursor }),
         }
       } catch (error) {
         throw new Error(
-          `Failed to search Notion pages: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to search Notion pages: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
         )
       }
     },
@@ -656,24 +674,30 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         })
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to list spaces: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to list spaces: ${errorData?.message || response.statusText}`)
         }
 
-        const data = await response.json() as NotionPaginatedResponse<NotionDatabase>
+        const data = (await response.json()) as NotionPaginatedResponse<NotionDatabase>
 
-        return data.results.map((db): SpaceData => ({
-          id: db.id,
-          name: extractTitle(db),
-          description: db.description?.[0]?.plain_text,
-          icon: db.icon?.emoji || db.icon?.external?.url || undefined,
-          url: db.url,
-        }))
+        return data.results.map((db): SpaceData => {
+          const description = db.description?.[0]?.plain_text
+          const icon = db.icon?.emoji || db.icon?.external?.url
+          return {
+            id: db.id,
+            name: extractTitle(db),
+            ...(description !== undefined && { description }),
+            ...(icon !== undefined && { icon }),
+            url: db.url,
+          }
+        })
       } catch (error) {
         throw new Error(
-          `Failed to list Notion spaces: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to list Notion spaces: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`
         )
       }
     },
@@ -688,19 +712,21 @@ export function createNotionProvider(config: ProviderConfig): KnowledgeProvider 
         }
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})) as Partial<NotionErrorResponse>
-          throw new Error(
-            `Failed to get space: ${errorData?.message || response.statusText}`
-          )
+          const errorData = (await response
+            .json()
+            .catch(() => ({}))) as Partial<NotionErrorResponse>
+          throw new Error(`Failed to get space: ${errorData?.message || response.statusText}`)
         }
 
-        const db = await response.json() as NotionDatabase
+        const db = (await response.json()) as NotionDatabase
+        const description = db.description?.[0]?.plain_text
+        const icon = db.icon?.emoji || db.icon?.external?.url
 
         return {
           id: db.id,
           name: extractTitle(db),
-          description: db.description?.[0]?.plain_text,
-          icon: db.icon?.emoji || db.icon?.external?.url || undefined,
+          ...(description !== undefined && { description }),
+          ...(icon !== undefined && { icon }),
           url: db.url,
         }
       } catch (error) {

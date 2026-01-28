@@ -48,10 +48,7 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
   /**
    * Make authenticated API request
    */
-  async function makeRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  async function makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${baseUrl}${endpoint}`
     const response = await fetch(url, {
       ...options,
@@ -100,8 +97,8 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
     info: mailchimpInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      apiKey = cfg.apiKey as string
-      serverPrefix = cfg.serverPrefix as string
+      apiKey = cfg['apiKey'] as string
+      serverPrefix = cfg['serverPrefix'] as string
 
       if (!apiKey) {
         throw new Error('Mailchimp API key is required')
@@ -190,17 +187,17 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
       }
 
       if (subscriber.firstName || subscriber.lastName) {
-        body.merge_fields = {
+        body['merge_fields'] = {
           ...(subscriber.firstName && { FNAME: subscriber.firstName }),
           ...(subscriber.lastName && { LNAME: subscriber.lastName }),
           ...subscriber.mergeFields,
         }
       } else if (subscriber.mergeFields) {
-        body.merge_fields = subscriber.mergeFields
+        body['merge_fields'] = subscriber.mergeFields
       }
 
       if (subscriber.tags?.length) {
-        body.tags = subscriber.tags
+        body['tags'] = subscriber.tags
       }
 
       const response = await makeRequest<{
@@ -216,18 +213,24 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
         body: JSON.stringify(body),
       })
 
+      const subscribedAt = response.timestamp_signup
+        ? new Date(response.timestamp_signup)
+        : response.timestamp_opt
+        ? new Date(response.timestamp_opt)
+        : undefined
+
       return {
         id: response.id,
         email: response.email_address,
-        firstName: response.merge_fields?.FNAME,
-        lastName: response.merge_fields?.LNAME,
         status: mapStatus(response.status),
         tags: response.tags.map((t) => t.name),
-        subscribedAt: response.timestamp_signup
-          ? new Date(response.timestamp_signup)
-          : response.timestamp_opt
-            ? new Date(response.timestamp_opt)
-            : undefined,
+        ...(response.merge_fields?.FNAME !== undefined && {
+          firstName: response.merge_fields.FNAME,
+        }),
+        ...(response.merge_fields?.LNAME !== undefined && {
+          lastName: response.merge_fields.LNAME,
+        }),
+        ...(subscribedAt !== undefined && { subscribedAt }),
       }
     },
 
@@ -238,23 +241,20 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
     ): Promise<SubscriberData> {
       // Mailchimp uses MD5 hash of lowercase email as subscriber ID
       const crypto = await import('crypto')
-      const subscriberId = crypto
-        .createHash('md5')
-        .update(email.toLowerCase())
-        .digest('hex')
+      const subscriberId = crypto.createHash('md5').update(email.toLowerCase()).digest('hex')
 
       const body: Record<string, unknown> = {}
 
       if (updates.email) {
-        body.email_address = updates.email
+        body['email_address'] = updates.email
       }
 
       if (updates.status) {
-        body.status = updates.status
+        body['status'] = updates.status
       }
 
       if (updates.firstName || updates.lastName || updates.mergeFields) {
-        body.merge_fields = {
+        body['merge_fields'] = {
           ...(updates.firstName && { FNAME: updates.firstName }),
           ...(updates.lastName && { LNAME: updates.lastName }),
           ...updates.mergeFields,
@@ -262,7 +262,7 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
       }
 
       if (updates.tags?.length) {
-        body.tags = updates.tags
+        body['tags'] = updates.tags
       }
 
       const response = await makeRequest<{
@@ -278,28 +278,31 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
         body: JSON.stringify(body),
       })
 
+      const updateSubscribedAt = response.timestamp_signup
+        ? new Date(response.timestamp_signup)
+        : response.timestamp_opt
+        ? new Date(response.timestamp_opt)
+        : undefined
+
       return {
         id: response.id,
         email: response.email_address,
-        firstName: response.merge_fields?.FNAME,
-        lastName: response.merge_fields?.LNAME,
         status: mapStatus(response.status),
         tags: response.tags.map((t) => t.name),
-        subscribedAt: response.timestamp_signup
-          ? new Date(response.timestamp_signup)
-          : response.timestamp_opt
-            ? new Date(response.timestamp_opt)
-            : undefined,
+        ...(response.merge_fields?.FNAME !== undefined && {
+          firstName: response.merge_fields.FNAME,
+        }),
+        ...(response.merge_fields?.LNAME !== undefined && {
+          lastName: response.merge_fields.LNAME,
+        }),
+        ...(updateSubscribedAt !== undefined && { subscribedAt: updateSubscribedAt }),
       }
     },
 
     async removeSubscriber(audienceId: string, email: string): Promise<boolean> {
       try {
         const crypto = await import('crypto')
-        const subscriberId = crypto
-          .createHash('md5')
-          .update(email.toLowerCase())
-          .digest('hex')
+        const subscriberId = crypto.createHash('md5').update(email.toLowerCase()).digest('hex')
 
         await makeRequest(`/lists/${audienceId}/members/${subscriberId}`, {
           method: 'DELETE',
@@ -343,19 +346,23 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
         total_items: number
       }>(`/lists/${audienceId}/members?${params}`)
 
-      const items = response.members.map((member) => ({
-        id: member.id,
-        email: member.email_address,
-        firstName: member.merge_fields?.FNAME,
-        lastName: member.merge_fields?.LNAME,
-        status: mapStatus(member.status),
-        tags: member.tags.map((t) => t.name),
-        subscribedAt: member.timestamp_signup
+      const items = response.members.map((member) => {
+        const memberSubscribedAt = member.timestamp_signup
           ? new Date(member.timestamp_signup)
           : member.timestamp_opt
-            ? new Date(member.timestamp_opt)
-            : undefined,
-      }))
+          ? new Date(member.timestamp_opt)
+          : undefined
+
+        return {
+          id: member.id,
+          email: member.email_address,
+          status: mapStatus(member.status),
+          tags: member.tags.map((t) => t.name),
+          ...(member.merge_fields?.FNAME !== undefined && { firstName: member.merge_fields.FNAME }),
+          ...(member.merge_fields?.LNAME !== undefined && { lastName: member.merge_fields.LNAME }),
+          ...(memberSubscribedAt !== undefined && { subscribedAt: memberSubscribedAt }),
+        }
+      })
 
       const offset = options?.offset || 0
       const limit = options?.limit || 10
@@ -403,10 +410,10 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
       if (campaign.content?.html || campaign.content?.text) {
         const contentBody: Record<string, unknown> = {}
         if (campaign.content.html) {
-          contentBody.html = campaign.content.html
+          contentBody['html'] = campaign.content.html
         }
         if (campaign.content.text) {
-          contentBody.plain_text = campaign.content.text
+          contentBody['plain_text'] = campaign.content.text
         }
 
         await makeRequest(`/campaigns/${response.id}/content`, {
@@ -414,6 +421,8 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
           body: JSON.stringify(contentBody),
         })
       }
+
+      const createSentAt = response.send_time ? new Date(response.send_time) : undefined
 
       return {
         id: response.id,
@@ -423,8 +432,8 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
         subject: response.settings.subject_line,
         fromName: response.settings.from_name,
         fromEmail: response.settings.reply_to,
-        sentAt: response.send_time ? new Date(response.send_time) : undefined,
         createdAt: new Date(response.create_time),
+        ...(createSentAt !== undefined && { sentAt: createSentAt }),
       }
     },
 
@@ -445,6 +454,8 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
           send_time?: string
         }>(`/campaigns/${campaignId}`)
 
+        const getSentAt = response.send_time ? new Date(response.send_time) : undefined
+
         return {
           id: response.id,
           name: response.settings.title,
@@ -453,8 +464,8 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
           subject: response.settings.subject_line,
           fromName: response.settings.from_name,
           fromEmail: response.settings.reply_to,
-          sentAt: response.send_time ? new Date(response.send_time) : undefined,
           createdAt: new Date(response.create_time),
+          ...(getSentAt !== undefined && { sentAt: getSentAt }),
         }
       } catch (error) {
         if (error instanceof Error && error.message.includes('404')) {
@@ -471,7 +482,7 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
       const body: Record<string, unknown> = {}
 
       if (updates.name || updates.subject || updates.fromName || updates.fromEmail) {
-        body.settings = {
+        body['settings'] = {
           ...(updates.name && { title: updates.name }),
           ...(updates.subject && { subject_line: updates.subject }),
           ...(updates.fromName && { from_name: updates.fromName }),
@@ -480,7 +491,7 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
       }
 
       if (updates.audienceId) {
-        body.recipients = { list_id: updates.audienceId }
+        body['recipients'] = { list_id: updates.audienceId }
       }
 
       const response = await makeRequest<{
@@ -505,10 +516,10 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
       if (updates.content?.html || updates.content?.text) {
         const contentBody: Record<string, unknown> = {}
         if (updates.content.html) {
-          contentBody.html = updates.content.html
+          contentBody['html'] = updates.content.html
         }
         if (updates.content.text) {
-          contentBody.plain_text = updates.content.text
+          contentBody['plain_text'] = updates.content.text
         }
 
         await makeRequest(`/campaigns/${response.id}/content`, {
@@ -516,6 +527,8 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
           body: JSON.stringify(contentBody),
         })
       }
+
+      const updateSentAt = response.send_time ? new Date(response.send_time) : undefined
 
       return {
         id: response.id,
@@ -525,14 +538,12 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
         subject: response.settings.subject_line,
         fromName: response.settings.from_name,
         fromEmail: response.settings.reply_to,
-        sentAt: response.send_time ? new Date(response.send_time) : undefined,
         createdAt: new Date(response.create_time),
+        ...(updateSentAt !== undefined && { sentAt: updateSentAt }),
       }
     },
 
-    async listCampaigns(
-      options?: CampaignListOptions
-    ): Promise<PaginatedResult<CampaignData>> {
+    async listCampaigns(options?: CampaignListOptions): Promise<PaginatedResult<CampaignData>> {
       const params = new URLSearchParams()
       params.set('count', String(options?.limit || 10))
       params.set('offset', String(options?.offset || 0))
@@ -563,17 +574,21 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
         total_items: number
       }>(`/campaigns?${params}`)
 
-      const items = response.campaigns.map((campaign) => ({
-        id: campaign.id,
-        name: campaign.settings.title,
-        status: campaign.status as 'draft' | 'scheduled' | 'sending' | 'sent',
-        audienceId: campaign.recipients.list_id,
-        subject: campaign.settings.subject_line,
-        fromName: campaign.settings.from_name,
-        fromEmail: campaign.settings.reply_to,
-        sentAt: campaign.send_time ? new Date(campaign.send_time) : undefined,
-        createdAt: new Date(campaign.create_time),
-      }))
+      const items = response.campaigns.map((campaign) => {
+        const campaignSentAt = campaign.send_time ? new Date(campaign.send_time) : undefined
+
+        return {
+          id: campaign.id,
+          name: campaign.settings.title,
+          status: campaign.status as 'draft' | 'scheduled' | 'sending' | 'sent',
+          audienceId: campaign.recipients.list_id,
+          subject: campaign.settings.subject_line,
+          fromName: campaign.settings.from_name,
+          fromEmail: campaign.settings.reply_to,
+          createdAt: new Date(campaign.create_time),
+          ...(campaignSentAt !== undefined && { sentAt: campaignSentAt }),
+        }
+      })
 
       const offset = options?.offset || 0
       const limit = options?.limit || 10
@@ -634,7 +649,8 @@ export function createMailchimpProvider(config: ProviderConfig): MarketingProvid
       return {
         campaignId: response.campaign_id,
         sent: response.emails_sent,
-        delivered: response.emails_sent - (response.bounces.hard_bounces + response.bounces.soft_bounces),
+        delivered:
+          response.emails_sent - (response.bounces.hard_bounces + response.bounces.soft_bounces),
         opens: response.opens.opens_total,
         uniqueOpens: response.opens.unique_opens,
         clicks: response.clicks.clicks_total,

@@ -130,10 +130,10 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
     info: cloudinaryInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      cloudName = cfg.cloudName as string
-      apiKey = cfg.apiKey as string
-      apiSecret = cfg.apiSecret as string
-      secure = cfg.secure !== false
+      cloudName = cfg['cloudName'] as string
+      apiKey = cfg['apiKey'] as string
+      apiSecret = cfg['apiSecret'] as string
+      secure = cfg['secure'] !== false
 
       if (!cloudName || !apiKey || !apiSecret) {
         throw new Error('Cloudinary requires cloudName, apiKey, and apiSecret')
@@ -226,13 +226,13 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           publicId: data.public_id,
           url: data.url,
           secureUrl: data.secure_url,
-          resourceType: data.resource_type,
+          resourceType: data.resource_type as 'image' | 'video' | 'raw',
           format: data.format,
           bytes: data.bytes,
-          width: data.width,
-          height: data.height,
-          duration: data.duration,
           createdAt: new Date(data.created_at),
+          ...(data.width !== undefined && { width: data.width }),
+          ...(data.height !== undefined && { height: data.height }),
+          ...(data.duration !== undefined && { duration: data.duration }),
         }
       } catch (error) {
         throw new Error(error instanceof Error ? error.message : 'Upload failed')
@@ -268,13 +268,13 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
             publicId: data.public_id,
             url: data.url,
             secureUrl: data.secure_url,
-            resourceType: data.resource_type,
+            resourceType: data.resource_type as 'image' | 'video' | 'raw',
             format: data.format,
             bytes: data.bytes,
-            width: data.width,
-            height: data.height,
-            duration: data.duration,
             createdAt: new Date(data.created_at),
+            ...(data.width !== undefined && { width: data.width }),
+            ...(data.height !== undefined && { height: data.height }),
+            ...(data.duration !== undefined && { duration: data.duration }),
           }
         }
 
@@ -284,13 +284,13 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           publicId: data.public_id,
           url: data.url,
           secureUrl: data.secure_url,
-          resourceType: data.resource_type,
+          resourceType: data.resource_type as 'image' | 'video' | 'raw',
           format: data.format,
           bytes: data.bytes,
-          width: data.width,
-          height: data.height,
-          duration: data.duration,
           createdAt: new Date(data.created_at),
+          ...(data.width !== undefined && { width: data.width }),
+          ...(data.height !== undefined && { height: data.height }),
+          ...(data.duration !== undefined && { duration: data.duration }),
         }
       } catch {
         return null
@@ -368,19 +368,19 @@ export function createCloudinaryProvider(config: ProviderConfig): MediaProvider 
           publicId: resource.public_id,
           url: resource.url,
           secureUrl: resource.secure_url,
-          resourceType: resource.resource_type,
+          resourceType: resource.resource_type as 'image' | 'video' | 'raw',
           format: resource.format,
           bytes: resource.bytes,
-          width: resource.width,
-          height: resource.height,
-          duration: resource.duration,
           createdAt: new Date(resource.created_at),
+          ...(resource.width !== undefined && { width: resource.width }),
+          ...(resource.height !== undefined && { height: resource.height }),
+          ...(resource.duration !== undefined && { duration: resource.duration }),
         }))
 
         return {
           items,
           hasMore: !!data.next_cursor,
-          nextCursor: data.next_cursor,
+          ...(data.next_cursor !== undefined && { nextCursor: data.next_cursor }),
         }
       } catch (error) {
         throw new Error(error instanceof Error ? error.message : 'List failed')

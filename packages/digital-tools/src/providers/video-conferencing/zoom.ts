@@ -120,13 +120,16 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
 
     // Get new token
     const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
-    const response = await fetch(`https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    })
+    const response = await fetch(
+      `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    )
 
     if (!response.ok) {
       throw new Error(`Failed to get access token: HTTP ${response.status}`)
@@ -142,10 +145,7 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
   /**
    * Make authenticated API request
    */
-  async function apiRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = await getAccessToken()
     const url = `${ZOOM_API_URL}${endpoint}`
 
@@ -175,14 +175,14 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
     return {
       id: meeting.id.toString(),
       topic: meeting.topic,
-      startTime: meeting.start_time ? new Date(meeting.start_time) : undefined,
-      duration: meeting.duration,
-      timezone: meeting.timezone,
-      agenda: meeting.agenda,
+      ...(meeting.start_time !== undefined && { startTime: new Date(meeting.start_time) }),
+      ...(meeting.duration !== undefined && { duration: meeting.duration }),
+      ...(meeting.timezone !== undefined && { timezone: meeting.timezone }),
+      ...(meeting.agenda !== undefined && { agenda: meeting.agenda }),
       joinUrl: meeting.join_url,
       hostId: meeting.host_id,
       status: meeting.status as 'waiting' | 'started' | 'finished',
-      password: meeting.password,
+      ...(meeting.password !== undefined && { password: meeting.password }),
       createdAt: new Date(meeting.created_at),
     }
   }
@@ -191,9 +191,9 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
     info: zoomInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      accountId = cfg.accountId as string
-      clientId = cfg.clientId as string
-      clientSecret = cfg.clientSecret as string
+      accountId = cfg['accountId'] as string
+      clientId = cfg['clientId'] as string
+      clientSecret = cfg['clientSecret'] as string
       accessToken = cfg.accessToken as string | undefined
 
       if (!accountId || !clientId || !clientSecret) {
@@ -243,7 +243,7 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
       }
 
       if (meeting.settings) {
-        body.settings = {
+        body['settings'] = {
           ...(meeting.settings.hostVideo !== undefined && {
             host_video: meeting.settings.hostVideo,
           }),
@@ -291,15 +291,15 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
     ): Promise<MeetingData> {
       const body: Record<string, unknown> = {}
 
-      if (updates.topic) body.topic = updates.topic
-      if (updates.startTime) body.start_time = updates.startTime.toISOString()
-      if (updates.duration !== undefined) body.duration = updates.duration
-      if (updates.timezone) body.timezone = updates.timezone
-      if (updates.agenda !== undefined) body.agenda = updates.agenda
-      if (updates.password !== undefined) body.password = updates.password
+      if (updates.topic) body['topic'] = updates.topic
+      if (updates.startTime) body['start_time'] = updates.startTime.toISOString()
+      if (updates.duration !== undefined) body['duration'] = updates.duration
+      if (updates.timezone) body['timezone'] = updates.timezone
+      if (updates.agenda !== undefined) body['agenda'] = updates.agenda
+      if (updates.password !== undefined) body['password'] = updates.password
 
       if (updates.settings) {
-        body.settings = {
+        body['settings'] = {
           ...(updates.settings.hostVideo !== undefined && {
             host_video: updates.settings.hostVideo,
           }),
@@ -376,7 +376,7 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
         items: response.meetings.map(convertMeeting),
         total: response.total_records,
         hasMore: !!response.next_page_token,
-        nextCursor: response.next_page_token,
+        ...(response.next_page_token !== undefined && { nextCursor: response.next_page_token }),
       }
     },
 
@@ -401,14 +401,16 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
           `/past_meetings/${meetingId}/participants`
         )
 
-        return response.participants.map((p) => ({
-          id: p.id,
-          name: p.name,
-          email: p.user_email,
-          joinTime: new Date(p.join_time),
-          leaveTime: p.leave_time ? new Date(p.leave_time) : undefined,
-          duration: p.duration,
-        }))
+        return response.participants.map(
+          (p): ParticipantData => ({
+            id: p.id,
+            name: p.name,
+            ...(p.user_email !== undefined && { email: p.user_email }),
+            joinTime: new Date(p.join_time),
+            ...(p.leave_time !== undefined && { leaveTime: new Date(p.leave_time) }),
+            ...(p.duration !== undefined && { duration: p.duration }),
+          })
+        )
       } catch (error) {
         if (error instanceof Error && error.message.includes('404')) {
           return []
@@ -423,16 +425,21 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
           `/meetings/${meetingId}/recordings`
         )
 
-        return response.recording_files.map((r) => ({
-          id: r.id,
-          meetingId: r.meeting_id,
-          type: r.recording_type === 'audio_only' ? 'audio' :
-                r.file_type === 'TRANSCRIPT' ? 'transcript' : 'video',
-          url: r.download_url,
-          size: r.file_size,
-          duration: undefined, // Not provided in this endpoint
-          createdAt: new Date(r.recording_start),
-        }))
+        return response.recording_files.map(
+          (r): MeetingRecordingData => ({
+            id: r.id,
+            meetingId: r.meeting_id,
+            type:
+              r.recording_type === 'audio_only'
+                ? 'audio'
+                : r.file_type === 'TRANSCRIPT'
+                ? 'transcript'
+                : 'video',
+            url: r.download_url,
+            ...(r.file_size !== undefined && { size: r.file_size }),
+            createdAt: new Date(r.recording_start),
+          })
+        )
       } catch (error) {
         if (error instanceof Error && error.message.includes('404')) {
           return []
@@ -446,6 +453,4 @@ export function createZoomProvider(config: ProviderConfig): VideoConferencingPro
 /**
  * Zoom provider definition
  */
-export const zoomProvider = defineProvider(zoomInfo, async (config) =>
-  createZoomProvider(config)
-)
+export const zoomProvider = defineProvider(zoomInfo, async (config) => createZoomProvider(config))

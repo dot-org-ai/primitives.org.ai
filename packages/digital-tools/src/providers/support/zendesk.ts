@@ -178,9 +178,9 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
     info: zendeskInfo,
 
     async initialize(cfg: ProviderConfig): Promise<void> {
-      subdomain = cfg.subdomain as string
-      apiKey = cfg.apiKey as string
-      email = cfg.email as string
+      subdomain = cfg['subdomain'] as string
+      apiKey = cfg['apiKey'] as string
+      email = cfg['email'] as string
 
       if (!subdomain || !apiKey || !email) {
         throw new Error('Zendesk subdomain, API key, and email are required')
@@ -251,7 +251,9 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
         const data = (await response.json()) as ZendeskTicketResponse
         return mapZendeskTicket(data.ticket)
       } catch (error) {
-        throw new Error(`Failed to create ticket: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to create ticket: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -276,7 +278,10 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
       }
     },
 
-    async updateTicket(ticketId: string, updates: Partial<CreateTicketOptions>): Promise<TicketData> {
+    async updateTicket(
+      ticketId: string,
+      updates: Partial<CreateTicketOptions>
+    ): Promise<TicketData> {
       const ticketBody: ZendeskTicketUpdateBody = {
         ...(updates.subject && { subject: updates.subject }),
         ...(updates.priority && { priority: updates.priority }),
@@ -311,7 +316,9 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
         const data = (await response.json()) as ZendeskTicketResponse
         return mapZendeskTicket(data.ticket)
       } catch (error) {
-        throw new Error(`Failed to update ticket: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to update ticket: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -344,12 +351,14 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
 
         return {
           items: tickets,
-          total: data.count,
+          ...(data.count !== undefined && { total: data.count }),
           hasMore: data.next_page !== null,
-          nextCursor: data.after_cursor,
+          ...(data.after_cursor !== undefined && { nextCursor: data.after_cursor }),
         }
       } catch (error) {
-        throw new Error(`Failed to list tickets: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to list tickets: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -374,7 +383,11 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
       }
     },
 
-    async addTicketComment(ticketId: string, body: string, isPublic: boolean = true): Promise<TicketCommentData> {
+    async addTicketComment(
+      ticketId: string,
+      body: string,
+      isPublic: boolean = true
+    ): Promise<TicketCommentData> {
       try {
         const response = await fetch(`${baseUrl}/tickets/${ticketId}.json`, {
           method: 'PUT',
@@ -410,7 +423,9 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
           createdAt: new Date(audit.created_at || Date.now()),
         }
       } catch (error) {
-        throw new Error(`Failed to add comment: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to add comment: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -437,7 +452,9 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
           createdAt: new Date(comment.created_at),
         }))
       } catch (error) {
-        throw new Error(`Failed to list comments: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to list comments: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
 
@@ -479,7 +496,9 @@ export function createZendeskProvider(config: ProviderConfig): SupportProvider {
         const data = (await response.json()) as ZendeskUsersSearchResponse
         return (data.users || []).map(mapZendeskUser)
       } catch (error) {
-        throw new Error(`Failed to search users: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        throw new Error(
+          `Failed to search users: ${error instanceof Error ? error.message : 'Unknown error'}`
+        )
       }
     },
   }
@@ -495,13 +514,13 @@ function mapZendeskTicket(ticket: ZendeskTicket): TicketData {
     description: ticket.description || '',
     status: mapZendeskStatus(ticket.status),
     priority: ticket.priority || 'normal',
-    type: ticket.type ?? undefined,
-    requesterId: ticket.requester_id?.toString(),
-    assigneeId: ticket.assignee_id?.toString(),
+    ...(ticket.type !== null && { type: ticket.type }),
+    ...(ticket.requester_id !== null && { requesterId: ticket.requester_id.toString() }),
+    ...(ticket.assignee_id !== null && { assigneeId: ticket.assignee_id.toString() }),
     tags: ticket.tags || [],
     createdAt: new Date(ticket.created_at),
     updatedAt: new Date(ticket.updated_at),
-    solvedAt: ticket.solved_at ? new Date(ticket.solved_at) : undefined,
+    ...(ticket.solved_at !== null && { solvedAt: new Date(ticket.solved_at) }),
   }
 }
 

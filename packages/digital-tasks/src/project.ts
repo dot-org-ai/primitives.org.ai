@@ -59,10 +59,7 @@ export type ExecutionMode = 'parallel' | 'sequential'
 /**
  * Task node in a workflow - can be a single task or a group
  */
-export type TaskNode =
-  | TaskDefinition
-  | ParallelGroup
-  | SequentialGroup
+export type TaskNode = TaskDefinition | ParallelGroup | SequentialGroup
 
 /**
  * Function type for the DSL
@@ -107,12 +104,7 @@ export interface SequentialGroup {
 /**
  * Project status
  */
-export type ProjectStatus =
-  | 'draft'
-  | 'active'
-  | 'paused'
-  | 'completed'
-  | 'cancelled'
+export type ProjectStatus = 'draft' | 'active' | 'paused' | 'completed' | 'cancelled'
 
 /**
  * Project definition
@@ -261,19 +253,28 @@ function generateProjectId(): string {
  */
 export function createProject(options: CreateProjectOptions): Project {
   const now = new Date()
-  return {
+  const project: Project = {
     id: generateProjectId(),
     name: options.name,
-    description: options.description,
     status: 'draft',
     tasks: options.tasks || [],
     defaultMode: options.defaultMode || 'sequential',
-    owner: options.owner,
-    tags: options.tags,
     createdAt: now,
     updatedAt: now,
-    metadata: options.metadata,
   }
+  if (options.description !== undefined) {
+    project.description = options.description
+  }
+  if (options.owner !== undefined) {
+    project.owner = options.owner
+  }
+  if (options.tags !== undefined) {
+    project.tags = options.tags
+  }
+  if (options.metadata !== undefined) {
+    project.metadata = options.metadata
+  }
+  return project
 }
 
 // ============================================================================
@@ -325,7 +326,10 @@ export function workflow(name: string, description?: string) {
      */
     then(...nodes: TaskNode[]) {
       if (nodes.length === 1) {
-        tasks.push(nodes[0])
+        const node = nodes[0]
+        if (node !== undefined) {
+          tasks.push(node)
+        }
       } else {
         tasks.push(sequential(...nodes))
       }
@@ -344,12 +348,15 @@ export function workflow(name: string, description?: string) {
      * Build the project
      */
     build(options?: Partial<Omit<CreateProjectOptions, 'name' | 'tasks'>>): Project {
-      return createProject({
+      const projectOptions: CreateProjectOptions = {
         name,
-        description,
         tasks,
         ...options,
-      })
+      }
+      if (description !== undefined) {
+        projectOptions.description = description
+      }
+      return createProject(projectOptions)
     },
   }
 
@@ -380,9 +387,7 @@ export async function materializeProject(
       const taskId = `${project.id}_task_${taskIndex++}`
 
       // Create dependencies based on mode (as string array for CreateTaskOptions)
-      const dependencies = mode === 'sequential' && previousIds.length > 0
-        ? previousIds
-        : undefined
+      const dependencies = mode === 'sequential' && previousIds.length > 0 ? previousIds : undefined
 
       // Create a FunctionDefinition from the task definition
       // Default to generative function type for DSL tasks
@@ -394,19 +399,28 @@ export async function materializeProject(
         output: 'string',
       } as FunctionDefinition
 
-      const newTask = await createBaseTask({
+      const createTaskOptions: CreateTaskOptions = {
         function: functionDef,
         priority: taskDef.priority || 'normal',
-        assignTo: taskDef.assignTo,
-        tags: taskDef.tags,
-        parentId,
         projectId: project.id,
-        dependencies,
         metadata: {
           ...taskDef.metadata,
           _taskNodeIndex: taskIndex - 1,
         },
-      })
+      }
+      if (taskDef.assignTo !== undefined) {
+        createTaskOptions.assignTo = taskDef.assignTo
+      }
+      if (taskDef.tags !== undefined) {
+        createTaskOptions.tags = taskDef.tags
+      }
+      if (parentId !== undefined) {
+        createTaskOptions.parentId = parentId
+      }
+      if (dependencies !== undefined) {
+        createTaskOptions.dependencies = dependencies
+      }
+      const newTask = await createBaseTask(createTaskOptions)
 
       // Override the generated ID with our predictable one
       ;(newTask as AnyTask).id = taskId
@@ -455,7 +469,12 @@ export async function materializeProject(
   // Process all root-level tasks
   let previousIds: string[] = []
   for (const node of project.tasks) {
-    previousIds = await processNode(node, undefined, previousIds, project.defaultMode || 'sequential')
+    previousIds = await processNode(
+      node,
+      undefined,
+      previousIds,
+      project.defaultMode || 'sequential'
+    )
   }
 
   return { project, tasks }
@@ -469,8 +488,8 @@ export async function materializeProject(
  * Get all tasks that depend on a given task (dependants)
  */
 export function getDependants(taskId: string, allTasks: AnyTask[]): AnyTask[] {
-  return allTasks.filter(t =>
-    t.dependencies?.some(d => d.taskId === taskId && d.type === 'blocked_by')
+  return allTasks.filter((t) =>
+    t.dependencies?.some((d) => d.taskId === taskId && d.type === 'blocked_by')
   )
 }
 
@@ -480,25 +499,21 @@ export function getDependants(taskId: string, allTasks: AnyTask[]): AnyTask[] {
 export function getDependencies(task: AnyTask, allTasks: AnyTask[]): AnyTask[] {
   if (!task.dependencies) return []
 
-  const depIds = task.dependencies
-    .filter(d => d.type === 'blocked_by')
-    .map(d => d.taskId)
+  const depIds = task.dependencies.filter((d) => d.type === 'blocked_by').map((d) => d.taskId)
 
-  return allTasks.filter(t => depIds.includes(t.id))
+  return allTasks.filter((t) => depIds.includes(t.id))
 }
 
 /**
  * Get tasks that are ready to execute (no unsatisfied dependencies)
  */
 export function getReadyTasks(allTasks: AnyTask[]): AnyTask[] {
-  return allTasks.filter(t => {
+  return allTasks.filter((t) => {
     if (t.status !== 'queued' && t.status !== 'pending') return false
 
     if (!t.dependencies || t.dependencies.length === 0) return true
 
-    return t.dependencies
-      .filter(d => d.type === 'blocked_by')
-      .every(d => d.satisfied)
+    return t.dependencies.filter((d) => d.type === 'blocked_by').every((d) => d.satisfied)
   })
 }
 
@@ -513,7 +528,7 @@ export function hasCycles(allTasks: AnyTask[]): boolean {
     visited.add(taskId)
     recStack.add(taskId)
 
-    const task = allTasks.find(t => t.id === taskId)
+    const task = allTasks.find((t) => t.id === taskId)
     if (task?.dependencies) {
       for (const dep of task.dependencies) {
         if (dep.type === 'blocked_by') {
@@ -554,7 +569,7 @@ export function sortTasks(allTasks: AnyTask[]): AnyTask[] {
     if (task.dependencies) {
       for (const dep of task.dependencies) {
         if (dep.type === 'blocked_by') {
-          const depTask = allTasks.find(t => t.id === dep.taskId)
+          const depTask = allTasks.find((t) => t.id === dep.taskId)
           if (depTask) visit(depTask)
         }
       }

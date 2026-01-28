@@ -115,7 +115,7 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
 
     async initialize(cfg: ProviderConfig): Promise<void> {
       apiKey = cfg.apiKey as string
-      defaultFrom = cfg.defaultFrom as string | undefined
+      defaultFrom = cfg['defaultFrom'] as string | undefined
 
       if (!apiKey) {
         throw new Error('Resend API key is required')
@@ -174,7 +174,7 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
       }
 
       if (options.attachments?.length) {
-        body.attachments = options.attachments.map((att) => ({
+        body['attachments'] = options.attachments.map((att) => ({
           filename: att.filename,
           content: typeof att.content === 'string' ? att.content : att.content.toString('base64'),
           content_type: att.contentType,
@@ -182,7 +182,7 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
       }
 
       if (options.sendAt) {
-        body.scheduled_at = options.sendAt.toISOString()
+        body['scheduled_at'] = options.sendAt.toISOString()
       }
 
       try {
@@ -296,13 +296,13 @@ export function createResendProvider(config: ProviderConfig): EmailProvider {
           id: data.id,
           from: data.from,
           to: Array.isArray(data.to) ? data.to : [data.to],
-          cc: data.cc,
-          bcc: data.bcc,
+          ...(data.cc !== undefined && { cc: data.cc }),
+          ...(data.bcc !== undefined && { bcc: data.bcc }),
           subject: data.subject,
-          text: data.text,
-          html: data.html,
+          ...(data.text !== undefined && { text: data.text }),
+          ...(data.html !== undefined && { html: data.html }),
           status: mapResendStatus(data.last_event),
-          sentAt: data.created_at ? new Date(data.created_at) : undefined,
+          ...(data.created_at !== undefined && { sentAt: new Date(data.created_at) }),
         }
       } catch {
         return null
