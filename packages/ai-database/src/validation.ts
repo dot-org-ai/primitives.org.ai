@@ -790,72 +790,72 @@ export function validateListOptions(options: unknown): void {
   const opts = options as Record<string, unknown>
 
   // Validate limit
-  if (opts.limit !== undefined) {
-    if (typeof opts.limit !== 'number') {
+  if (opts['limit'] !== undefined) {
+    if (typeof opts['limit'] !== 'number') {
       throw new ValidationError(
-        `Invalid limit: must be a number, got ${typeof opts.limit}`,
+        `Invalid limit: must be a number, got ${typeof opts['limit']}`,
         'Input',
         'limit',
-        opts.limit
+        opts['limit']
       )
     }
-    if (opts.limit < 0) {
+    if (opts['limit'] < 0) {
       throw new ValidationError(
         'Invalid limit: must be positive or zero',
         'Input',
         'limit',
-        opts.limit
+        opts['limit']
       )
     }
   }
 
   // Validate offset
-  if (opts.offset !== undefined) {
-    if (typeof opts.offset !== 'number') {
+  if (opts['offset'] !== undefined) {
+    if (typeof opts['offset'] !== 'number') {
       throw new ValidationError(
-        `Invalid offset: must be a number, got ${typeof opts.offset}`,
+        `Invalid offset: must be a number, got ${typeof opts['offset']}`,
         'Input',
         'offset',
-        opts.offset
+        opts['offset']
       )
     }
-    if (opts.offset < 0) {
+    if (opts['offset'] < 0) {
       throw new ValidationError(
         'Invalid offset: must be positive or zero',
         'Input',
         'offset',
-        opts.offset
+        opts['offset']
       )
     }
   }
 
   // Validate orderBy
-  if (opts.orderBy !== undefined) {
-    if (typeof opts.orderBy !== 'string') {
+  if (opts['orderBy'] !== undefined) {
+    if (typeof opts['orderBy'] !== 'string') {
       throw new ValidationError(
-        `Invalid orderBy: must be a string, got ${typeof opts.orderBy}`,
+        `Invalid orderBy: must be a string, got ${typeof opts['orderBy']}`,
         'Input',
         'orderBy',
-        opts.orderBy
+        opts['orderBy']
       )
     }
 
-    if (containsSqlInjection(opts.orderBy)) {
+    if (containsSqlInjection(opts['orderBy'])) {
       throw new ValidationError(
         'Invalid orderBy: contains injection patterns that are not allowed',
         'Input',
         'orderBy',
-        opts.orderBy
+        opts['orderBy']
       )
     }
 
     // Check pattern using allowlist
-    if (!isValidFieldNameFormat(opts.orderBy)) {
+    if (!isValidFieldNameFormat(opts['orderBy'])) {
       throw new ValidationError(
         'Invalid orderBy field: must be alphanumeric with underscores',
         'Input',
         'orderBy',
-        opts.orderBy
+        opts['orderBy']
       )
     }
   }
@@ -877,12 +877,17 @@ export function validateSearchOptions(options: unknown): void {
   const opts = options as Record<string, unknown>
 
   // Validate fields array
-  if (opts.fields !== undefined) {
-    if (!Array.isArray(opts.fields)) {
-      throw new ValidationError('Invalid fields: must be an array', 'Input', 'fields', opts.fields)
+  if (opts['fields'] !== undefined) {
+    if (!Array.isArray(opts['fields'])) {
+      throw new ValidationError(
+        'Invalid fields: must be an array',
+        'Input',
+        'fields',
+        opts['fields']
+      )
     }
 
-    for (const field of opts.fields) {
+    for (const field of opts['fields']) {
       // Skip dangerous field names silently - they will be filtered out by the search method
       // This allows the search to return empty results rather than throwing
       if (typeof field === 'string' && DANGEROUS_PROPERTIES.has(field)) {

@@ -1297,7 +1297,7 @@ export class MemoryProvider implements DBProvider {
     const ftsResults = await this.search(type, query)
     const ftsRanks = new Map<string, number>()
     ftsResults.forEach((entity, index) => {
-      const id = (entity.$id as string) || (entity.id as string)
+      const id = (entity['$id'] as string) || (entity['id'] as string)
       ftsRanks.set(id, index + 1) // 1-indexed rank
     })
 
@@ -1309,7 +1309,7 @@ export class MemoryProvider implements DBProvider {
     })
     const semanticRanks = new Map<string, { rank: number; score: number }>()
     semanticResults.forEach((entity, index) => {
-      const id = (entity.$id as string) || (entity.id as string)
+      const id = (entity['$id'] as string) || (entity['id'] as string)
       semanticRanks.set(id, { rank: index + 1, score: entity.$score })
     })
 

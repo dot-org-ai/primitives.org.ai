@@ -103,7 +103,7 @@ export function hasId(value: unknown): value is HasId {
     value !== null &&
     typeof value === 'object' &&
     '$id' in value &&
-    typeof (value as Record<string, unknown>).$id === 'string'
+    typeof (value as Record<string, unknown>)['$id'] === 'string'
   )
 }
 
@@ -119,17 +119,15 @@ export function hasId(value: unknown): value is HasId {
  * }
  * ```
  */
-export function isEntityArray(
-  value: unknown
-): value is Array<unknown> & EntityMarker {
+export function isEntityArray(value: unknown): value is Array<unknown> & EntityMarker {
   if (!Array.isArray(value)) {
     return false
   }
   // Check for $type or $isArrayRelation properties on the array
   const arr = value as Array<unknown> & Record<string, unknown>
   return (
-    (arr.$type !== undefined && typeof arr.$type === 'string') ||
-    arr.$isArrayRelation === true
+    (arr['$type'] !== undefined && typeof arr['$type'] === 'string') ||
+    arr['$isArrayRelation'] === true
   )
 }
 
@@ -137,9 +135,7 @@ export function isEntityArray(
  * Check if a value is a non-null object (excluding arrays).
  * Useful for narrowing before accessing properties.
  */
-export function isPlainObject(
-  value: unknown
-): value is Record<string, unknown> {
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
@@ -147,16 +143,14 @@ export function isPlainObject(
  * Check if an array contains relation elements (objects with $type markers).
  * Uses direct property access to match original behavior where $type !== undefined.
  */
-export function hasRelationElements(
-  arr: unknown[]
-): arr is Array<Record<string, unknown>> {
+export function hasRelationElements(arr: unknown[]): arr is Array<Record<string, unknown>> {
   return arr.some((v) => {
     if (v === null || typeof v !== 'object') {
       return false
     }
     // Use direct property access to match original behavior: (v as any).$type !== undefined
     const obj = v as Record<string, unknown>
-    return obj.$type !== undefined
+    return obj['$type'] !== undefined
   })
 }
 
@@ -209,13 +203,13 @@ export function extractEntityId(value: unknown): string | undefined {
     }
 
     // Try $id property (entity marker)
-    if ('$id' in obj && typeof obj.$id === 'string') {
-      return obj.$id
+    if ('$id' in obj && typeof obj['$id'] === 'string') {
+      return obj['$id']
     }
 
     // Try plain id property (generic object)
-    if ('id' in obj && typeof obj.id === 'string') {
-      return obj.id
+    if ('id' in obj && typeof obj['id'] === 'string') {
+      return obj['id']
     }
   }
 
@@ -238,7 +232,7 @@ export function extractMarkerType(value: unknown): string | undefined {
   }
   // Use direct property access to handle proxies: (value as any).$type
   const obj = value as Record<string, unknown>
-  const type = obj.$type
+  const type = obj['$type']
   if (type !== undefined && typeof type === 'string') {
     return type
   }
@@ -248,9 +242,7 @@ export function extractMarkerType(value: unknown): string | undefined {
 /**
  * Extract $type from an array relation.
  */
-export function extractArrayRelationType(
-  arr: unknown
-): string | undefined {
+export function extractArrayRelationType(arr: unknown): string | undefined {
   if (isEntityArray(arr) && typeof arr.$type === 'string') {
     return arr.$type
   }
@@ -261,10 +253,7 @@ export function extractArrayRelationType(
  * Safely access a property on an unknown value.
  * Returns undefined if the value is not an object or the property doesn't exist.
  */
-export function safeGet<T = unknown>(
-  value: unknown,
-  key: string
-): T | undefined {
+export function safeGet<T = unknown>(value: unknown, key: string): T | undefined {
   if (isPlainObject(value)) {
     return value[key] as T | undefined
   }
@@ -318,10 +307,7 @@ export function asComparator<T>(
  * Type-safe access to symbol-keyed properties on objects.
  * Used in proxy handlers where we need to access symbol properties.
  */
-export function getSymbolProperty<T = unknown>(
-  obj: object,
-  sym: symbol
-): T | undefined {
+export function getSymbolProperty<T = unknown>(obj: object, sym: symbol): T | undefined {
   return (obj as Record<symbol, unknown>)[sym] as T | undefined
 }
 

@@ -397,7 +397,7 @@ export class DBPromise<T> implements PromiseLike<T> {
     const parentPromise = this
 
     return new DBPromise<U[]>({
-      type: this._options.type,
+      ...(this._options.type !== undefined && { type: this._options.type }),
       executor: async () => {
         // Resolve the parent array
         const items = await parentPromise.resolve()
@@ -460,7 +460,7 @@ export class DBPromise<T> implements PromiseLike<T> {
     const parentPromise = this
 
     return new DBPromise<T>({
-      type: this._options.type,
+      ...(this._options.type !== undefined && { type: this._options.type }),
       executor: async () => {
         const items = await parentPromise.resolve()
         if (!Array.isArray(items)) {
@@ -481,7 +481,7 @@ export class DBPromise<T> implements PromiseLike<T> {
     const parentPromise = this
 
     return new DBPromise<T>({
-      type: this._options.type,
+      ...(this._options.type !== undefined && { type: this._options.type }),
       executor: async () => {
         const items = await parentPromise.resolve()
         if (!Array.isArray(items)) {
@@ -500,7 +500,7 @@ export class DBPromise<T> implements PromiseLike<T> {
     const parentPromise = this
 
     return new DBPromise<T>({
-      type: this._options.type,
+      ...(this._options.type !== undefined && { type: this._options.type }),
       executor: async () => {
         const items = await parentPromise.resolve()
         if (!Array.isArray(items)) {
@@ -518,7 +518,7 @@ export class DBPromise<T> implements PromiseLike<T> {
     const parentPromise = this
 
     return new DBPromise({
-      type: this._options.type,
+      ...(this._options.type !== undefined && { type: this._options.type }),
       executor: async () => {
         const items = await parentPromise.resolve()
         if (Array.isArray(items)) {
@@ -657,7 +657,7 @@ export class DBPromise<T> implements PromiseLike<T> {
         skipped,
         current,
         elapsed,
-        remaining,
+        ...(remaining !== undefined && { remaining }),
         rate,
       }
     }
@@ -826,17 +826,21 @@ export class DBPromise<T> implements PromiseLike<T> {
           actionId,
         }
 
-        await actionsAPI.update(actionId, {
+        const updatePayload: Partial<ForEachActionState> = {
           status: cancelled ? 'failed' : 'completed',
           progress: completed + failed + skipped,
           data: { processedIds: Array.from(processedIds) },
           result: finalResult,
-          error: cancelled
-            ? 'Cancelled'
-            : errors.length > 0
-            ? `${errors.length} items failed`
-            : undefined,
-        })
+        }
+        const errorMessage = cancelled
+          ? 'Cancelled'
+          : errors.length > 0
+          ? `${errors.length} items failed`
+          : undefined
+        if (errorMessage !== undefined) {
+          updatePayload.error = errorMessage
+        }
+        await actionsAPI.update(actionId, updatePayload)
       }
     }
 
@@ -848,7 +852,7 @@ export class DBPromise<T> implements PromiseLike<T> {
       elapsed: Date.now() - startTime,
       errors,
       cancelled,
-      actionId,
+      ...(actionId !== undefined && { actionId }),
     }
   }
 
@@ -1008,8 +1012,9 @@ const DB_PROXY_HANDLERS: ProxyHandler<DBPromise<unknown>> = {
 
     // Return a new DBPromise for the property path
     const internals = target as unknown as DBPromiseInternals
+    const typeValue = internals._options?.type
     return new DBPromise<unknown>({
-      type: internals._options?.type,
+      ...(typeValue !== undefined && { type: typeValue }),
       parent: target,
       propertyPath: [...target.path, prop],
       executor: async () => {
@@ -1453,7 +1458,7 @@ async function executeBatchLoads(
     for (let i = 0; i < uniqueIds.length; i++) {
       const entity = entities[i]
       if (entity) {
-        const entityId = (entity.$id || entity.id) as string
+        const entityId = (entity['$id'] || entity['id']) as string
         relationResults.set(entityId, entity)
       }
     }
@@ -1473,7 +1478,7 @@ async function executeBatchLoads(
 
         for (const entity of relationResults.values()) {
           const entityObj = entity as Record<string, unknown>
-          const entityType = entityObj.$type as string | undefined
+          const entityType = entityObj['$type'] as string | undefined
           const nestedValue = entityObj[nestedPath]
 
           if (typeof nestedValue === 'string') {
@@ -1766,7 +1771,7 @@ export function wrapEntityOperations<T>(
       return new DBPromise({
         type: typeName,
         executor: () => operations.get(id),
-        actionsAPI,
+        ...(actionsAPI !== undefined && { actionsAPI }),
       })
     },
 
@@ -1774,7 +1779,7 @@ export function wrapEntityOperations<T>(
       return new DBPromise({
         type: typeName,
         executor: () => operations.list(options),
-        actionsAPI,
+        ...(actionsAPI !== undefined && { actionsAPI }),
       })
     },
 
@@ -1782,7 +1787,7 @@ export function wrapEntityOperations<T>(
       return new DBPromise({
         type: typeName,
         executor: () => operations.find(where),
-        actionsAPI,
+        ...(actionsAPI !== undefined && { actionsAPI }),
       })
     },
 
@@ -1790,7 +1795,7 @@ export function wrapEntityOperations<T>(
       return new DBPromise({
         type: typeName,
         executor: () => operations.search(query, options),
-        actionsAPI,
+        ...(actionsAPI !== undefined && { actionsAPI }),
       })
     },
 
@@ -1801,7 +1806,7 @@ export function wrapEntityOperations<T>(
           const items = await operations.list({ limit: 1 })
           return items[0] ?? null
         },
-        actionsAPI,
+        ...(actionsAPI !== undefined && { actionsAPI }),
       })
     },
 
@@ -1845,7 +1850,7 @@ export function wrapEntityOperations<T>(
       const listPromise = new DBPromise<T[]>({
         type: typeName,
         executor: () => operations.list(listOptions),
-        actionsAPI,
+        ...(actionsAPI !== undefined && { actionsAPI }),
       })
       // The callback and options are properly typed for T, but DBPromise.forEach
       // uses a conditional type. Use asCallback for the callback conversion.

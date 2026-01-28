@@ -518,6 +518,15 @@ export class DatabaseServiceCore extends RpcTarget {
  * Handles HTTP requests for CRUD operations on data records and relationships,
  * plus graph traversal queries.
  */
+// Type declarations for Cloudflare Workers runtime types
+type SqlStorage = {
+  exec(query: string, ...params: unknown[]): { toArray(): unknown[] }
+}
+
+type DurableObjectState = {
+  storage: { sql: SqlStorage }
+}
+
 export class DatabaseDO extends DurableObjectBase {
   private sql!: SqlStorage
   private initialized = false
@@ -659,7 +668,7 @@ export class DatabaseDO extends DurableObjectBase {
       // Route: /data/:id (get, update, delete)
       const dataMatch = path.match(/^\/data\/(.+)$/)
       if (dataMatch) {
-        const id = decodeURIComponent(dataMatch[1])
+        const id = decodeURIComponent(dataMatch[1]!)
         if (method === 'GET') return this.handleGetData(id)
         if (method === 'PATCH') return this.handleUpdateData(id, request)
         if (method === 'DELETE') return this.handleDeleteData(id, url, request)
@@ -750,14 +759,14 @@ export class DatabaseDO extends DurableObjectBase {
       // Route: /events/subscriptions/:id (delete subscription)
       const subMatch = path.match(/^\/events\/subscriptions\/([^/]+)$/)
       if (subMatch) {
-        const subId = decodeURIComponent(subMatch[1])
+        const subId = decodeURIComponent(subMatch[1]!)
         if (method === 'DELETE') return this.handleUnsubscribe(subId)
       }
 
       // Route: /events/subscriptions/:id/deliveries (list deliveries)
       const deliveriesMatch = path.match(/^\/events\/subscriptions\/([^/]+)\/deliveries$/)
       if (deliveriesMatch && method === 'GET') {
-        const subId = decodeURIComponent(deliveriesMatch[1])
+        const subId = decodeURIComponent(deliveriesMatch[1]!)
         return this.handleListDeliveries(subId)
       }
 
@@ -828,15 +837,15 @@ export class DatabaseDO extends DurableObjectBase {
       // Route: /embeddings/batch/:jobId/status (batch job status)
       const batchStatusMatch = path.match(/^\/embeddings\/batch\/([^/]+)\/status$/)
       if (batchStatusMatch && method === 'GET') {
-        const jobId = decodeURIComponent(batchStatusMatch[1])
+        const jobId = decodeURIComponent(batchStatusMatch[1]!)
         return this.handleEmbeddingsBatchStatus(jobId)
       }
 
       // Route: /embeddings/:type/:id (get or generate embedding for an entity)
       const embeddingMatch = path.match(/^\/embeddings\/([^/]+)\/([^/]+)$/)
       if (embeddingMatch && method === 'GET') {
-        const entityType = decodeURIComponent(embeddingMatch[1])
-        const entityId = decodeURIComponent(embeddingMatch[2])
+        const entityType = decodeURIComponent(embeddingMatch[1]!)
+        const entityId = decodeURIComponent(embeddingMatch[2]!)
         return this.handleGetEmbedding(entityType, entityId)
       }
 
@@ -1274,7 +1283,7 @@ export class DatabaseDO extends DurableObjectBase {
     // Forward traversal with from_id (no relation means all outgoing)
     if (from_id && !relationParam) {
       const rows = this.sql.exec('SELECT to_id FROM _rels WHERE from_id = ?', from_id).toArray()
-      const toIds = [...new Set(rows.map((r: any) => r.to_id as string))]
+      const toIds: string[] = [...new Set(rows.map((r: any) => r.to_id as string))]
 
       if (toIds.length === 0) {
         return Response.json([])
@@ -3063,7 +3072,7 @@ export class DatabaseDO extends DurableObjectBase {
       for (const value of Object.values(data)) {
         if (typeof value === 'string') {
           const valueLower = value.toLowerCase()
-          if (queryTerms.some((term) => valueLower.includes(term))) {
+          if (queryTerms.some((term: string) => valueLower.includes(term))) {
             hasMatch = true
             break
           }
