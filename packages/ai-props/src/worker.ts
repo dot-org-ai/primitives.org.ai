@@ -275,7 +275,8 @@ export class PropsServiceCore extends RpcTarget {
  * PropsService - WorkerEntrypoint for RPC access
  *
  * Provides `connect()` method that returns an RpcTarget service
- * with all AI props methods.
+ * with all AI props methods. Also handles HTTP endpoints for
+ * direct JSON-RPC access.
  *
  * @example
  * ```typescript
@@ -287,13 +288,114 @@ export class PropsServiceCore extends RpcTarget {
  * ```
  */
 export class PropsService extends WorkerEntrypoint<Env> {
+  private serviceCore: PropsServiceCore | null = null
+
   /**
-   * Connect to the props service and get an RPC-enabled service
+   * Get or create the service core instance
+   */
+  private getServiceCore(): PropsServiceCore {
+    if (!this.serviceCore) {
+      this.serviceCore = new PropsServiceCore()
+    }
+    return this.serviceCore
+  }
+
+  /**
+   * Get a connected service instance for RPC calls
+   *
+   * Note: Named 'getService' instead of 'connect' because 'connect'
+   * is a reserved method name in Cloudflare Workers RPC (used for sockets).
    *
    * @returns PropsServiceCore instance for RPC calls
    */
+  getService(): PropsServiceCore {
+    return this.getServiceCore()
+  }
+
+  /**
+   * Alias for getService() - provides the connect() interface
+   * Note: This may conflict with the Fetcher's connect() for sockets
+   * when accessed via service bindings. Use getService() instead.
+   *
+   * @deprecated Use getService() instead
+   * @returns PropsServiceCore instance for RPC calls
+   */
   connect(): PropsServiceCore {
-    return new PropsServiceCore()
+    return this.getServiceCore()
+  }
+
+  /**
+   * HTTP request handler for JSON-RPC and service info endpoints
+   *
+   * Routes:
+   * - GET / - Returns service info
+   * - POST /rpc - JSON-RPC endpoint for calling service methods
+   */
+  override async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    // GET / - Service info
+    if (request.method === 'GET' && url.pathname === '/') {
+      const service = this.getServiceCore()
+      return Response.json({
+        name: 'ai-props',
+        version: '1.0.0',
+        methods: [
+          'generate',
+          'getSync',
+          'prefetch',
+          'generateMany',
+          'mergeWithGenerated',
+          'configure',
+          'getConfig',
+          'resetConfig',
+          'getCached',
+          'setCached',
+          'deleteCached',
+          'clearCache',
+          'getCacheSize',
+          'createCacheKey',
+          'configureCache',
+          'validate',
+          'hasRequired',
+          'getMissing',
+          'isComplete',
+          'sanitize',
+          'mergeDefaults',
+        ],
+        rpc: '/rpc',
+      })
+    }
+
+    // POST /rpc - JSON-RPC endpoint
+    if (url.pathname === '/rpc' && request.method === 'POST') {
+      try {
+        const body = (await request.json()) as { method: string; args?: unknown[] }
+        const { method, args = [] } = body
+
+        if (!method || typeof method !== 'string') {
+          return Response.json({ error: 'Missing or invalid method' }, { status: 400 })
+        }
+
+        const service = this.getServiceCore()
+
+        // Check if method exists on service
+        const methodFn = (service as unknown as Record<string, unknown>)[method]
+        if (typeof methodFn !== 'function') {
+          return Response.json({ error: `Method "${method}" not found` }, { status: 404 })
+        }
+
+        // Call the method
+        const result = await (methodFn as (...args: unknown[]) => unknown).apply(service, args)
+        return Response.json({ result })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        return Response.json({ error: message }, { status: 500 })
+      }
+    }
+
+    // 404 for other routes
+    return Response.json({ error: 'Not found' }, { status: 404 })
   }
 }
 

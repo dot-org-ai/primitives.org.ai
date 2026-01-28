@@ -33,12 +33,12 @@ export function validateProps(
 
   if (typeof schema === 'string') {
     // Simple string schema - just check if value exists
-    if (!props.value) {
+    if (!props['value']) {
       errors.push({
         path: 'value',
         message: 'Value is required',
         expected: 'string',
-        received: props.value,
+        received: props['value'],
       })
     }
     return { valid: errors.length === 0, errors }
@@ -194,7 +194,7 @@ export function hasRequiredProps<P extends Record<string, unknown>>(
   props: Partial<P>,
   required: (keyof P)[]
 ): boolean {
-  return required.every(key => props[key] !== undefined)
+  return required.every((key) => props[key] !== undefined)
 }
 
 /**
@@ -204,35 +204,29 @@ export function getMissingProps<P extends Record<string, unknown>>(
   props: Partial<P>,
   required: (keyof P)[]
 ): (keyof P)[] {
-  return required.filter(key => props[key] === undefined)
+  return required.filter((key) => props[key] === undefined)
 }
 
 /**
  * Check if props are complete according to schema
  */
-export function isComplete(
-  props: Record<string, unknown>,
-  schema: PropSchema
-): boolean {
+export function isComplete(props: Record<string, unknown>, schema: PropSchema): boolean {
   if (typeof schema === 'string') {
-    return props.value !== undefined
+    return props['value'] !== undefined
   }
 
-  return Object.keys(schema).every(key => props[key] !== undefined)
+  return Object.keys(schema).every((key) => props[key] !== undefined)
 }
 
 /**
  * Get list of missing props according to schema
  */
-export function getMissingFromSchema(
-  props: Record<string, unknown>,
-  schema: PropSchema
-): string[] {
+export function getMissingFromSchema(props: Record<string, unknown>, schema: PropSchema): string[] {
   if (typeof schema === 'string') {
-    return props.value === undefined ? ['value'] : []
+    return props['value'] === undefined ? ['value'] : []
   }
 
-  return Object.keys(schema).filter(key => props[key] === undefined)
+  return Object.keys(schema).filter((key) => props[key] === undefined)
 }
 
 /**
@@ -243,7 +237,7 @@ export function sanitizeProps<P extends Record<string, unknown>>(
   schema: PropSchema
 ): Partial<P> {
   if (typeof schema === 'string') {
-    return { value: (props as Record<string, unknown>).value } as unknown as Partial<P>
+    return { value: (props as Record<string, unknown>)['value'] } as unknown as Partial<P>
   }
 
   const schemaKeys = new Set(Object.keys(schema))
@@ -273,15 +267,10 @@ export function mergeWithDefaults<P extends Record<string, unknown>>(
     for (const [key, schemaDef] of Object.entries(schema)) {
       if (result[key as keyof P] === undefined) continue
 
-      const expectedType = typeof schemaDef === 'string'
-        ? extractTypeFromSchema(schemaDef)
-        : null
+      const expectedType = typeof schemaDef === 'string' ? extractTypeFromSchema(schemaDef) : null
 
       if (expectedType) {
-        result[key as keyof P] = coerceType(
-          result[key as keyof P],
-          expectedType
-        ) as P[keyof P]
+        result[key as keyof P] = coerceType(result[key as keyof P], expectedType) as P[keyof P]
       }
     }
   }
@@ -321,13 +310,10 @@ export function createValidator<P extends Record<string, unknown>>(
 /**
  * Assert props are valid, throwing on error
  */
-export function assertValidProps(
-  props: Record<string, unknown>,
-  schema: PropSchema
-): void {
+export function assertValidProps(props: Record<string, unknown>, schema: PropSchema): void {
   const result = validateProps(props, schema)
   if (!result.valid) {
-    const messages = result.errors.map(e => `${e.path}: ${e.message}`).join(', ')
+    const messages = result.errors.map((e) => `${e.path}: ${e.message}`).join(', ')
     throw new Error(`Invalid props: ${messages}`)
   }
 }

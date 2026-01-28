@@ -62,7 +62,7 @@ export function createPropsEnhancer<P extends Record<string, unknown>>(
 
       // Check required props
       const missingRequired = (required as string[]).filter(
-        key => propsWithDefaults[key as keyof P] === undefined
+        (key) => propsWithDefaults[key as keyof P] === undefined
       )
       if (missingRequired.length > 0) {
         throw new Error(`Missing required props: ${missingRequired.join(', ')}`)
@@ -72,14 +72,10 @@ export function createPropsEnhancer<P extends Record<string, unknown>>(
       const filteredSchema = filterSchemaKeys(schema, exclude as string[])
 
       // Generate missing props
-      return await mergeWithGenerated<P>(
-        filteredSchema,
-        propsWithDefaults as Partial<P>,
-        {
-          model: config.model,
-          system: config.system,
-        }
-      )
+      return await mergeWithGenerated<P>(filteredSchema, propsWithDefaults as Partial<P>, {
+        ...(config.model !== undefined && { model: config.model }),
+        ...(config.system !== undefined && { system: config.system }),
+      })
     } catch (error) {
       if (fallback) {
         return { ...defaults, ...fallback, ...partialProps } as P
@@ -154,7 +150,7 @@ export function createAsyncPropsProvider<P extends Record<string, unknown>>(
       revalidate?: number
     ): Promise<{ props: P; revalidate?: number }> => {
       const props = await enhancer(context)
-      return { props, revalidate }
+      return { props, ...(revalidate !== undefined && { revalidate }) }
     },
   }
 }
@@ -194,8 +190,8 @@ export function createPropsTransformer<
     const result = await generateProps({
       schema,
       context: input,
-      model: config.model,
-      system: config.system,
+      ...(config.model !== undefined && { model: config.model }),
+      ...(config.system !== undefined && { system: config.system }),
     })
 
     const generated = result.props as Record<string, unknown>
@@ -234,8 +230,8 @@ export function createConditionalGenerator<P extends Record<string, unknown>>(op
     }
 
     return mergeWithGenerated(schema, props, {
-      model: config.model,
-      system: config.system,
+      ...(config.model !== undefined && { model: config.model }),
+      ...(config.system !== undefined && { system: config.system }),
     })
   }
 }
@@ -276,10 +272,10 @@ export function createBatchGenerator<P extends Record<string, unknown>>(options:
       for (let i = 0; i < items.length; i += concurrency) {
         const batch = items.slice(i, i + concurrency)
         const batchResults = await Promise.all(
-          batch.map(item =>
+          batch.map((item) =>
             mergeWithGenerated<P>(schema, item, {
-              model: config.model,
-              system: config.system,
+              ...(config.model !== undefined && { model: config.model }),
+              ...(config.system !== undefined && { system: config.system }),
             })
           )
         )
@@ -297,8 +293,8 @@ export function createBatchGenerator<P extends Record<string, unknown>>(options:
 
       for (const item of items) {
         const result = await mergeWithGenerated<P>(schema, item, {
-          model: config.model,
-          system: config.system,
+          ...(config.model !== undefined && { model: config.model }),
+          ...(config.system !== undefined && { system: config.system }),
         })
         results.push(result)
       }

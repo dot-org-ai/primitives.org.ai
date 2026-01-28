@@ -17,9 +17,10 @@ import { createCacheKey, getDefaultCache } from './cache.js'
 
 /**
  * Default configuration
+ * Note: Use full model ID to avoid alias resolution issues in bundled environments
  */
 const DEFAULT_CONFIG: AIPropsConfig = {
-  model: 'sonnet',
+  model: 'anthropic/claude-sonnet-4.5',
   cache: true,
   cacheTTL: 5 * 60 * 1000, // 5 minutes
 }
@@ -159,11 +160,16 @@ export async function generateProps<T = Record<string, unknown>>(
   }
 
   // Generate using AI
+  const effectiveModel = model ?? config.model ?? DEFAULT_CONFIG.model!
   const result = await generateObject({
-    model: model || config.model || 'sonnet',
+    model: effectiveModel,
     schema: resolvedSchema,
     prompt: fullPrompt,
-    system: system || config.system,
+    ...(system !== undefined
+      ? { system }
+      : config.system !== undefined
+      ? { system: config.system }
+      : {}),
   })
 
   const props = result.object as T
@@ -179,7 +185,7 @@ export async function generateProps<T = Record<string, unknown>>(
     props,
     cached: false,
     metadata: {
-      model: model || config.model || 'sonnet',
+      model: effectiveModel,
       duration: Date.now() - startTime,
     },
   }
@@ -200,9 +206,7 @@ export function getPropsSync<T = Record<string, unknown>>(
   const cached = cache.get<T>(cacheKey)
 
   if (!cached) {
-    throw new Error(
-      'Props not in cache. Use generateProps() first or ensure caching is enabled.'
-    )
+    throw new Error('Props not in cache. Use generateProps() first or ensure caching is enabled.')
   }
 
   return cached.props
@@ -219,9 +223,7 @@ export function getPropsSync<T = Record<string, unknown>>(
  * ])
  * ```
  */
-export async function prefetchProps(
-  requests: GeneratePropsOptions[]
-): Promise<void> {
+export async function prefetchProps(requests: GeneratePropsOptions[]): Promise<void> {
   await Promise.all(requests.map(generateProps))
 }
 
@@ -231,7 +233,7 @@ export async function prefetchProps(
 export async function generatePropsMany<T = Record<string, unknown>>(
   requests: GeneratePropsOptions[]
 ): Promise<GeneratePropsResult<T>[]> {
-  return Promise.all(requests.map(req => generateProps<T>(req)))
+  return Promise.all(requests.map((req) => generateProps<T>(req)))
 }
 
 /**
@@ -248,7 +250,7 @@ export async function mergeWithGenerated<T extends Record<string, unknown>>(
   const schemaObj = typeof schema === 'string' ? { value: schema } : schema
   const schemaKeys = Object.keys(schemaObj as Record<string, unknown>)
   const providedKeys = Object.keys(partialProps)
-  const missingKeys = schemaKeys.filter(k => !providedKeys.includes(k))
+  const missingKeys = schemaKeys.filter((k) => !providedKeys.includes(k))
 
   // If all props are provided, return as-is
   if (missingKeys.length === 0) {

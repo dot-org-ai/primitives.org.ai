@@ -8,12 +8,7 @@
  */
 
 import type { SimpleSchema } from 'ai-functions'
-import type {
-  PropSchema,
-  AIComponentOptions,
-  AIComponent,
-  AIPropsConfig,
-} from './types.js'
+import type { PropSchema, AIComponentOptions, AIComponent, AIPropsConfig } from './types.js'
 import { generateProps, mergeWithGenerated } from './generate.js'
 
 /**
@@ -59,23 +54,17 @@ export function AI<P extends Record<string, unknown>>(
 
     // Check if all required props are provided
     const missingRequired = (required as string[]).filter(
-      key => propsWithDefaults[key as keyof P] === undefined
+      (key) => propsWithDefaults[key as keyof P] === undefined
     )
     if (missingRequired.length > 0) {
-      throw new Error(
-        `Missing required props: ${missingRequired.join(', ')}`
-      )
+      throw new Error(`Missing required props: ${missingRequired.join(', ')}`)
     }
 
     // Generate missing props
-    const fullProps = await mergeWithGenerated<P>(
-      filteredSchema,
-      propsWithDefaults as Partial<P>,
-      {
-        model: config.model,
-        system: config.system,
-      }
-    )
+    const fullProps = await mergeWithGenerated<P>(filteredSchema, propsWithDefaults as Partial<P>, {
+      ...(config.model !== undefined && { model: config.model }),
+      ...(config.system !== undefined && { system: config.system }),
+    })
 
     return fullProps
   }
@@ -145,9 +134,7 @@ export function createAIComponent<P extends Record<string, unknown>>(
  * })
  * ```
  */
-export function definePropsSchema<T extends Record<string, string | SimpleSchema>>(
-  schema: T
-): T {
+export function definePropsSchema<T extends Record<string, string | SimpleSchema>>(schema: T): T {
   return schema
 }
 
@@ -185,16 +172,13 @@ export function createComponentFactory<P extends Record<string, unknown>>(
      * Generate multiple instances
      */
     generateMany: async (contexts: Partial<P>[]): Promise<P[]> => {
-      return Promise.all(contexts.map(ctx => component(ctx)))
+      return Promise.all(contexts.map((ctx) => component(ctx)))
     },
 
     /**
      * Generate with specific overrides
      */
-    generateWith: async (
-      context: Partial<P>,
-      overrides: Partial<P>
-    ): Promise<P> => {
+    generateWith: async (context: Partial<P>, overrides: Partial<P>): Promise<P> => {
       const generated = await component(context)
       return { ...generated, ...overrides }
     },
@@ -232,9 +216,7 @@ export function composeAIComponents<
     [K in keyof T]: T[K] extends AIComponentOptions<infer P> ? P : never
   }
 
-  const aiComponent = async (
-    partialProps: Partial<ResultProps>
-  ): Promise<ResultProps> => {
+  const aiComponent = async (partialProps: Partial<ResultProps>): Promise<ResultProps> => {
     const results: Record<string, unknown> = {}
 
     // Generate each component's props
@@ -257,8 +239,7 @@ export function composeAIComponents<
 
   aiComponent.schema = composedSchema as PropSchema
   aiComponent.config = {}
-  aiComponent.generateProps = (context?: Partial<ResultProps>) =>
-    aiComponent(context || {})
+  aiComponent.generateProps = (context?: Partial<ResultProps>) => aiComponent(context || {})
 
   return aiComponent as AIComponent<ResultProps>
 }
