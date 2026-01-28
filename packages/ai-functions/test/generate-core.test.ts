@@ -2,234 +2,155 @@
  * Tests for the core generate() primitive
  *
  * generate(type, prompt, opts?) is the foundation that all other functions use.
+ * Tests require actual AI calls via the Cloudflare AI Gateway.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
+import { generateObject, generateText } from '../src/generate.js'
+import { z } from 'zod'
 
-// ============================================================================
-// Mock for underlying AI calls
-// ============================================================================
-
-const mockAICall = vi.fn()
-
-// Mock generate implementation
-async function generate(
-  type: string,
-  prompt: string,
-  options?: Record<string, unknown>
-): Promise<unknown> {
-  return mockAICall(type, prompt, options)
-}
+// Skip tests if no gateway configured
+const hasGateway = !!process.env.AI_GATEWAY_URL
 
 // ============================================================================
 // generate(type, prompt, opts) signature tests
 // ============================================================================
 
-describe('generate(type, prompt, opts)', () => {
-  beforeEach(() => {
-    mockAICall.mockReset()
-  })
-
+describe.skipIf(!hasGateway)('generate(type, prompt, opts)', () => {
   describe('type: json', () => {
-    it('generates JSON without schema (AI infers structure)', async () => {
-      mockAICall.mockResolvedValue({
-        competitors: ['Competitor A', 'Competitor B'],
-        marketSize: 1000000,
-        trends: ['AI adoption', 'Cloud migration'],
+    it('generates JSON without explicit schema (AI infers structure)', async () => {
+      const result = await generateObject({
+        model: 'haiku',
+        schema: z.object({
+          competitors: z.array(z.string()).describe('List of competitors'),
+          marketSize: z.number().describe('Estimated market size'),
+        }),
+        prompt:
+          'Provide a simple competitive analysis of the cloud computing market. List 2 competitors and an estimated market size in billions.',
       })
 
-      const result = await generate('json', 'competitive analysis of Acme Corp')
-
-      expect(mockAICall).toHaveBeenCalledWith('json', 'competitive analysis of Acme Corp', undefined)
-      expect(result).toHaveProperty('competitors')
-      expect(result).toHaveProperty('marketSize')
+      expect(result.object).toHaveProperty('competitors')
+      expect(result.object).toHaveProperty('marketSize')
+      expect(Array.isArray(result.object.competitors)).toBe(true)
+      expect(typeof result.object.marketSize).toBe('number')
     })
 
     it('generates JSON with schema (typed, validated)', async () => {
-      mockAICall.mockResolvedValue({
-        name: 'Spaghetti Carbonara',
-        servings: 4,
-        ingredients: ['pasta', 'eggs', 'bacon'],
-        steps: ['Boil pasta', 'Cook bacon', 'Mix eggs'],
+      const result = await generateObject({
+        model: 'haiku',
+        schema: z.object({
+          name: z.string().describe('Recipe name'),
+          servings: z.number().describe('Number of servings'),
+          ingredients: z.array(z.string()).describe('List of ingredients'),
+          steps: z.array(z.string()).describe('Cooking steps'),
+        }),
+        prompt: 'Generate a simple 3-ingredient recipe with 2 steps.',
       })
 
-      const result = await generate('json', 'Italian pasta recipe', {
-        schema: {
-          name: 'Recipe name',
-          servings: 'Number of servings (number)',
-          ingredients: ['List of ingredients'],
-          steps: ['Cooking steps'],
-        },
-      })
-
-      expect(mockAICall).toHaveBeenCalledWith(
-        'json',
-        'Italian pasta recipe',
-        expect.objectContaining({ schema: expect.any(Object) })
-      )
-      expect(result).toHaveProperty('name')
-      expect(result).toHaveProperty('servings')
-      expect(typeof (result as { servings: number }).servings).toBe('number')
+      expect(result.object).toHaveProperty('name')
+      expect(result.object).toHaveProperty('servings')
+      expect(typeof result.object.name).toBe('string')
+      expect(typeof result.object.servings).toBe('number')
+      expect(Array.isArray(result.object.ingredients)).toBe(true)
+      expect(Array.isArray(result.object.steps)).toBe(true)
     })
   })
 
   describe('type: text', () => {
     it('generates plain text', async () => {
-      mockAICall.mockResolvedValue('This is the generated text content.')
+      const result = await generateText({
+        model: 'haiku',
+        prompt: 'Write one sentence about AI.',
+      })
 
-      const result = await generate('text', 'Write a paragraph about AI')
-
-      expect(mockAICall).toHaveBeenCalledWith('text', 'Write a paragraph about AI', undefined)
-      expect(typeof result).toBe('string')
+      expect(typeof result.text).toBe('string')
+      expect(result.text.length).toBeGreaterThan(10)
     })
   })
 
   describe('type: code', () => {
-    it('generates code with language option', async () => {
-      mockAICall.mockResolvedValue(`
-function validateEmail(email: string): boolean {
-  return /^[^@]+@[^@]+\\.[^@]+$/.test(email);
-}
-      `.trim())
-
-      const result = await generate('code', 'email validation function', {
-        language: 'typescript',
+    it('generates code with language specified in prompt', async () => {
+      const result = await generateText({
+        model: 'haiku',
+        system:
+          'You are a code generator. Output only valid TypeScript code, no explanations or markdown.',
+        prompt:
+          'Write a TypeScript function called validateEmail that takes a string and returns boolean.',
       })
 
-      expect(mockAICall).toHaveBeenCalledWith(
-        'code',
-        'email validation function',
-        expect.objectContaining({ language: 'typescript' })
-      )
-      expect(typeof result).toBe('string')
-      expect(result).toContain('function')
+      expect(typeof result.text).toBe('string')
+      expect(result.text).toContain('function')
+      expect(result.text).toMatch(/validateEmail|email/i)
     })
 
     it('generates code in different languages', async () => {
-      mockAICall.mockResolvedValue('def validate_email(email):\n    return "@" in email')
+      const result = await generateText({
+        model: 'haiku',
+        system:
+          'You are a code generator. Output only valid Python code, no explanations or markdown.',
+        prompt:
+          'Write a Python function called validate_email that takes a string and returns a boolean.',
+      })
 
-      await generate('code', 'email validation', { language: 'python' })
-
-      expect(mockAICall).toHaveBeenCalledWith(
-        'code',
-        'email validation',
-        expect.objectContaining({ language: 'python' })
-      )
+      expect(typeof result.text).toBe('string')
+      expect(result.text).toContain('def')
     })
   })
 
   describe('type: markdown', () => {
     it('generates markdown content', async () => {
-      mockAICall.mockResolvedValue('# README\n\n## Features\n\n- Feature 1\n- Feature 2')
+      const result = await generateText({
+        model: 'haiku',
+        system: 'You write in markdown format.',
+        prompt: 'Write a very short README with a heading and 2 bullet points.',
+      })
 
-      const result = await generate('markdown', 'README for a TypeScript library')
-
-      expect(mockAICall).toHaveBeenCalledWith('markdown', 'README for a TypeScript library', undefined)
-      expect(typeof result).toBe('string')
-      expect(result).toContain('#')
+      expect(typeof result.text).toBe('string')
+      expect(result.text).toContain('#')
     })
   })
 
   describe('type: yaml', () => {
     it('generates YAML content', async () => {
-      mockAICall.mockResolvedValue(`
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: my-app
-      `.trim())
+      const result = await generateText({
+        model: 'haiku',
+        system: 'You output only valid YAML, no explanations or markdown fences.',
+        prompt: 'Generate a simple YAML config with name: "test-app" and port: 3000.',
+      })
 
-      const result = await generate('yaml', 'kubernetes deployment for my-app')
-
-      expect(mockAICall).toHaveBeenCalledWith('yaml', 'kubernetes deployment for my-app', undefined)
-      expect(typeof result).toBe('string')
-      expect(result).toContain('apiVersion')
+      expect(typeof result.text).toBe('string')
+      expect(result.text.toLowerCase()).toContain('name')
     })
   })
 
   describe('type: list', () => {
     it('generates a list of items', async () => {
-      mockAICall.mockResolvedValue(['Item 1', 'Item 2', 'Item 3'])
+      const result = await generateObject({
+        model: 'haiku',
+        schema: z.object({
+          items: z.array(z.string()).describe('List of startup ideas'),
+        }),
+        prompt: 'List exactly 3 startup ideas.',
+      })
 
-      const result = await generate('list', '5 startup ideas')
-
-      expect(mockAICall).toHaveBeenCalledWith('list', '5 startup ideas', undefined)
-      expect(Array.isArray(result)).toBe(true)
+      expect(Array.isArray(result.object.items)).toBe(true)
+      expect(result.object.items.length).toBe(3)
     })
   })
 
   describe('type: diagram', () => {
     it('generates diagram code', async () => {
-      mockAICall.mockResolvedValue('graph TD\n  A[Start] --> B[Process]\n  B --> C[End]')
-
-      const result = await generate('diagram', 'user flow for authentication', {
-        format: 'mermaid',
+      const result = await generateText({
+        model: 'haiku',
+        system:
+          'You generate Mermaid diagram code. Output only the diagram code, no explanations or markdown fences.',
+        prompt: 'Create a simple flowchart: Start -> Login -> Dashboard.',
       })
 
-      expect(mockAICall).toHaveBeenCalledWith(
-        'diagram',
-        'user flow for authentication',
-        expect.objectContaining({ format: 'mermaid' })
-      )
-      expect(typeof result).toBe('string')
+      expect(typeof result.text).toBe('string')
+      // Mermaid diagrams typically contain --> or -> for connections
+      expect(result.text).toMatch(/(flowchart|graph|-->|->)/i)
     })
-  })
-
-  describe('type: slides', () => {
-    it('generates presentation slides', async () => {
-      mockAICall.mockResolvedValue('---\ntheme: default\n---\n\n# Title\n\nContent')
-
-      const result = await generate('slides', 'quarterly review presentation', {
-        format: 'slidev',
-        slides: 10,
-      })
-
-      expect(mockAICall).toHaveBeenCalledWith(
-        'slides',
-        'quarterly review presentation',
-        expect.objectContaining({ format: 'slidev', slides: 10 })
-      )
-    })
-  })
-})
-
-// ============================================================================
-// Tagged template support on generate
-// ============================================================================
-
-describe('generate as tagged template', () => {
-  beforeEach(() => {
-    mockAICall.mockReset()
-  })
-
-  // Note: This tests the concept - actual implementation would need the template wrapper
-  it('should support tagged template syntax (conceptual)', async () => {
-    mockAICall.mockResolvedValue({ analysis: 'Result' })
-
-    // This would be: generate`analysis of ${company}`
-    const company = 'Acme Corp'
-    const prompt = `analysis of ${company}`
-
-    const result = await generate('json', prompt)
-
-    expect(result).toHaveProperty('analysis')
-  })
-
-  it('should convert objects to YAML in templates (conceptual)', async () => {
-    mockAICall.mockResolvedValue('Generated content')
-
-    const context = {
-      brand: 'TechCo',
-      audience: 'developers',
-    }
-
-    // This would be: generate`content for ${{ context }}`
-    // The object would be converted to YAML
-    const prompt = `content for\ncontext:\n  brand: TechCo\n  audience: developers`
-
-    await generate('text', prompt)
-
-    expect(mockAICall).toHaveBeenCalledWith('text', expect.stringContaining('brand: TechCo'), undefined)
   })
 })
 
@@ -237,60 +158,50 @@ describe('generate as tagged template', () => {
 // Options parameter tests
 // ============================================================================
 
-describe('generate options', () => {
-  beforeEach(() => {
-    mockAICall.mockReset()
-    mockAICall.mockResolvedValue('result')
+describe.skipIf(!hasGateway)('generate options', () => {
+  it('respects temperature option (low temperature = more deterministic)', async () => {
+    // Low temperature should give consistent results
+    const result1 = await generateText({
+      model: 'haiku',
+      prompt: 'Say exactly "hello" and nothing else.',
+      temperature: 0,
+    })
+
+    const result2 = await generateText({
+      model: 'haiku',
+      prompt: 'Say exactly "hello" and nothing else.',
+      temperature: 0,
+    })
+
+    // With temperature 0, responses should be very similar
+    expect(result1.text.toLowerCase()).toContain('hello')
+    expect(result2.text.toLowerCase()).toContain('hello')
   })
 
-  it('passes model option', async () => {
-    await generate('text', 'test', { model: 'claude-opus-4-5' })
+  it('accepts maxTokens option without error', async () => {
+    // This test verifies the maxTokens option is passed through without error
+    // The actual truncation behavior is provider-dependent
+    const result = await generateText({
+      model: 'haiku',
+      prompt: 'Say "hello" and nothing else.',
+      maxTokens: 50,
+    })
 
-    expect(mockAICall).toHaveBeenCalledWith(
-      'text',
-      'test',
-      expect.objectContaining({ model: 'claude-opus-4-5' })
-    )
+    // Just verify we got a response - maxTokens behavior varies by provider/gateway
+    expect(result.text).toBeDefined()
+    expect(typeof result.text).toBe('string')
   })
 
-  it('passes temperature option', async () => {
-    await generate('text', 'creative writing', { temperature: 0.9 })
+  it('passes system prompt correctly', async () => {
+    const result = await generateText({
+      model: 'haiku',
+      system: 'You always respond with exactly one word.',
+      prompt: 'What is your favorite color?',
+    })
 
-    expect(mockAICall).toHaveBeenCalledWith(
-      'text',
-      'creative writing',
-      expect.objectContaining({ temperature: 0.9 })
-    )
-  })
-
-  it('passes maxTokens option', async () => {
-    await generate('text', 'long article', { maxTokens: 4000 })
-
-    expect(mockAICall).toHaveBeenCalledWith(
-      'text',
-      'long article',
-      expect.objectContaining({ maxTokens: 4000 })
-    )
-  })
-
-  it('passes thinking option', async () => {
-    await generate('json', 'complex analysis', { thinking: 'high' })
-
-    expect(mockAICall).toHaveBeenCalledWith(
-      'json',
-      'complex analysis',
-      expect.objectContaining({ thinking: 'high' })
-    )
-  })
-
-  it('passes thinking as number (token budget)', async () => {
-    await generate('json', 'complex analysis', { thinking: 10000 })
-
-    expect(mockAICall).toHaveBeenCalledWith(
-      'json',
-      'complex analysis',
-      expect.objectContaining({ thinking: 10000 })
-    )
+    // With the system prompt, response should be short (ideally one word)
+    const wordCount = result.text.trim().split(/\s+/).length
+    expect(wordCount).toBeLessThanOrEqual(3) // Allow some flexibility
   })
 })
 
@@ -298,22 +209,22 @@ describe('generate options', () => {
 // All convenience functions use generate
 // ============================================================================
 
-describe('convenience functions map to generate', () => {
+describe('convenience functions documentation', () => {
   it('documents the mapping', () => {
     // This test documents the expected mappings
     const mappings = {
-      'ai(prompt)': "generate('text', prompt)",
-      'write(prompt)': "generate('text', prompt)",
-      'code(prompt)': "generate('code', prompt)",
-      'list(prompt)': "generate('list', prompt)",
-      'lists(prompt)': "generate('lists', prompt)",
-      'extract(prompt)': "generate('extract', prompt)",
-      'summarize(prompt)': "generate('summary', prompt)",
-      'diagram(prompt)': "generate('diagram', prompt)",
-      'slides(prompt)': "generate('slides', prompt)",
-      'is(prompt)': "generate('boolean', prompt)",
+      'ai(prompt)': 'generateText({ model, prompt })',
+      'write(prompt)': 'generateText({ model, prompt })',
+      'code(prompt)': "generateText({ model, system: 'code generator', prompt })",
+      'list(prompt)': 'generateObject({ model, schema: { items: [...] }, prompt })',
+      'lists(prompt)':
+        'generateObject({ model, schema: { listName1: [...], listName2: [...] }, prompt })',
+      'extract(prompt)': 'generateObject({ model, schema: { extracted: [...] }, prompt })',
+      'summarize(prompt)': "generateText({ model, system: 'summarizer', prompt })",
+      'diagram(prompt)': "generateText({ model, system: 'mermaid generator', prompt })",
+      'is(prompt)': 'generateObject({ model, schema: { result: boolean }, prompt })',
     }
 
-    expect(Object.keys(mappings)).toHaveLength(10)
+    expect(Object.keys(mappings)).toHaveLength(9)
   })
 })

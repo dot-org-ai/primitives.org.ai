@@ -4,6 +4,23 @@
  * Provides deterministic embeddings based on text content to enable
  * meaningful semantic search in tests without real AI providers.
  *
+ * LEGITIMATE USE CASES (keep mock semantic provider for these):
+ * - Testing embedding dimension configuration
+ * - Testing semantic search algorithm logic (sorting, thresholds, filtering)
+ * - Testing embedding storage and retrieval mechanics
+ * - Unit testing search utilities with predictable scores
+ *
+ * DO NOT USE FOR (use real AI Gateway instead):
+ * - Integration tests requiring real semantic similarity
+ * - Testing AI-powered entity matching quality
+ * - End-to-end semantic search tests
+ *
+ * For real AI tests, use describe.skipIf(!hasGateway) pattern:
+ * ```ts
+ * const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
+ * describe.skipIf(!hasGateway)('real semantic tests', () => { ... })
+ * ```
+ *
  * @packageDocumentation
  */
 

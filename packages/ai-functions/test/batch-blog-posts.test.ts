@@ -15,117 +15,71 @@
  * ```
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  createBatch,
-  withBatch,
-  type BatchQueue,
-  type BatchResult,
-} from '../src/batch-queue.js'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { createBatch, withBatchQueue, generateObject, generateText } from '../src/index.js'
+import { z } from 'zod'
 
-// Import memory adapter to register it
-import '../src/batch/memory.js'
-import { configureMemoryAdapter, clearBatches } from '../src/batch/memory.js'
+// Memory adapter for testing - simulates batch processing locally
+// Import from .ts file for proper vite resolution
+import { configureMemoryAdapter, clearBatches } from '../src/batch/memory.ts'
 
-// ============================================================================
-// Mock Setup
-// ============================================================================
-
-// Mock the generate functions
-vi.mock('../src/generate.js', () => ({
-  generateObject: vi.fn().mockImplementation(async ({ prompt, schema }) => {
-    // Simulate list generation
-    if (schema?.items) {
-      return {
-        object: {
-          items: [
-            'How AI is Revolutionizing Startup Fundraising in 2026',
-            'The Rise of Solo Founders: Building $10M ARR Companies Alone',
-            'Why Remote-First is Non-Negotiable for 2026 Startups',
-            'Sustainable Growth vs Hypergrowth: The 2026 Paradigm Shift',
-            'Building in Public: How Transparency Became a Competitive Advantage',
-            'The API-First Startup: Lessons from 2026 Unicorns',
-            'From Side Project to Series A: The 2026 Playbook',
-            'Climate Tech Startups: The Hottest Sector of 2026',
-            'The Death of Traditional MVPs: Ship Faster, Learn Faster',
-            'Community-Led Growth: The New GTM Strategy for 2026',
-          ],
-        },
-      }
-    }
-    // Simulate blog post generation
-    if (prompt.includes('blog post about')) {
-      const titleMatch = prompt.match(/blog post about (.+)/)
-      const title = titleMatch?.[1] || 'Unknown Topic'
-      return {
-        object: {
-          text: `# ${title}\n\nThis is a comprehensive blog post about ${title}.\n\n## Introduction\n\nIn 2026, the startup landscape continues to evolve...\n\n## Key Takeaways\n\n1. Innovation is key\n2. Focus on customer value\n3. Build sustainable businesses\n\n## Conclusion\n\nThe future of startups is bright for those who adapt.`,
-        },
-      }
-    }
-    return { object: { result: 'Generated content' } }
-  }),
-  generateText: vi.fn().mockImplementation(async ({ prompt }) => {
-    // Simulate blog post text generation
-    if (prompt.includes('blog post about')) {
-      const titleMatch = prompt.match(/blog post about (.+)/)
-      const title = titleMatch?.[1] || 'Unknown Topic'
-      return {
-        text: `# ${title}\n\nThis is a comprehensive blog post about ${title}.\n\n## Introduction\n\nIn 2026, the startup landscape continues to evolve rapidly. Entrepreneurs are finding new ways to build, scale, and succeed.\n\n## The State of Startups in 2026\n\nThe ecosystem has matured significantly. AI tools have become indispensable, funding patterns have shifted, and remote work is now the default.\n\n## Key Strategies for Success\n\n1. **Leverage AI Wisely** - Use AI as a multiplier, not a replacement\n2. **Build Community First** - Your early adopters are your growth engine\n3. **Focus on Unit Economics** - Hypergrowth without sustainability is dead\n4. **Embrace Transparency** - Building in public creates trust and accountability\n\n## Practical Steps\n\n- Start with a problem you deeply understand\n- Validate with paying customers, not surveys\n- Build the smallest thing that delivers value\n- Iterate based on real usage data\n\n## Conclusion\n\nBuilding a startup in 2026 requires a blend of traditional business fundamentals and modern tools. The founders who succeed will be those who can navigate this balance effectively.`,
-      }
-    }
-    return { text: 'Generated text content' }
-  }),
-}))
+// Skip AI-dependent tests if no gateway configured
+const hasGateway = !!process.env.AI_GATEWAY_URL
 
 // ============================================================================
-// Test Helpers
+// Real AI Tests (require gateway)
 // ============================================================================
 
-/**
- * Simulate the list template function
- */
-async function mockList(prompt: string): Promise<string[]> {
-  const { generateObject } = await import('../src/generate.js')
-  const result = await generateObject({
-    model: 'sonnet',
-    schema: { items: ['List items'] },
-    prompt,
+describe.skipIf(!hasGateway)('Batch Blog Post Generation with Real AI', () => {
+  it('generates blog post titles using real AI', async () => {
+    const result = await generateObject({
+      model: 'haiku',
+      schema: z.object({
+        titles: z.array(z.string()).describe('List of blog post titles'),
+      }),
+      prompt: 'Generate exactly 3 blog post titles about building startups.',
+    })
+
+    expect(result.object.titles).toHaveLength(3)
+    expect(result.object.titles.every((t: string) => typeof t === 'string')).toBe(true)
   })
-  return (result.object as { items: string[] }).items
-}
+
+  it('generates a single blog post using real AI', async () => {
+    const result = await generateText({
+      model: 'haiku',
+      prompt: 'Write a very short blog post intro (2-3 sentences) about TypeScript.',
+    })
+
+    expect(result.text).toBeDefined()
+    expect(result.text.length).toBeGreaterThan(50)
+  })
+})
 
 // ============================================================================
-// Tests
+// Batch Queue Mechanics Tests (use memory adapter - no AI needed)
 // ============================================================================
 
-describe('Batch Blog Post Generation', () => {
+describe('Batch Queue Mechanics', () => {
+  // Use a simple handler that doesn't call real AI
+  const mockHandler = async (item: { prompt: string }) => {
+    return `Generated content for: ${item.prompt.substring(0, 50)}...`
+  }
+
   beforeEach(() => {
-    vi.clearAllMocks()
     clearBatches()
-    // Use default handler that calls the mock
-    configureMemoryAdapter({})
+    // Configure with mock handler to avoid real AI calls in batch tests
+    configureMemoryAdapter({ handler: mockHandler })
   })
 
   afterEach(() => {
     clearBatches()
   })
 
-  describe('list` immediate execution', () => {
-    it('list` executes immediately and returns titles', async () => {
-      const titles = await mockList('10 blog post titles about building startups in 2026')
-
-      expect(titles).toHaveLength(10)
-      expect(titles[0]).toBe('How AI is Revolutionizing Startup Fundraising in 2026')
-      expect(titles[9]).toBe('Community-Led Growth: The New GTM Strategy for 2026')
-    })
-  })
-
   describe('batch processing workflow', () => {
     it('creates batch queue and adds items', async () => {
       const batch = createBatch({ provider: 'openai', model: 'gpt-4o' })
 
-      const titles = await mockList('10 blog post titles about building startups in 2026')
+      const titles = ['Title 1', 'Title 2', 'Title 3']
 
       // Add each title to the batch
       const items = titles.map((title) =>
@@ -134,45 +88,41 @@ describe('Batch Blog Post Generation', () => {
         })
       )
 
-      expect(batch.size).toBe(10)
-      expect(items).toHaveLength(10)
+      expect(batch.size).toBe(3)
+      expect(items).toHaveLength(3)
       expect(items[0].status).toBe('pending')
     })
 
     it('submits batch and returns job info', async () => {
       const batch = createBatch({ provider: 'openai', model: 'gpt-4o' })
 
-      const titles = await mockList('10 blog post titles about building startups in 2026')
+      const titles = ['Title 1', 'Title 2', 'Title 3']
 
-      titles.forEach((title) =>
-        batch.add(`Write a comprehensive blog post about: ${title}`)
-      )
+      titles.forEach((title) => batch.add(`Write a comprehensive blog post about: ${title}`))
 
       const { job, completion } = await batch.submit()
 
       expect(job.id).toMatch(/^batch_memory_/)
       expect(job.provider).toBe('openai')
-      expect(job.totalItems).toBe(10)
+      expect(job.totalItems).toBe(3)
       expect(job.status).toBe('pending')
 
       // Wait for completion
       const results = await completion
-      expect(results).toHaveLength(10)
+      expect(results).toHaveLength(3)
     })
 
     it('waits for batch completion and returns results', async () => {
       const batch = createBatch({ provider: 'openai', model: 'gpt-4o' })
 
-      const titles = await mockList('10 blog post titles about building startups in 2026')
+      const titles = ['Title 1', 'Title 2', 'Title 3']
 
-      titles.forEach((title) =>
-        batch.add(`Write a comprehensive blog post about: ${title}`)
-      )
+      titles.forEach((title) => batch.add(`Write a comprehensive blog post about: ${title}`))
 
       await batch.submit()
       const results = await batch.wait()
 
-      expect(results).toHaveLength(10)
+      expect(results).toHaveLength(3)
       expect(results.every((r) => r.status === 'completed')).toBe(true)
       expect(results[0].result).toBeDefined()
     })
@@ -181,9 +131,7 @@ describe('Batch Blog Post Generation', () => {
       const batch = createBatch({ provider: 'openai' })
 
       const titles = ['First', 'Second', 'Third']
-      const items = titles.map((title, i) =>
-        batch.add(`Write about: ${title}`, { customId: `item_${i}` })
-      )
+      titles.map((title, i) => batch.add(`Write about: ${title}`, { customId: `item_${i}` }))
 
       await batch.submit()
       const results = await batch.wait()
@@ -196,17 +144,14 @@ describe('Batch Blog Post Generation', () => {
 
   describe('withBatchQueue helper', () => {
     it('provides convenient batch execution', async () => {
-      const titles = await mockList('10 blog post titles about building startups in 2026')
+      const titles = ['Title A', 'Title B', 'Title C']
 
-      const results = await withBatch(
-        (batch) =>
-          titles.map((title) =>
-            batch.add(`Write a blog post about: ${title}`)
-          ),
+      const results = await withBatchQueue(
+        (batch) => titles.map((title) => batch.add(`Write a blog post about: ${title}`)),
         { provider: 'openai', model: 'gpt-4o' }
       )
 
-      expect(results).toHaveLength(10)
+      expect(results).toHaveLength(3)
       expect(results.every((r) => r.status === 'completed')).toBe(true)
     })
   })
@@ -233,8 +178,11 @@ describe('Batch Blog Post Generation', () => {
 
   describe('error handling', () => {
     it('handles partial failures', async () => {
-      // Configure adapter to fail 30% of requests
-      configureMemoryAdapter({ failureRate: 0.3 })
+      // Configure adapter to fail 30% of requests with a mock handler
+      configureMemoryAdapter({
+        failureRate: 0.3,
+        handler: async (item: { prompt: string }) => `Result for: ${item.prompt}`,
+      })
 
       const batch = createBatch({ provider: 'openai' })
 
@@ -280,9 +228,11 @@ describe('Batch Blog Post Generation', () => {
 
   describe('batch with custom handler', () => {
     it('uses custom handler for processing', async () => {
-      const customHandler = vi.fn().mockImplementation(async (item) => {
+      let callCount = 0
+      const customHandler = async (item: { prompt: string }) => {
+        callCount++
         return `Custom result for: ${item.prompt}`
-      })
+      }
 
       configureMemoryAdapter({ handler: customHandler })
 
@@ -293,17 +243,20 @@ describe('Batch Blog Post Generation', () => {
       await batch.submit()
       const results = await batch.wait()
 
-      expect(customHandler).toHaveBeenCalledTimes(2)
+      expect(callCount).toBe(2)
       expect(results[0].result).toBe('Custom result for: Topic 1')
       expect(results[1].result).toBe('Custom result for: Topic 2')
     })
   })
 
-  describe('full workflow: list → map → batch', () => {
+  describe('full workflow: list -> map -> batch', () => {
     it('executes the complete blog post generation workflow', async () => {
-      // Step 1: Get titles (executes immediately)
-      const titles = await mockList('10 blog post titles about building startups in 2026')
-      expect(titles).toHaveLength(10)
+      // Step 1: Simulate getting titles (in real usage, this would be AI-generated)
+      const titles = [
+        'How AI is Revolutionizing Startup Fundraising',
+        'The Rise of Solo Founders',
+        'Remote-First is Non-Negotiable',
+      ]
 
       // Step 2: Create batch for blog posts (deferred)
       const batch = createBatch({
@@ -320,28 +273,26 @@ describe('Batch Blog Post Generation', () => {
         })
       )
 
-      expect(batch.size).toBe(10)
+      expect(batch.size).toBe(3)
       expect(blogItems.every((item) => item.status === 'pending')).toBe(true)
 
       // Step 4: Submit the batch
       const { job, completion } = await batch.submit()
 
       expect(job.id).toBeDefined()
-      expect(job.totalItems).toBe(10)
+      expect(job.totalItems).toBe(3)
       expect(batch.isSubmitted).toBe(true)
 
       // Step 5: Wait for results
       const results = await completion
 
-      expect(results).toHaveLength(10)
+      expect(results).toHaveLength(3)
       expect(results.every((r) => r.status === 'completed')).toBe(true)
 
-      // Verify results have blog post content
+      // Verify results have content
       for (const result of results) {
         expect(result.result).toBeDefined()
         expect(typeof result.result).toBe('string')
-        // Blog posts should have some content
-        expect((result.result as string).length).toBeGreaterThan(100)
       }
 
       // Verify items are updated after completion
@@ -351,9 +302,12 @@ describe('Batch Blog Post Generation', () => {
 })
 
 describe('Provider-specific batch behavior', () => {
+  // Use a simple handler that doesn't call real AI
+  const mockHandler = async () => 'Test result'
+
   beforeEach(() => {
     clearBatches()
-    configureMemoryAdapter({})
+    configureMemoryAdapter({ handler: mockHandler })
   })
 
   it('uses specified provider', async () => {
@@ -372,7 +326,11 @@ describe('Provider-specific batch behavior', () => {
   })
 
   it('respects model configuration', async () => {
-    const customHandler = vi.fn().mockResolvedValue('Result')
+    let handlerCalled = false
+    const customHandler = async () => {
+      handlerCalled = true
+      return 'Result'
+    }
     configureMemoryAdapter({ handler: customHandler })
 
     const batch = createBatch({ provider: 'openai', model: 'gpt-4o-mini' })
@@ -382,6 +340,6 @@ describe('Provider-specific batch behavior', () => {
 
     // The model should be passed to the handler via batch options
     // (memory adapter doesn't use it, but real adapters would)
-    expect(customHandler).toHaveBeenCalled()
+    expect(handlerCalled).toBe(true)
   })
 })

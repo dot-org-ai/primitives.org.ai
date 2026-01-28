@@ -107,11 +107,14 @@ export { Goals } from './goals.js'
  */
 export { approve } from './approve.js'
 export { ask } from './ask.js'
+export { browse } from './browse.js'
 export { do } from './do.js'
 export { decide } from './decide.js'
 export { generate } from './generate.js'
+export { image } from './image.js'
 export { is } from './is.js'
 export { notify } from './notify.js'
+export { video } from './video.js'
 
 export { kpis, okrs } from './kpis.js'
 
@@ -147,6 +150,47 @@ export type {
   EscalationValidationResult,
   ProfileConstraints,
 } from './capability-tiers.js'
+
+// Export browser automation types
+export type {
+  BrowseOptions,
+  BrowseResult,
+  BrowseAction,
+  BrowseActionType,
+  Viewport,
+  ClickOptions,
+  TypeOptions,
+  ScrollOptions,
+  ScreenshotOptions,
+  ExtractOptions,
+} from './browse.js'
+
+// Export image generation types
+export type {
+  ImageStyle,
+  ImageSize,
+  ImageFormat,
+  ImageOptions,
+  ImageResult,
+  VariationOptions,
+  EditOptions,
+  UpscaleOptions,
+  UpscaleResult,
+} from './image.js'
+
+// Export video generation types
+export type {
+  VideoOptions,
+  VideoResult,
+  VideoResolution,
+  VideoAspectRatio,
+  VideoModel,
+  VideoStyle,
+  VideoMetadata,
+  VideoFromImageOptions,
+  VideoExtendOptions,
+  VideoEditOptions,
+} from './video.js'
 
 // Export transport bridge (connects to digital-tools)
 export type {

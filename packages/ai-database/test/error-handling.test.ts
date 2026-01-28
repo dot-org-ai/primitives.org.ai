@@ -14,20 +14,19 @@
  * - src/schema/entity-operations.ts:209-211 - Edge creation swallows all errors
  * - src/schema/resolve.ts:439-441 - AI generation failure silently swallowed
  *
+ * Note: This file legitimately uses mocks to simulate provider failures for error testing.
+ * This is different from mocking AI behavior - we're testing error handling paths.
+ *
  * @packageDocumentation
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 import { DatabaseError, isEntityExistsError } from '../src/errors.js'
 
 describe('Error Propagation Tests', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
   })
 
   describe('Runtime Edge Resolution Errors (entity-operations.ts:760)', () => {

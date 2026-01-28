@@ -16,7 +16,7 @@
  * ```
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   configure,
   resetContext,
@@ -29,54 +29,14 @@ import {
   getFlexThreshold,
   getBatchThreshold,
   isFlexAvailable,
-} from '../src/context.js'
-import { list, write, ai, is } from '../src/primitives.js'
-import {
   createBatchMap,
   BatchMapPromise,
-  captureOperation,
-  isInRecordingMode,
-} from '../src/batch-map.js'
+} from '../src/index.js'
+import { captureOperation } from '../src/batch-map.js'
 
-// Import memory adapter to register it
-import '../src/batch/memory.js'
-import { configureMemoryAdapter, clearBatches } from '../src/batch/memory.js'
-
-// ============================================================================
-// Mock Setup
-// ============================================================================
-
-vi.mock('../src/generate.js', () => ({
-  generateObject: vi.fn().mockImplementation(async ({ prompt, schema }) => {
-    // Simulate list generation
-    if (schema?.items) {
-      return {
-        object: {
-          items: [
-            'Building AI-First Startups in 2026',
-            'The Future of Remote Work',
-            'Sustainable Tech Growth',
-            'From Idea to MVP in 30 Days',
-            'Community-Led Product Development',
-          ],
-        },
-      }
-    }
-    // Simulate boolean
-    if (schema?.answer) {
-      return {
-        object: { answer: 'true' },
-      }
-    }
-    // Default object
-    return { object: { result: 'Generated content' } }
-  }),
-  generateText: vi.fn().mockImplementation(async ({ prompt }) => {
-    return {
-      text: `Generated blog post for: ${prompt.slice(0, 50)}...`,
-    }
-  }),
-}))
+// Memory adapter for testing - simulates batch processing locally
+// Import from .ts file for proper vite resolution
+import { configureMemoryAdapter, clearBatches } from '../src/batch/memory.ts'
 
 // ============================================================================
 // Tests
@@ -84,7 +44,6 @@ vi.mock('../src/generate.js', () => ({
 
 describe('Implicit Batch Processing', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
     resetContext()
     clearBatches()
     configureMemoryAdapter({})
@@ -145,7 +104,7 @@ describe('Implicit Batch Processing', () => {
     })
   })
 
-  describe('Three-Tier Execution (immediate → flex → batch)', () => {
+  describe('Three-Tier Execution (immediate -> flex -> batch)', () => {
     it('getExecutionTier returns immediate for < flexThreshold items', () => {
       configure({ batchMode: 'auto', flexThreshold: 5, batchThreshold: 500 })
 
@@ -267,8 +226,7 @@ describe('Implicit Batch Processing', () => {
 
       // Create batch map - this enters recording mode for each item
       const batchMap = createBatchMap(items, (item) => {
-        // When we call write` here, it should capture the operation
-        // Since we mocked generateText, we need to manually capture
+        // Capture operation for each item
         captureOperation(`Write about: ${item}`, 'text', undefined, undefined)
         recordedCount++
         return `result_${item}`
@@ -306,7 +264,7 @@ describe('Implicit Batch Processing', () => {
       })
     })
 
-    it('supports async iteration', async () => {
+    it('supports iteration over results', async () => {
       configure({ batchMode: 'immediate' })
 
       const items = ['X', 'Y']
@@ -334,20 +292,15 @@ describe('Implicit Batch Processing', () => {
   })
 
   describe('Full Workflow', () => {
-    it('list → map → batch flow works end-to-end', async () => {
+    it('list -> map -> batch flow works end-to-end', async () => {
       // Configure for immediate execution (for testing)
       configure({ batchMode: 'immediate', provider: 'openai', model: 'gpt-4o' })
 
-      // Step 1: Get titles (this executes immediately)
-      // Note: The mock returns { object: { items: [...] } }
-      // so we access .items from the result
-      const result = await list`5 blog post titles about startups`
-      const titles = (result as any).items || result
-      expect(titles).toHaveLength(5)
+      // Step 1: Simulate getting titles (in production this would be AI-generated)
+      const titles = ['Title 1', 'Title 2', 'Title 3', 'Title 4', 'Title 5']
 
       // Step 2: Map to blog posts
       // In the real implementation, this would capture operations
-      // For this test, we simulate the batch map behavior
       const batchMap = createBatchMap(titles, (title: string) => {
         // Capture the write operation
         captureOperation(`Write a blog post about: ${title}`, 'text')
@@ -384,12 +337,16 @@ describe('Implicit Batch Processing', () => {
       const items = ['Test']
       const batchMap = new BatchMapPromise<string>(
         items,
-        [[{
-          id: 'op_1',
-          prompt: 'Test prompt',
-          itemPlaceholder: 'Test',
-          type: 'text' as const,
-        }]],
+        [
+          [
+            {
+              id: 'op_1',
+              prompt: 'Test prompt',
+              itemPlaceholder: 'Test',
+              type: 'text' as const,
+            },
+          ],
+        ],
         { deferred: true }
       )
 

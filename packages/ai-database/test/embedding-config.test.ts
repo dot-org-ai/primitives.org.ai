@@ -1,8 +1,12 @@
 /**
  * Tests for Configurable Embedding Dimensions
  *
- * RED phase: These tests verify that embedding dimensions can be configured
- * instead of being hardcoded to 384.
+ * Tests are split into:
+ * 1. Unit tests using deterministic mock embeddings for dimension testing
+ * 2. Integration tests using real AI Gateway (skipIf no gateway)
+ *
+ * Note: The mock semantic provider is used here for deterministic dimension testing,
+ * not to avoid AI calls. Testing dimensions requires predictable vector lengths.
  *
  * @see aip-kdfx - RED: Write tests for configurable embedding dimensions
  * @see aip-0gf4 - GREEN: Make embedding dimensions configurable
@@ -13,6 +17,9 @@ import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 import { DEFAULT_EMBEDDING_DIMENSIONS } from '../src/constants.js'
 import { createMockSemanticProvider } from './utils/mock-semantic.js'
 import type { DatabaseSchema } from '../src/index.js'
+
+// Check for AI Gateway availability
+const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
 
 describe('configurable embedding dimensions', () => {
   beforeEach(() => {
@@ -177,5 +184,66 @@ describe('configurable embedding dimensions', () => {
         expect(embedding.length).toBe(2048)
       })
     })
+  })
+})
+
+/**
+ * Real AI Gateway Embedding Dimension Tests
+ *
+ * These tests verify embedding dimensions with real AI Gateway calls.
+ * They are skipped when AI_GATEWAY_URL is not configured.
+ */
+describe.skipIf(!hasGateway)('Real AI Gateway Embedding Dimensions', () => {
+  const schema = {
+    Article: {
+      title: 'string',
+      content: 'markdown',
+    },
+  } as const satisfies DatabaseSchema
+
+  beforeEach(() => {
+    setProvider(createMemoryProvider({ useAiFunctions: true }))
+  })
+
+  it('should generate embeddings with standard dimensions', async () => {
+    const { db, artifacts } = DB(schema)
+
+    await db.Article.create('article-real', {
+      title: 'Real Embedding Test',
+      content: 'Testing real embedding dimensions via AI Gateway.',
+    })
+
+    const embedding = await artifacts.get('Article/article-real', 'embedding')
+
+    expect(embedding).not.toBeNull()
+    expect(Array.isArray(embedding?.content)).toBe(true)
+
+    // Real embeddings should have standard dimensions (384, 768, 1024, 1536)
+    const vector = embedding?.content as number[]
+    expect([384, 768, 1024, 1536]).toContain(vector.length)
+    expect(embedding?.metadata?.dimensions).toBe(vector.length)
+  })
+
+  it('should maintain consistent dimensions across multiple entities', async () => {
+    const { db, artifacts } = DB(schema)
+
+    await db.Article.create('article-1', {
+      title: 'First Article',
+      content: 'Content for first article.',
+    })
+
+    await db.Article.create('article-2', {
+      title: 'Second Article',
+      content: 'Content for second article.',
+    })
+
+    const emb1 = await artifacts.get('Article/article-1', 'embedding')
+    const emb2 = await artifacts.get('Article/article-2', 'embedding')
+
+    const vec1 = emb1?.content as number[]
+    const vec2 = emb2?.content as number[]
+
+    // Both embeddings should have the same dimensions
+    expect(vec1.length).toBe(vec2.length)
   })
 })

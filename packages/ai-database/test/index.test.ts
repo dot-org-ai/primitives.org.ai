@@ -771,8 +771,8 @@ describe('DB integration tests', () => {
       const { nouns } = DB(schema)
 
       const allNouns = await nouns.list()
-      // Expect 3 nouns: BlogPost, Author, and Edge (system entity)
-      expect(allNouns.length).toBe(3)
+      // Expect 5 nouns: BlogPost, Author, and system entities (Noun, Verb, Edge)
+      expect(allNouns.length).toBe(5)
     })
 
     it('gets noun definition by name', async () => {
