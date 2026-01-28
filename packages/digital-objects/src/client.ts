@@ -16,7 +16,41 @@
  * @packageDocumentation
  */
 
-import { RPC } from 'rpc.do'
+import {
+  RPC,
+  http,
+  type RPCProxy,
+  type SqlQuery,
+  type RemoteStorage,
+  type RemoteCollections,
+  type DatabaseSchema,
+  type RpcSchema,
+} from 'rpc.do'
+
+/**
+ * DO Client features available on RPC proxy
+ * This mirrors the DOClientFeatures interface from rpc.do which is not exported
+ */
+interface DOClientFeatures {
+  /** Tagged template SQL query */
+  sql: <R = Record<string, unknown>>(
+    strings: TemplateStringsArray,
+    ...values: unknown[]
+  ) => SqlQuery<R>
+  /** Remote storage access */
+  storage: RemoteStorage
+  /** Remote collection access (MongoDB-style) */
+  collection: RemoteCollections
+  /** Get database schema */
+  dbSchema: () => Promise<DatabaseSchema>
+  /** Get full RPC schema */
+  schema: () => Promise<RpcSchema>
+}
+
+/**
+ * Type for the Digital Objects RPC client
+ */
+export type DigitalObjectsClient = RPCProxy<DigitalObjectsAPI> & DOClientFeatures
 
 import type {
   Noun,
@@ -114,8 +148,8 @@ const DEFAULT_URL = 'https://digital-objects.workers.dev'
 export function createDigitalObjectsClient(
   url: string = DEFAULT_URL,
   options?: DigitalObjectsClientOptions
-) {
-  return RPC<DigitalObjectsAPI>(url, options)
+): DigitalObjectsClient {
+  return RPC<DigitalObjectsAPI>(http(url, options?.token))
 }
 
 /**
@@ -128,6 +162,6 @@ export function createDigitalObjectsClient(
  * const post = await client.create('Post', { title: 'Hello' })
  * ```
  */
-const client = createDigitalObjectsClient()
+const client: DigitalObjectsClient = createDigitalObjectsClient()
 
 export default client
