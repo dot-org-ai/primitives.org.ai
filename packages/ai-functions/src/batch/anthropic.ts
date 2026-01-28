@@ -104,9 +104,11 @@ export function configureAnthropic(options: { apiKey?: string; baseUrl?: string 
 }
 
 function getApiKey(): string {
-  const key = anthropicApiKey || process.env.ANTHROPIC_API_KEY
+  const key = anthropicApiKey || process.env['ANTHROPIC_API_KEY']
   if (!key) {
-    throw new Error('Anthropic API key not configured. Set ANTHROPIC_API_KEY or call configureAnthropic()')
+    throw new Error(
+      'Anthropic API key not configured. Set ANTHROPIC_API_KEY or call configureAnthropic()'
+    )
   }
   return key
 }
@@ -125,7 +127,7 @@ async function anthropicRequest<T>(
       'anthropic-beta': ANTHROPIC_BETA,
       'Content-Type': 'application/json',
     },
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined && { body: JSON.stringify(body) }),
   })
 
   if (!response.ok) {
@@ -167,8 +169,8 @@ const anthropicAdapter: BatchAdapter = {
           model,
           max_tokens: item.options?.maxTokens || maxTokens,
           messages: [{ role: 'user', content: item.prompt }],
-          system: item.options?.system,
-          temperature: item.options?.temperature,
+          ...(item.options?.system !== undefined && { system: item.options.system }),
+          ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
         },
       }
 
@@ -201,10 +203,11 @@ const anthropicAdapter: BatchAdapter = {
       status: mapStatus(batch),
       totalItems: items.length,
       completedItems: batch.request_counts.succeeded,
-      failedItems: batch.request_counts.errored + batch.request_counts.expired + batch.request_counts.canceled,
+      failedItems:
+        batch.request_counts.errored + batch.request_counts.expired + batch.request_counts.canceled,
       createdAt: new Date(batch.created_at),
       expiresAt: new Date(batch.expires_at),
-      webhookUrl: options.webhookUrl,
+      ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
     }
 
     // Create completion promise
@@ -227,9 +230,10 @@ const anthropicAdapter: BatchAdapter = {
         batch.request_counts.canceled +
         batch.request_counts.expired,
       completedItems: batch.request_counts.succeeded,
-      failedItems: batch.request_counts.errored + batch.request_counts.expired + batch.request_counts.canceled,
+      failedItems:
+        batch.request_counts.errored + batch.request_counts.expired + batch.request_counts.canceled,
       createdAt: new Date(batch.created_at),
-      completedAt: batch.ended_at ? new Date(batch.ended_at) : undefined,
+      ...(batch.ended_at && { completedAt: new Date(batch.ended_at) }),
       expiresAt: new Date(batch.expires_at),
     }
   },

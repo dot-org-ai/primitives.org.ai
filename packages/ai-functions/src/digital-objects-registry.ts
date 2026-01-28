@@ -121,9 +121,9 @@ function definitionToData(definition: FunctionDefinition): StoredFunctionDefinit
   const base: StoredFunctionDefinition = {
     name: definition.name,
     type: definition.type,
-    description: definition.description,
+    ...(definition.description !== undefined && { description: definition.description }),
     args: definition.args,
-    returnType: definition.returnType,
+    ...(definition.returnType !== undefined && { returnType: definition.returnType }),
   }
 
   switch (definition.type) {
@@ -131,21 +131,21 @@ function definitionToData(definition: FunctionDefinition): StoredFunctionDefinit
       const codeDef = definition as CodeFunctionDefinition
       return {
         ...base,
-        language: codeDef.language,
-        instructions: codeDef.instructions,
-        includeTests: codeDef.includeTests,
-        includeExamples: codeDef.includeExamples,
+        ...(codeDef.language !== undefined && { language: codeDef.language }),
+        ...(codeDef.instructions !== undefined && { instructions: codeDef.instructions }),
+        ...(codeDef.includeTests !== undefined && { includeTests: codeDef.includeTests }),
+        ...(codeDef.includeExamples !== undefined && { includeExamples: codeDef.includeExamples }),
       }
     }
     case 'generative': {
       const genDef = definition as GenerativeFunctionDefinition
       return {
         ...base,
-        output: genDef.output,
-        system: genDef.system,
-        promptTemplate: genDef.promptTemplate,
-        model: genDef.model,
-        temperature: genDef.temperature,
+        ...(genDef.output !== undefined && { output: genDef.output }),
+        ...(genDef.system !== undefined && { system: genDef.system }),
+        ...(genDef.promptTemplate !== undefined && { promptTemplate: genDef.promptTemplate }),
+        ...(genDef.model !== undefined && { model: genDef.model }),
+        ...(genDef.temperature !== undefined && { temperature: genDef.temperature }),
       }
     }
     case 'agentic': {
@@ -153,22 +153,22 @@ function definitionToData(definition: FunctionDefinition): StoredFunctionDefinit
       return {
         ...base,
         instructions: agentDef.instructions,
-        promptTemplate: agentDef.promptTemplate,
-        tools: agentDef.tools,
-        maxIterations: agentDef.maxIterations,
-        model: agentDef.model,
-        stream: agentDef.stream,
+        ...(agentDef.promptTemplate !== undefined && { promptTemplate: agentDef.promptTemplate }),
+        ...(agentDef.tools !== undefined && { tools: agentDef.tools }),
+        ...(agentDef.maxIterations !== undefined && { maxIterations: agentDef.maxIterations }),
+        ...(agentDef.model !== undefined && { model: agentDef.model }),
+        ...(agentDef.stream !== undefined && { stream: agentDef.stream }),
       }
     }
     case 'human': {
       const humanDef = definition as HumanFunctionDefinition
       return {
         ...base,
-        channel: humanDef.channel,
+        ...(humanDef.channel !== undefined && { channel: humanDef.channel }),
         instructions: humanDef.instructions,
-        promptTemplate: humanDef.promptTemplate,
-        timeout: humanDef.timeout,
-        assignee: humanDef.assignee,
+        ...(humanDef.promptTemplate !== undefined && { promptTemplate: humanDef.promptTemplate }),
+        ...(humanDef.timeout !== undefined && { timeout: humanDef.timeout }),
+        ...(humanDef.assignee !== undefined && { assignee: humanDef.assignee }),
       }
     }
   }
@@ -178,54 +178,80 @@ function definitionToData(definition: FunctionDefinition): StoredFunctionDefinit
  * Convert stored data back to a FunctionDefinition
  */
 function dataToDefinition(data: StoredFunctionDefinition): FunctionDefinition {
-  const base = {
-    name: data.name,
-    description: data.description,
-    args: data.args,
-    returnType: data.returnType,
-  }
-
   switch (data.type) {
-    case 'code':
-      return {
-        ...base,
-        type: 'code',
-        language: data.language as CodeFunctionDefinition['language'],
-        instructions: data.instructions,
-        includeTests: data.includeTests,
-        includeExamples: data.includeExamples,
-      }
-    case 'generative':
-      return {
-        ...base,
+    case 'code': {
+      const def = {
+        type: 'code' as const,
+        name: data.name,
+        args: data.args,
+      } as CodeFunctionDefinition
+      if (data.description !== undefined)
+        (def as { description: string }).description = data.description
+      if (data.returnType !== undefined)
+        (def as { returnType: unknown }).returnType = data.returnType
+      if (data.language !== undefined)
+        (def as { language: CodeFunctionDefinition['language'] }).language =
+          data.language as CodeFunctionDefinition['language']
+      if (data.instructions !== undefined)
+        (def as { instructions: string }).instructions = data.instructions
+      if (data.includeTests !== undefined)
+        (def as { includeTests: boolean }).includeTests = data.includeTests
+      if (data.includeExamples !== undefined)
+        (def as { includeExamples: boolean }).includeExamples = data.includeExamples
+      return def
+    }
+    case 'generative': {
+      const def: GenerativeFunctionDefinition = {
         type: 'generative',
-        output: data.output as GenerativeFunctionDefinition['output'],
-        system: data.system,
-        promptTemplate: data.promptTemplate,
-        model: data.model,
-        temperature: data.temperature,
+        name: data.name,
+        args: data.args,
+        output: (data.output ?? 'string') as GenerativeFunctionDefinition['output'],
       }
-    case 'agentic':
-      return {
-        ...base,
-        type: 'agentic',
+      if (data.description !== undefined) def.description = data.description
+      if (data.returnType !== undefined) def.returnType = data.returnType
+      if (data.system !== undefined) def.system = data.system
+      if (data.promptTemplate !== undefined) def.promptTemplate = data.promptTemplate
+      if (data.model !== undefined) def.model = data.model
+      if (data.temperature !== undefined) def.temperature = data.temperature
+      return def
+    }
+    case 'agentic': {
+      const def = {
+        type: 'agentic' as const,
+        name: data.name,
+        args: data.args,
         instructions: data.instructions ?? '',
-        promptTemplate: data.promptTemplate,
-        tools: data.tools as AgenticFunctionDefinition['tools'],
-        maxIterations: data.maxIterations,
-        model: data.model,
-        stream: data.stream,
-      }
-    case 'human':
-      return {
-        ...base,
+      } as AgenticFunctionDefinition
+      if (data.description !== undefined)
+        (def as { description: string }).description = data.description
+      if (data.returnType !== undefined)
+        (def as { returnType: unknown }).returnType = data.returnType
+      if (data.promptTemplate !== undefined)
+        (def as { promptTemplate: string }).promptTemplate = data.promptTemplate
+      if (data.tools !== undefined)
+        (def as { tools: AgenticFunctionDefinition['tools'] }).tools =
+          data.tools as AgenticFunctionDefinition['tools']
+      if (data.maxIterations !== undefined)
+        (def as { maxIterations: number }).maxIterations = data.maxIterations
+      if (data.model !== undefined) (def as { model: string }).model = data.model
+      if (data.stream !== undefined) (def as { stream: boolean }).stream = data.stream
+      return def
+    }
+    case 'human': {
+      const def: HumanFunctionDefinition = {
         type: 'human',
-        channel: data.channel as HumanFunctionDefinition['channel'],
+        name: data.name,
+        args: data.args,
+        channel: (data.channel ?? 'web') as HumanFunctionDefinition['channel'],
         instructions: data.instructions ?? '',
-        promptTemplate: data.promptTemplate,
-        timeout: data.timeout,
-        assignee: data.assignee,
       }
+      if (data.description !== undefined) def.description = data.description
+      if (data.returnType !== undefined) def.returnType = data.returnType
+      if (data.promptTemplate !== undefined) def.promptTemplate = data.promptTemplate
+      if (data.timeout !== undefined) def.timeout = data.timeout
+      if (data.assignee !== undefined) def.assignee = data.assignee
+      return def
+    }
   }
 }
 
@@ -617,11 +643,13 @@ export class DigitalObjectsFunctionRegistry implements FunctionRegistry {
   ): Promise<Action<FunctionCallData>> {
     await this.ensureInitialized()
 
+    const data: FunctionCallData = { args: undefined, result }
+    if (duration !== undefined) data.duration = duration
     return this.provider.perform<FunctionCallData>(
       FUNCTION_VERBS.COMPLETE,
       undefined,
       callActionId,
-      { args: undefined, result, duration }
+      data
     )
   }
 
@@ -635,11 +663,14 @@ export class DigitalObjectsFunctionRegistry implements FunctionRegistry {
   ): Promise<Action<FunctionCallData>> {
     await this.ensureInitialized()
 
-    return this.provider.perform<FunctionCallData>(FUNCTION_VERBS.FAIL, undefined, callActionId, {
-      args: undefined,
-      error,
-      duration,
-    })
+    const data: FunctionCallData = { args: undefined, error }
+    if (duration !== undefined) data.duration = duration
+    return this.provider.perform<FunctionCallData>(
+      FUNCTION_VERBS.FAIL,
+      undefined,
+      callActionId,
+      data
+    )
   }
 
   /**

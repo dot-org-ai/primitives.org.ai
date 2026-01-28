@@ -27,7 +27,7 @@ export class NotImplementedError extends Error {
     super(message)
     this.name = 'NotImplementedError'
     this.functionName = functionName
-    this.details = details
+    if (details !== undefined) this.details = details
 
     // Maintain proper stack trace for where the error was thrown (V8 engines)
     if (Error.captureStackTrace) {

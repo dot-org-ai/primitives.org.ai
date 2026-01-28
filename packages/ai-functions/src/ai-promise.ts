@@ -253,9 +253,9 @@ export class AIPromise<T> implements PromiseLike<T> {
       model: this._options.model || 'sonnet',
       schema,
       prompt: finalPrompt,
-      system: this._options.system,
-      temperature: this._options.temperature,
-      maxTokens: this._options.maxTokens,
+      ...(this._options.system !== undefined && { system: this._options.system }),
+      ...(this._options.temperature !== undefined && { temperature: this._options.temperature }),
+      ...(this._options.maxTokens !== undefined && { maxTokens: this._options.maxTokens }),
     })
 
     // Extract the value based on type
@@ -683,7 +683,7 @@ const PROXY_HANDLERS: ProxyHandler<AIPromise<unknown>> = {
   // Handle function calls (for chained methods)
   apply(target, _thisArg, args) {
     // If the target is callable (e.g., from a template function), call it
-    const call = (target as unknown as Record<string, unknown>)._call
+    const call = (target as unknown as Record<string, unknown>)['_call']
     if (typeof call === 'function') {
       return (call as (...args: unknown[]) => unknown)(...args)
     }
@@ -913,7 +913,10 @@ export function createAITemplateFunction<T>(
       captureOperation(prompt, batchType, options.baseSchema, options.system)
     }
 
-    const promise = new AIPromise<T>(prompt, { ...options, type })
+    const promise = new AIPromise<T>(prompt, {
+      ...options,
+      ...(type !== undefined && { type }),
+    })
 
     // Add dependencies
     for (const dep of dependencies) {
@@ -1046,10 +1049,12 @@ function createStreamingAIPromise<T>(
       const result = await streamText({
         model: promiseOptions.model || 'sonnet',
         prompt: finalPrompt,
-        system: promiseOptions.system,
-        temperature: promiseOptions.temperature,
-        maxTokens: promiseOptions.maxTokens,
-        abortSignal: options?.abortSignal,
+        ...(promiseOptions.system !== undefined && { system: promiseOptions.system }),
+        ...(promiseOptions.temperature !== undefined && {
+          temperature: promiseOptions.temperature,
+        }),
+        ...(promiseOptions.maxTokens !== undefined && { maxTokens: promiseOptions.maxTokens }),
+        ...(options?.abortSignal !== undefined && { abortSignal: options.abortSignal }),
       })
 
       let fullText = ''
@@ -1093,10 +1098,12 @@ function createStreamingAIPromise<T>(
         model: promiseOptions.model || 'sonnet',
         schema,
         prompt: finalPrompt,
-        system: promiseOptions.system,
-        temperature: promiseOptions.temperature,
-        maxTokens: promiseOptions.maxTokens,
-        abortSignal: options?.abortSignal,
+        ...(promiseOptions.system !== undefined && { system: promiseOptions.system }),
+        ...(promiseOptions.temperature !== undefined && {
+          temperature: promiseOptions.temperature,
+        }),
+        ...(promiseOptions.maxTokens !== undefined && { maxTokens: promiseOptions.maxTokens }),
+        ...(options?.abortSignal !== undefined && { abortSignal: options.abortSignal }),
       })
 
       let lastPartial: Partial<T> = {} as Partial<T>

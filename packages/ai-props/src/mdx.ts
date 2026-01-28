@@ -644,8 +644,9 @@ export function createMDXPropsGenerator(options: MDXPropsGeneratorOptions): MDXP
     }
     contextParts.push(`Generate props for the ${componentName} component.`)
 
+    // Use full model ID to avoid alias resolution issues in bundled environments
     const genResult = await generateObject({
-      model: model || 'sonnet',
+      model: model || 'anthropic/claude-sonnet-4.5',
       schema: missingPropsSchema,
       prompt: contextParts.join('\n'),
     })

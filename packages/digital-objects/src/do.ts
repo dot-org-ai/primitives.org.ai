@@ -125,13 +125,13 @@ interface FilterCondition {
 interface CascadeDefinition {
   operator: CascadeOperator
   targetType: string
-  predicate?: string // e.g., 'tenantOf' in '<- SaaSTenant.tenantOf'
+  predicate?: string | undefined // e.g., 'tenantOf' in '<- SaaSTenant.tenantOf'
   description: string
   isArray: boolean
   isFuzzy: boolean // uses vector/similarity search
   isBidirectional: boolean
-  routeParam?: string // e.g., ':tenant' means instances are DOs
-  filters?: FilterCondition[]
+  routeParam?: string | undefined // e.g., ':tenant' means instances are DOs
+  filters?: FilterCondition[] | undefined
 }
 
 // ============================================
@@ -165,8 +165,8 @@ export interface DOContext {
   $id: string
   $type: string
   $version: number
-  $extends?: string
-  $parent?: string
+  $extends?: string | undefined
+  $parent?: string | undefined
 
   // Instance operations
   instances: () => DOInstance[]
@@ -224,18 +224,18 @@ interface ParsedField {
   name: string
   description: string
   type: 'string' | 'number' | 'date' | 'boolean' | 'enum' | 'object' | 'array'
-  enumValues?: string[]
-  cascade?: CascadeDefinition
-  nested?: Record<string, ParsedField>
-  arrayItem?: ParsedField
+  enumValues?: string[] | undefined
+  cascade?: CascadeDefinition | undefined
+  nested?: Record<string, ParsedField> | undefined
+  arrayItem?: ParsedField | undefined
 }
 
 interface ParsedDefinition {
   $type: string
-  $id?: string
+  $id?: string | undefined
   $version: number
-  $context?: string
-  $extends?: string
+  $context?: string | undefined
+  $extends?: string | undefined
   fields: Record<string, ParsedField>
   cascades: Record<string, CascadeDefinition>
   functions: Record<string, FunctionDef>
@@ -285,6 +285,7 @@ export function parseFilters(filterStr: string): FilterCondition[] {
     const match = part.match(FILTER_CONDITION_REGEX)
     if (match) {
       const [, field, op, rawValue] = match
+      if (!field || !rawValue) continue
       let value: string | number | boolean = rawValue.trim()
 
       // Type coercion
@@ -319,7 +320,7 @@ export function parseCascade(value: string): { description: string; cascade?: Ca
   let parseValue = value
 
   const routeMatch = value.match(ROUTE_PARAM_REGEX)
-  if (routeMatch) {
+  if (routeMatch && routeMatch[1] && routeMatch[2]) {
     routeParam = routeMatch[1]
     parseValue = routeMatch[2]
   }
@@ -328,7 +329,7 @@ export function parseCascade(value: string): { description: string; cascade?: Ca
   const match = parseValue.match(CASCADE_REGEX)
   if (!match) return { description: value }
 
-  const [, rawDescription, operator, targetPart] = match
+  const [, rawDescription = '', operator, targetPart = ''] = match
   const op = operator as CascadeOperator
   const description = rawDescription.trim()
 
@@ -340,14 +341,14 @@ export function parseCascade(value: string): { description: string; cascade?: Ca
   // Extract filters if present
   let targetClean = targetPart.trim()
   const filterMatch = targetClean.match(FILTER_REGEX)
-  if (filterMatch) {
+  if (filterMatch && filterMatch[1]) {
     filters = parseFilters(filterMatch[1])
     targetClean = targetClean.replace(FILTER_REGEX, '').trim()
   }
 
   // Check for Type.predicate format
   const predicateMatch = targetClean.match(TARGET_PREDICATE_REGEX)
-  if (predicateMatch) {
+  if (predicateMatch && predicateMatch[1]) {
     targetType = predicateMatch[1]
     predicate = predicateMatch[2]
   } else {
@@ -376,7 +377,9 @@ export function parseCascade(value: string): { description: string; cascade?: Ca
 export function parseFieldType(value: string): ParsedField['type'] {
   if (TYPE_SUFFIX_REGEX.test(value)) {
     const match = value.match(TYPE_SUFFIX_REGEX)
-    return match![1].toLowerCase() as 'number' | 'date' | 'boolean'
+    if (match?.[1]) {
+      return match[1].toLowerCase() as 'number' | 'date' | 'boolean'
+    }
   }
   if (ENUM_REGEX.test(value)) return 'enum'
   return 'string'
@@ -489,7 +492,7 @@ function parseDefinition(def: DODefinition): ParsedDefinition {
 
     // Migration handlers: migrate.N
     const migrateMatch = key.match(MIGRATE_REGEX)
-    if (migrateMatch && typeof value === 'function') {
+    if (migrateMatch && migrateMatch[1] && typeof value === 'function') {
       parsed.migrations[parseInt(migrateMatch[1], 10)] = value as MigrateHandler
       continue
     }
@@ -545,15 +548,15 @@ function parseDefinition(def: DODefinition): ParsedDefinition {
 
 export class DigitalObjectDefinition<T extends DODefinition = DODefinition> {
   readonly $type: string
-  readonly $id?: string
+  readonly $id?: string | undefined
   readonly $version: number
-  readonly $context?: string
-  readonly $extends?: string
+  readonly $context?: string | undefined
+  readonly $extends?: string | undefined
 
   private _raw: T
   private _parsed: ParsedDefinition
-  private _storage?: DOStorage
-  private _context?: DOContext
+  private _storage?: DOStorage | undefined
+  private _context?: DOContext | undefined
   private _memoryInstances = new Map<string, Record<string, unknown>>()
 
   constructor(definition: T, storage?: DOStorage) {
@@ -699,7 +702,7 @@ export class DigitalObjectDefinition<T extends DODefinition = DODefinition> {
         instances.push({
           $id: key,
           $type: this.$type,
-          $version: ((value as Record<string, unknown>).$version as number) || this.$version,
+          $version: ((value as Record<string, unknown>)['$version'] as number) || this.$version,
           data: value as Record<string, unknown>,
         })
       }
@@ -709,7 +712,7 @@ export class DigitalObjectDefinition<T extends DODefinition = DODefinition> {
         instances.push({
           $id: key,
           $type: this.$type,
-          $version: ((value as Record<string, unknown>).$version as number) || this.$version,
+          $version: ((value as Record<string, unknown>)['$version'] as number) || this.$version,
           data: value,
         })
       }
@@ -733,7 +736,7 @@ export class DigitalObjectDefinition<T extends DODefinition = DODefinition> {
     return {
       $id: id,
       $type: this.$type,
-      $version: (data.$version as number) || this.$version,
+      $version: (data['$version'] as number) || this.$version,
       data,
     }
   }
@@ -851,8 +854,8 @@ export class DigitalObjectDefinition<T extends DODefinition = DODefinition> {
       $version: this.$version,
     }
 
-    if (this.$id) json.$id = this.$id
-    if (this.$context) json.$context = this.$context
+    if (this.$id) json['$id'] = this.$id
+    if (this.$context) json['$context'] = this.$context
 
     // Serialize fields (raw values)
     for (const [key, value] of Object.entries(this._raw)) {

@@ -62,9 +62,16 @@ importers:
       mdxld:
         specifier: ^1.0.1
         version: 1.0.1(@mdx-js/mdx@3.1.1)(web-streams-polyfill@4.0.0-beta.3)
+    devDependencies:
+      '@cloudflare/vitest-pool-workers':
+        specifier: ^0.8.0
+        version: 0.8.71(@cloudflare/workers-types@4.20251202.0)(@vitest/runner@4.0.15)(@vitest/snapshot@3.0.4)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))
+      '@cloudflare/workers-types':
+        specifier: ^4.20250124.0
+        version: 4.20251202.0
       vitest:
-        specifier: ^2.0.0
-        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+        specifier: 3.0.4
+        version: 3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
   packages/ai-evaluate:
     dependencies:
@@ -124,7 +131,7 @@ importers:
     optionalDependencies:
       oauth.do:
         specifier: ^0.2.1
-        version: 0.2.3(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+        version: 0.2.3(hono@4.11.7)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
     devDependencies:
       dotenv:
         specifier: ^17.2.3
@@ -198,7 +205,19 @@ importers:
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
+      ai-providers:
+        specifier: workspace:*
+        version: link:../ai-providers
+      hono:
+        specifier: ^4.0.0
+        version: 4.11.7
+      language-models:
+        specifier: workspace:*
+        version: link:../language-models
     devDependencies:
+      '@cloudflare/vitest-pool-workers':
+        specifier: ^0.8.0
+        version: 0.8.71(@cloudflare/workers-types@4.20251202.0)(@vitest/runner@4.0.15)(@vitest/snapshot@3.0.4)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))
       '@cloudflare/workers-types':
         specifier: ^4.20250109.0
         version: 4.20251202.0
@@ -206,8 +225,8 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
       vitest:
-        specifier: ^2.1.9
-        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+        specifier: 3.0.4
+        version: 3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
   packages/ai-providers:
     dependencies:
@@ -273,12 +292,18 @@ importers:
         specifier: workspace:*
         version: link:../types
     devDependencies:
+      '@cloudflare/vitest-pool-workers':
+        specifier: ^0.8.0
+        version: 0.8.71(@cloudflare/workers-types@4.20251202.0)(@vitest/runner@4.0.15)(@vitest/snapshot@3.0.4)(vitest@2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))
       '@cloudflare/workers-types':
         specifier: ^4.20250109.0
         version: 4.20251202.0
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+      wrangler:
+        specifier: ^4.0.0
+        version: 4.61.0(@cloudflare/workers-types@4.20251202.0)
 
   packages/autonomous-agents:
     dependencies:
@@ -291,6 +316,12 @@ importers:
       org.ai:
         specifier: workspace:*
         version: link:../org.ai
+      rpc.do:
+        specifier: '*'
+        version: 0.1.4
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.0
@@ -334,6 +365,9 @@ importers:
 
   packages/digital-objects:
     dependencies:
+      rpc.do:
+        specifier: ^0.2.3
+        version: 0.2.3(oauth.do@0.2.3(hono@4.11.7)(react-dom@19.2.1(react@19.2.0))(react@19.2.0))
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -359,6 +393,9 @@ importers:
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
+      rpc.do:
+        specifier: '*'
+        version: 0.1.4
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -387,6 +424,9 @@ importers:
       digital-workers:
         specifier: workspace:*
         version: link:../digital-workers
+      rpc.do:
+        specifier: ^0.1.0
+        version: 0.1.4
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.0
@@ -406,6 +446,9 @@ importers:
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
+      rpc.do:
+        specifier: ^0.1.0
+        version: 0.1.4
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -431,6 +474,9 @@ importers:
       org.ai:
         specifier: workspace:*
         version: link:../org.ai
+      rpc.do:
+        specifier: '*'
+        version: 0.1.4
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -456,6 +502,9 @@ importers:
       org.ai:
         specifier: workspace:*
         version: link:../org.ai
+      rpc.do:
+        specifier: '*'
+        version: 0.1.4
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.0
@@ -487,57 +536,9 @@ importers:
       '@org.ai/types':
         specifier: workspace:^
         version: link:../types
-      ai-database:
+      id.org.ai:
         specifier: workspace:^
-        version: link:../ai-database
-      ai-evaluate:
-        specifier: workspace:^
-        version: link:../ai-evaluate
-      ai-experiments:
-        specifier: workspace:^
-        version: link:../ai-experiments
-      ai-functions:
-        specifier: workspace:^
-        version: link:../ai-functions
-      ai-props:
-        specifier: workspace:^
-        version: link:../ai-props
-      ai-providers:
-        specifier: workspace:^
-        version: link:../ai-providers
-      ai-tests:
-        specifier: workspace:^
-        version: link:../ai-tests
-      ai-workflows:
-        specifier: workspace:^
-        version: link:../ai-workflows
-      autonomous-agents:
-        specifier: workspace:^
-        version: link:../autonomous-agents
-      business-as-code:
-        specifier: workspace:^
-        version: link:../business-as-code
-      digital-products:
-        specifier: workspace:^
-        version: link:../digital-products
-      digital-tasks:
-        specifier: workspace:^
-        version: link:../digital-tasks
-      digital-tools:
-        specifier: workspace:^
-        version: link:../digital-tools
-      digital-workers:
-        specifier: workspace:^
-        version: link:../digital-workers
-      human-in-the-loop:
-        specifier: workspace:^
-        version: link:../human-in-the-loop
-      language-models:
-        specifier: workspace:^
-        version: link:../language-models
-      services-as-software:
-        specifier: workspace:^
-        version: link:../services-as-software
+        version: link:../id.org.ai
       zod:
         specifier: ^3.24.0
         version: 3.25.76
@@ -4007,8 +4008,14 @@ packages:
   canonicalize@1.0.8:
     resolution: {integrity: sha512-0CNTVCLZggSh7bc5VkX5WWPWO+cyZbNd07IHIsSXLia/eAq+r836hgk+8BKoEh7949Mda87VUOitx5OddVj64A==}
 
+  capnweb@0.1.0:
+    resolution: {integrity: sha512-+pygKx1JFTZTRdd1hHgaBRg5BwULEDZq8ZoHXkYP2GXNV3lrjXLj5qzlGz+SgBCJjWUmNBtlh7JPWdr0wIbY8w==}
+
   capnweb@0.2.0:
     resolution: {integrity: sha512-fQSW5h6HIefRM4rHZMyAsWcu/qE/6Qr2OC8B99whifjDJatI5KLFcODSykKmpyCCKF50N3HvZ5lB26YBdh0fRg==}
+
+  capnweb@0.4.0:
+    resolution: {integrity: sha512-OgqPQcxnrAIqjrkAuwI4N9MP/mzseM5w9oLWb/oU63KveBJl1c8p41etLSVQUlYFiAYZu+h6/LJxKaDJd93xFw==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -4817,6 +4824,10 @@ packages:
     engines: {node: 20 || >=22}
     hasBin: true
 
+  glob@13.0.0:
+    resolution: {integrity: sha512-tvZgpqk6fz4BaNZ66ZsRaZnbHvP/jG3uKJvAZOwEVUL4RTA5nJeeLYfyN9/VA8NX/V3IBG+hkeuGpKjvELkVhA==}
+    engines: {node: 20 || >=22}
+
   glob@9.3.5:
     resolution: {integrity: sha512-e1LleDykUz2Iu+MTYdkSsuWX8lvAjAcs0Xef0lNIu0S2wOAzuTxCJtcd9S3cijlwYF18EsU3rzb8jPVobxDh9Q==}
     engines: {node: '>=16 || 14 >=14.17'}
@@ -4873,6 +4884,10 @@ packages:
 
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
+
+  hono@4.11.7:
+    resolution: {integrity: sha512-l7qMiNee7t82bH3SeyUCt9UF15EVmaBvsppY2zQtrbIhl/yzBTny+YUxsVjSjQ6gaqaeVtZmGocom8TzBlA4Yw==}
+    engines: {node: '>=16.9.0'}
 
   html-escaper@2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
@@ -5638,6 +5653,11 @@ packages:
     resolution: {integrity: sha512-tt6PvKu4WyzPwWUzy/hvPFqn+uwXO0K1ZHka8az3NnrhWJDmSqI8ncWq0fkL0k/lmmi5tAC11FXwXuh0rFbt1A==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
+  oauth.do@0.1.15:
+    resolution: {integrity: sha512-joUG0F/qWiqge2epdCc6FjmTL6+YG8qS1rjxF+jqtrBKvDlC3BypxdtbwoX0jfOCq1zjZ01vxOxKcif/tTo7Ug==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
   oauth.do@0.2.3:
     resolution: {integrity: sha512-bQ2N438ssbqd9y2psrLN5FWNWAFaidAPPT4RZbciG7NaJOVPR5MXQ9fbOzoLJNqxPT7pFpmDDzIKFqGUpgR9Ng==}
     engines: {node: '>=18.0.0'}
@@ -6098,6 +6118,23 @@ packages:
   router@2.2.0:
     resolution: {integrity: sha512-nLTrUKm2UyiL7rlhapu/Zl45FwNgkZGaCpZbIHajDYgwlJCOzLSk+cIPAnsEqV955GjILJnKbdQC1nVPz+gAYQ==}
     engines: {node: '>= 18'}
+
+  rpc.do@0.1.4:
+    resolution: {integrity: sha512-iwDMg1rWLhtaTuM4y2MO9BCZf+DxK8fdSo8sTHjCvbd7W/BIbpHMDW34JOSx8UwO8llk2dvvNs6djqcfoqgAKQ==}
+    engines: {node: '>=18.0.0'}
+
+  rpc.do@0.2.3:
+    resolution: {integrity: sha512-x5TkUQAJnMhXIBEosHz4/TLHCaVQpheVY5v5lxfzZ4EqNLabM3gIMPmfWw4xKhZJ3NCXlDXaWW0xzD9wDkIfTQ==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+    peerDependencies:
+      '@dotdo/types': '>=0.1.0'
+      oauth.do: ^0.2.0
+    peerDependenciesMeta:
+      '@dotdo/types':
+        optional: true
+      oauth.do:
+        optional: true
 
   run-applescript@7.1.0:
     resolution: {integrity: sha512-DPe5pVFaAsinSaV6QjQ6gdiedWDcRCbUuiQfQa2wmWV7+xC9bGulGI8+TdRmoFkAPaBXk8CrAbnlY2ISniJ47Q==}
@@ -6563,10 +6600,6 @@ packages:
 
   undici@7.14.0:
     resolution: {integrity: sha512-Vqs8HTzjpQXZeXdpsfChQTlafcMQaaIwnGwLam1wudSSjlJeQ3bw1j+TLPePgrCnCpUXx7Ba5Pdpf5OBih62NQ==}
-    engines: {node: '>=20.18.1'}
-
-  undici@7.16.0:
-    resolution: {integrity: sha512-QEg3HPMll0o3t2ourKwOeUAZ159Kn9mx5pnzHRQO8+Wixmh88YdZRiIwat0iNzNNXn0yoEtXJqFpyW7eM8BV7g==}
     engines: {node: '>=20.18.1'}
 
   undici@7.18.2:
@@ -10968,7 +11001,6 @@ snapshots:
   bundle-name@4.1.0:
     dependencies:
       run-applescript: 7.1.0
-    optional: true
 
   bytes@3.1.2: {}
 
@@ -10990,7 +11022,13 @@ snapshots:
 
   canonicalize@1.0.8: {}
 
+  capnweb@0.1.0:
+    optional: true
+
   capnweb@0.2.0: {}
+
+  capnweb@0.4.0:
+    optional: true
 
   ccount@2.0.1: {}
 
@@ -11164,17 +11202,14 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  default-browser-id@5.0.1:
-    optional: true
+  default-browser-id@5.0.1: {}
 
   default-browser@5.4.0:
     dependencies:
       bundle-name: 4.1.0
       default-browser-id: 5.0.1
-    optional: true
 
-  define-lazy-prop@3.0.0:
-    optional: true
+  define-lazy-prop@3.0.0: {}
 
   defu@6.1.4: {}
 
@@ -12015,6 +12050,12 @@ snapshots:
       package-json-from-dist: 1.0.1
       path-scurry: 2.0.1
 
+  glob@13.0.0:
+    dependencies:
+      minimatch: 10.1.1
+      minipass: 7.1.2
+      path-scurry: 2.0.1
+
   glob@9.3.5:
     dependencies:
       fs.realpath: 1.0.0
@@ -12118,6 +12159,8 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.4
 
+  hono@4.11.7: {}
+
   html-escaper@2.0.2: {}
 
   html-void-elements@3.0.0: {}
@@ -12180,8 +12223,7 @@ snapshots:
 
   is-decimal@2.0.1: {}
 
-  is-docker@3.0.0:
-    optional: true
+  is-docker@3.0.0: {}
 
   is-extglob@2.1.1: {}
 
@@ -12196,7 +12238,6 @@ snapshots:
   is-inside-container@1.0.0:
     dependencies:
       is-docker: 3.0.0
-    optional: true
 
   is-number@7.0.0: {}
 
@@ -12219,7 +12260,6 @@ snapshots:
   is-wsl@3.1.0:
     dependencies:
       is-inside-container: 1.0.0
-    optional: true
 
   isexe@2.0.0: {}
 
@@ -12982,7 +13022,7 @@ snapshots:
       glob-to-regexp: 0.4.1
       sharp: 0.33.5
       stoppable: 1.1.0
-      undici: 7.16.0
+      undici: 7.18.2
       workerd: 1.20250906.0
       ws: 8.18.0
       youch: 4.1.0-beta.10
@@ -13135,11 +13175,18 @@ snapshots:
 
   npm-to-yarn@3.0.1: {}
 
-  oauth.do@0.2.3(react-dom@19.2.1(react@19.2.0))(react@19.2.0):
+  oauth.do@0.1.15:
+    dependencies:
+      open: 10.2.0
+    optionalDependencies:
+      keytar: 7.9.0
+
+  oauth.do@0.2.3(hono@4.11.7)(react-dom@19.2.1(react@19.2.0))(react@19.2.0):
     dependencies:
       keytar: 7.9.0
       open: 10.2.0
     optionalDependencies:
+      hono: 4.11.7
       react: 19.2.0
       react-dom: 19.2.1(react@19.2.0)
     optional: true
@@ -13184,7 +13231,6 @@ snapshots:
       define-lazy-prop: 3.0.0
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
-    optional: true
 
   optionator@0.9.4:
     dependencies:
@@ -13660,8 +13706,21 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  run-applescript@7.1.0:
-    optional: true
+  rpc.do@0.1.4:
+    dependencies:
+      oauth.do: 0.1.15
+    optionalDependencies:
+      capnweb: 0.1.0
+
+  rpc.do@0.2.3(oauth.do@0.2.3(hono@4.11.7)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)):
+    dependencies:
+      glob: 13.0.0
+      ts-morph: 27.0.2
+    optionalDependencies:
+      capnweb: 0.4.0
+      oauth.do: 0.2.3(hono@4.11.7)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+
+  run-applescript@7.1.0: {}
 
   run-parallel@1.2.0:
     dependencies:
@@ -14152,8 +14211,6 @@ snapshots:
       '@fastify/busboy': 2.1.1
 
   undici@7.14.0: {}
-
-  undici@7.16.0: {}
 
   undici@7.18.2: {}
 
@@ -14648,7 +14705,6 @@ snapshots:
   wsl-utils@0.1.0:
     dependencies:
       is-wsl: 3.1.0
-    optional: true
 
   y18n@5.0.8: {}
 

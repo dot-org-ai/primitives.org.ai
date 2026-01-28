@@ -2277,7 +2277,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
     }
   }
 
-  private async totalTimeoutTest(step: WorkflowStep): Promise<{ error: string }> {
+  private async totalTimeoutTest(step: WorkflowStep): Promise<never> {
     const cascadeStep = DurableStep.cascade('total-timeout', {
       code: async () => {
         await new Promise((r) => setTimeout(r, 100))
@@ -2286,19 +2286,8 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
       generative: async () => ({ success: true }),
       totalTimeout: 1,
     })
-    try {
-      await cascadeStep.run(step, {})
-      return { error: '' }
-    } catch (error) {
-      // Return the error message so the test can verify it
-      if (error instanceof CascadeTimeout) {
-        return { error: `Cascade timeout: ${error.message}` }
-      }
-      if (error instanceof Error) {
-        return { error: error.message }
-      }
-      return { error: String(error) }
-    }
+    // Let the CascadeTimeout error propagate
+    return cascadeStep.run(step, {}) as Promise<never>
   }
 
   private async returnSuccessTest(
@@ -2529,10 +2518,7 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
     }
   }
 
-  private async allTiersFailTest(step: WorkflowStep): Promise<{
-    error: string
-    history?: Array<{ tier: string; error?: string }>
-  }> {
+  private async allTiersFailTest(step: WorkflowStep): Promise<never> {
     const cascadeStep = DurableStep.cascade('all-tiers-fail', {
       code: async () => {
         throw new Error('Code failed')
@@ -2541,47 +2527,18 @@ export class TestWorkflow extends WorkflowEntrypoint<Env, TestWorkflowParams> {
         throw new Error('Generative failed')
       },
     })
-    try {
-      await cascadeStep.run(step, {})
-      return { error: '' }
-    } catch (error) {
-      if (error instanceof AllTiersFailed) {
-        return {
-          error: `All tiers failed: ${error.history.map((h) => h.tier).join(', ')}`,
-          history: error.history.map((h) => ({
-            tier: h.tier,
-            ...(h.error?.message !== undefined && { error: h.error.message }),
-          })),
-        }
-      }
-      return { error: error instanceof Error ? error.message : String(error) }
-    }
+    // Let the AllTiersFailed error propagate
+    return cascadeStep.run(step, {}) as Promise<never>
   }
 
-  private async errorHistoryTest(step: WorkflowStep): Promise<{
-    error: string
-    history?: Array<{ tier: string; error?: string }>
-  }> {
+  private async errorHistoryTest(step: WorkflowStep): Promise<never> {
     const cascadeStep = DurableStep.cascade('error-history', {
       code: async () => {
         throw new Error('Code error')
       },
     })
-    try {
-      await cascadeStep.run(step, {})
-      return { error: '' }
-    } catch (error) {
-      if (error instanceof AllTiersFailed) {
-        return {
-          error: `All tiers failed: ${error.history.length} tier(s)`,
-          history: error.history.map((h) => ({
-            tier: h.tier,
-            ...(h.error?.message !== undefined && { error: h.error.message }),
-          })),
-        }
-      }
-      return { error: error instanceof Error ? error.message : String(error) }
-    }
+    // Let the AllTiersFailed error propagate
+    return cascadeStep.run(step, {}) as Promise<never>
   }
 
   private async customErrorHandlerTest(

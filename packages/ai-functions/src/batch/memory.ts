@@ -105,7 +105,7 @@ const memoryAdapter: BatchAdapter = {
       completedItems: 0,
       failedItems: 0,
       createdAt: batch.createdAt,
-      webhookUrl: options.webhookUrl,
+      ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
     }
 
     return { job, completion }
@@ -123,12 +123,17 @@ const memoryAdapter: BatchAdapter = {
     return {
       id: batch.id,
       provider: 'openai',
-      status: batch.status === 'completed' ? 'completed' : batch.status === 'failed' ? 'failed' : 'in_progress',
+      status:
+        batch.status === 'completed'
+          ? 'completed'
+          : batch.status === 'failed'
+          ? 'failed'
+          : 'in_progress',
       totalItems: batch.items.length,
       completedItems,
       failedItems,
       createdAt: batch.createdAt,
-      completedAt: batch.completedAt,
+      ...(batch.completedAt && { completedAt: batch.completedAt }),
     }
   },
 
@@ -195,9 +200,9 @@ async function processMemoryBatch(batch: MemoryBatch): Promise<BatchResult[]> {
           model: batch.options.model || 'sonnet',
           schema: item.schema,
           prompt: item.prompt,
-          system: item.options?.system,
-          temperature: item.options?.temperature,
-          maxTokens: item.options?.maxTokens,
+          ...(item.options?.system !== undefined && { system: item.options.system }),
+          ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
+          ...(item.options?.maxTokens !== undefined && { maxTokens: item.options.maxTokens }),
         })
         result = response.object
       } else {
@@ -205,9 +210,9 @@ async function processMemoryBatch(batch: MemoryBatch): Promise<BatchResult[]> {
         const response = await generateText({
           model: batch.options.model || 'sonnet',
           prompt: item.prompt,
-          system: item.options?.system,
-          temperature: item.options?.temperature,
-          maxTokens: item.options?.maxTokens,
+          ...(item.options?.system !== undefined && { system: item.options.system }),
+          ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
+          ...(item.options?.maxTokens !== undefined && { maxTokens: item.options.maxTokens }),
         })
         result = response.text
       }

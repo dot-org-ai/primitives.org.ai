@@ -124,7 +124,7 @@ const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
   'gpt-4-turbo': { inputPricePerMillion: 10, outputPricePerMillion: 30 },
   'gpt-4': { inputPricePerMillion: 30, outputPricePerMillion: 60 },
   'gpt-3.5-turbo': { inputPricePerMillion: 0.5, outputPricePerMillion: 1.5 },
-  'o1': { inputPricePerMillion: 15, outputPricePerMillion: 60 },
+  o1: { inputPricePerMillion: 15, outputPricePerMillion: 60 },
   'o1-mini': { inputPricePerMillion: 3, outputPricePerMillion: 12 },
   'o1-preview': { inputPricePerMillion: 15, outputPricePerMillion: 60 },
   'o3-mini': { inputPricePerMillion: 1.1, outputPricePerMillion: 4.4 },
@@ -144,7 +144,7 @@ const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
   'gemini-1.5-flash': { inputPricePerMillion: 0.075, outputPricePerMillion: 0.3 },
 
   // Default fallback
-  'default': { inputPricePerMillion: 1, outputPricePerMillion: 3 },
+  default: { inputPricePerMillion: 1, outputPricePerMillion: 3 },
 }
 
 // ============================================================================
@@ -181,7 +181,7 @@ export class TokenCounter {
 
     // Rough estimate: ~4 chars per token for English
     // Unicode characters may use more tokens
-    const unicodeChars = Array.from(text).filter(char => char.charCodeAt(0) > 127).length
+    const unicodeChars = Array.from(text).filter((char) => char.charCodeAt(0) > 127).length
     const asciiChars = charCount - unicodeChars
 
     // ASCII chars: ~4 per token, Unicode: ~2 per token (rough)
@@ -240,7 +240,10 @@ export class BudgetExceededError extends Error {
 export class BudgetTracker {
   private totalInputTokens = 0
   private totalOutputTokens = 0
-  private usageByModel: Record<string, { inputTokens: number; outputTokens: number; cost: number }> = {}
+  private usageByModel: Record<
+    string,
+    { inputTokens: number; outputTokens: number; cost: number }
+  > = {}
   private triggeredThresholds: Set<number> = new Set()
   private requests: StoredRequest[] = []
 
@@ -347,7 +350,9 @@ export class BudgetTracker {
 
       if (projectedCost > this.config.maxCost) {
         throw new BudgetExceededError(
-          `Cost budget exceeded: $${projectedCost.toFixed(4)} would exceed limit of $${this.config.maxCost}`,
+          `Cost budget exceeded: $${projectedCost.toFixed(4)} would exceed limit of $${
+            this.config.maxCost
+          }`,
           'cost',
           this.config.maxCost,
           this.getTotalCost(),
@@ -365,7 +370,9 @@ export class BudgetTracker {
     if (this.config.maxTokens !== undefined) {
       if (this.getTotalTokens() > this.config.maxTokens) {
         throw new BudgetExceededError(
-          `Token budget exceeded: ${this.getTotalTokens()} tokens exceeds limit of ${this.config.maxTokens}`,
+          `Token budget exceeded: ${this.getTotalTokens()} tokens exceeds limit of ${
+            this.config.maxTokens
+          }`,
           'tokens',
           this.config.maxTokens,
           this.getTotalTokens()
@@ -378,7 +385,9 @@ export class BudgetTracker {
       const currentCost = this.getTotalCost()
       if (currentCost > this.config.maxCost) {
         throw new BudgetExceededError(
-          `Cost budget exceeded: $${currentCost.toFixed(4)} exceeds limit of $${this.config.maxCost}`,
+          `Cost budget exceeded: $${currentCost.toFixed(4)} exceeds limit of $${
+            this.config.maxCost
+          }`,
           'cost',
           this.config.maxCost,
           currentCost
@@ -580,11 +589,11 @@ export class RequestContext implements IRequestContext {
 
   constructor(options: RequestContextOptions & { depth?: number } = {}) {
     this.requestId = options.requestId ?? randomUUID()
-    this.userId = options.userId
-    this.tenantId = options.tenantId
-    this.parentRequestId = options.parentRequestId
+    if (options.userId !== undefined) this.userId = options.userId
+    if (options.tenantId !== undefined) this.tenantId = options.tenantId
+    if (options.parentRequestId !== undefined) this.parentRequestId = options.parentRequestId
     this.depth = (options as { depth?: number }).depth ?? 0
-    this.metadata = options.metadata
+    if (options.metadata !== undefined) this.metadata = options.metadata
 
     // Generate trace/span IDs for W3C traceparent
     this.traceId = randomUUID().replace(/-/g, '')
@@ -648,12 +657,13 @@ export class RequestContext implements IRequestContext {
    * Create a RequestContext from trace headers
    */
   static fromHeaders(headers: Record<string, string>): RequestContext {
-    return new RequestContext({
-      requestId: headers['x-request-id'],
-      userId: headers['x-user-id'],
-      tenantId: headers['x-tenant-id'],
-      parentRequestId: headers['x-parent-request-id'],
-    })
+    const opts: RequestContextOptions = {}
+    if (headers['x-request-id'] !== undefined) opts.requestId = headers['x-request-id']
+    if (headers['x-user-id'] !== undefined) opts.userId = headers['x-user-id']
+    if (headers['x-tenant-id'] !== undefined) opts.tenantId = headers['x-tenant-id']
+    if (headers['x-parent-request-id'] !== undefined)
+      opts.parentRequestId = headers['x-parent-request-id']
+    return new RequestContext(opts)
   }
 }
 
@@ -695,7 +705,10 @@ export async function withBudget<T>(
   const { userId, tenantId, ...budgetConfig } = options
 
   const tracker = new BudgetTracker(budgetConfig)
-  const ctx = userId || tenantId ? createRequestContext({ userId, tenantId }) : undefined
+  const ctxOptions: RequestContextOptions = {}
+  if (userId !== undefined) ctxOptions.userId = userId
+  if (tenantId !== undefined) ctxOptions.tenantId = tenantId
+  const ctx = userId || tenantId ? createRequestContext(ctxOptions) : undefined
 
   // Track parent tracker for nested contexts
   const parentTracker = currentBudgetTracker

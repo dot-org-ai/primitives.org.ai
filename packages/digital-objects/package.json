@@ -62,7 +62,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "rpc.do": "*",
+    "rpc.do": "^0.2.3",
     "zod": "^3.23.0"
   },
   "devDependencies": {

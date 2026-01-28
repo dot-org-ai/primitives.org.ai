@@ -70,12 +70,10 @@ export async function runEval<TInput, TOutput, TExpected>(
   const { name, cases, task, scorers, concurrency = 3 } = options
 
   // Get models to test
-  const models =
-    options.models ??
-    createModelVariants({
-      tiers: options.tiers,
-      providers: options.providers,
-    }).map((v) => v.input)
+  const variantOptions: { tiers?: ModelTier[]; providers?: string[] } = {}
+  if (options.tiers !== undefined) variantOptions.tiers = options.tiers
+  if (options.providers !== undefined) variantOptions.providers = options.providers
+  const models = options.models ?? createModelVariants(variantOptions).map((v) => v.input)
 
   const results: EvalResult<TOutput>[] = []
   const startTime = Date.now()
@@ -118,13 +116,13 @@ export async function runEval<TInput, TOutput, TExpected>(
               scores.push({
                 name: s.name,
                 score: Math.max(0, Math.min(1, score)),
-                ...(s.description !== undefined && { description: s.description }),
+                ...(s.description && { description: s.description }),
               })
             } catch (err) {
               scores.push({
                 name: s.name,
                 score: 0,
-                ...(s.description !== undefined && { description: s.description }),
+                ...(s.description && { description: s.description }),
                 metadata: { error: String(err) },
               })
             }

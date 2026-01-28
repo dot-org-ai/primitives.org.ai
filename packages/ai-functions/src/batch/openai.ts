@@ -110,18 +110,14 @@ export function configureOpenAI(options: { apiKey?: string; baseUrl?: string }):
 }
 
 function getApiKey(): string {
-  const key = openaiApiKey || process.env.OPENAI_API_KEY
+  const key = openaiApiKey || process.env['OPENAI_API_KEY']
   if (!key) {
     throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY or call configureOpenAI()')
   }
   return key
 }
 
-async function openaiRequest<T>(
-  method: 'GET' | 'POST',
-  path: string,
-  body?: unknown
-): Promise<T> {
+async function openaiRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
   const url = `${openaiBaseUrl}${path}`
   const response = await fetch(url, {
     method,
@@ -129,7 +125,7 @@ async function openaiRequest<T>(
       Authorization: `Bearer ${getApiKey()}`,
       'Content-Type': 'application/json',
     },
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined && { body: JSON.stringify(body) }),
   })
 
   if (!response.ok) {
@@ -214,8 +210,8 @@ const openaiAdapter: BatchAdapter = {
             ...(item.options?.system ? [{ role: 'system', content: item.options.system }] : []),
             { role: 'user', content: item.prompt },
           ],
-          max_tokens: item.options?.maxTokens,
-          temperature: item.options?.temperature,
+          ...(item.options?.maxTokens !== undefined && { max_tokens: item.options.maxTokens }),
+          ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
         },
       }
 
@@ -256,8 +252,8 @@ const openaiAdapter: BatchAdapter = {
       completedItems: 0,
       failedItems: 0,
       createdAt: new Date(batch.created_at * 1000),
-      expiresAt: batch.expires_at ? new Date(batch.expires_at * 1000) : undefined,
-      webhookUrl: options.webhookUrl,
+      ...(batch.expires_at && { expiresAt: new Date(batch.expires_at * 1000) }),
+      ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
       inputFileId: batch.input_file_id,
     }
 
@@ -278,12 +274,12 @@ const openaiAdapter: BatchAdapter = {
       completedItems: batch.request_counts.completed,
       failedItems: batch.request_counts.failed,
       createdAt: new Date(batch.created_at * 1000),
-      startedAt: batch.in_progress_at ? new Date(batch.in_progress_at * 1000) : undefined,
-      completedAt: batch.completed_at ? new Date(batch.completed_at * 1000) : undefined,
-      expiresAt: batch.expires_at ? new Date(batch.expires_at * 1000) : undefined,
+      ...(batch.in_progress_at && { startedAt: new Date(batch.in_progress_at * 1000) }),
+      ...(batch.completed_at && { completedAt: new Date(batch.completed_at * 1000) }),
+      ...(batch.expires_at && { expiresAt: new Date(batch.expires_at * 1000) }),
       inputFileId: batch.input_file_id,
-      outputFileId: batch.output_file_id || undefined,
-      errorFileId: batch.error_file_id || undefined,
+      ...(batch.output_file_id && { outputFileId: batch.output_file_id }),
+      ...(batch.error_file_id && { errorFileId: batch.error_file_id }),
     }
   },
 
@@ -494,7 +490,7 @@ async function processOpenAIItem(item: BatchItem, model: string): Promise<BatchR
   // Add JSON schema if provided
   if (item.schema) {
     const zodSchema = convertSchema(item.schema)
-    body.response_format = {
+    body['response_format'] = {
       type: 'json_schema',
       json_schema: {
         name: 'response',

@@ -29,23 +29,23 @@ import type {
  * Communication transport - maps contact channels to delivery mechanisms
  */
 export type Transport =
-  | 'email'      // Email transport (SendGrid, Resend, etc.)
-  | 'sms'        // SMS transport (Twilio, etc.)
-  | 'voice'      // Voice call transport (Vapi, Twilio, etc.)
-  | 'slack'      // Slack API
-  | 'teams'      // Microsoft Teams API
-  | 'discord'    // Discord API
-  | 'whatsapp'   // WhatsApp Business API
-  | 'telegram'   // Telegram Bot API
-  | 'web'        // Web push/in-app
-  | 'webhook'    // Generic webhook
+  | 'email' // Email transport (SendGrid, Resend, etc.)
+  | 'sms' // SMS transport (Twilio, etc.)
+  | 'voice' // Voice call transport (Vapi, Twilio, etc.)
+  | 'slack' // Slack API
+  | 'teams' // Microsoft Teams API
+  | 'discord' // Discord API
+  | 'whatsapp' // WhatsApp Business API
+  | 'telegram' // Telegram Bot API
+  | 'web' // Web push/in-app
+  | 'webhook' // Generic webhook
 
 /**
  * Transport configuration
  */
 export interface TransportConfig {
   transport: Transport
-  provider?: string        // Specific provider (e.g., 'sendgrid', 'resend')
+  provider?: string // Specific provider (e.g., 'sendgrid', 'resend')
   apiKey?: string
   apiUrl?: string
   options?: Record<string, unknown>
@@ -73,7 +73,7 @@ export interface MessagePayload {
 
   // Interactive (for questions/approvals)
   actions?: MessageAction[]
-  schema?: unknown  // SimpleSchema from ai-functions
+  schema?: unknown // SimpleSchema from ai-functions
   timeout?: number
 }
 
@@ -246,8 +246,17 @@ export function resolveAddress(contacts: Contacts, channel: ContactChannel): Add
 export function resolveWorkerAddresses(worker: Worker): Address[] {
   const addresses: Address[] = []
   const channels: ContactChannel[] = [
-    'email', 'slack', 'teams', 'discord', 'phone', 'sms',
-    'whatsapp', 'telegram', 'web', 'api', 'webhook',
+    'email',
+    'slack',
+    'teams',
+    'discord',
+    'phone',
+    'sms',
+    'whatsapp',
+    'telegram',
+    'web',
+    'api',
+    'webhook',
   ]
 
   for (const channel of channels) {
@@ -365,9 +374,7 @@ export async function sendToMultipleTransports(
   configs?: Record<Transport, TransportConfig>
 ): Promise<DeliveryResult[]> {
   const results = await Promise.all(
-    transports.map(transport =>
-      sendViaTransport(transport, payload, configs?.[transport])
-    )
+    transports.map((transport) => sendViaTransport(transport, payload, configs?.[transport]))
   )
   return results
 }
@@ -385,7 +392,7 @@ export function buildNotifyPayload(action: NotifyActionData): MessagePayload {
     body: action.message,
     type: 'notification',
     priority: action.priority || 'normal',
-    metadata: action.metadata,
+    ...(action.metadata !== undefined && { metadata: action.metadata }),
   }
 }
 
@@ -397,9 +404,9 @@ export function buildAskPayload(action: AskActionData): MessagePayload {
     to: resolveActionTarget(action.object),
     body: action.question,
     type: 'question',
-    schema: action.schema,
-    timeout: action.timeout,
-    metadata: action.metadata,
+    ...(action.schema !== undefined && { schema: action.schema }),
+    ...(action.timeout !== undefined && { timeout: action.timeout }),
+    ...(action.metadata !== undefined && { metadata: action.metadata }),
   }
 }
 
@@ -450,7 +457,7 @@ export const MessageTypeMapping = {
   discord: 'chat',
   whatsapp: 'text',
   telegram: 'text',
-  voice: 'voicemail',  // For voicemail messages
+  voice: 'voicemail', // For voicemail messages
 } as const
 
 /**
@@ -490,9 +497,7 @@ export function toDigitalToolsMessage(
 /**
  * Convert digital-tools Message to worker notification format
  */
-export function fromDigitalToolsMessage(
-  message: Record<string, unknown>
-): Partial<MessagePayload> {
+export function fromDigitalToolsMessage(message: Record<string, unknown>): Partial<MessagePayload> {
   return {
     to: message.to as string | string[],
     from: message.from as string | undefined,

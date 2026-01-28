@@ -11,7 +11,7 @@ import { createCacheKey, getDefaultCache } from './cache.js';
  * Default configuration
  */
 const DEFAULT_CONFIG = {
-    model: 'sonnet',
+    model: 'anthropic/claude-sonnet-4.5',
     cache: true,
     cacheTTL: 5 * 60 * 1000, // 5 minutes
 };
@@ -130,7 +130,7 @@ export async function generateProps(options) {
     }
     // Generate using AI
     const result = await generateObject({
-        model: model || config.model || 'sonnet',
+        model: model || config.model,
         schema: resolvedSchema,
         prompt: fullPrompt,
         system: system || config.system,
@@ -146,7 +146,7 @@ export async function generateProps(options) {
         props,
         cached: false,
         metadata: {
-            model: model || config.model || 'sonnet',
+            model: model || config.model,
             duration: Date.now() - startTime,
         },
     };

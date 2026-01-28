@@ -79,10 +79,15 @@ export function configureGoogleGenAI(options: {
   if (options.gatewayToken) gatewayToken = options.gatewayToken
 }
 
-function getConfig(): { apiKey: string; baseUrl: string; gatewayUrl?: string; gatewayToken?: string } {
+function getConfig(): {
+  apiKey: string
+  baseUrl: string
+  gatewayUrl?: string
+  gatewayToken?: string
+} {
   // Check for AI Gateway configuration
-  const gwUrl = gatewayUrl || process.env.AI_GATEWAY_URL
-  const gwToken = gatewayToken || process.env.AI_GATEWAY_TOKEN
+  const gwUrl = gatewayUrl || process.env['AI_GATEWAY_URL']
+  const gwToken = gatewayToken || process.env['AI_GATEWAY_TOKEN']
 
   // If using gateway, we don't need a direct API key
   if (gwUrl && gwToken) {
@@ -94,13 +99,13 @@ function getConfig(): { apiKey: string; baseUrl: string; gatewayUrl?: string; ga
     }
   }
 
-  const key = googleApiKey || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+  const key = googleApiKey || process.env['GOOGLE_API_KEY'] || process.env['GEMINI_API_KEY']
   if (!key) {
     throw new Error(
       'Google API key not configured. Set GOOGLE_API_KEY or GEMINI_API_KEY, or use AI_GATEWAY_URL and AI_GATEWAY_TOKEN'
     )
   }
-  return { apiKey: key, baseUrl: googleBaseUrl, gatewayUrl: undefined, gatewayToken: undefined }
+  return { apiKey: key, baseUrl: googleBaseUrl }
 }
 
 // ============================================================================
@@ -158,7 +163,7 @@ const googleAdapter: BatchAdapter = {
       completedItems: 0,
       failedItems: 0,
       createdAt: new Date(),
-      webhookUrl: options.webhookUrl,
+      ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
     }
 
     return { job, completion }
@@ -181,7 +186,7 @@ const googleAdapter: BatchAdapter = {
       completedItems,
       failedItems,
       createdAt: job.createdAt,
-      completedAt: job.completedAt,
+      ...(job.completedAt && { completedAt: job.completedAt }),
     }
   },
 
@@ -325,7 +330,9 @@ async function processGoogleItem(item: BatchItem, model: string): Promise<BatchR
   if (item.options?.system) {
     contents.push({
       role: 'user',
-      parts: [{ text: `System instruction: ${item.options.system}\n\nUser request: ${item.prompt}` }],
+      parts: [
+        { text: `System instruction: ${item.options.system}\n\nUser request: ${item.prompt}` },
+      ],
     })
   } else {
     contents.push({
@@ -338,14 +345,14 @@ async function processGoogleItem(item: BatchItem, model: string): Promise<BatchR
     contents,
     generationConfig: {
       maxOutputTokens: item.options?.maxTokens || 8192,
-      temperature: item.options?.temperature,
+      ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
     },
   }
 
   // Add JSON mode if schema is provided
   if (item.schema) {
-    body.generationConfig = {
-      ...(body.generationConfig as object),
+    body['generationConfig'] = {
+      ...(body['generationConfig'] as object),
       responseMimeType: 'application/json',
     }
   }
@@ -371,7 +378,10 @@ async function processGoogleItem(item: BatchItem, model: string): Promise<BatchR
   let result: unknown = content
 
   // Try to parse JSON if schema was provided or content looks like JSON
-  if (content && (item.schema || content.trim().startsWith('{') || content.trim().startsWith('['))) {
+  if (
+    content &&
+    (item.schema || content.trim().startsWith('{') || content.trim().startsWith('['))
+  ) {
     try {
       result = JSON.parse(content)
     } catch {
@@ -384,13 +394,13 @@ async function processGoogleItem(item: BatchItem, model: string): Promise<BatchR
     customId: item.id,
     status: 'completed',
     result,
-    usage: data.usageMetadata
-      ? {
-          promptTokens: data.usageMetadata.promptTokenCount,
-          completionTokens: data.usageMetadata.candidatesTokenCount,
-          totalTokens: data.usageMetadata.totalTokenCount,
-        }
-      : undefined,
+    ...(data.usageMetadata && {
+      usage: {
+        promptTokens: data.usageMetadata.promptTokenCount,
+        completionTokens: data.usageMetadata.candidatesTokenCount,
+        totalTokens: data.usageMetadata.totalTokenCount,
+      },
+    }),
   }
 }
 
@@ -414,7 +424,9 @@ async function processGoogleItemViaGateway(
   if (item.options?.system) {
     contents.push({
       role: 'user',
-      parts: [{ text: `System instruction: ${item.options.system}\n\nUser request: ${item.prompt}` }],
+      parts: [
+        { text: `System instruction: ${item.options.system}\n\nUser request: ${item.prompt}` },
+      ],
     })
   } else {
     contents.push({
@@ -427,13 +439,13 @@ async function processGoogleItemViaGateway(
     contents,
     generationConfig: {
       maxOutputTokens: item.options?.maxTokens || 8192,
-      temperature: item.options?.temperature,
+      ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
     },
   }
 
   if (item.schema) {
-    body.generationConfig = {
-      ...(body.generationConfig as object),
+    body['generationConfig'] = {
+      ...(body['generationConfig'] as object),
       responseMimeType: 'application/json',
     }
   }
@@ -458,7 +470,10 @@ async function processGoogleItemViaGateway(
 
   let result: unknown = content
 
-  if (content && (item.schema || content.trim().startsWith('{') || content.trim().startsWith('['))) {
+  if (
+    content &&
+    (item.schema || content.trim().startsWith('{') || content.trim().startsWith('['))
+  ) {
     try {
       result = JSON.parse(content)
     } catch {
@@ -471,13 +486,13 @@ async function processGoogleItemViaGateway(
     customId: item.id,
     status: 'completed',
     result,
-    usage: data.usageMetadata
-      ? {
-          promptTokens: data.usageMetadata.promptTokenCount,
-          completionTokens: data.usageMetadata.candidatesTokenCount,
-          totalTokens: data.usageMetadata.totalTokenCount,
-        }
-      : undefined,
+    ...(data.usageMetadata && {
+      usage: {
+        promptTokens: data.usageMetadata.promptTokenCount,
+        completionTokens: data.usageMetadata.candidatesTokenCount,
+        totalTokens: data.usageMetadata.totalTokenCount,
+      },
+    }),
   }
 }
 

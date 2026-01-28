@@ -308,7 +308,7 @@ export class BatchQueue {
     for (const item of this.items) {
       if (item.status === 'failed') {
         item.status = 'pending'
-        item.error = undefined
+        delete item.error
       }
     }
 
@@ -335,9 +335,9 @@ export class BatchQueue {
     const item: BatchItem<T> = {
       id: options?.customId || `item_${++this.idCounter}`,
       prompt,
-      schema: options?.schema,
-      options: options?.options,
-      metadata: options?.metadata,
+      ...(options?.schema !== undefined && { schema: options.schema }),
+      ...(options?.options !== undefined && { options: options.options }),
+      ...(options?.metadata !== undefined && { metadata: options.metadata }),
       status: 'pending',
     }
 
@@ -451,8 +451,8 @@ export class BatchQueue {
         const item = this.items.find((i) => i.id === r.id)
         if (item) {
           item.status = r.status
-          item.result = r.result
-          item.error = r.error
+          if (r.result !== undefined) item.result = r.result
+          if (r.error !== undefined) item.error = r.error
 
           if (r.status === 'failed') {
             failedResults.push(r)
@@ -750,8 +750,8 @@ export function deferToBatch<T>(
   options?: FunctionOptions & { customId?: string }
 ): BatchItem<T> {
   return batch.add<T>(prompt, {
-    schema,
-    options,
-    customId: options?.customId,
+    ...(schema !== undefined && { schema }),
+    ...(options !== undefined && { options }),
+    ...(options?.customId !== undefined && { customId: options.customId }),
   })
 }

@@ -157,7 +157,7 @@ export class MemoryCache<T> implements CacheStorage<T> {
       createdAt: now,
       lastAccessedAt: now,
       accessCount: 0,
-      expiresAt: ttl ? now + ttl : undefined
+      ...(ttl ? { expiresAt: now + ttl } : {}),
     }
 
     // Check if we need to evict (LRU)
@@ -247,7 +247,7 @@ export class MemoryCache<T> implements CacheStorage<T> {
   dispose(): void {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer)
-      this.cleanupTimer = undefined
+      delete this.cleanupTimer
     }
   }
 
@@ -311,14 +311,12 @@ export class MemoryCache<T> implements CacheStorage<T> {
  * Uses a fast, non-cryptographic hash suitable for cache keys
  */
 export function hashKey(input: unknown): string {
-  const str = typeof input === 'string'
-    ? input
-    : stableStringify(input)
+  const str = typeof input === 'string' ? input : stableStringify(input)
 
   // Simple djb2 hash
   let hash = 5381
   for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) + hash) + str.charCodeAt(i)
+    hash = (hash << 5) + hash + str.charCodeAt(i)
     hash = hash & hash // Convert to 32bit integer
   }
 
@@ -338,7 +336,7 @@ function stableStringify(obj: unknown): string {
   }
 
   const keys = Object.keys(obj).sort()
-  const pairs = keys.map(key => {
+  const pairs = keys.map((key) => {
     return JSON.stringify(key) + ':' + stableStringify((obj as Record<string, unknown>)[key])
   })
 
@@ -418,7 +416,11 @@ export class EmbeddingCache {
   /**
    * Set multiple embeddings at once
    */
-  async setMany(texts: string[], embeddings: number[][], options: EmbeddingCacheOptions): Promise<void> {
+  async setMany(
+    texts: string[],
+    embeddings: number[][],
+    options: EmbeddingCacheOptions
+  ): Promise<void> {
     for (let i = 0; i < texts.length; i++) {
       await this.set(texts[i]!, embeddings[i]!, options)
     }
@@ -459,7 +461,7 @@ export class EmbeddingCache {
       hits: this.stats.hits,
       misses: this.stats.misses,
       hitRate: total > 0 ? this.stats.hits / total : 0,
-      size: this.storage['cache'].size
+      size: this.storage['cache'].size,
     }
   }
 
@@ -514,7 +516,10 @@ export class GenerationCache {
   /**
    * Get a cached generation result
    */
-  async get<T = unknown>(params: GenerationParams, options?: GenerationCacheGetOptions): Promise<T | undefined> {
+  async get<T = unknown>(
+    params: GenerationParams,
+    options?: GenerationCacheGetOptions
+  ): Promise<T | undefined> {
     if (options?.bypass) {
       return undefined
     }
@@ -548,7 +553,7 @@ export class GenerationCache {
       hits: this.stats.hits,
       misses: this.stats.misses,
       hitRate: total > 0 ? this.stats.hits / total : 0,
-      size: this.storage['cache'].size
+      size: this.storage['cache'].size,
     }
   }
 
@@ -566,19 +571,19 @@ export class GenerationCache {
   private createKey(params: GenerationParams): string {
     const keyParams: Record<string, unknown> = {
       prompt: params.prompt,
-      model: params.model
+      model: params.model,
     }
 
     if (params.system !== undefined) {
-      keyParams.system = params.system
+      keyParams['system'] = params.system
     }
 
     if (params.temperature !== undefined) {
-      keyParams.temperature = params.temperature
+      keyParams['temperature'] = params.temperature
     }
 
     if (params.schemaVersion !== undefined) {
-      keyParams.schemaVersion = params.schemaVersion
+      keyParams['schemaVersion'] = params.schemaVersion
     }
 
     return createCacheKey('generation', keyParams)
@@ -631,7 +636,7 @@ export function withCache<TArgs extends unknown[], TResult>(
     const result = await fn(...args)
 
     // Cache result (don't cache errors - they throw before reaching here)
-    await cache.set(key, result, { ttl })
+    await cache.set(key, result, ttl !== undefined ? { ttl } : undefined)
 
     return result
   }
@@ -644,7 +649,7 @@ export function withCache<TArgs extends unknown[], TResult>(
     const result = await fn(...args)
 
     // Update cache with new result
-    await cache.set(key, result, { ttl })
+    await cache.set(key, result, ttl !== undefined ? { ttl } : undefined)
 
     return result
   }

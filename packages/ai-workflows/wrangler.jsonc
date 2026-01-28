@@ -1,0 +1,22 @@
+{
+  // Wrangler configuration for ai-workflows worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+  //
+  // Configures Cloudflare Workflows binding for testing DurableStep
+  // with real Workflows runtime semantics.
+
+  "name": "ai-workflows",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // Cloudflare Workflows binding
+  // This binds the TestWorkflow class to WORKFLOW for testing DurableStep
+  "workflows": [
+    {
+      "name": "test-workflow",
+      "binding": "WORKFLOW",
+      "class_name": "TestWorkflow"
+    }
+  ]
+}

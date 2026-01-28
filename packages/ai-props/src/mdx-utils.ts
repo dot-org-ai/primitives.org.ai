@@ -71,12 +71,16 @@ export function parseYAML(yaml: string): Record<string, unknown> {
   const result: Record<string, unknown> = {}
   const lines = yaml.trim().split('\n')
 
-  // Stack for tracking nested objects: { obj, indent }
-  const stack: Array<{ obj: Record<string, unknown>; indent: number; key: string }> = []
+  // Stack for tracking nested objects
+  // Each entry stores: the parent object, the parent indent level, and the current object's indent
+  const stack: Array<{
+    parentObj: Record<string, unknown>
+    parentIndent: number
+    thisIndent: number
+  }> = []
   let currentObj: Record<string, unknown> = result
-  let currentIndent = 0
+  let currentIndent = -1 // Use -1 for root level
   let currentArray: unknown[] | null = null
-  let currentArrayKey: string | null = null
 
   for (const line of lines) {
     // Skip empty lines
@@ -86,16 +90,12 @@ export function parseYAML(yaml: string): Record<string, unknown> {
     const indentMatch = line.match(/^(\s*)/)
     const indent = indentMatch && indentMatch[1] !== undefined ? indentMatch[1].length : 0
 
-    // Pop stack if we've dedented
-    while (stack.length > 0 && indent <= stack[stack.length - 1]!.indent) {
+    // Pop stack if we've dedented (back to a parent level or sibling)
+    while (stack.length > 0 && indent <= stack[stack.length - 1]!.thisIndent) {
       const popped = stack.pop()!
-      currentObj = stack.length > 0 ? stack[stack.length - 1]!.obj : result
-      currentIndent = stack.length > 0 ? stack[stack.length - 1]!.indent : 0
-      // Reset array tracking when dedenting
-      if (currentArray !== null && indent <= currentIndent) {
-        currentArray = null
-        currentArrayKey = null
-      }
+      currentObj = popped.parentObj
+      currentIndent = popped.parentIndent
+      currentArray = null
     }
 
     // Check for array item
@@ -121,22 +121,23 @@ export function parseYAML(yaml: string): Record<string, unknown> {
         if (nextLine && nextLine.trim().startsWith('-')) {
           // It's an array
           currentArray = []
-          currentArrayKey = key
           currentObj[key] = currentArray
         } else {
           // It's a nested object
           const nestedObj: Record<string, unknown> = {}
           currentObj[key] = nestedObj
-          stack.push({ obj: currentObj, indent, key })
+          stack.push({
+            parentObj: currentObj,
+            parentIndent: currentIndent,
+            thisIndent: indent,
+          })
           currentObj = nestedObj
           currentIndent = indent
           currentArray = null
-          currentArrayKey = null
         }
       } else {
         currentObj[key] = parseYAMLValue(value)
         currentArray = null
-        currentArrayKey = null
       }
     }
   }

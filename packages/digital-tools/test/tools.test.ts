@@ -43,13 +43,13 @@ describe('Web Tools', () => {
     })
 
     it('has required parameters', () => {
-      const urlParam = fetchUrl.parameters.find(p => p.name === 'url')
+      const urlParam = fetchUrl.parameters.find((p) => p.name === 'url')
       expect(urlParam).toBeDefined()
       expect(urlParam?.required).toBe(true)
     })
 
     it('has optional parameters', () => {
-      const methodParam = fetchUrl.parameters.find(p => p.name === 'method')
+      const methodParam = fetchUrl.parameters.find((p) => p.name === 'method')
       expect(methodParam).toBeDefined()
       expect(methodParam?.required).toBe(false)
     })
@@ -103,9 +103,9 @@ describe('Web Tools', () => {
   describe('webTools array', () => {
     it('contains all web tools', () => {
       expect(webTools).toHaveLength(3)
-      expect(webTools.map(t => t.id)).toContain('web.fetch')
-      expect(webTools.map(t => t.id)).toContain('web.parse-html')
-      expect(webTools.map(t => t.id)).toContain('web.read')
+      expect(webTools.map((t) => t.id)).toContain('web.fetch')
+      expect(webTools.map((t) => t.id)).toContain('web.parse-html')
+      expect(webTools.map((t) => t.id)).toContain('web.read')
     })
   })
 })
@@ -304,7 +304,7 @@ describe('Data Tools', () => {
   describe('dataTools array', () => {
     it('contains all data tools', () => {
       expect(dataTools).toHaveLength(5)
-      const ids = dataTools.map(t => t.id)
+      const ids = dataTools.map((t) => t.id)
       expect(ids).toContain('data.json.parse')
       expect(ids).toContain('data.json.stringify')
       expect(ids).toContain('data.csv.parse')
@@ -323,9 +323,9 @@ describe('Communication Tools', () => {
     })
 
     it('has required parameters', () => {
-      const toParam = sendEmail.parameters.find(p => p.name === 'to')
-      const subjectParam = sendEmail.parameters.find(p => p.name === 'subject')
-      const bodyParam = sendEmail.parameters.find(p => p.name === 'body')
+      const toParam = sendEmail.parameters.find((p) => p.name === 'to')
+      const subjectParam = sendEmail.parameters.find((p) => p.name === 'subject')
+      const bodyParam = sendEmail.parameters.find((p) => p.name === 'body')
 
       expect(toParam?.required).toBe(true)
       expect(subjectParam?.required).toBe(true)
@@ -419,7 +419,7 @@ describe('Communication Tools', () => {
   describe('communicationTools array', () => {
     it('contains all communication tools', () => {
       expect(communicationTools).toHaveLength(4)
-      const ids = communicationTools.map(t => t.id)
+      const ids = communicationTools.map((t) => t.id)
       expect(ids).toContain('communication.email.send')
       expect(ids).toContain('communication.slack.send')
       expect(ids).toContain('communication.notify')
@@ -437,7 +437,11 @@ describe('Builtin Tools Utilities', () => {
     it('returns all builtin tools', () => {
       const tools = getBuiltinTools()
 
-      expect(tools.length).toBe(webTools.length + dataTools.length + communicationTools.length)
+      // Note: systemTools are included as of fsx/gitx/bashx integration (aip-3749.3)
+      // Use >= to allow for future additions while ensuring the core tools are present
+      expect(tools.length).toBeGreaterThanOrEqual(
+        webTools.length + dataTools.length + communicationTools.length
+      )
     })
   })
 

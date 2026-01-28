@@ -10,6 +10,11 @@
   "compatibility_date": "2025-01-20",
   "compatibility_flags": ["nodejs_compat_v2"],
 
+  // AI Gateway binding for embeddings
+  "ai": {
+    "binding": "AI"
+  },
+
   // Durable Objects for database storage
   "durable_objects": {
     "bindings": [

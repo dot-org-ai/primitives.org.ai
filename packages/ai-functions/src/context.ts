@@ -165,20 +165,20 @@ function getEnvContext(): ExecutionContext {
   const context: ExecutionContext = {}
 
   // Model defaults
-  if (process.env.AI_MODEL) {
-    context.model = process.env.AI_MODEL
+  if (process.env['AI_MODEL']) {
+    context.model = process.env['AI_MODEL']
   }
 
   // Provider defaults
-  if (process.env.AI_PROVIDER) {
-    context.provider = process.env.AI_PROVIDER
-  } else if (process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+  if (process.env['AI_PROVIDER']) {
+    context.provider = process.env['AI_PROVIDER']
+  } else if (process.env['ANTHROPIC_API_KEY'] && !process.env['OPENAI_API_KEY']) {
     context.provider = 'anthropic'
-  } else if (process.env.OPENAI_API_KEY) {
+  } else if (process.env['OPENAI_API_KEY']) {
     context.provider = 'openai'
-  } else if (process.env.CLOUDFLARE_API_TOKEN) {
+  } else if (process.env['CLOUDFLARE_API_TOKEN']) {
     context.provider = 'cloudflare'
-  } else if (process.env.AWS_ACCESS_KEY_ID) {
+  } else if (process.env['AWS_ACCESS_KEY_ID']) {
     context.provider = 'bedrock'
   }
 
@@ -191,23 +191,23 @@ function getEnvBatchContext(): Partial<ExecutionContext> {
   const context: Partial<ExecutionContext> = {}
 
   // Batch mode
-  if (process.env.AI_BATCH_MODE) {
-    context.batchMode = process.env.AI_BATCH_MODE as BatchMode
+  if (process.env['AI_BATCH_MODE']) {
+    context.batchMode = process.env['AI_BATCH_MODE'] as BatchMode
   }
 
   // Flex threshold (when to start using flex processing)
-  if (process.env.AI_FLEX_THRESHOLD) {
-    context.flexThreshold = parseInt(process.env.AI_FLEX_THRESHOLD, 10)
+  if (process.env['AI_FLEX_THRESHOLD']) {
+    context.flexThreshold = parseInt(process.env['AI_FLEX_THRESHOLD'], 10)
   }
 
   // Batch threshold (when to switch from flex to full batch)
-  if (process.env.AI_BATCH_THRESHOLD) {
-    context.batchThreshold = parseInt(process.env.AI_BATCH_THRESHOLD, 10)
+  if (process.env['AI_BATCH_THRESHOLD']) {
+    context.batchThreshold = parseInt(process.env['AI_BATCH_THRESHOLD'], 10)
   }
 
   // Webhook URL
-  if (process.env.AI_BATCH_WEBHOOK_URL) {
-    context.webhookUrl = process.env.AI_BATCH_WEBHOOK_URL
+  if (process.env['AI_BATCH_WEBHOOK_URL']) {
+    context.webhookUrl = process.env['AI_BATCH_WEBHOOK_URL']
   }
 
   return context

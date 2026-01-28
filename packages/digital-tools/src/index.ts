@@ -72,12 +72,7 @@ export {
 } from './registry.js'
 
 // Export tool definition helpers
-export {
-  defineTool,
-  defineAndRegister,
-  createToolExecutor,
-  toolBuilder,
-} from './define.js'
+export { defineTool, defineAndRegister, createToolExecutor, toolBuilder } from './define.js'
 
 // Export pre-built tools
 export {
@@ -101,6 +96,39 @@ export {
   sendNotification,
   sendSms,
   communicationTools,
+
+  // System tools (fsx.do, gitx.do, bashx.do integration)
+  // Filesystem (fsx.do)
+  fsRead,
+  fsWrite,
+  fsList,
+  fsDelete,
+  fsGlob,
+  fsGrep,
+  fsxTools,
+
+  // Git (gitx.do)
+  gitInit,
+  gitClone,
+  gitStatus,
+  gitAdd,
+  gitCommit,
+  gitLog,
+  gitDiff,
+  gitCheckout,
+  gitPush,
+  gitPull,
+  gitxTools,
+
+  // Bash (bashx.do)
+  bashExec,
+  bashAnalyze,
+  bashScript,
+  bashEnv,
+  bashxTools,
+
+  // All system tools
+  systemTools,
 } from './tools/index.js'
 
 // Export providers (concrete implementations using third-party APIs)
@@ -158,12 +186,13 @@ import { registry } from './registry.js'
 import { webTools } from './tools/web.js'
 import { dataTools } from './tools/data.js'
 import { communicationTools } from './tools/communication.js'
+import { systemTools } from './tools/system.js'
 
 /**
  * Register all built-in tools in the global registry
  */
 export function registerBuiltinTools(): void {
-  for (const tool of [...webTools, ...dataTools, ...communicationTools]) {
+  for (const tool of [...webTools, ...dataTools, ...communicationTools, ...systemTools]) {
     registry.register(tool)
   }
 }
@@ -172,5 +201,5 @@ export function registerBuiltinTools(): void {
  * Get all built-in tools
  */
 export function getBuiltinTools() {
-  return [...webTools, ...dataTools, ...communicationTools]
+  return [...webTools, ...dataTools, ...communicationTools, ...systemTools]
 }

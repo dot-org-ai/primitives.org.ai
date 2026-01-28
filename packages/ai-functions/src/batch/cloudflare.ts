@@ -95,18 +95,24 @@ export function configureCloudflare(options: {
 }
 
 function getConfig(): { accountId: string; gatewayId: string; apiToken: string } {
-  const accId = accountId || process.env.CLOUDFLARE_ACCOUNT_ID
-  const gwId = gatewayId || process.env.CLOUDFLARE_AI_GATEWAY_ID || process.env.AI_GATEWAY_ID
-  const token = apiToken || process.env.CLOUDFLARE_API_TOKEN
+  const accId = accountId || process.env['CLOUDFLARE_ACCOUNT_ID']
+  const gwId = gatewayId || process.env['CLOUDFLARE_AI_GATEWAY_ID'] || process.env['AI_GATEWAY_ID']
+  const token = apiToken || process.env['CLOUDFLARE_API_TOKEN']
 
   if (!accId) {
-    throw new Error('Cloudflare account ID not configured. Set CLOUDFLARE_ACCOUNT_ID or call configureCloudflare()')
+    throw new Error(
+      'Cloudflare account ID not configured. Set CLOUDFLARE_ACCOUNT_ID or call configureCloudflare()'
+    )
   }
   if (!gwId) {
-    throw new Error('Cloudflare AI Gateway ID not configured. Set CLOUDFLARE_AI_GATEWAY_ID or call configureCloudflare()')
+    throw new Error(
+      'Cloudflare AI Gateway ID not configured. Set CLOUDFLARE_AI_GATEWAY_ID or call configureCloudflare()'
+    )
   }
   if (!token) {
-    throw new Error('Cloudflare API token not configured. Set CLOUDFLARE_API_TOKEN or call configureCloudflare()')
+    throw new Error(
+      'Cloudflare API token not configured. Set CLOUDFLARE_API_TOKEN or call configureCloudflare()'
+    )
   }
 
   return { accountId: accId, gatewayId: gwId, apiToken: token }
@@ -126,7 +132,7 @@ async function cloudflareRequest<T>(
       Authorization: `Bearer ${config.apiToken}`,
       'Content-Type': 'application/json',
     },
-    body: body ? JSON.stringify(body) : undefined,
+    ...(body !== undefined && { body: JSON.stringify(body) }),
   })
 
   if (!response.ok) {
@@ -134,7 +140,7 @@ async function cloudflareRequest<T>(
     throw new Error(`Cloudflare API error: ${response.status} ${error}`)
   }
 
-  const data = await response.json() as { success: boolean; result: T; errors?: unknown[] }
+  const data = (await response.json()) as { success: boolean; result: T; errors?: unknown[] }
   if (!data.success) {
     throw new Error(`Cloudflare API error: ${JSON.stringify(data.errors)}`)
   }
@@ -146,14 +152,17 @@ async function cloudflareRequest<T>(
 // In-memory job storage (for polling)
 // ============================================================================
 
-const pendingJobs = new Map<string, {
-  items: BatchItem[]
-  options: BatchQueueOptions
-  results: BatchResult[]
-  status: BatchStatus
-  createdAt: Date
-  completedAt?: Date
-}>()
+const pendingJobs = new Map<
+  string,
+  {
+    items: BatchItem[]
+    options: BatchQueueOptions
+    results: BatchResult[]
+    status: BatchStatus
+    createdAt: Date
+    completedAt?: Date
+  }
+>()
 
 let jobCounter = 0
 
@@ -198,7 +207,7 @@ const cloudflareAdapter: BatchAdapter = {
       completedItems: 0,
       failedItems: 0,
       createdAt: new Date(),
-      webhookUrl: options.webhookUrl,
+      ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
     }
 
     return { job, completion }
@@ -221,7 +230,7 @@ const cloudflareAdapter: BatchAdapter = {
       completedItems,
       failedItems,
       createdAt: job.createdAt,
-      completedAt: job.completedAt,
+      ...(job.completedAt && { completedAt: job.completedAt }),
     }
   },
 
@@ -343,12 +352,12 @@ async function processCloudflareItem(
     model: model.replace(`${provider}/`, ''),
     messages,
     max_tokens: item.options?.maxTokens || 4096,
-    temperature: item.options?.temperature,
+    ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
   }
 
   // Add JSON mode if schema is provided
   if (item.schema) {
-    body.response_format = { type: 'json_object' }
+    body['response_format'] = { type: 'json_object' }
   }
 
   const response = await fetch(url, {
@@ -365,7 +374,7 @@ async function processCloudflareItem(
     throw new Error(`Cloudflare Gateway error: ${response.status} ${error}`)
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     choices?: Array<{ message: { content: string } }>
     content?: Array<{ text: string }>
     response?: string
@@ -402,13 +411,13 @@ async function processCloudflareItem(
     customId: item.id,
     status: 'completed',
     result,
-    usage: data.usage
-      ? {
-          promptTokens: data.usage.prompt_tokens,
-          completionTokens: data.usage.completion_tokens,
-          totalTokens: data.usage.total_tokens,
-        }
-      : undefined,
+    ...(data.usage && {
+      usage: {
+        promptTokens: data.usage.prompt_tokens,
+        completionTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens,
+      },
+    }),
   }
 }
 

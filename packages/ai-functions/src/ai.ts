@@ -265,7 +265,7 @@ function createSchemaFunctions<T extends Record<string, SimpleSchema>>(
         model,
         schema,
         prompt: schemaPrompt,
-        system,
+        ...(system !== undefined && { system }),
         ...rest,
       })
 
@@ -430,7 +430,9 @@ async function executeCodeFunction<TInput>(
   definition: CodeFunctionDefinition<unknown, TInput>,
   args: TInput
 ): Promise<string> {
-  const { name, description, language = 'typescript', instructions, model = 'sonnet' } = definition
+  const { name, description, language = 'typescript', instructions } = definition
+  const model =
+    'model' in definition ? (definition as { model?: string }).model ?? 'sonnet' : 'sonnet'
 
   const argsDescription = JSON.stringify(args, null, 2)
 
@@ -479,9 +481,9 @@ async function executeGenerativeFunction<TOutput, TInput>(
       const result = await generateObject({
         model,
         schema: { text: 'The generated text response' },
-        system,
         prompt,
-        temperature,
+        ...(system !== undefined && { system }),
+        ...(temperature !== undefined && { temperature }),
       })
       return (result.object as { text: string }).text as TOutput
     }
@@ -491,9 +493,9 @@ async function executeGenerativeFunction<TOutput, TInput>(
       const result = await generateObject({
         model,
         schema: objectSchema as SimpleSchemaType,
-        system,
         prompt,
-        temperature,
+        ...(system !== undefined && { system }),
+        ...(temperature !== undefined && { temperature }),
       })
       return result.object as TOutput
     }
@@ -688,7 +690,7 @@ async function executeHumanFunction<TOutput, TInput>(
 
   const result = await generateObject({
     model: 'sonnet',
-    schema: uiSchema[channel] ?? uiSchema.custom,
+    schema: uiSchema[channel] ?? uiSchema['custom'],
     system: `Generate ${channel} UI/content for a human-in-the-loop task.`,
     prompt: `Task: ${instructions}
 
@@ -765,8 +767,8 @@ export function configureAI(options: AIClientOptions): void {
 function getDefaultAIClient(): AIClient {
   if (!defaultClient) {
     // Try to auto-configure from environment
-    const wsUrl = typeof process !== 'undefined' ? process.env?.AI_WS_URL : undefined
-    const httpUrl = typeof process !== 'undefined' ? process.env?.AI_HTTP_URL : undefined
+    const wsUrl = typeof process !== 'undefined' ? process.env?.['AI_WS_URL'] : undefined
+    const httpUrl = typeof process !== 'undefined' ? process.env?.['AI_HTTP_URL'] : undefined
 
     if (wsUrl) {
       // Explicitly type the options to call the correct AI() overload.

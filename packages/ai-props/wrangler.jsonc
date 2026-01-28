@@ -1,0 +1,27 @@
+{
+  // Wrangler configuration for ai-props worker tests
+  // Used by @cloudflare/vitest-pool-workers for testing
+  //
+  // The PropsService class extends WorkerEntrypoint and provides
+  // AI-powered props generation via RPC.
+
+  "name": "ai-props",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  // AI binding for Cloudflare Workers AI
+  // Enables real AI Gateway access in tests
+  "ai": {
+    "binding": "AI"
+  },
+
+  // Service binding to self for capnweb RPC testing
+  // This allows tests to access PropsService via RPC
+  "services": [
+    {
+      "binding": "PROPS",
+      "service": "ai-props"
+    }
+  ]
+}

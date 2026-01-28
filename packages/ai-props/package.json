@@ -17,6 +17,14 @@
     "./mdx": {
       "import": "./dist/mdx.js",
       "types": "./dist/mdx.d.ts"
+    },
+    "./streaming": {
+      "import": "./dist/streaming.js",
+      "types": "./dist/streaming.d.ts"
+    },
+    "./rpc": {
+      "import": "./dist/rpc.js",
+      "types": "./dist/rpc.d.ts"
     }
   },
   "scripts": {
@@ -29,7 +37,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*"
+    "ai-functions": "workspace:*",
+    "ai-providers": "workspace:*",
+    "language-models": "workspace:*",
+    "hono": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

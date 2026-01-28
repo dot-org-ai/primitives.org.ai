@@ -100,11 +100,7 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
   /** Cached resolver promise */
   private _resolver: Promise<T[]> | null = null
 
-  constructor(
-    items: unknown[],
-    operations: CapturedOperation[][],
-    options: BatchMapOptions = {}
-  ) {
+  constructor(items: unknown[], operations: CapturedOperation[][], options: BatchMapOptions = {}) {
     this._items = items
     this._operations = operations
     this._options = options
@@ -144,7 +140,9 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
         if (isFlexAvailable()) {
           return this._resolveViaFlex()
         }
-        console.warn(`Flex processing not available for ${getProvider()}, using immediate execution`)
+        console.warn(
+          `Flex processing not available for ${getProvider()}, using immediate execution`
+        )
         return this._resolveImmediately()
 
       case 'batch':
@@ -186,8 +184,8 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
           batchItems.push({
             id,
             prompt,
-            schema: op.schema,
-            options: { system: op.system, model },
+            ...(op.schema !== undefined && { schema: op.schema }),
+            options: Object.assign({ model }, op.system !== undefined ? { system: op.system } : {}),
             status: 'pending',
           })
 
@@ -219,7 +217,9 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
       adapter = getBatchAdapter(provider)
     } catch {
       // Adapter not registered, fall back to immediate execution
-      console.warn(`Batch adapter for ${provider} not available, falling back to immediate execution`)
+      console.warn(
+        `Batch adapter for ${provider} not available, falling back to immediate execution`
+      )
       return this._resolveImmediately()
     }
 
@@ -243,8 +243,8 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
         batchItems.push({
           id,
           prompt,
-          schema: op.schema,
-          options: { system: op.system, model },
+          ...(op.schema !== undefined && { schema: op.schema }),
+          options: Object.assign({ model }, op.system !== undefined ? { system: op.system } : {}),
           status: 'pending',
         })
 
@@ -256,15 +256,15 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
     const batch = createBatch({
       provider,
       model,
-      webhookUrl: ctx.webhookUrl,
-      metadata: ctx.metadata,
+      ...(ctx.webhookUrl !== undefined && { webhookUrl: ctx.webhookUrl }),
+      ...(ctx.metadata !== undefined && { metadata: ctx.metadata }),
     })
 
     for (const item of batchItems) {
       batch.add(item.prompt, {
-        schema: item.schema,
-        options: item.options,
-        customId: item.id,
+        ...(item.schema !== undefined && { schema: item.schema }),
+        ...(item.options !== undefined && { options: item.options }),
+        ...(item.id !== undefined && { customId: item.id }),
       })
     }
 
@@ -324,7 +324,11 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
   ): Promise<unknown> {
     switch (op.type) {
       case 'text':
-        const textResult = await generateText({ model, prompt, system: op.system })
+        const textResult = await generateText({
+          model,
+          prompt,
+          ...(op.system !== undefined && { system: op.system }),
+        })
         return textResult.text
 
       case 'boolean':
@@ -341,7 +345,7 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
           model,
           schema: { items: ['List items'] },
           prompt,
-          system: op.system,
+          ...(op.system !== undefined && { system: op.system }),
         })
         return (listResult.object as { items: string[] }).items
 
@@ -351,7 +355,7 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
           model,
           schema: op.schema || { result: 'The result' },
           prompt,
-          system: op.system,
+          ...(op.system !== undefined && { system: op.system }),
         })
         return objResult.object
     }
@@ -387,7 +391,7 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
       if (operations.length === 1) {
         results[itemIndex] = batchResult.result as T
       } else {
-        (results[itemIndex] as Record<string, unknown>)[`op_${opIndex}`] = batchResult.result
+        ;(results[itemIndex] as Record<string, unknown>)[`op_${opIndex}`] = batchResult.result
       }
     }
 
@@ -499,9 +503,9 @@ export function captureOperation(
     id: `op_${++operationCounter}`,
     prompt,
     itemPlaceholder: currentItemPlaceholder,
-    schema,
+    ...(schema !== undefined && { schema }),
     type,
-    system,
+    ...(system !== undefined && { system }),
   })
 }
 
