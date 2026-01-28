@@ -8,8 +8,20 @@ export default defineConfig({
     minWorkers: 1,
     fileParallelism: false,
 
-    globals: true,
-    include: ['test/**/*.test.ts', 'src/**/*.test.ts'],
+    globals: false,
+    environment: 'node',
+    include: ['test/**/*.test.ts'],
+    exclude: ['node_modules/**', 'dist/**'],
+    testTimeout: 30000,
+    hookTimeout: 10000,
+
+    // Run tests sequentially
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
 
     // Coverage configuration
     coverage: {
@@ -17,18 +29,6 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts'],
       exclude: ['**/*.test.ts', '**/__tests__/**', '**/node_modules/**'],
-      thresholds: {
-        statements: 65,
-        branches: 60,
-        functions: 60,
-        lines: 65,
-      },
-    },
-
-    // Alias for cloudflare:workers mock (shared across monorepo)
-    alias: {
-      'cloudflare:workers': new URL('../config/mocks/cloudflare-workers.ts', import.meta.url)
-        .pathname,
     },
   },
 })

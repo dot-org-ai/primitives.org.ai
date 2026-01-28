@@ -4,15 +4,26 @@
  * Primitives for building and orchestrating autonomous AI agents that operate
  * within a company boundary using the digital-workers interface.
  *
- * This module defines agent-specific types that are compatible with the
- * consolidated types from org.ai. For new projects, you can import from
- * 'org.ai/types' directly for the canonical type definitions.
+ * ## Type Migration Notes
+ *
+ * This package uses agent-specific types that are specialized versions of the
+ * consolidated types from org.ai/types. The key differences are:
+ *
+ * - **Role**: Local type uses `tools?: AIFunctionDefinition[]` for executable tools,
+ *   while org.ai uses `tools?: string[]` for tool name references.
+ * - **TeamMember**: Local type uses `role: Role` (required Role object),
+ *   while org.ai uses `role?: string` (optional role ID reference).
+ * - **Goal**: Local type uses different status values ('active' | 'completed' | 'blocked' | 'cancelled')
+ *   optimized for agent workflows.
+ *
+ * For new projects that need the canonical, interoperable types, import from 'org.ai/types'.
+ * The org.ai types are re-exported with 'Org' prefix for interoperability.
  */
 
 import type { AIFunctionDefinition, AIGenerateOptions, SimpleSchema } from 'ai-functions'
 
-// Re-export consolidated types from org.ai/types for new code
-// These are prefixed with 'Org' to distinguish from local types
+// Re-export consolidated types from org.ai/types for interoperability
+// Use these Org-prefixed types when you need compatibility with other packages
 export type {
   Role as OrgRole,
   Team as OrgTeam,
@@ -52,6 +63,11 @@ export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired'
 
 /**
  * Role definition for an agent or human worker
+ *
+ * This is an agent-specific role type that supports executable tool definitions.
+ * For interoperability with other packages, see `OrgRole` which uses string-based tool references.
+ *
+ * @see OrgRole - The canonical org.ai role type with string-based tools
  */
 export interface Role {
   /** Unique role identifier */
@@ -64,7 +80,7 @@ export interface Role {
   skills: string[]
   /** Permissions and access levels */
   permissions?: string[]
-  /** Tools available to this role */
+  /** Tools available to this role (executable function definitions) */
   tools?: AIFunctionDefinition[]
   /** Expected outputs from this role */
   outputs?: string[]
@@ -72,6 +88,11 @@ export interface Role {
 
 /**
  * Team composition and coordination
+ *
+ * This is an agent-specific team type where members have full Role objects.
+ * For interoperability with other packages, see `OrgTeam` which uses string-based role references.
+ *
+ * @see OrgTeam - The canonical org.ai team type with string-based roles
  */
 export interface Team {
   /** Unique team identifier */
@@ -80,7 +101,7 @@ export interface Team {
   name: string
   /** Team description and purpose */
   description?: string
-  /** Team members (agents and humans) */
+  /** Team members (agents and humans) with full Role objects */
   members: TeamMember[]
   /** Team goals */
   goals?: Goal[]
@@ -92,13 +113,18 @@ export interface Team {
 
 /**
  * Team member representation
+ *
+ * This is an agent-specific team member type where role is a full Role object.
+ * For interoperability with other packages, see `OrgTeamMember` which uses string-based role references.
+ *
+ * @see OrgTeamMember - The canonical org.ai team member type with string-based roles
  */
 export interface TeamMember {
   /** Member ID (agent or human) */
   id: string
   /** Member name */
   name: string
-  /** Member role on the team */
+  /** Member role on the team (full Role object with tools and skills) */
   role: Role
   /** Member type */
   type: 'agent' | 'human'
@@ -122,6 +148,11 @@ export interface CommunicationChannel {
 
 /**
  * Goal definition with measurable outcomes
+ *
+ * This is an agent-specific goal type optimized for agent workflows.
+ * For interoperability with other packages, see `OrgGoal` which has a richer status model.
+ *
+ * @see OrgGoal - The canonical org.ai goal type with comprehensive status tracking
  */
 export interface Goal {
   /** Unique goal identifier */
@@ -136,7 +167,7 @@ export interface Goal {
   deadline?: Date
   /** Goal priority */
   priority?: Priority
-  /** Goal status */
+  /** Goal status (agent workflow states) */
   status?: 'active' | 'completed' | 'blocked' | 'cancelled'
   /** Sub-goals */
   subgoals?: Goal[]
@@ -283,6 +314,11 @@ export interface AgentHistoryEntry {
 
 /**
  * Key Performance Indicator
+ *
+ * This is an agent-specific KPI type with optional fields.
+ * For interoperability with other packages, see `OrgKPI` which has required unit and target fields.
+ *
+ * @see OrgKPI - The canonical org.ai KPI type with stricter requirements
  */
 export interface KPI {
   /** KPI identifier */
@@ -307,6 +343,11 @@ export interface KPI {
 
 /**
  * Objectives and Key Results
+ *
+ * This is an agent-specific OKR type with required id field.
+ * For interoperability with other packages, see `OrgOKR` which has optional id.
+ *
+ * @see OrgOKR - The canonical org.ai OKR type
  */
 export interface OKR {
   /** OKR identifier */
@@ -329,6 +370,11 @@ export interface OKR {
 
 /**
  * Key Result within an OKR
+ *
+ * This is an agent-specific KeyResult type with required id and simplified value fields.
+ * For interoperability with other packages, see `OrgKeyResult` which has more flexible value handling.
+ *
+ * @see OrgKeyResult - The canonical org.ai KeyResult type with startValue/targetValue/currentValue
  */
 export interface KeyResult {
   /** Key result identifier */

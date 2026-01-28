@@ -7,6 +7,7 @@
  * @packageDocumentation
  */
 
+import { calculateProgressPercent } from 'org.ai'
 import type { KPI, OKR, KeyResult } from './types.js'
 
 /**
@@ -95,7 +96,7 @@ export function kpi(config: {
    */
   function getProgress(): number {
     if (typeof state.value === 'number' && typeof state.target === 'number') {
-      return Math.min(100, (state.value / state.target) * 100)
+      return calculateProgressPercent({ current: state.value, target: state.target })
     }
     // For string values, return 0 (cannot calculate numeric progress)
     return 0
@@ -536,7 +537,7 @@ function generateOKRId(objective: string): string {
  */
 function calculateKeyResultProgress(kr: KeyResult): number {
   if (typeof kr.current === 'number' && typeof kr.target === 'number') {
-    return Math.min(100, (kr.current / kr.target) * 100)
+    return calculateProgressPercent({ current: kr.current, target: kr.target })
   }
   return 0
 }

@@ -8,6 +8,7 @@
  */
 
 import { generateObject, type AIGenerateOptions, type SimpleSchema } from 'ai-functions'
+import { z } from 'zod'
 import type {
   Agent,
   AgentConfig,
@@ -18,6 +19,56 @@ import type {
   ApprovalStatus,
 } from './types.js'
 import { executeApproval } from './actions.js'
+
+// ============================================================================
+// Zod schemas for runtime validation of AI responses
+// ============================================================================
+
+/**
+ * Schema for task execution response (doTask in supervised/manual mode)
+ */
+const DoTaskResponseSchema = z.object({
+  result: z.unknown(),
+  reasoning: z.string(),
+  needsApproval: z.boolean(),
+})
+
+/**
+ * Schema for ask response
+ */
+const AskResponseSchema = z.object({
+  answer: z.unknown(),
+  reasoning: z.string(),
+})
+
+/**
+ * Schema for decide response
+ */
+const DecideResponseSchema = z.object({
+  decision: z.string(),
+  reasoning: z.string(),
+  confidence: z.number(),
+})
+
+/**
+ * Schema for type validation response (is function)
+ */
+const IsValidResponseSchema = z.object({
+  isValid: z.boolean(),
+})
+
+/**
+ * Schema for agentic task response (executeAgenticTask)
+ */
+const AgenticTaskResponseSchema = z.object({
+  thinking: z.string(),
+  action: z.object({
+    type: z.string(),
+    toolName: z.string().optional(),
+    arguments: z.string().optional(),
+  }),
+  result: z.unknown().optional(),
+})
 
 /**
  * Create an autonomous agent
@@ -81,10 +132,7 @@ export function Agent(config: AgentConfig): Agent {
   /**
    * Execute a task
    */
-  async function doTask<TResult = unknown>(
-    task: string,
-    context?: unknown
-  ): Promise<TResult> {
+  async function doTask<TResult = unknown>(task: string, context?: unknown): Promise<TResult> {
     const startTime = Date.now()
     status = 'thinking'
 
@@ -127,11 +175,11 @@ export function Agent(config: AgentConfig): Agent {
         temperature,
       })
 
-      const response = result.object as unknown as {
-        result: unknown
-        reasoning: string
-        needsApproval: boolean
+      const parsed = DoTaskResponseSchema.safeParse(result.object)
+      if (!parsed.success) {
+        throw new Error(`Invalid AI response for task: ${parsed.error.message}`)
       }
+      const response = parsed.data
 
       // Request approval if needed and agent requires approval
       if (config.requiresApproval || response.needsApproval) {
@@ -178,10 +226,7 @@ export function Agent(config: AgentConfig): Agent {
   /**
    * Ask a question
    */
-  async function ask<TResult = unknown>(
-    question: string,
-    context?: unknown
-  ): Promise<TResult> {
+  async function ask<TResult = unknown>(question: string, context?: unknown): Promise<TResult> {
     const startTime = Date.now()
     status = 'thinking'
 
@@ -199,7 +244,11 @@ export function Agent(config: AgentConfig): Agent {
         temperature,
       })
 
-      const response = result.object as { answer: unknown; reasoning: string }
+      const parsed = AskResponseSchema.safeParse(result.object)
+      if (!parsed.success) {
+        throw new Error(`Invalid AI response for ask: ${parsed.error.message}`)
+      }
+      const response = parsed.data
 
       recordHistory({
         type: 'question',
@@ -227,10 +276,7 @@ export function Agent(config: AgentConfig): Agent {
   /**
    * Make a decision
    */
-  async function decide<T extends string>(
-    options: T[],
-    context?: string
-  ): Promise<T> {
+  async function decide<T extends string>(options: T[], context?: string): Promise<T> {
     const startTime = Date.now()
     status = 'thinking'
 
@@ -245,14 +291,25 @@ export function Agent(config: AgentConfig): Agent {
           confidence: 'Confidence level 0-100 (number)',
         },
         system: systemPrompt,
-        prompt: `Make a decision between these options:\n${options.map((o, i) => `${i + 1}. ${o}`).join('\n')}\n\nContext: ${context || 'No additional context'}`,
+        prompt: `Make a decision between these options:\n${options
+          .map((o, i) => `${i + 1}. ${o}`)
+          .join('\n')}\n\nContext: ${context || 'No additional context'}`,
         temperature,
       })
 
-      const response = result.object as unknown as {
-        decision: T
-        reasoning: string
-        confidence: number
+      const parsed = DecideResponseSchema.safeParse(result.object)
+      if (!parsed.success) {
+        throw new Error(`Invalid AI response for decide: ${parsed.error.message}`)
+      }
+      const response = parsed.data
+
+      // Validate the decision is one of the provided options
+      if (!options.includes(response.decision as T)) {
+        throw new Error(
+          `AI returned invalid decision "${response.decision}". Expected one of: ${options.join(
+            ', '
+          )}`
+        )
       }
 
       recordHistory({
@@ -264,7 +321,7 @@ export function Agent(config: AgentConfig): Agent {
       })
 
       status = 'idle'
-      return response.decision
+      return response.decision as T
     } catch (error) {
       status = 'error'
       recordHistory({
@@ -359,19 +416,27 @@ export function Agent(config: AgentConfig): Agent {
    */
   async function is(value: unknown, type: string | SimpleSchema): Promise<boolean> {
     try {
-      const schema = typeof type === 'string'
-        ? { isValid: `Is this value a valid ${type}? (boolean)` }
-        : { isValid: 'Does this value match the schema? (boolean)' }
+      const schema =
+        typeof type === 'string'
+          ? { isValid: `Is this value a valid ${type}? (boolean)` }
+          : { isValid: 'Does this value match the schema? (boolean)' }
 
       const result = await generateObject({
         model,
         schema,
         system: 'You are a type validator. Determine if the value matches the expected type.',
-        prompt: `Value: ${JSON.stringify(value)}\n\nExpected type: ${typeof type === 'string' ? type : JSON.stringify(type)}`,
+        prompt: `Value: ${JSON.stringify(value)}\n\nExpected type: ${
+          typeof type === 'string' ? type : JSON.stringify(type)
+        }`,
         temperature: 0,
       })
 
-      return (result.object as unknown as { isValid: boolean }).isValid
+      const parsed = IsValidResponseSchema.safeParse(result.object)
+      if (!parsed.success) {
+        // If we can't parse the response, treat as validation failure
+        return false
+      }
+      return parsed.data.isValid
     } catch {
       return false
     }
@@ -431,14 +496,16 @@ export function Agent(config: AgentConfig): Agent {
    * Reset agent state
    */
   function reset(): void {
-    Object.keys(state).forEach(key => delete state[key])
+    Object.keys(state).forEach((key) => delete state[key])
     history.length = 0
     status = 'idle'
   }
 
   return {
     config,
-    status,
+    get status() {
+      return status
+    },
     state,
     do: doTask,
     ask,
@@ -517,14 +584,18 @@ async function executeAgenticTask<TResult>(
         result: 'The final result if done',
       },
       system: systemPrompt,
-      prompt: `Task: ${task}\n\nContext: ${JSON.stringify(context)}\n\nPrevious actions:\n${toolResults.map((r, i) => `${i + 1}. ${JSON.stringify(r)}`).join('\n') || 'None yet'}\n\nWhat should you do next?`,
+      prompt: `Task: ${task}\n\nContext: ${JSON.stringify(context)}\n\nPrevious actions:\n${
+        toolResults.map((r, i) => `${i + 1}. ${JSON.stringify(r)}`).join('\n') || 'None yet'
+      }\n\nWhat should you do next?`,
     })
 
-    const response = result.object as {
-      thinking: string
-      action: { type: string; toolName?: string; arguments?: string }
-      result?: unknown
+    const parsed = AgenticTaskResponseSchema.safeParse(result.object)
+    if (!parsed.success) {
+      throw new Error(
+        `Invalid AI response in agentic loop (iteration ${iteration}): ${parsed.error.message}`
+      )
     }
+    const response = parsed.data
 
     // Check if done
     if (response.action.type === 'done' || response.result) {
@@ -533,7 +604,7 @@ async function executeAgenticTask<TResult>(
 
     // Execute tool
     if (response.action.type === 'tool' && response.action.toolName) {
-      const tool = tools.find(t => t.name === response.action.toolName)
+      const tool = tools.find((t) => t.name === response.action.toolName)
       if (tool) {
         const args = JSON.parse(response.action.arguments || '{}')
         const toolResult = await tool.handler(args)

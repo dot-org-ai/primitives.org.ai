@@ -2,6 +2,7 @@
  * Goals definition for digital workers
  */
 
+import { calculateProgress, isOnTrack } from 'org.ai'
 import type { WorkerGoals, WorkerKPI } from './types.js'
 
 // Note: Goal, Goals types are re-exported from types.ts which imports from org.ai
@@ -204,8 +205,7 @@ defineGoals.updateMetric = (
  * ```
  */
 defineGoals.progress = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
-  if (kpi.target === 0) return 0
-  return Math.min(1, Math.max(0, kpi.current / kpi.target))
+  return calculateProgress(kpi)
 }
 
 /**
@@ -222,7 +222,7 @@ defineGoals.progress = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
  * ```
  */
 defineGoals.onTrack = (kpi: Pick<WorkerKPI, 'current' | 'target'>, threshold = 0.8): boolean => {
-  return defineGoals.progress(kpi) >= threshold
+  return isOnTrack(kpi, threshold)
 }
 
 // Legacy alias for backward compatibility

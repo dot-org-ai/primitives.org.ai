@@ -70,6 +70,7 @@ export type {
 } from './types.js'
 
 // Re-export consolidated org.ai shared types for consumers
+// Use these for interoperability with other packages in the ecosystem
 export type {
   GoalPriority,
   GoalStatus,
@@ -84,6 +85,22 @@ export type {
   MemberStatus,
   MemberAvailability,
 } from 'org.ai/types'
+
+// Re-export org.ai types with Org prefix for explicit interoperability
+// These are the canonical types from org.ai/types, different from the agent-specific types above
+export type {
+  OrgRole,
+  OrgTeam,
+  OrgTeamMember,
+  OrgChannel,
+  OrgGoal,
+  OrgGoals,
+  OrgGoalPriority,
+  OrgGoalStatus,
+  OrgKPI,
+  OrgOKR,
+  OrgKeyResult,
+} from './types.js'
 
 // Agent creation and management
 export { Agent } from './agent.js'

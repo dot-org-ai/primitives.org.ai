@@ -31,7 +31,8 @@
     "ai-functions": "workspace:*",
     "digital-workers": "workspace:*",
     "org.ai": "workspace:*",
-    "rpc.do": "*"
+    "rpc.do": "*",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

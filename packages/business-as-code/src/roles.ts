@@ -9,17 +9,12 @@
  * @packageDocumentation
  */
 
-import type { Role as OrgRole, RoleType as OrgRoleType, WorkerType as OrgWorkerType } from 'org.ai'
+import type { Role as OrgRole, RoleType as OrgRoleType, RoleWorkerType } from 'org.ai'
 import type { Worker, WorkerRef } from 'digital-workers'
 
 // Re-export for convenience
 export type { Worker, WorkerRef } from 'digital-workers'
-export type { OrgRole, OrgRoleType, OrgWorkerType }
-
-/**
- * Re-exported WorkerType from org.ai (aliased as RoleWorkerType for backward compatibility)
- */
-export type RoleWorkerType = OrgWorkerType
+export type { OrgRole, OrgRoleType, RoleWorkerType }
 
 // =============================================================================
 // Business Role - Bridges Worker Role and Authorization

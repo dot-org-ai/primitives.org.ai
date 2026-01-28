@@ -12,11 +12,13 @@
     "./typescript/react.json": "./typescript/react.json",
     "./eslint": "./eslint/index.js",
     "./eslint/base": "./eslint/base.js",
-    "./eslint/react": "./eslint/react.js"
+    "./eslint/react": "./eslint/react.js",
+    "./mocks/cloudflare-workers": "./mocks/cloudflare-workers.ts"
   },
   "files": [
     "typescript/*.json",
-    "eslint/*.js"
+    "eslint/*.js",
+    "mocks/*.ts"
   ],
   "dependencies": {
     "@eslint/js": "^9.16.0",

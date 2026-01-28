@@ -6,7 +6,7 @@
  */
 
 // Role types
-export type { Role, RoleType, RoleWorkerType as WorkerType } from './role.js'
+export type { Role, RoleType, RoleWorkerType } from './role.js'
 export { isRole, createRole } from './role.js'
 
 // Team types

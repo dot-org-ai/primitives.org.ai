@@ -3,6 +3,7 @@
  */
 
 import type { KPI, OKR, KeyResult } from 'org.ai'
+import { calculateProgress, isOnTrack, calculateGap } from 'org.ai'
 import type { WorkerKPI, WorkerOKR } from './types.js'
 
 // Re-export KPI, OKR from org.ai for convenience
@@ -103,8 +104,7 @@ kpis.update = (kpi: WorkerKPI, current: number): WorkerKPI => {
  * ```
  */
 kpis.progress = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
-  if (kpi.target === 0) return 0
-  return Math.min(1, Math.max(0, kpi.current / kpi.target))
+  return calculateProgress(kpi)
 }
 
 /**
@@ -121,7 +121,7 @@ kpis.progress = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
  * ```
  */
 kpis.onTrack = (kpi: Pick<WorkerKPI, 'current' | 'target'>, threshold = 0.8): boolean => {
-  return kpis.progress(kpi) >= threshold
+  return isOnTrack(kpi, threshold)
 }
 
 /**
@@ -137,7 +137,7 @@ kpis.onTrack = (kpi: Pick<WorkerKPI, 'current' | 'target'>, threshold = 0.8): bo
  * ```
  */
 kpis.gap = (kpi: Pick<WorkerKPI, 'current' | 'target'>): number => {
-  return kpi.target - kpi.current
+  return calculateGap(kpi)
 }
 
 /**

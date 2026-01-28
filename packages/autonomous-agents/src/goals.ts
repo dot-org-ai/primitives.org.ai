@@ -7,6 +7,7 @@
  * @packageDocumentation
  */
 
+import { calculateProgressPercent } from 'org.ai'
 import type { Goal, GoalsConfig, Priority } from './types.js'
 
 /**
@@ -272,7 +273,7 @@ function calculateProgress(goal: Goal): number {
 
   // Handle numeric progress
   if (typeof goal.progress === 'number' && typeof goal.target === 'number') {
-    return Math.min(100, (goal.progress / goal.target) * 100)
+    return calculateProgressPercent({ current: goal.progress, target: goal.target })
   }
 
   // Handle percentage strings
@@ -283,7 +284,7 @@ function calculateProgress(goal: Goal): number {
     if (progressMatch && targetMatch) {
       const progressNum = parseInt(progressMatch[1]!, 10)
       const targetNum = parseInt(targetMatch[1]!, 10)
-      return Math.min(100, (progressNum / targetNum) * 100)
+      return calculateProgressPercent({ current: progressNum, target: targetNum })
     }
   }
 
