@@ -966,7 +966,7 @@ export class DatabaseDO extends DurableObjectBase {
     const body = (await request.json()) as Record<string, any>
 
     // Merge data fields (shallow merge)
-    const mergedData = { ...existing.data, ...(body.data ?? {}) }
+    const mergedData = { ...existing['data'], ...(body['data'] ?? {}) }
     const now = new Date().toISOString()
     const dataJson = JSON.stringify(mergedData)
 
@@ -975,20 +975,24 @@ export class DatabaseDO extends DurableObjectBase {
     // Emit Type.updated event
     const actor = request.headers.get('X-Actor') ?? 'system'
     this.emitEvent({
-      event: `${existing.type}.updated`,
+      event: `${existing['type']}.updated`,
       actor,
-      object: `${existing.type}/${id}`,
+      object: `${existing['type']}/${id}`,
       data: mergedData,
-      previousData: existing.data,
+      previousData: existing['data'],
     })
 
     // If embedding exists, update it with new content
     const existingEmbedding = this.sql
-      .exec('SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?', existing.type, id)
+      .exec(
+        'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
+        existing['type'],
+        id
+      )
       .toArray()
     if (existingEmbedding.length > 0) {
       await this.generateEmbeddingForEntity(
-        existing.type as string,
+        existing['type'] as string,
         id,
         mergedData as Record<string, unknown>
       ).catch(() => {
@@ -997,10 +1001,10 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const result = {
-      id: existing.id,
-      type: existing.type,
+      id: existing['id'],
+      type: existing['type'],
       data: mergedData,
-      created_at: existing.created_at,
+      created_at: existing['created_at'],
       updated_at: now,
     }
     return Response.json(result)
@@ -1034,22 +1038,22 @@ export class DatabaseDO extends DurableObjectBase {
     // Delete embedding for this entity
     this.sql.exec(
       'DELETE FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
-      entity.type,
+      entity['type'],
       id
     )
 
     // Emit Type.deleted event
     const actor = request?.headers.get('X-Actor') ?? 'system'
     this.emitEvent({
-      event: `${entity.type}.deleted`,
+      event: `${entity['type']}.deleted`,
       actor,
-      object: `${entity.type}/${id}`,
-      data: entity.data,
+      object: `${entity['type']}/${id}`,
+      data: entity['data'],
     })
 
     const result: Record<string, unknown> = { deleted: true }
     if (cascadeDeleted !== undefined) {
-      result.cascadeDeleted = cascadeDeleted
+      result['cascadeDeleted'] = cascadeDeleted
     }
     return Response.json(result)
   }
@@ -1182,8 +1186,8 @@ export class DatabaseDO extends DurableObjectBase {
           )
           .toArray()
         const result: Record<string, any> = { from_id, relation, to_id }
-        result.metadata = metadata ?? null
-        result.created_at = (rows[0] as any)?.created_at
+        result['metadata'] = metadata ?? null
+        result['created_at'] = (rows[0] as any)?.created_at
         return Response.json(result)
       } else {
         throw err
@@ -1191,8 +1195,8 @@ export class DatabaseDO extends DurableObjectBase {
     }
 
     const result: Record<string, any> = { from_id, relation, to_id }
-    result.metadata = metadata ?? null
-    result.created_at = now
+    result['metadata'] = metadata ?? null
+    result['created_at'] = now
     return Response.json(result)
   }
 
@@ -1228,7 +1232,7 @@ export class DatabaseDO extends DurableObjectBase {
       event: 'relationship.deleted',
       actor,
       object: `${from_id}->${relation}->${to_id}`,
-      data: { from_id, relation, to_id, metadata: existingRel.metadata },
+      data: { from_id, relation, to_id, metadata: existingRel['metadata'] },
     })
 
     return Response.json({ deleted: true })
@@ -1477,8 +1481,8 @@ export class DatabaseDO extends DurableObjectBase {
     const records = this.sql.exec(query, ...params).toArray()
     const results = records.map((r: any) => {
       const entity = this.deserializeDataRow(r)
-      if (metadataMap && metadataMap.has(entity.id as string)) {
-        ;(entity as any).$rel = metadataMap.get(entity.id as string)
+      if (metadataMap && metadataMap.has(entity['id'] as string)) {
+        ;(entity as any).$rel = metadataMap.get(entity['id'] as string)
       }
       return entity
     })
@@ -1642,7 +1646,7 @@ export class DatabaseDO extends DurableObjectBase {
       actor,
       object: `${from_id}->${relation}->${to_id}`,
       data: { from_id, relation, to_id, metadata: metadata ?? null },
-      previousData: { from_id, relation, to_id, metadata: existingRel.metadata },
+      previousData: { from_id, relation, to_id, metadata: existingRel['metadata'] },
     })
 
     return Response.json({ from_id, relation, to_id, metadata: metadata ?? null })
@@ -1963,7 +1967,7 @@ export class DatabaseDO extends DurableObjectBase {
 
     for (const row of rows) {
       const record = this.deserializeDataRow(row as any)
-      const data = record.data as Record<string, unknown>
+      const data = record['data'] as Record<string, unknown>
 
       // Determine which fields to search
       const searchFields =
@@ -2269,13 +2273,13 @@ export class DatabaseDO extends DurableObjectBase {
 
     for (const row of rows) {
       const event = this.deserializeEventRow(row as any)
-      const eventType = event.event as string
+      const eventType = event['event'] as string
 
       if (eventType.endsWith('.created')) {
-        entityData = (event.data as Record<string, unknown>) ?? {}
+        entityData = (event['data'] as Record<string, unknown>) ?? {}
         hasData = true
       } else if (eventType.endsWith('.updated')) {
-        entityData = { ...entityData, ...((event.data as Record<string, unknown>) ?? {}) }
+        entityData = { ...entityData, ...((event['data'] as Record<string, unknown>) ?? {}) }
         hasData = true
       }
       // Skip .deleted events - we want to restore to the state before deletion
@@ -2476,11 +2480,11 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (typeof body.retryEnabled === 'boolean') {
-      this.pipelineConfig.retryEnabled = body.retryEnabled
+    if (typeof body['retryEnabled'] === 'boolean') {
+      this.pipelineConfig.retryEnabled = body['retryEnabled']
     }
-    if (typeof body.batchSize === 'number') {
-      this.pipelineConfig.batchSize = body.batchSize
+    if (typeof body['batchSize'] === 'number') {
+      this.pipelineConfig.batchSize = body['batchSize']
     }
 
     return Response.json(this.pipelineConfig)
@@ -2497,7 +2501,7 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (body.simulateError) {
+    if (body['simulateError']) {
       // Return error but don't crash
       return Response.json({ error: 'Simulated pipeline error' }, { status: 503 })
     }
@@ -2510,18 +2514,22 @@ export class DatabaseDO extends DurableObjectBase {
    */
   private deserializeEventRow(row: Record<string, any>): Record<string, any> {
     return {
-      id: row.id,
-      event: row.event,
-      actor: row.actor,
-      object: row.object,
-      data: row.data ? (typeof row.data === 'string' ? JSON.parse(row.data) : row.data) : null,
-      result: row.result,
-      previousData: row.previous_data
-        ? typeof row.previous_data === 'string'
-          ? JSON.parse(row.previous_data)
-          : row.previous_data
+      id: row['id'],
+      event: row['event'],
+      actor: row['actor'],
+      object: row['object'],
+      data: row['data']
+        ? typeof row['data'] === 'string'
+          ? JSON.parse(row['data'])
+          : row['data']
         : null,
-      timestamp: row.timestamp,
+      result: row['result'],
+      previousData: row['previous_data']
+        ? typeof row['previous_data'] === 'string'
+          ? JSON.parse(row['previous_data'])
+          : row['previous_data']
+        : null,
+      timestamp: row['timestamp'],
     }
   }
 
@@ -2531,25 +2539,25 @@ export class DatabaseDO extends DurableObjectBase {
 
   private deserializeDataRow(row: Record<string, any>): Record<string, any> {
     return {
-      id: row.id,
-      type: row.type,
-      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
+      id: row['id'],
+      type: row['type'],
+      data: typeof row['data'] === 'string' ? JSON.parse(row['data']) : row['data'],
+      created_at: row['created_at'],
+      updated_at: row['updated_at'],
     }
   }
 
   private deserializeRelRow(row: Record<string, any>): Record<string, any> {
     return {
-      from_id: row.from_id,
-      relation: row.relation,
-      to_id: row.to_id,
-      metadata: row.metadata
-        ? typeof row.metadata === 'string'
-          ? JSON.parse(row.metadata)
-          : row.metadata
+      from_id: row['from_id'],
+      relation: row['relation'],
+      to_id: row['to_id'],
+      metadata: row['metadata']
+        ? typeof row['metadata'] === 'string'
+          ? JSON.parse(row['metadata'])
+          : row['metadata']
         : null,
-      created_at: row.created_at,
+      created_at: row['created_at'],
     }
   }
 
@@ -2568,8 +2576,8 @@ export class DatabaseDO extends DurableObjectBase {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (body.model) {
-      this.embeddingsConfig.model = body.model
+    if (body['model']) {
+      this.embeddingsConfig.model = body['model']
     }
 
     return Response.json(this.embeddingsConfig)
@@ -2591,14 +2599,14 @@ export class DatabaseDO extends DurableObjectBase {
           .exec(
             'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
             entityType,
-            entity.id
+            entity['id']
           )
           .toArray()
         if (existing.length === 0) {
           await this.generateEmbeddingForEntity(
             entityType,
-            entity.id as string,
-            entity.data as Record<string, unknown>
+            entity['id'] as string,
+            entity['data'] as Record<string, unknown>
           )
         }
       }
@@ -2660,14 +2668,18 @@ export class DatabaseDO extends DurableObjectBase {
       const entity = this.deserializeDataRow(row as any)
       // Check if embedding already exists
       const existing = this.sql
-        .exec('SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?', type, entity.id)
+        .exec(
+          'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
+          type,
+          entity['id']
+        )
         .toArray()
 
       if (existing.length === 0) {
         await this.generateEmbeddingForEntity(
           type,
-          entity.id as string,
-          entity.data as Record<string, unknown>
+          entity['id'] as string,
+          entity['data'] as Record<string, unknown>
         )
         warmed++
       }
@@ -2701,8 +2713,8 @@ export class DatabaseDO extends DurableObjectBase {
       const entity = this.deserializeDataRow(row as any)
       await this.generateEmbeddingForEntity(
         type,
-        entity.id as string,
-        entity.data as Record<string, unknown>
+        entity['id'] as string,
+        entity['data'] as Record<string, unknown>
       )
       generated++
     }
@@ -2753,7 +2765,7 @@ export class DatabaseDO extends DurableObjectBase {
       }
 
       const entity = this.deserializeDataRow(entityRows[0] as any)
-      await this.generateEmbeddingForEntity(type, id, entity.data as Record<string, unknown>)
+      await this.generateEmbeddingForEntity(type, id, entity['data'] as Record<string, unknown>)
       processed++
     }
 
@@ -2823,8 +2835,8 @@ export class DatabaseDO extends DurableObjectBase {
           const entity = this.deserializeDataRow(row as any)
           await this.generateEmbeddingForEntity(
             type,
-            entity.id as string,
-            entity.data as Record<string, unknown>
+            entity['id'] as string,
+            entity['data'] as Record<string, unknown>
           )
           job.processed++
         } catch {
@@ -2890,7 +2902,7 @@ export class DatabaseDO extends DurableObjectBase {
     const embedding = await this.generateEmbeddingForEntity(
       entityType,
       entityId,
-      entity.data as Record<string, unknown>
+      entity['data'] as Record<string, unknown>
     )
 
     if (!embedding) {
@@ -2932,13 +2944,17 @@ export class DatabaseDO extends DurableObjectBase {
     for (const row of entities) {
       const entity = this.deserializeDataRow(row as any)
       const existingEmbedding = this.sql
-        .exec('SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?', type, entity.id)
+        .exec(
+          'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
+          type,
+          entity['id']
+        )
         .toArray()
       if (existingEmbedding.length === 0) {
         await this.generateEmbeddingForEntity(
           type,
-          entity.id as string,
-          entity.data as Record<string, unknown>
+          entity['id'] as string,
+          entity['data'] as Record<string, unknown>
         )
       }
     }
@@ -2981,7 +2997,7 @@ export class DatabaseDO extends DurableObjectBase {
 
       // Apply where filters if specified
       if (where) {
-        const data = entity.data as Record<string, unknown>
+        const data = entity['data'] as Record<string, unknown>
         let matches = true
         for (const [field, value] of Object.entries(where)) {
           if (data[field] !== value) {
@@ -2993,15 +3009,15 @@ export class DatabaseDO extends DurableObjectBase {
       }
 
       // Apply time filters
-      if (since && entity.created_at < since) continue
-      if (until && entity.created_at > until) continue
+      if (since && entity['created_at'] < since) continue
+      if (until && entity['created_at'] > until) continue
 
       finalResults.push({
-        id: entity.id,
-        type: entity.type,
-        data: entity.data,
-        created_at: entity.created_at,
-        updated_at: entity.updated_at,
+        id: entity['id'],
+        type: entity['type'],
+        data: entity['data'],
+        created_at: entity['created_at'],
+        updated_at: entity['updated_at'],
         $score: result.score,
       })
     }
@@ -3040,7 +3056,7 @@ export class DatabaseDO extends DurableObjectBase {
 
     for (const row of entities) {
       const entity = this.deserializeDataRow(row as any)
-      const data = entity.data as Record<string, unknown>
+      const data = entity['data'] as Record<string, unknown>
 
       // Simple FTS: check if any text field contains query terms
       let hasMatch = false
@@ -3055,7 +3071,7 @@ export class DatabaseDO extends DurableObjectBase {
       }
 
       if (hasMatch) {
-        ftsRanks.set(entity.id as string, ftsRank++)
+        ftsRanks.set(entity['id'] as string, ftsRank++)
       }
     }
 
@@ -3067,13 +3083,17 @@ export class DatabaseDO extends DurableObjectBase {
     for (const row of entities) {
       const entity = this.deserializeDataRow(row as any)
       const existingEmbedding = this.sql
-        .exec('SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?', type, entity.id)
+        .exec(
+          'SELECT id FROM _embeddings WHERE entity_type = ? AND entity_id = ?',
+          type,
+          entity['id']
+        )
         .toArray()
       if (existingEmbedding.length === 0) {
         await this.generateEmbeddingForEntity(
           type,
-          entity.id as string,
-          entity.data as Record<string, unknown>
+          entity['id'] as string,
+          entity['data'] as Record<string, unknown>
         )
       }
     }
@@ -3147,11 +3167,11 @@ export class DatabaseDO extends DurableObjectBase {
       const entity = this.deserializeDataRow(entityRows[0] as any)
 
       finalResults.push({
-        id: entity.id,
-        type: entity.type,
-        data: entity.data,
-        created_at: entity.created_at,
-        updated_at: entity.updated_at,
+        id: entity['id'],
+        type: entity['type'],
+        data: entity['data'],
+        created_at: entity['created_at'],
+        updated_at: entity['updated_at'],
         $score: result.semanticScore,
         $rrfScore: result.rrfScore,
         $ftsRank: result.ftsRank,
