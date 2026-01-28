@@ -1055,3 +1055,379 @@ describe('Error Handling', () => {
     expect(state?.status).not.toBe('error') // Fresh worker shouldn't be in error
   })
 })
+
+// =============================================================================
+// Stateless Actions on WorkerEntrypoint (RED phase - not yet implemented)
+// =============================================================================
+//
+// These tests verify that DigitalWorkersServiceCore exposes stateless action
+// methods (notify, decide, askAI) directly on the RpcTarget. This enables
+// consuming workers to call these actions without managing worker lifecycle.
+//
+// Pattern:
+//   const service = env.DIGITAL_WORKERS.connect()
+//   const decision = await service.decide({ options: ['A', 'B'] })
+//   await service.notify({ target: 'alice', message: 'Done' })
+//   const answer = await service.askAI('What should we do?')
+//
+// These methods are STATELESS - they do not require spawning a worker first.
+// They use the AI binding from env for real AI Gateway calls.
+// =============================================================================
+
+describe('Stateless Actions - notify()', () => {
+  let core: InstanceType<typeof DigitalWorkersServiceCore>
+
+  beforeEach(() => {
+    core = new DigitalWorkersServiceCore(env)
+  })
+
+  it('exposes notify as a method on DigitalWorkersServiceCore', () => {
+    expect(typeof core.notify).toBe('function')
+  })
+
+  it('sends a notification and returns a result', async () => {
+    const result = await core.notify({
+      target: 'test-user',
+      message: 'Hello from stateless action',
+    })
+
+    expect(result).toBeDefined()
+    expect(result.sent).toBe(true)
+    expect(result.messageId).toBeDefined()
+    expect(typeof result.messageId).toBe('string')
+  })
+
+  it('includes channel information in result', async () => {
+    const result = await core.notify({
+      target: 'test-user',
+      message: 'Test notification',
+      via: 'webhook',
+    })
+
+    expect(result.via).toBeDefined()
+    expect(Array.isArray(result.via)).toBe(true)
+    expect(result.via.length).toBeGreaterThan(0)
+  })
+
+  it('supports priority levels', async () => {
+    const result = await core.notify({
+      target: 'test-user',
+      message: 'Urgent: Server is down!',
+      priority: 'urgent',
+    })
+
+    expect(result.sent).toBe(true)
+  })
+
+  it('supports sending to multiple targets', async () => {
+    const result = await core.notify({
+      target: ['user-a', 'user-b', 'user-c'],
+      message: 'Team broadcast notification',
+    })
+
+    expect(result.sent).toBe(true)
+    expect(result.recipients).toBeDefined()
+    expect(result.recipients?.length).toBe(3)
+  })
+
+  it('includes sentAt timestamp in result', async () => {
+    const result = await core.notify({
+      target: 'test-user',
+      message: 'Timestamped notification',
+    })
+
+    expect(result.sentAt).toBeInstanceOf(Date)
+  })
+
+  it('returns sent:false when target is unreachable', async () => {
+    const result = await core.notify({
+      target: { id: 'nonexistent', contacts: {} },
+      message: 'Should fail gracefully',
+      via: 'slack',
+    })
+
+    expect(result.sent).toBe(false)
+    expect(result.via).toHaveLength(0)
+  })
+
+  it('supports metadata in notification', async () => {
+    const result = await core.notify({
+      target: 'test-user',
+      message: 'Deployment complete',
+      metadata: { version: '2.1.0', environment: 'production' },
+    })
+
+    expect(result.sent).toBe(true)
+  })
+})
+
+describe('Stateless Actions - decide()', () => {
+  let core: InstanceType<typeof DigitalWorkersServiceCore>
+
+  beforeEach(() => {
+    core = new DigitalWorkersServiceCore(env)
+  })
+
+  it('exposes decide as a method on DigitalWorkersServiceCore', () => {
+    expect(typeof core.decide).toBe('function')
+  })
+
+  it('makes a decision between options using real AI Gateway', async () => {
+    const decision = await core.decide({
+      options: ['Option A', 'Option B'],
+      context: 'Choose the better option for testing',
+    })
+
+    expect(decision).toBeDefined()
+    expect(decision.choice).toBeDefined()
+    expect(['Option A', 'Option B']).toContain(decision.choice)
+  })
+
+  it('returns reasoning with the decision', async () => {
+    const decision = await core.decide({
+      options: ['Deploy now', 'Wait until Monday'],
+      context: 'Production deploy on a Friday afternoon',
+    })
+
+    expect(decision.reasoning).toBeDefined()
+    expect(typeof decision.reasoning).toBe('string')
+    expect(decision.reasoning.length).toBeGreaterThan(0)
+  })
+
+  it('returns confidence score between 0 and 1', async () => {
+    const decision = await core.decide({
+      options: ['React', 'Vue', 'Svelte'],
+      context: 'Choose a frontend framework for a new project',
+      criteria: ['performance', 'ecosystem', 'developer experience'],
+    })
+
+    expect(decision.confidence).toBeDefined()
+    expect(typeof decision.confidence).toBe('number')
+    expect(decision.confidence).toBeGreaterThanOrEqual(0)
+    expect(decision.confidence).toBeLessThanOrEqual(1)
+  })
+
+  it('supports criteria for multi-criteria evaluation', async () => {
+    const decision = await core.decide({
+      options: ['Approach A', 'Approach B', 'Approach C'],
+      context: 'Technical architecture decision',
+      criteria: ['scalability', 'cost', 'time-to-market'],
+    })
+
+    expect(decision.choice).toBeDefined()
+    // Should be one of the provided options
+    expect(['Approach A', 'Approach B', 'Approach C']).toContain(decision.choice)
+  })
+
+  it('returns alternatives with scores', async () => {
+    const decision = await core.decide({
+      options: ['A', 'B', 'C'],
+      context: 'Simple ranking test',
+    })
+
+    expect(decision.alternatives).toBeDefined()
+    expect(Array.isArray(decision.alternatives)).toBe(true)
+    // Each alternative should have an option and a score
+    if (decision.alternatives && decision.alternatives.length > 0) {
+      for (const alt of decision.alternatives) {
+        expect(alt.option).toBeDefined()
+        expect(typeof alt.score).toBe('number')
+      }
+    }
+  })
+
+  it('handles structured options (objects)', async () => {
+    const decision = await core.decide({
+      options: [
+        { id: 'migrate', label: 'Migrate to new platform' },
+        { id: 'refactor', label: 'Refactor existing system' },
+        { id: 'rebuild', label: 'Rebuild from scratch' },
+      ],
+      context: 'Legacy system modernization decision',
+    })
+
+    expect(decision.choice).toBeDefined()
+  })
+
+  it('requires at least two options', async () => {
+    await expect(
+      core.decide({
+        options: ['Only one option'],
+        context: 'Not enough options',
+      })
+    ).rejects.toThrow()
+  })
+})
+
+describe('Stateless Actions - askAI()', () => {
+  let core: InstanceType<typeof DigitalWorkersServiceCore>
+
+  beforeEach(() => {
+    core = new DigitalWorkersServiceCore(env)
+  })
+
+  it('exposes askAI as a method on DigitalWorkersServiceCore', () => {
+    expect(typeof core.askAI).toBe('function')
+  })
+
+  it('answers a question using real AI Gateway', async () => {
+    const answer = await core.askAI('What is 2 + 2?')
+
+    expect(answer).toBeDefined()
+    expect(typeof answer).toBe('string')
+    expect(answer.length).toBeGreaterThan(0)
+  })
+
+  it('accepts context for informed answers', async () => {
+    const answer = await core.askAI('What is our refund policy?', {
+      context: {
+        refundWindow: '30 days',
+        conditions: 'Original packaging required',
+        exceptions: 'Digital products non-refundable',
+      },
+    })
+
+    expect(answer).toBeDefined()
+    expect(typeof answer).toBe('string')
+  })
+
+  it('supports structured response with schema', async () => {
+    const result = await core.askAI('List three primary colors', {
+      schema: {
+        colors: ['Color name as a string'],
+      },
+    })
+
+    expect(result).toBeDefined()
+    // When schema is provided, result should match the schema shape
+    expect(typeof result).toBe('object')
+    const structured = result as { colors: string[] }
+    expect(Array.isArray(structured.colors)).toBe(true)
+    expect(structured.colors.length).toBe(3)
+  })
+
+  it('returns plain string when no schema provided', async () => {
+    const answer = await core.askAI('Say hello')
+
+    expect(typeof answer).toBe('string')
+  })
+
+  it('handles complex questions with context', async () => {
+    const answer = await core.askAI('Should we scale up the database?', {
+      context: {
+        currentCPU: '85%',
+        currentMemory: '70%',
+        queryLatency: '450ms',
+        peakHours: '9am-5pm EST',
+      },
+    })
+
+    expect(answer).toBeDefined()
+    expect(typeof answer).toBe('string')
+    expect(answer.length).toBeGreaterThan(0)
+  })
+
+  it('handles empty question gracefully', async () => {
+    await expect(core.askAI('')).rejects.toThrow()
+  })
+})
+
+describe('Stateless Actions - Job ID Pattern', () => {
+  let core: InstanceType<typeof DigitalWorkersServiceCore>
+
+  beforeEach(() => {
+    core = new DigitalWorkersServiceCore(env)
+  })
+
+  it('decide returns a job ID for tracking', async () => {
+    const decision = await core.decide({
+      options: ['A', 'B'],
+      context: 'Test decision for job tracking',
+    })
+
+    expect(decision.jobId).toBeDefined()
+    expect(typeof decision.jobId).toBe('string')
+    expect(decision.jobId.length).toBeGreaterThan(0)
+  })
+
+  it('askAI returns a job ID when called with tracking option', async () => {
+    const result = await core.askAI('Test question', { track: true })
+
+    // When tracking is enabled, result becomes an object with jobId
+    expect(typeof result).toBe('object')
+    const tracked = result as { answer: string; jobId: string }
+    expect(tracked.jobId).toBeDefined()
+    expect(typeof tracked.jobId).toBe('string')
+  })
+
+  it('notify returns a job ID', async () => {
+    const result = await core.notify({
+      target: 'test-user',
+      message: 'Job tracking test',
+    })
+
+    expect(result.jobId).toBeDefined()
+    expect(typeof result.jobId).toBe('string')
+  })
+
+  it('job IDs are unique across calls', async () => {
+    const result1 = await core.notify({ target: 'user-a', message: 'First' })
+    const result2 = await core.notify({ target: 'user-b', message: 'Second' })
+
+    expect(result1.jobId).not.toBe(result2.jobId)
+  })
+
+  it('job ID follows expected format pattern', async () => {
+    const result = await core.notify({ target: 'user', message: 'Format test' })
+
+    // Job IDs should follow a predictable pattern (e.g., job_<uuid> or similar)
+    expect(result.jobId).toMatch(/^job_/)
+  })
+})
+
+describe('Stateless Actions via connect() RPC', () => {
+  it('connect() returns a service with stateless action methods', () => {
+    const service = new DigitalWorkersService({ env } as any, {} as any)
+    const core = service.connect()
+
+    // Verify stateless action methods exist alongside lifecycle methods
+    expect(typeof core.notify).toBe('function')
+    expect(typeof core.decide).toBe('function')
+    expect(typeof core.askAI).toBe('function')
+
+    // Lifecycle methods should still exist
+    expect(typeof core.spawn).toBe('function')
+    expect(typeof core.terminate).toBe('function')
+    expect(typeof core.send).toBe('function')
+  })
+
+  it('stateless actions do not require spawning a worker first', async () => {
+    const service = new DigitalWorkersService({ env } as any, {} as any)
+    const core = service.connect()
+
+    // Should work without any prior spawn() calls
+    const decision = await core.decide({
+      options: ['Yes', 'No'],
+      context: 'Simple yes/no test without worker lifecycle',
+    })
+
+    expect(decision.choice).toBeDefined()
+    expect(['Yes', 'No']).toContain(decision.choice)
+  })
+
+  it('stateless actions are independent of worker state', async () => {
+    const service = new DigitalWorkersService({ env } as any, {} as any)
+    const core = service.connect()
+
+    // Notify should work independently
+    const notifyResult = await core.notify({
+      target: 'independent-user',
+      message: 'No worker required',
+    })
+    expect(notifyResult.sent).toBe(true)
+
+    // askAI should work independently
+    const answer = await core.askAI('Is this independent?')
+    expect(answer).toBeDefined()
+  })
+})
