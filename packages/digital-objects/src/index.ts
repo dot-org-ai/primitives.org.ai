@@ -85,3 +85,34 @@ export type {
   ValidationResult,
   ValidationOptions,
 } from './schema-validation.js'
+
+// DO() Factory - Declarative Digital Object Definitions
+export {
+  DO,
+  DigitalObjectDefinition,
+  parseFieldType,
+  parseField,
+  parseEnumValues,
+  parseCascade,
+  parseFilters,
+  isGenerativeString,
+} from './do.js'
+export type {
+  DODefinition,
+  DOContext,
+  DOStorage,
+  DOInstance,
+  ParsedDefinition,
+  ParsedField,
+  CascadeDefinition,
+  CascadeOperator,
+  CallableDefinition,
+  InferSchema,
+  FilterCondition,
+  GenerativeFunctionDef,
+  CodeFunctionDef,
+  FunctionDef,
+  EventHandler,
+  ScheduleHandler,
+  MigrateHandler,
+} from './do.js'
