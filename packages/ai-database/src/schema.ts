@@ -55,6 +55,8 @@ import {
   getSchemaMetadata,
 } from './type-guards.js'
 
+import { parseOperator as graphdlParseOperator } from '@graphdl/core'
+
 // =============================================================================
 // Re-exports from modular files
 // =============================================================================
@@ -806,81 +808,46 @@ export interface OperatorParseResult {
  * ```
  */
 export function parseOperator(definition: string): OperatorParseResult | null {
-  // Supported operators in order of specificity (longer operators first)
-  const operators = ['~>', '<~', '->', '<-'] as const
+  // Use graphdl's parseOperator implementation
+  const graphdlResult = graphdlParseOperator(definition)
+  if (!graphdlResult) return null
 
+  // ai-database's parseField expects targetType to contain the raw suffix after the operator,
+  // including modifiers (?, [], .backref). Extract this directly from the definition
+  // rather than reconstructing from graphdl's parsed components.
+  const operators = ['~>', '<~', '->', '<-'] as const
+  let rawTargetType = ''
   for (const op of operators) {
     const opIndex = definition.indexOf(op)
     if (opIndex !== -1) {
-      // Extract prompt (text before operator)
-      const beforeOp = definition.slice(0, opIndex).trim()
-      const prompt = beforeOp || undefined
-
-      // Extract target type (text after operator)
-      let targetType = definition.slice(opIndex + op.length).trim()
-
-      // Determine direction: < = backward, otherwise forward
-      const direction = op.startsWith('<') ? 'backward' : 'forward'
-
-      // Determine match mode: ~ = fuzzy, otherwise exact
-      const matchMode = op.includes('~') ? 'fuzzy' : 'exact'
-
-      // Parse field-level threshold from ~>Type(0.9) syntax
-      let threshold: number | undefined
-      const thresholdMatch = targetType.match(/^([^(]+)\(([0-9.]+)\)(.*)$/)
-      if (thresholdMatch) {
-        const [, typePart, thresholdStr, suffix] = thresholdMatch
-        threshold = parseFloat(thresholdStr!)
-        if (!isNaN(threshold) && threshold >= 0 && threshold <= 1) {
-          // Reconstruct targetType without the threshold
-          targetType = (typePart || '') + (suffix || '')
-        } else {
-          threshold = undefined
-        }
-      }
-
-      // Parse union types (A|B|C syntax)
-      // First, strip off any modifiers (?, [], .backref) to get clean types
-      let cleanType = targetType
-      // Remove optional modifier for union parsing
-      if (cleanType.endsWith('?')) {
-        cleanType = cleanType.slice(0, -1)
-      }
-      // Remove array modifier for union parsing
-      if (cleanType.endsWith('[]')) {
-        cleanType = cleanType.slice(0, -2)
-      }
-      // Remove backref for union parsing (take only part before dot)
-      const dotIndex = cleanType.indexOf('.')
-      if (dotIndex !== -1) {
-        cleanType = cleanType.slice(0, dotIndex)
-      }
-
-      // Check for union types
-      let unionTypes: string[] | undefined
-      if (cleanType.includes('|')) {
-        unionTypes = cleanType
-          .split('|')
-          .map((t) => t.trim())
-          .filter(Boolean)
-        // The primary targetType is the first union type
-        // But we keep targetType as the full string for backward compatibility
-        // with modifier parsing in parseField
-      }
-
-      return {
-        ...(prompt !== undefined && { prompt }),
-        operator: op,
-        direction,
-        matchMode,
-        targetType,
-        ...(unionTypes !== undefined && { unionTypes }),
-        ...(threshold !== undefined && { threshold }),
-      }
+      rawTargetType = definition.slice(opIndex + op.length).trim()
+      break
     }
   }
 
-  return null
+  // Handle threshold extraction - graphdl already does this, so strip threshold from rawTargetType
+  if (graphdlResult.threshold !== undefined) {
+    // Remove threshold from rawTargetType (e.g., 'Type(0.8)' -> 'Type')
+    rawTargetType = rawTargetType.replace(/\([0-9.]+\)/, '')
+  } else {
+    // Handle malformed threshold syntax (missing closing paren)
+    // graphdl strips these internally - we need to do the same for rawTargetType
+    const malformedThresholdMatch = rawTargetType.match(/^([A-Za-z][A-Za-z0-9_]*)\([^)]*$/)
+    if (malformedThresholdMatch) {
+      rawTargetType = malformedThresholdMatch[1]!
+    }
+  }
+
+  const result: OperatorParseResult = {
+    operator: graphdlResult.operator,
+    direction: graphdlResult.direction,
+    matchMode: graphdlResult.matchMode,
+    targetType: rawTargetType,
+  }
+  if (graphdlResult.prompt !== undefined) result.prompt = graphdlResult.prompt
+  if (graphdlResult.unionTypes !== undefined) result.unionTypes = graphdlResult.unionTypes
+  if (graphdlResult.threshold !== undefined) result.threshold = graphdlResult.threshold
+  return result
 }
 
 /**

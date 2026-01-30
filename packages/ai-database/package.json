@@ -39,6 +39,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@graphdl/core": "workspace:*",
     "@org.ai/types": "workspace:*",
     "ai-functions": "workspace:*",
     "digital-objects": "workspace:*",
