@@ -480,3 +480,55 @@ export interface TypeMeta {
   /** Event type for deletion (e.g., 'Post.deleted') */
   deleted: string
 }
+
+// =============================================================================
+// Validation Types
+// =============================================================================
+
+/**
+ * Validation error codes
+ *
+ * | Code | Description |
+ * |------|-------------|
+ * | `UNKNOWN_TYPE` | Field references an unknown type |
+ * | `INVALID_PARTITION_FIELD` | $partitionBy references a non-existent field |
+ * | `INVALID_INDEX_FIELD` | $index references a non-existent field |
+ * | `INVALID_FTS_FIELD` | $fts references a non-existent field |
+ * | `INVALID_VECTOR_FIELD` | $vector references a non-existent field |
+ * | `UNKNOWN_RELATION_TARGET` | Relation targets a non-existent entity |
+ * | `CONFLICTING_MODIFIERS` | Field has conflicting modifiers (! + ?) |
+ */
+export type ValidationErrorCode =
+  | 'UNKNOWN_TYPE'
+  | 'INVALID_PARTITION_FIELD'
+  | 'INVALID_INDEX_FIELD'
+  | 'INVALID_FTS_FIELD'
+  | 'INVALID_VECTOR_FIELD'
+  | 'UNKNOWN_RELATION_TARGET'
+  | 'CONFLICTING_MODIFIERS'
+
+/**
+ * A single validation error or warning
+ */
+export interface ValidationError {
+  /** Error code identifying the type of issue */
+  code: ValidationErrorCode
+  /** Human-readable error message */
+  message: string
+  /** Entity name where the error occurred */
+  entity?: string
+  /** Field name where the error occurred */
+  field?: string
+}
+
+/**
+ * Result of validating a parsed graph
+ */
+export interface ValidationResult {
+  /** Whether the graph is valid (no errors) */
+  valid: boolean
+  /** Validation errors (issues that must be fixed) */
+  errors: ValidationError[]
+  /** Validation warnings (issues that should be addressed but are not fatal) */
+  warnings: ValidationError[]
+}

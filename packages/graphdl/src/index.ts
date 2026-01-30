@@ -40,6 +40,11 @@ export type {
   ParsedGraph,
   TypeMeta,
   EntityDirectives,
+
+  // Validation types
+  ValidationErrorCode,
+  ValidationError,
+  ValidationResult,
 } from './types.js'
 
 // =============================================================================
@@ -138,3 +143,9 @@ export {
   toGerund,
   toResult,
 } from './linguistic.js'
+
+// =============================================================================
+// Validation
+// =============================================================================
+
+export { validateGraph, validateEntity } from './validate.js'
