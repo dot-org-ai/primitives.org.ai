@@ -20,11 +20,11 @@
     "url": "https://github.com/ai-primitives/primitives.org.ai.git",
     "directory": "packages/graphdl"
   },
-  "homepage": "https://github.com/ai-primitives/primitives.org.ai/tree/main/packages/graphdl#readme",
+  "homepage": "https://graphdl.org",
   "bugs": {
     "url": "https://github.com/ai-primitives/primitives.org.ai/issues"
   },
-  "author": "Nathan Clevenger <nathan@ai-primitives.dev>",
+  "author": "Nathan Clevenger",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
