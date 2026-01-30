@@ -50,6 +50,55 @@ export const TYPE_ALIASES: Record<string, string> = {
 export const PARAMETRIC_TYPES = new Set(['decimal', 'varchar', 'char', 'fixed'])
 
 /**
+ * Generic types that accept type parameters in angle brackets.
+ *
+ * | Type | Parameters | Example |
+ * |------|------------|---------|
+ * | `map` | key type, value type | `map<string, int>` |
+ * | `struct` | struct name | `struct<Address>` |
+ * | `enum` | enum name | `enum<Status>` |
+ * | `ref` | reference target | `ref<Post>` |
+ * | `list` | element type | `list<string>` |
+ */
+export const GENERIC_TYPES = new Set(['map', 'struct', 'enum', 'ref', 'list'])
+
+/**
+ * Split generic type parameters respecting nested angle brackets.
+ *
+ * For example, `"string, list<int>"` splits to `["string", "list<int>"]`
+ * rather than splitting inside the nested `<>`.
+ *
+ * @param content - The content inside the top-level angle brackets
+ * @returns Array of parameter strings, trimmed
+ */
+export function splitGenericParams(content: string): string[] {
+  const params: string[] = []
+  let depth = 0
+  let current = ''
+
+  for (const char of content) {
+    if (char === '<') {
+      depth++
+      current += char
+    } else if (char === '>') {
+      depth--
+      current += char
+    } else if (char === ',' && depth === 0) {
+      params.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+
+  if (current.trim()) {
+    params.push(current.trim())
+  }
+
+  return params
+}
+
+/**
  * Check if a type string represents a primitive type
  */
 function isPrimitiveType(type: string): type is PrimitiveType {
@@ -109,7 +158,9 @@ function parseField(name: string, definition: string | [string]): ParsedField {
   // Parse modifiers from the end, handling any order
   // Modifiers are: ?, [], !, #
   // Only parse if type doesn't contain spaces (prompts may have these characters)
-  if (!type.includes(' ')) {
+  // Exception: generic types like map<string, int>? may contain spaces inside <>
+  const hasGenericBrackets = type.includes('<') && type.includes('>')
+  if (!type.includes(' ') || hasGenericBrackets) {
     let parsing = true
     while (parsing) {
       if (type.endsWith('#')) {
@@ -147,6 +198,34 @@ function parseField(name: string, definition: string | [string]): ParsedField {
       } else {
         // varchar, char, fixed all take a length parameter
         if (paramParts.length >= 1 && paramParts[0]) length = parseInt(paramParts[0], 10)
+      }
+    }
+  }
+
+  // Parse generic types: map<string, int>, struct<Address>, enum<Status>, ref<Post>, list<string>
+  let keyType: string | undefined
+  let valueType: string | undefined
+  let structName: string | undefined
+  let enumName: string | undefined
+  let refTarget: string | undefined
+  let elementType: string | undefined
+  const genericMatch = type.match(/^(\w+)<(.+)>$/)
+  if (genericMatch) {
+    const [, baseType, content] = genericMatch
+    if (baseType && GENERIC_TYPES.has(baseType)) {
+      type = baseType
+      const params = splitGenericParams(content!)
+      if (baseType === 'map' && params.length >= 2) {
+        keyType = params[0]
+        valueType = params[1]
+      } else if (baseType === 'struct' && params.length >= 1) {
+        structName = params[0]
+      } else if (baseType === 'enum' && params.length >= 1) {
+        enumName = params[0]
+      } else if (baseType === 'ref' && params.length >= 1) {
+        refTarget = params[0]
+      } else if (baseType === 'list' && params.length >= 1) {
+        elementType = params[0]
       }
     }
   }
@@ -189,6 +268,12 @@ function parseField(name: string, definition: string | [string]): ParsedField {
   if (precision !== undefined) result.precision = precision
   if (scale !== undefined) result.scale = scale
   if (length !== undefined) result.length = length
+  if (keyType !== undefined) result.keyType = keyType
+  if (valueType !== undefined) result.valueType = valueType
+  if (structName !== undefined) result.structName = structName
+  if (enumName !== undefined) result.enumName = enumName
+  if (refTarget !== undefined) result.refTarget = refTarget
+  if (elementType !== undefined) result.elementType = elementType
   return result
 }
 

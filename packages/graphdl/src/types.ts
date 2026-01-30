@@ -194,6 +194,11 @@ export type PrimitiveType =
   | 'varchar'
   | 'char'
   | 'fixed'
+  | 'map'
+  | 'struct'
+  | 'enum'
+  | 'ref'
+  | 'list'
   | 'json'
   | 'markdown'
   | 'url'
@@ -380,6 +385,18 @@ export interface ParsedField {
   scale?: number
   /** Length parameter for parametric types like varchar(length), char(length), fixed(length) */
   length?: number
+  /** Key type for map<K, V> generic */
+  keyType?: string
+  /** Value type for map<K, V> generic */
+  valueType?: string
+  /** Struct name for struct<Name> generic */
+  structName?: string
+  /** Enum name for enum<Name> generic */
+  enumName?: string
+  /** Reference target for ref<Target> generic */
+  refTarget?: string
+  /** Element type for list<T> generic */
+  elementType?: string
 }
 
 /**

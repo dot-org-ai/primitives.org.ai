@@ -56,6 +56,8 @@ export {
   getReferencingEntities,
   TYPE_ALIASES,
   PARAMETRIC_TYPES,
+  GENERIC_TYPES,
+  splitGenericParams,
 } from './graph.js'
 
 // =============================================================================

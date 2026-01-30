@@ -103,6 +103,12 @@ export const PRIMITIVE_TYPES = new Set([
   'varchar',
   'char',
   'fixed',
+  // Generic types (container/wrapper types)
+  'map',
+  'struct',
+  'enum',
+  'ref',
+  'list',
   // Structured types
   'json',
   'object',
