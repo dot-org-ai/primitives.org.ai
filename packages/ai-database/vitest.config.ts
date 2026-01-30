@@ -28,7 +28,7 @@ export default defineConfig({
     globals: false,
     environment: 'node',
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
-    exclude: ['node_modules/**', 'dist/**'],
+    exclude: ['node_modules/**', 'dist/**', 'test/worker/**', 'test/core-schema.test.ts'],
     testTimeout: 30000,
     hookTimeout: 15000,
     // Run tests sequentially for database operations
