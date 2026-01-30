@@ -14,7 +14,13 @@
  * @packageDocumentation
  */
 
-import { createProviderRegistry, type Provider, type ProviderRegistryProvider, type LanguageModel, type EmbeddingModel } from 'ai'
+import {
+  createProviderRegistry,
+  type Provider,
+  type ProviderRegistryProvider,
+  type LanguageModel,
+  type EmbeddingModel,
+} from 'ai'
 
 /**
  * Available provider IDs
@@ -68,7 +74,7 @@ const GATEWAY_PROVIDER_PATHS: Record<ProviderId, string> = {
   google: 'google-ai-studio',
   openrouter: 'openrouter',
   cloudflare: 'workers-ai',
-  bedrock: 'aws-bedrock'
+  bedrock: 'aws-bedrock',
 }
 
 /**
@@ -83,7 +89,8 @@ function getEnvConfig(): ProviderConfig {
     gatewayToken: process.env['AI_GATEWAY_TOKEN'] || process.env['DO_TOKEN'],
 
     // llm.do WebSocket transport
-    useWebSocket: process.env['LLM_WEBSOCKET'] === 'true' || process.env['USE_LLM_WEBSOCKET'] === 'true',
+    useWebSocket:
+      process.env['LLM_WEBSOCKET'] === 'true' || process.env['USE_LLM_WEBSOCKET'] === 'true',
     llmUrl: process.env['LLM_URL'],
 
     // Individual provider keys (fallbacks)
@@ -92,7 +99,7 @@ function getEnvConfig(): ProviderConfig {
     googleApiKey: process.env['GOOGLE_GENERATIVE_AI_API_KEY'] || process.env['GOOGLE_AI_API_KEY'],
     openrouterApiKey: process.env['OPENROUTER_API_KEY'],
     cloudflareAccountId: process.env['CLOUDFLARE_ACCOUNT_ID'],
-    cloudflareApiToken: process.env['CLOUDFLARE_API_TOKEN']
+    cloudflareApiToken: process.env['CLOUDFLARE_API_TOKEN'],
   }
 }
 
@@ -134,7 +141,7 @@ function createGatewayFetch(config: ProviderConfig): typeof fetch | undefined {
         const { createLLMFetch } = await import('./llm.do.js')
         llmFetchInstance = createLLMFetch({
           url: config.llmUrl ?? 'wss://llm.do/ws',
-          token: config.gatewayToken!
+          token: config.gatewayToken!,
         })
       }
       return llmFetchInstance(url, init)
@@ -195,11 +202,13 @@ function buildProviderOptions(
  */
 async function createOpenAIProvider(config: ProviderConfig): Promise<unknown> {
   const { createOpenAI } = await import('@ai-sdk/openai')
-  return createOpenAI(buildProviderOptions(
-    getApiKey(config, config.openaiApiKey),
-    getBaseUrl('openai', config),
-    createGatewayFetch(config),
-  ))
+  return createOpenAI(
+    buildProviderOptions(
+      getApiKey(config, config.openaiApiKey),
+      getBaseUrl('openai', config),
+      createGatewayFetch(config)
+    )
+  )
 }
 
 /**
@@ -207,11 +216,13 @@ async function createOpenAIProvider(config: ProviderConfig): Promise<unknown> {
  */
 async function createAnthropicProvider(config: ProviderConfig): Promise<unknown> {
   const { createAnthropic } = await import('@ai-sdk/anthropic')
-  return createAnthropic(buildProviderOptions(
-    getApiKey(config, config.anthropicApiKey),
-    getBaseUrl('anthropic', config),
-    createGatewayFetch(config),
-  ))
+  return createAnthropic(
+    buildProviderOptions(
+      getApiKey(config, config.anthropicApiKey),
+      getBaseUrl('anthropic', config),
+      createGatewayFetch(config)
+    )
+  )
 }
 
 /**
@@ -219,11 +230,13 @@ async function createAnthropicProvider(config: ProviderConfig): Promise<unknown>
  */
 async function createGoogleProvider(config: ProviderConfig): Promise<unknown> {
   const { createGoogleGenerativeAI } = await import('@ai-sdk/google')
-  return createGoogleGenerativeAI(buildProviderOptions(
-    getApiKey(config, config.googleApiKey),
-    getBaseUrl('google', config),
-    createGatewayFetch(config),
-  ))
+  return createGoogleGenerativeAI(
+    buildProviderOptions(
+      getApiKey(config, config.googleApiKey),
+      getBaseUrl('google', config),
+      createGatewayFetch(config)
+    )
+  )
 }
 
 /**
@@ -231,11 +244,13 @@ async function createGoogleProvider(config: ProviderConfig): Promise<unknown> {
  */
 async function createOpenRouterProvider(config: ProviderConfig): Promise<unknown> {
   const { createOpenAI } = await import('@ai-sdk/openai')
-  return createOpenAI(buildProviderOptions(
-    getApiKey(config, config.openrouterApiKey),
-    getBaseUrl('openrouter', config, 'https://openrouter.ai/api/v1'),
-    createGatewayFetch(config),
-  ))
+  return createOpenAI(
+    buildProviderOptions(
+      getApiKey(config, config.openrouterApiKey),
+      getBaseUrl('openrouter', config, 'https://openrouter.ai/api/v1'),
+      createGatewayFetch(config)
+    )
+  )
 }
 
 /**
@@ -271,19 +286,24 @@ async function createBedrockProvider(config: ProviderConfig): Promise<unknown> {
  * Create Cloudflare Workers AI provider
  */
 async function createCloudflareProvider(config: ProviderConfig): Promise<unknown> {
-  const { cloudflare } = await import('./providers/cloudflare.js')
+  const { cloudflare, cloudflareLanguageModel } = await import('./providers/cloudflare.js')
+
+  const cloudflareConfig = {
+    accountId: config.cloudflareAccountId,
+    apiToken: getApiKey(config, config.cloudflareApiToken),
+    gateway: process.env['CLOUDFLARE_AI_GATEWAY'],
+  }
 
   return {
-    languageModel: (modelId: string) => {
-      throw new Error(`Cloudflare language models not yet supported via registry. Use embedding models like: cloudflare:@cf/baai/bge-m3`)
+    languageModel: async (modelId: string) => {
+      return cloudflareLanguageModel(modelId, cloudflareConfig)
     },
     textEmbeddingModel: (modelId: string) => {
       return cloudflare.embedding(modelId, {
-        accountId: config.cloudflareAccountId,
-        apiToken: getApiKey(config, config.cloudflareApiToken),
-        baseUrl: getBaseUrl('cloudflare', config)
+        ...cloudflareConfig,
+        baseUrl: getBaseUrl('cloudflare', config),
       })
-    }
+    },
   } as unknown
 }
 
@@ -296,7 +316,7 @@ const providerFactories: Record<ProviderId, (config: ProviderConfig) => Promise<
   google: createGoogleProvider,
   openrouter: createOpenRouterProvider,
   cloudflare: createCloudflareProvider,
-  bedrock: createBedrockProvider
+  bedrock: createBedrockProvider,
 }
 
 /**
@@ -334,7 +354,9 @@ export async function createRegistry(
   options: { providers?: ProviderId[] } = {}
 ): Promise<ProviderRegistryProvider> {
   const mergedConfig = { ...getEnvConfig(), ...config }
-  const providerIds = options.providers || (['openai', 'anthropic', 'google', 'openrouter', 'cloudflare', 'bedrock'] as ProviderId[])
+  const providerIds =
+    options.providers ||
+    (['openai', 'anthropic', 'google', 'openrouter', 'cloudflare', 'bedrock'] as ProviderId[])
 
   const providers: Record<string, unknown> = {}
 
@@ -366,7 +388,7 @@ export async function getRegistry(): Promise<ProviderRegistryProvider> {
   if (defaultRegistry) return defaultRegistry
 
   if (!defaultRegistryPromise) {
-    defaultRegistryPromise = createRegistry().then(registry => {
+    defaultRegistryPromise = createRegistry().then((registry) => {
       defaultRegistry = registry
       return registry
     })
@@ -397,7 +419,7 @@ function parseModelId(id: string): { provider: string; model: string } {
   }
   return {
     provider: id.substring(0, slashIndex),
-    model: id.substring(slashIndex + 1)
+    model: id.substring(slashIndex + 1),
   }
 }
 
@@ -437,9 +459,15 @@ export async function model(id: string): Promise<LanguageModel> {
   const colonIndex = id.indexOf(':')
   if (colonIndex > 0) {
     const provider = id.substring(0, colonIndex)
+    const modelId = id.substring(colonIndex + 1)
     // Known providers that support direct routing
     if (['bedrock', 'openai', 'anthropic', 'google', 'openrouter'].includes(provider)) {
       return registry.languageModel(id as `${string}:${string}`)
+    }
+    // Cloudflare needs async resolution
+    if (provider === 'cloudflare') {
+      const { cloudflareLanguageModel } = await import('./providers/cloudflare.js')
+      return cloudflareLanguageModel(modelId)
     }
   }
 

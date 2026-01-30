@@ -1,18 +1,22 @@
 /**
- * Cloudflare Workers AI Provider for embeddings
+ * Cloudflare Workers AI Provider for embeddings and language models
  *
- * Provides embedding models via Cloudflare Workers AI API.
- * Default model: @cf/baai/bge-m3
+ * Provides embedding and language models via Cloudflare Workers AI API.
+ * Default embedding model: @cf/baai/bge-m3
+ * Default language model: @cf/meta/llama-3.3-70b-instruct-fp8-fast
+ *
+ * For language models, uses Cloudflare's OpenAI-compatible endpoint.
  *
  * @packageDocumentation
  */
 
-import type { EmbeddingModel } from 'ai'
+import type { EmbeddingModel, LanguageModel } from 'ai'
 
 /**
  * Default Cloudflare embedding model
  */
 export const DEFAULT_CF_EMBEDDING_MODEL = '@cf/baai/bge-m3'
+export const DEFAULT_CF_LANGUAGE_MODEL = '@cf/openai/gpt-oss-120b'
 
 /**
  * Cloudflare Workers AI configuration
@@ -35,7 +39,7 @@ function getCloudflareConfig(): CloudflareConfig {
   return {
     accountId: typeof process !== 'undefined' ? process.env?.['CLOUDFLARE_ACCOUNT_ID'] : undefined,
     apiToken: typeof process !== 'undefined' ? process.env?.['CLOUDFLARE_API_TOKEN'] : undefined,
-    gateway: typeof process !== 'undefined' ? process.env?.['CLOUDFLARE_AI_GATEWAY'] : undefined
+    gateway: typeof process !== 'undefined' ? process.env?.['CLOUDFLARE_AI_GATEWAY'] : undefined,
   }
 }
 
@@ -90,9 +94,9 @@ class CloudflareEmbeddingModel {
 
     // Cloudflare AI binding processes one at a time or in batches depending on model
     for (const text of values) {
-      const result = await this.ai!.run(this.modelId as BaseAiTextEmbeddingsModels, {
-        text
-      }) as { data?: number[][] }
+      const result = (await this.ai!.run(this.modelId as BaseAiTextEmbeddingsModels, {
+        text,
+      })) as { data?: number[][] }
 
       if (result.data && Array.isArray(result.data) && result.data[0]) {
         embeddings.push(result.data[0])
@@ -119,7 +123,8 @@ class CloudflareEmbeddingModel {
       )
     }
 
-    const url = baseUrl ||
+    const url =
+      baseUrl ||
       (gateway
         ? `https://gateway.ai.cloudflare.com/v1/${accountId}/${gateway}/workers-ai/${this.modelId}`
         : `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${this.modelId}`)
@@ -131,12 +136,12 @@ class CloudflareEmbeddingModel {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiToken}`,
+          Authorization: `Bearer ${apiToken}`,
           'Content-Type': 'application/json',
-          ...headers
+          ...headers,
         },
         body: JSON.stringify({ text }),
-        signal: abortSignal ?? null
+        signal: abortSignal ?? null,
       })
 
       if (!response.ok) {
@@ -144,7 +149,7 @@ class CloudflareEmbeddingModel {
         throw new Error(`Cloudflare AI error: ${response.status} ${error}`)
       }
 
-      const result = await response.json() as {
+      const result = (await response.json()) as {
         success: boolean
         result?: { data: number[][] }
         errors?: Array<{ message: string }>
@@ -185,6 +190,51 @@ export function cloudflareEmbedding(
 }
 
 /**
+ * Create a Cloudflare Workers AI language model using OpenAI-compatible endpoint
+ *
+ * Cloudflare provides an OpenAI-compatible API for language models at:
+ * https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1
+ *
+ * @example
+ * ```ts
+ * import { cloudflareLanguageModel } from 'ai-providers'
+ * import { generateText } from 'ai'
+ *
+ * const model = await cloudflareLanguageModel('@cf/meta/llama-3.3-70b-instruct-fp8-fast')
+ * const { text } = await generateText({ model, prompt: 'Hello!' })
+ * ```
+ */
+export async function cloudflareLanguageModel(
+  modelId: string = DEFAULT_CF_LANGUAGE_MODEL,
+  config: CloudflareConfig = {}
+): Promise<LanguageModel> {
+  const mergedConfig = { ...getCloudflareConfig(), ...config }
+  const { accountId, apiToken, gateway } = mergedConfig
+
+  if (!accountId || !apiToken) {
+    throw new Error(
+      'Cloudflare credentials required. Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN environment variables.'
+    )
+  }
+
+  // Use OpenAI SDK pointed at Cloudflare's OpenAI-compatible endpoint
+  const { createOpenAI } = await import('@ai-sdk/openai')
+
+  // Build base URL - use gateway if configured, otherwise direct API
+  const baseURL = gateway
+    ? `https://gateway.ai.cloudflare.com/v1/${accountId}/${gateway}/workers-ai/v1`
+    : `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1`
+
+  const openai = createOpenAI({
+    apiKey: apiToken,
+    baseURL,
+  })
+
+  // Return the language model - model ID should be the Cloudflare model name
+  return openai(modelId)
+}
+
+/**
  * Cloudflare Workers AI provider
  */
 export const cloudflare = {
@@ -196,7 +246,12 @@ export const cloudflare = {
   /**
    * Alias for embedding
    */
-  textEmbeddingModel: cloudflareEmbedding
+  textEmbeddingModel: cloudflareEmbedding,
+
+  /**
+   * Create a language model (async - uses OpenAI-compatible endpoint)
+   */
+  languageModel: cloudflareLanguageModel,
 }
 
 // Type definitions for Cloudflare AI binding
