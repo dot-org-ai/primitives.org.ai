@@ -139,8 +139,8 @@ export {
   hasEmbeddingsConfig,
 } from './schema/index.js'
 
-// Import generateAIFields directly from cascade.js to avoid potential circular dependency
-import { generateAIFields } from './schema/cascade.js'
+// Import generateAIFields and generateEntity directly from cascade.js to avoid potential circular dependency
+import { generateAIFields, generateEntity as cascadeGenerateEntity } from './schema/cascade.js'
 
 export type { AIGenerationConfig, EntityOperationsConfig, SeedResult } from './schema/index.js'
 
@@ -156,6 +156,10 @@ import {
 
 // Import extended provider types for type assertions
 import type { DBProviderExtended, SemanticSearchResult } from './schema/index.js'
+
+// Import module-level state setters for bridging state between schema.ts and schema/ modules
+import { setProvider as setModuleProvider } from './schema/provider.js'
+import { setNLQueryGenerator as setModuleNLQueryGenerator } from './schema/nl-query.js'
 
 // Import error handling utilities
 import {
@@ -189,6 +193,7 @@ import type {
   ParsedField,
   ParsedEntity,
   ParsedSchema,
+  SeedConfig,
   Verb,
   Noun,
   NounProperty,
@@ -874,6 +879,21 @@ function parseField(name: string, definition: FieldDefinition): ParsedField {
   }
 
   let type = definition
+
+  // Handle seed column mapping syntax: '$.columnName'
+  // This maps a source column from seed data to this field
+  if (type.startsWith('$.')) {
+    const seedColumn = type.slice(2) // Remove '$.' prefix
+    return {
+      name,
+      type: 'string', // Seed fields are stored as strings
+      isArray: false,
+      isOptional: false,
+      isRelation: false,
+      seedMapping: seedColumn,
+    }
+  }
+
   let isArray = false
   let isOptional = false
   let isRelation = false
@@ -1009,8 +1029,35 @@ export function parseSchema(schema: DatabaseSchema): ParsedSchema {
       fields.set(fieldName, parseField(fieldName, fieldDef))
     }
 
+    // Extract seed configuration if $seed is defined
+    let seedConfig: SeedConfig | undefined
+    const seedUrl = entitySchema['$seed'] as string | undefined
+    const seedIdField = entitySchema['$id'] as string | undefined
+
+    if (seedUrl) {
+      // Extract the id column from $id field (e.g., '$.oNETSOCCode' -> 'oNETSOCCode')
+      const idColumn = seedIdField?.startsWith('$.') ? seedIdField.slice(2) : undefined
+      if (idColumn) {
+        // Build field mappings from fields with seedMapping
+        const fieldMappings = new Map<string, string>()
+        for (const [fieldName, field] of fields) {
+          if (field.seedMapping) {
+            fieldMappings.set(fieldName, field.seedMapping)
+          }
+        }
+
+        seedConfig = {
+          url: seedUrl,
+          idColumn,
+          fieldMappings,
+        }
+      }
+    }
+
     // Store raw schema for accessing metadata like $fuzzyThreshold
-    entities.set(entityName, { name: entityName, fields, schema: entitySchema })
+    const entityData: ParsedEntity = { name: entityName, fields, schema: entitySchema }
+    if (seedConfig !== undefined) entityData.seedConfig = seedConfig
+    entities.set(entityName, entityData)
   }
 
   // Validation pass: check that all operator-based references (->, ~>, <-, <~) point to existing types
@@ -2024,6 +2071,8 @@ let nlQueryGenerator: NLQueryGenerator | null = null
  */
 export function setNLQueryGenerator(generator: NLQueryGenerator): void {
   nlQueryGenerator = generator
+  // Bridge to schema/nl-query.ts module state so extracted modules share the same generator
+  setModuleNLQueryGenerator(generator as import('./schema/types.js').NLQueryGenerator)
 }
 
 /**
@@ -2076,19 +2125,38 @@ export async function executeNLQuery<T>(
   schema: ParsedSchema,
   targetType?: string
 ): Promise<NLQueryResult<T>> {
+  // Import applyFilters for MongoDB-style filter support
+  const { applyFilters } = await import('./schema/nl-query-generator.js')
+
   // If no AI generator configured, fall back to search
   if (!nlQueryGenerator) {
-    // Simple fallback: search across all types or target type
     const provider = await resolveProvider()
     const results: T[] = []
 
+    // Simple heuristic for common "list all" patterns in fallback mode
+    const lowerQuestion = question.toLowerCase().trim()
+    const isListAllQuery =
+      /^(show|list|get|find|display)\s+(all|every|the)?\s*/i.test(lowerQuestion) ||
+      lowerQuestion === '' ||
+      /\ball\b/i.test(lowerQuestion)
+
     if (targetType) {
-      const searchResults = await provider.search(targetType, question)
-      results.push(...(searchResults as T[]))
+      if (isListAllQuery) {
+        const listResults = await provider.list(targetType)
+        results.push(...(listResults as T[]))
+      } else {
+        const searchResults = await provider.search(targetType, question)
+        results.push(...(searchResults as T[]))
+      }
     } else {
       for (const [typeName] of schema.entities) {
-        const searchResults = await provider.search(typeName, question)
-        results.push(...(searchResults as T[]))
+        if (isListAllQuery) {
+          const listResults = await provider.list(typeName)
+          results.push(...(listResults as T[]))
+        } else {
+          const searchResults = await provider.search(typeName, question)
+          results.push(...(searchResults as T[]))
+        }
       }
     }
 
@@ -2106,22 +2174,20 @@ export async function executeNLQuery<T>(
 
   // Execute the plan
   const provider = await resolveProvider()
-  const results: T[] = []
+  let results: T[] = []
 
   for (const typeName of plan.types) {
     let typeResults: Record<string, unknown>[]
 
     if (plan.search) {
-      typeResults = await provider.search(
-        typeName,
-        plan.search,
-        plan.filters ? { where: plan.filters } : undefined
-      )
+      typeResults = await provider.search(typeName, plan.search)
     } else {
-      typeResults = await provider.list(
-        typeName,
-        plan.filters ? { where: plan.filters } : undefined
-      )
+      typeResults = await provider.list(typeName)
+    }
+
+    // Apply MongoDB-style filters in memory
+    if (plan.filters && Object.keys(plan.filters).length > 0) {
+      typeResults = applyFilters(typeResults, plan.filters)
     }
 
     results.push(...(typeResults as T[]))
@@ -2218,6 +2284,8 @@ const FILE_COUNT_THRESHOLD = 10_000
 export function setProvider(provider: DBProvider): void {
   globalProvider = provider
   providerPromise = null
+  // Bridge to schema/provider.ts module state so extracted modules share the same provider
+  setModuleProvider(provider as import('./schema/provider.js').DBProvider)
 }
 
 /**
@@ -3170,19 +3238,44 @@ export function DB<TSchema extends DatabaseSchema>(
     }
   }
 
+  /**
+   * Make entity operations callable as a tagged template literal.
+   * This allows both: db.Lead.get('id') and db.Lead`natural language query`
+   */
+  function makeCallableEntityOps(
+    ops: Record<string, unknown>,
+    entityName: string
+  ): Record<string, unknown> {
+    const nlQueryFn = createNLQueryFn(parsedSchema, entityName)
+    const callableOps = function (strings: TemplateStringsArray, ...values: unknown[]) {
+      return nlQueryFn(strings, ...values)
+    }
+    Object.assign(callableOps, ops)
+    return callableOps as unknown as Record<string, unknown>
+  }
+
   for (const [entityName, entity] of parsedSchema.entities) {
     if (entityName === 'Edge') {
       // Special handling for Edge entity - query from in-memory edge records + runtime edges
       const edgeOps = createEdgeEntityOperations(allEdgeRecords, resolveProvider)
-      entityOperations[entityName] = wrapEntityOperations(entityName, edgeOps, forEachActionsAPI)
+      entityOperations[entityName] = makeCallableEntityOps(
+        wrapEntityOperations(entityName, edgeOps, forEachActionsAPI) as Record<string, unknown>,
+        entityName
+      )
     } else if (entityName === 'Noun') {
       // Noun entity - auto-generated from schema entity types
       const nounOps = createNounEntityOperations(allNounRecords)
-      entityOperations[entityName] = wrapEntityOperations(entityName, nounOps, forEachActionsAPI)
+      entityOperations[entityName] = makeCallableEntityOps(
+        wrapEntityOperations(entityName, nounOps, forEachActionsAPI) as Record<string, unknown>,
+        entityName
+      )
     } else if (entityName === 'Verb') {
       // Verb entity - standard verbs with conjugation forms
       const verbOps = createVerbEntityOperations(allVerbRecords)
-      entityOperations[entityName] = wrapEntityOperations(entityName, verbOps, forEachActionsAPI)
+      entityOperations[entityName] = makeCallableEntityOps(
+        wrapEntityOperations(entityName, verbOps, forEachActionsAPI) as Record<string, unknown>,
+        entityName
+      )
     } else {
       const baseOps = createEntityOperations(entityName, entity, parsedSchema)
       // Wrap with DBPromise for chainable queries, inject actions for forEach persistence
@@ -3248,9 +3341,15 @@ export function DB<TSchema extends DatabaseSchema>(
           return draft
         }
 
+        // Pre-generate entity ID so it's available during resolve phase
+        // This allows generated child entities to reference the parent via $generatedBy
+        const preGeneratedId = typeof args[0] === 'string' ? args[0] : crypto.randomUUID()
+
         // Run draft phase first - draftFn returns an object with draft properties
         const draftResult = await draftFn(data)
         const draft = isPlainObject(draftResult) ? draftResult : {}
+        // Inject $id into draft so resolve can pass it as context to resolveReferenceSpec
+        draft['$id'] = preGeneratedId
         // Then resolve
         const resolveResult = await resolveFn(draft)
         const resolved = isPlainObject(resolveResult) ? resolveResult : {}
@@ -3265,25 +3364,43 @@ export function DB<TSchema extends DatabaseSchema>(
         // so we don't need to call it here. The originalCreate flow handles:
         // resolveForwardExact → resolveForwardFuzzy → resolveBackwardFuzzy → generateAIFields → provider.create
 
-        // Call originalCreate with the resolved data
+        // Call originalCreate with the resolved data using the pre-generated ID
         // Type assertion to Function is necessary for dynamic method call with spread args
-        if (typeof args[0] === 'string') {
-          return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
-            wrappedOps,
-            args[0],
-            finalData,
-            options
-          )
-        } else {
-          return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
-            wrappedOps,
-            finalData,
-            options
-          )
+        return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
+          wrappedOps,
+          preGeneratedId,
+          finalData,
+          options
+        )
+      }
+
+      // Add seed method if entity has seed configuration
+      if (entity.seedConfig) {
+        const seedConfig = entity.seedConfig
+        ;(wrappedOps as Record<string, unknown>)['seed'] = async (): Promise<{ count: number }> => {
+          const { loadSeedData } = await import('./schema/seed.js')
+          const records = await loadSeedData(seedConfig)
+          const provider = await resolveProvider()
+
+          for (const record of records) {
+            const { $id, ...data } = record
+            // Upsert: check if exists, then update or create
+            const existing = await provider.get(entityName, $id)
+            if (existing) {
+              await provider.update(entityName, $id, data as Record<string, unknown>)
+            } else {
+              await provider.create(entityName, $id, data as Record<string, unknown>)
+            }
+          }
+
+          return { count: records.length }
         }
       }
 
-      entityOperations[entityName] = wrappedOps
+      entityOperations[entityName] = makeCallableEntityOps(
+        wrappedOps as Record<string, unknown>,
+        entityName
+      )
     }
   }
 
@@ -3440,7 +3557,10 @@ export function DB<TSchema extends DatabaseSchema>(
     async emit(optionsOrType: CreateEventOptions | string, data?: unknown): Promise<DBEvent> {
       const provider = await resolveProvider()
       if (hasEventsAPI(provider)) {
-        return provider.emit(optionsOrType as CreateEventOptions)
+        if (typeof optionsOrType === 'string') {
+          return provider.emit(optionsOrType, data)
+        }
+        return provider.emit(optionsOrType)
       }
       // Return minimal event if provider doesn't support emit
       const now = new Date()
@@ -4485,13 +4605,11 @@ async function cascadeGenerate(
 
       // Generate new related entities
       if (field.isArray) {
-        // Generate array of related entities
-        // Use generateSimpleEntity to avoid infinite recursion
-        const generated = generateSimpleEntity(
+        // Generate array of related entities using AI-enabled generation
+        const generated = await cascadeGenerateEntity(
           field.relatedType!,
           field.prompt,
           { parent: entityDef.name, parentData: entity, parentId: entityId },
-          relatedEntityDef,
           schema
         )
 
@@ -4528,12 +4646,11 @@ async function cascadeGenerate(
           progress
         )
       } else {
-        // Generate single related entity using simple generation
-        const generated = generateSimpleEntity(
+        // Generate single related entity using AI-enabled generation
+        const generated = await cascadeGenerateEntity(
           field.relatedType!,
           field.prompt,
           { parent: entityDef.name, parentData: entity, parentId: entityId },
-          relatedEntityDef,
           schema
         )
 
@@ -5137,6 +5254,19 @@ async function resolveReferenceSpec(
 
   // Build context for generation from contextData
   const genCtxParts: string[] = []
+  // Include $instructions from source entity schema (injected during resolve)
+  if (typeof contextData['$instructions'] === 'string') {
+    genCtxParts.push(contextData['$instructions'])
+  }
+  // Include target entity's $instructions
+  const tgtInstructions = targetEntity.schema?.['$instructions']
+  if (typeof tgtInstructions === 'string') {
+    genCtxParts.push(tgtInstructions)
+  }
+  // Include spec prompt
+  if (spec.prompt) {
+    genCtxParts.push(spec.prompt)
+  }
   for (const [key, value] of Object.entries(contextData)) {
     if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
       genCtxParts.push(`${key}: ${value}`)
@@ -5185,7 +5315,9 @@ async function resolveReferenceSpec(
   const created = await provider.create(spec.type, undefined, {
     ...generatedData,
     $generated: true,
-    $generatedBy: spec.matchMode === 'fuzzy' ? 'fuzzy-resolution' : 'reference-resolution',
+    $generatedBy:
+      (contextData['$id'] as string) ||
+      (spec.matchMode === 'fuzzy' ? 'fuzzy-resolution' : 'reference-resolution'),
     $sourceField: spec.field,
   })
   return created['$id'] as string
@@ -5296,7 +5428,7 @@ function createEntityOperations<T>(
         schema,
         provider,
         entityId,
-        options?.cascade ? { skipArrayGeneration: true } : undefined
+        { skipArrayGeneration: true }
       )
 
       // Resolve forward fuzzy (~>) fields by semantic search then generation
@@ -5560,6 +5692,9 @@ function createEntityOperations<T>(
 
         // Only process fields with relationship operators
         if (field.operator && field.relatedType) {
+          // Skip optional relation fields - they shouldn't auto-generate
+          if (field.isOptional) continue
+
           // Skip backward references - they are resolved lazily via hydrateEntity
           if (field.operator === '<-' || field.operator === '<~') continue
 
@@ -5661,6 +5796,12 @@ function createEntityOperations<T>(
       const provider = await resolveProvider()
       const resolved: Record<string, unknown> = { ...draft }
       const errors: Array<{ field: string; error: string }> = []
+
+      // Inject $instructions from entity schema into resolved context for reference resolution
+      const entityInstructions = entity.schema?.['$instructions']
+      if (entityInstructions && typeof entityInstructions === 'string') {
+        resolved['$instructions'] = entityInstructions
+      }
 
       // Remove draft markers
       delete resolved['$refs']
