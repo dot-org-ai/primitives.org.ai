@@ -74,19 +74,31 @@ export interface DependencyGraph {
 export const PRIMITIVE_TYPES = new Set([
   // Text types
   'string',
+  'text',
   'markdown',
   'url',
   'email',
   // Numeric types
   'number',
   'int',
+  'long',
+  'bigint',
   'float',
   'double',
   'decimal',
-  // Other types
+  // Boolean
   'boolean',
+  // Date/time types
   'date',
   'datetime',
+  'timestamp',
+  'timestamptz',
+  'time',
+  // Identifier types
+  'uuid',
+  // Binary types
+  'binary',
+  // Structured types
   'json',
   'object',
   'array',

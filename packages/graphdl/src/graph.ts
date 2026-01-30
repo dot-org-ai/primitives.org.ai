@@ -24,6 +24,20 @@ import { parseOperator } from './relationship.js'
 import { PRIMITIVE_TYPES } from './dependency-graph.js'
 
 /**
+ * Type aliases that resolve to canonical primitive type names.
+ *
+ * These allow shorthand or alternate spellings to be used in schema
+ * definitions while normalizing to a single canonical type internally.
+ *
+ * | Alias  | Resolves To |
+ * |--------|-------------|
+ * | `bool` | `boolean`   |
+ */
+export const TYPE_ALIASES: Record<string, string> = {
+  bool: 'boolean',
+}
+
+/**
  * Check if a type string represents a primitive type
  */
 function isPrimitiveType(type: string): type is PrimitiveType {
@@ -103,6 +117,11 @@ function parseField(name: string, definition: string | [string]): ParsedField {
         parsing = false
       }
     }
+  }
+
+  // Resolve type aliases (e.g., bool -> boolean)
+  if (type in TYPE_ALIASES) {
+    type = TYPE_ALIASES[type]!
   }
 
   // Check for backref syntax (Type.field)
