@@ -397,6 +397,8 @@ export interface ParsedField {
   refTarget?: string
   /** Element type for list<T> generic */
   elementType?: string
+  /** Default value for the field, parsed from `type = value` syntax */
+  default?: unknown
 }
 
 /**

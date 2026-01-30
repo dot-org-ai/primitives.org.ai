@@ -58,6 +58,7 @@ export {
   PARAMETRIC_TYPES,
   GENERIC_TYPES,
   splitGenericParams,
+  parseDefaultValue,
 } from './graph.js'
 
 // =============================================================================

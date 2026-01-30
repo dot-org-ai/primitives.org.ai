@@ -105,6 +105,61 @@ function isPrimitiveType(type: string): type is PrimitiveType {
   return PRIMITIVE_TYPES.has(type)
 }
 
+/**
+ * Parse a default value string into its typed representation.
+ *
+ * Handles:
+ * - Quoted strings: `"active"` or `'active'` -> `"active"`
+ * - Numbers: `42`, `3.14`, `-1` -> number
+ * - Booleans: `true`, `false` -> boolean
+ * - Null: `null` -> null
+ * - Empty object: `{}` -> {}
+ * - Empty array: `[]` -> []
+ * - Function calls: `now()`, `gen_random_uuid()` -> { function: "name" }
+ *
+ * @param value - The raw default value string
+ * @returns The parsed default value
+ */
+export function parseDefaultValue(value: string): unknown {
+  const trimmed = value.trim()
+
+  // Null
+  if (trimmed === 'null') return null
+
+  // Boolean
+  if (trimmed === 'true') return true
+  if (trimmed === 'false') return false
+
+  // Empty object
+  if (trimmed === '{}') return {}
+
+  // Empty array
+  if (trimmed === '[]') return []
+
+  // Function call: name()
+  const funcMatch = trimmed.match(/^(\w+)\(\)$/)
+  if (funcMatch) {
+    return { function: funcMatch[1] }
+  }
+
+  // Quoted string (double or single quotes)
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+
+  // Number
+  const num = Number(trimmed)
+  if (!isNaN(num) && trimmed !== '') {
+    return num
+  }
+
+  // Fallback: return as string
+  return trimmed
+}
+
 // =============================================================================
 // Field Parsing
 // =============================================================================
@@ -120,6 +175,28 @@ function parseField(name: string, definition: string | [string]): ParsedField {
   }
 
   let type = definition
+
+  // Parse default value: 'type = value' syntax
+  // Must be done BEFORE operator parsing since '=' could appear in prompts
+  let defaultValue: unknown | undefined
+  let hasDefault = false
+  const defaultMatch = type.match(/^(.+?)\s*=\s*(.+)$/)
+  if (defaultMatch) {
+    const [, typePart, valuePart] = defaultMatch
+    // Only treat as default if the type part doesn't contain relationship operators
+    if (
+      typePart &&
+      valuePart &&
+      !typePart.includes('->') &&
+      !typePart.includes('~>') &&
+      !typePart.includes('<-') &&
+      !typePart.includes('<~')
+    ) {
+      type = typePart.trim()
+      defaultValue = parseDefaultValue(valuePart)
+      hasDefault = true
+    }
+  }
 
   // Try to parse as a relationship operator first
   const operatorResult = parseOperator(type)
@@ -274,6 +351,7 @@ function parseField(name: string, definition: string | [string]): ParsedField {
   if (enumName !== undefined) result.enumName = enumName
   if (refTarget !== undefined) result.refTarget = refTarget
   if (elementType !== undefined) result.elementType = elementType
+  if (hasDefault) result.default = defaultValue
   return result
 }
 
