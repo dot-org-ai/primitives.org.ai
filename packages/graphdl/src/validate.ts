@@ -77,7 +77,7 @@ export function validateEntity(
   // Validate directives
   if (entity.directives) {
     // Validate $partitionBy
-    const partitionBy = entity.directives.$partitionBy
+    const partitionBy = entity.directives['$partitionBy']
     if (Array.isArray(partitionBy)) {
       for (const fieldRef of partitionBy) {
         if (typeof fieldRef === 'string' && !fieldNames.has(fieldRef)) {
@@ -92,7 +92,7 @@ export function validateEntity(
     }
 
     // Validate $index
-    const index = entity.directives.$index
+    const index = entity.directives['$index']
     if (Array.isArray(index)) {
       for (const indexDef of index) {
         if (Array.isArray(indexDef)) {
@@ -111,7 +111,7 @@ export function validateEntity(
     }
 
     // Validate $fts
-    const fts = entity.directives.$fts
+    const fts = entity.directives['$fts']
     if (Array.isArray(fts)) {
       for (const fieldRef of fts) {
         if (typeof fieldRef === 'string' && !fieldNames.has(fieldRef)) {
@@ -126,7 +126,7 @@ export function validateEntity(
     }
 
     // Validate $vector
-    const vector = entity.directives.$vector
+    const vector = entity.directives['$vector']
     if (vector && typeof vector === 'object' && 'field' in vector) {
       const vectorField = (vector as { field: string }).field
       if (typeof vectorField === 'string' && !fieldNames.has(vectorField)) {
