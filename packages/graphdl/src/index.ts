@@ -39,6 +39,7 @@ export type {
   ParsedEntity,
   ParsedGraph,
   TypeMeta,
+  EntityDirectives,
 } from './types.js'
 
 // =============================================================================

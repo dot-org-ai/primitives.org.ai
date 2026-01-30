@@ -155,6 +155,7 @@ function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
   // Object definition with fields
   const fields = new Map<string, ParsedField>()
   let $type: string | undefined
+  const directives: Record<string, unknown> = {}
 
   for (const [fieldName, fieldDef] of Object.entries(definition)) {
     // Handle $type metadata
@@ -163,8 +164,9 @@ function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
       continue
     }
 
-    // Skip other metadata fields
+    // Collect other $ prefixed directives for passthrough
     if (fieldName.startsWith('$')) {
+      directives[fieldName] = fieldDef
       continue
     }
 
@@ -179,6 +181,7 @@ function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
     fields,
   }
   if ($type !== undefined) entity.$type = $type
+  if (Object.keys(directives).length > 0) entity.directives = directives
   return entity
 }
 

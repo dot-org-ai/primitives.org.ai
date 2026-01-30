@@ -357,6 +357,20 @@ export interface ParsedField {
 }
 
 /**
+ * Passthrough directives for entity configuration
+ *
+ * Arbitrary $ prefixed properties that pass through the parser without
+ * error, stored for downstream consumers like IceType, ClickHouse, etc.
+ *
+ * Common directives:
+ * - `$partitionBy` - Partition key fields
+ * - `$index` - Secondary index definitions
+ * - `$fts` - Full-text search fields
+ * - `$vector` - Vector/embedding configuration
+ */
+export type EntityDirectives = Record<string, unknown>
+
+/**
  * Parsed entity with all fields
  */
 export interface ParsedEntity {
@@ -366,6 +380,8 @@ export interface ParsedEntity {
   $type?: string
   /** Parsed field definitions */
   fields: Map<string, ParsedField>
+  /** Passthrough directives ($ prefixed properties except $type) */
+  directives?: EntityDirectives
 }
 
 /**
