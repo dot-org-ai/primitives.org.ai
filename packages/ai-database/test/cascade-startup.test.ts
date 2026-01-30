@@ -99,6 +99,7 @@ describe('Startup Cascade', () => {
       })
 
       expect(problem).toBeTruthy()
+      // The task field should be the task's ID (as a string)
       expect(problem.task).toBe(task.$id)
     })
   })

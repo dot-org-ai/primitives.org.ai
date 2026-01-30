@@ -657,6 +657,12 @@ export function hydrateEntity(
             if (prop === '$type') {
               return storedMatchedType || field.relatedType
             }
+            // Return the stored ID for $id property access (useful for equality checks)
+            if (prop === '$id') {
+              return storedId
+            }
+            // For any other property access, return undefined
+            // Note: Use problem.task.$id or String(problem.task) for equality checks
             return undefined
           },
         })
