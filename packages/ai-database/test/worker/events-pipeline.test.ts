@@ -91,7 +91,7 @@ async function insertRel(
 // =============================================================================
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Events - _events Table', () => {
+describe('Events - _events Table', () => {
   let stub: DurableObjectStub
 
   beforeEach(() => {

@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest'
 import { DB } from '../src/schema.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Cascade Generation via ->Type[] Triggers', () => {
+describe('Cascade Generation via ->Type[] Triggers', () => {
   describe('Cascade through relationships', () => {
     it('should cascade generation through ->[] relationships', async () => {
       const { db } = DB({

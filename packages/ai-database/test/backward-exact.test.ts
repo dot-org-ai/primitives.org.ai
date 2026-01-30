@@ -33,7 +33,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Backward Exact (<-) Resolution', () => {
+describe('Backward Exact (<-) Resolution', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
   })

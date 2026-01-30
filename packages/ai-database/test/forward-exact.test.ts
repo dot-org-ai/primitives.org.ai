@@ -15,7 +15,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Forward Exact (->) Generation', () => {
+describe('Forward Exact (->) Generation', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
   })
@@ -62,7 +62,7 @@ describe.skip('Forward Exact (->) Generation', () => {
         Founder: { name: 'string', role: 'string' },
       })
 
-      const startup = await db.Startup.create({ name: 'Acme' })
+      const startup = await db.Startup.create({ name: 'Acme' }, { cascade: true })
       const founders = await startup.founders
       expect(founders.length).toBeGreaterThan(0)
       expect(founders[0].$type).toBe('Founder')
@@ -74,7 +74,7 @@ describe.skip('Forward Exact (->) Generation', () => {
         Member: { name: 'string', title: 'string' },
       })
 
-      const team = await db.Team.create({ name: 'Engineering' })
+      const team = await db.Team.create({ name: 'Engineering' }, { cascade: true })
       const members = await team.members
 
       expect(members.length).toBeGreaterThan(0)

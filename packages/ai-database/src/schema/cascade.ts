@@ -410,12 +410,11 @@ export async function generateAIFields(
   // Collect fields that need generation
   const fieldsToGenerate: Array<{ fieldName: string; prompt: string | undefined }> = []
 
-  for (const [fieldName, field] of entityDef.fields) {
-    // Skip if value already provided
-    if (result[fieldName] !== undefined && result[fieldName] !== null) {
-      continue
-    }
+  // When entity has $context or template variables, allow regenerating draft-generated prompt fields
+  const hasRichContext =
+    !!(contextDeps && contextDeps.length > 0) || !!(instructions && instructions.includes('{'))
 
+  for (const [fieldName, field] of entityDef.fields) {
     // Skip relation fields (handled separately)
     if (field.isRelation) {
       continue
@@ -427,6 +426,17 @@ export async function generateAIFields(
     // - Question marks: 'What is the price?'
     const isPromptField =
       field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+
+    // Skip if value already provided (unless AI can improve it)
+    if (result[fieldName] !== undefined && result[fieldName] !== null) {
+      // When AI is enabled, always attempt to generate prompt fields
+      // (overriding draft-generated placeholder values with AI-generated content).
+      // When AI is disabled, skip already-populated fields unless rich context is available.
+      if (isPromptField && (aiConfig.enabled || hasRichContext)) {
+        fieldsToGenerate.push({ fieldName, prompt: field.type })
+      }
+      continue
+    }
 
     if (isPromptField) {
       // Use the field type (which is actually the prompt) as the prompt
@@ -494,6 +504,20 @@ export async function generateAIFields(
     }
   }
 
+  // Enforce length constraints from field type hints like 'string (30 chars)'
+  for (const { fieldName, prompt } of fieldsToGenerate) {
+    if (typeof result[fieldName] === 'string' && prompt) {
+      const charMatch = prompt.match(/\((\d+)\s*chars?\)/)
+      if (charMatch) {
+        const maxLen = parseInt(charMatch[1]!, 10)
+        const value = result[fieldName] as string
+        if (value.length > maxLen) {
+          result[fieldName] = value.slice(0, maxLen)
+        }
+      }
+    }
+  }
+
   return result
 }
 
@@ -546,8 +570,9 @@ export async function generateEntity(
           if (field.relatedType === context.parent && context.parentId) {
             data[fieldName] = context.parentId
           }
-        } else if (field.operator === '->' && field.direction === 'forward') {
-          // Recursively generate nested forward exact relations
+        } else if (field.operator === '->' && field.direction === 'forward' && !field.isArray) {
+          // Recursively generate nested forward exact single relations (not arrays).
+          // Array forward relations are handled by cascadeGenerate with proper depth control.
           if (!field.isOptional) {
             const nestedGenerated = await generateEntity(
               field.relatedType!,
@@ -613,9 +638,9 @@ export async function generateEntity(
         // Store the parent ID directly - this is a reference back to the parent
         data[fieldName] = context.parentId
       }
-    } else if (field.operator === '->' && field.direction === 'forward') {
-      // Recursively generate nested forward exact relations
-      // This handles cases like Person.bio -> Bio
+    } else if (field.operator === '->' && field.direction === 'forward' && !field.isArray) {
+      // Recursively generate nested forward exact single relations (not arrays).
+      // Array forward relations are handled by cascadeGenerate with proper depth control.
       if (!field.isOptional) {
         const nestedGenerated = await generateEntity(
           field.relatedType!,

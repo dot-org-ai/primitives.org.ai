@@ -1514,15 +1514,16 @@ async function executeBatchLoads(
           nestedBatchLoads.set(nestedPath, { type: nestedType, ids: nestedIds })
         }
       }
-
       // Recursively load nested relations
       if (nestedBatchLoads.size > 0) {
         // Create nested recordings for the next level if available
+        // The key must be the field name (not the type) so that nestedRelationInfo
+        // lookups in the recursive call match by relation field name
         const nestedRecordings: PropertyRecording[] = []
-        for (const nestedRecording of nestedInfo.nestedRelations.values()) {
+        for (const [nestedFieldName, nestedRecording] of nestedInfo.nestedRelations) {
           nestedRecordings.push({
             paths: new Set(),
-            relations: new Map([[nestedRecording.type, nestedRecording]]),
+            relations: new Map([[nestedFieldName, nestedRecording]]),
           })
         }
 

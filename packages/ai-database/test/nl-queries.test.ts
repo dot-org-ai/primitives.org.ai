@@ -21,8 +21,8 @@ import type { NLQueryResult, NLQueryGenerator, NLQueryContext, NLQueryPlan } fro
 // Check for AI Gateway availability
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
 
-// TODO: Advanced feature tests - needs investigation
-describe.skip('Natural Language Query Execution', () => {
+// NL query feature tests - implementation complete
+describe('Natural Language Query Execution', () => {
   beforeEach(() => {
     // Use in-memory provider for testing
     setProvider(createMemoryProvider())

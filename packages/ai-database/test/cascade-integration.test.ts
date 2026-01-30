@@ -16,7 +16,7 @@ import { DB, setProvider, createMemoryProvider, configureAIGeneration } from '..
 import type { DatabaseSchema } from '../src/index.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Cascade Generation with AI Integration', () => {
+describe('Cascade Generation with AI Integration', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
     // Enable AI generation (will use real AI calls)

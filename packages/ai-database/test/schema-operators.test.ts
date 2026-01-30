@@ -15,7 +15,7 @@ import { parseSchema, DB, setProvider, createMemoryProvider } from '../src/index
 import type { DatabaseSchema } from '../src/schema.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Schema Operator Parsing', () => {
+describe('Schema Operator Parsing', () => {
   describe('-> (Forward Exact) Operator', () => {
     it('parses simple forward exact reference: { Post: { author: "->Author" } }', () => {
       const schema: DatabaseSchema = {

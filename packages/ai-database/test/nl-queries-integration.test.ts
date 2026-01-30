@@ -17,8 +17,8 @@ import {
 } from '../src/index.js'
 import type { NLQueryGenerator, NLQueryContext, NLQueryPlan } from '../src/index.js'
 
-// TODO: Template literal syntax for NL queries needs implementation investigation
-describe.skip('Natural Language Queries with LLM Integration', () => {
+// NL queries with LLM integration tests - template literal syntax implemented
+describe('Natural Language Queries with LLM Integration', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
     // Reset NL query generator before each test

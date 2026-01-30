@@ -38,8 +38,8 @@ import type {
   NLQueryGenerator,
 } from '../../src/schema/types.js'
 
-// TODO: Advanced feature tests - needs investigation
-describe.skip('NL Query Module Interface', () => {
+// NL Query Module Interface tests - implementation complete
+describe('NL Query Module Interface', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
   })

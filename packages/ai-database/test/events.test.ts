@@ -10,7 +10,7 @@ import { StandardEventTypes, entityEvent, typePattern, actionPattern } from '../
 import type { DBEvent, EventsAPI } from '../src/events.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Events API', () => {
+describe('Events API', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
   })

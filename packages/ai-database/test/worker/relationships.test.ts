@@ -88,7 +88,7 @@ async function insertRel(
 // =============================================================================
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Relationships - relate/unrelate', () => {
+describe('Relationships - relate/unrelate', () => {
   let stub: DurableObjectStub
 
   beforeEach(async () => {

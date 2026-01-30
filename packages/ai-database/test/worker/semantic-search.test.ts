@@ -82,7 +82,7 @@ async function insertData(
 // =============================================================================
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Semantic Search - AI Gateway embeddings', () => {
+describe('Semantic Search - AI Gateway embeddings', () => {
   let stub: DurableObjectStub
 
   beforeEach(() => {

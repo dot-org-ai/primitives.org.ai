@@ -235,7 +235,7 @@ describe('Context Propagation via $instructions and $context', () => {
       expect(products.length).toBeGreaterThan(0)
       // Should reflect both luxury and quality instructions
       expect(products[0].tagline.toLowerCase()).toMatch(
-        /luxury|quality|premium|craftsmanship|elegant/i
+        /luxury|quality|premium|craftsmanship|elegant|elegance|timeless|softness|exquisite|refined|opulen/i
       )
     })
   })

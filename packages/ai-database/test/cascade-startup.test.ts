@@ -99,8 +99,10 @@ describe('Startup Cascade', () => {
       })
 
       expect(problem).toBeTruthy()
-      // The task field should be the task's ID (as a string)
-      expect(problem.task).toBe(task.$id)
+      // The task field should reference the task's ID
+      // Forward refs are wrapped in thenable proxies, so use String() or await
+      const resolvedTask = await problem.task
+      expect(resolvedTask.$id).toBe(task.$id)
     })
   })
 

@@ -59,7 +59,7 @@ async function doJSON(
 // =============================================================================
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Query Operations - list', () => {
+describe('Query Operations - list', () => {
   let stub: DurableObjectStub
 
   beforeEach(async () => {

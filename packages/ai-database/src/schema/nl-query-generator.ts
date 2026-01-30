@@ -105,15 +105,35 @@ export function createDefaultNLQueryGenerator(): NLQueryGenerator {
     }
 
     // Dynamically import generateObject to avoid circular dependencies
-    const { generateObject } = await import('ai-functions')
+    let result: { object: unknown }
+    try {
+      const { generateObject } = await import('ai-functions')
 
-    const prompt = buildQueryPrompt(query, context)
+      const prompt = buildQueryPrompt(query, context)
 
-    const result = await generateObject({
-      model: config.model,
-      schema: QUERY_PLAN_SCHEMA,
-      prompt,
-    })
+      result = await generateObject({
+        model: config.model,
+        schema: QUERY_PLAN_SCHEMA,
+        prompt,
+      })
+    } catch (error: unknown) {
+      // If API key is missing or AI service unavailable, fall back to basic plan
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const isApiKeyError =
+        errorMessage.includes('API key') ||
+        errorMessage.includes('apiKey') ||
+        errorMessage.includes('OPENAI_API_KEY') ||
+        errorMessage.includes('ANTHROPIC_API_KEY')
+      if (isApiKeyError) {
+        return {
+          types: context.targetType ? [context.targetType] : context.types.map((t) => t.name),
+          search: query,
+          interpretation: `Search for "${query}"`,
+          confidence: 0.5,
+        }
+      }
+      throw error
+    }
 
     // Raw object has string dates from LLM output
     const rawPlan = result.object as unknown as {

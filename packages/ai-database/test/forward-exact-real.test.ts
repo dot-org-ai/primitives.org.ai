@@ -18,7 +18,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { DB, setProvider, createMemoryProvider, configureAIGeneration } from '../src/index.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Forward Exact with Real AI Generation', () => {
+describe('Forward Exact with Real AI Generation', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
     // Enable AI generation - this uses ai-functions generateObject
@@ -135,7 +135,7 @@ describe.skip('Forward Exact with Real AI Generation', () => {
         Member: { name: 'string', role: 'string' },
       })
 
-      const team = await db.Team.create({ name: 'Engineering Team' })
+      const team = await db.Team.create({ name: 'Engineering Team' }, { cascade: true })
       const members = await team.members
 
       // Should generate at least one member when prompt is provided
@@ -178,7 +178,7 @@ describe.skip('Forward Exact with Real AI Generation', () => {
         Founder: { name: 'string', title: 'string', background: 'string' },
       })
 
-      const startup = await db.Startup.create({ name: 'InnovateCo' })
+      const startup = await db.Startup.create({ name: 'InnovateCo' }, { cascade: true })
       const founders = await startup.founders
 
       expect(founders.length).toBeGreaterThan(0)

@@ -30,7 +30,7 @@ const MOCK_CSV_DATA = `id,name,category
 3,Carrot,Vegetable`
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('$seed Reference Data Loading', () => {
+describe('$seed Reference Data Loading', () => {
   let originalFetch: typeof globalThis.fetch
 
   beforeEach(() => {

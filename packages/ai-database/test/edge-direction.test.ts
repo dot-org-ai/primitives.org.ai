@@ -16,7 +16,7 @@ import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 import type { DatabaseSchema } from '../src/index.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Edge Direction Tracking', () => {
+describe('Edge Direction Tracking', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
   })

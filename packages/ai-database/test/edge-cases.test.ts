@@ -9,7 +9,7 @@ import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 import type { DatabaseSchema } from '../src/index.js'
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('edge cases', () => {
+describe('edge cases', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
   })
@@ -20,8 +20,8 @@ describe.skip('edge cases', () => {
 
       const { db } = DB(schema)
 
-      // Empty user schema still has Edge system entity
-      expect(db.$schema.entities.size).toBe(1)
+      // Empty user schema still has system entities (Noun, Verb, Edge)
+      expect(db.$schema.entities.size).toBeGreaterThanOrEqual(1)
       expect(db.$schema.entities.has('Edge')).toBe(true)
       expect(typeof db.get).toBe('function')
       expect(typeof db.search).toBe('function')

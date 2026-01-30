@@ -7,7 +7,7 @@ export default defineConfig({
     minWorkers: 1,
     fileParallelism: false,
 
-        globals: false,
+        globals: true,
         environment: 'node',
         include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
         exclude: ['node_modules/**', 'dist/**'],

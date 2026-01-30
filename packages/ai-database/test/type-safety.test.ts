@@ -43,7 +43,7 @@ interface Team {
 }
 
 // TODO: Advanced feature tests - needs investigation
-describe.skip('Type Safety Tests', () => {
+describe('Type Safety Tests', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
   })
