@@ -145,20 +145,29 @@ export interface Verb {
 /**
  * Primitive field types supported in schema definitions
  *
- * Includes both general types and precision numeric types for
- * compatibility with IceType and database schemas.
+ * Includes general types, precision numeric types, temporal types, and
+ * binary types for compatibility with IceType, Apache Iceberg, Parquet,
+ * ClickHouse, DuckDB, and other database schemas.
  *
  * | Type | Description |
  * |------|-------------|
  * | `string` | Text/varchar |
+ * | `text` | Long-form text (equivalent to TEXT in SQL) |
  * | `number` | General numeric (float64 equivalent) |
  * | `int` | 32-bit integer |
+ * | `long` | 64-bit integer |
+ * | `bigint` | Arbitrary precision integer |
  * | `float` | 32-bit floating point |
  * | `double` | 64-bit floating point |
  * | `decimal` | Arbitrary precision decimal |
- * | `boolean` | True/false |
+ * | `boolean` | True/false (alias: `bool`) |
  * | `date` | Date without time |
  * | `datetime` | Date with time |
+ * | `timestamp` | Timestamp without timezone |
+ * | `timestamptz` | Timestamp with timezone |
+ * | `time` | Time without date |
+ * | `uuid` | UUID identifier |
+ * | `binary` | Binary/byte array |
  * | `json` | JSON object |
  * | `markdown` | Markdown text |
  * | `url` | URL string |
