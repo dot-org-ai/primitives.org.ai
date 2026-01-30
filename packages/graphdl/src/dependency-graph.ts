@@ -156,8 +156,11 @@ export function buildDependencyGraph(schema: ParsedGraph): DependencyGraph {
       }
 
       // Determine dependency type based on operator
-      const sourceNode = nodes[typeName]!
-      const targetNode = nodes[target]!
+      // sourceNode is guaranteed to exist from the first loop
+      // targetNode is guaranteed to exist from the check above
+      const sourceNode = nodes[typeName]
+      const targetNode = nodes[target]
+      if (!sourceNode || !targetNode) continue
 
       if (isSoft || isOptionalField) {
         // Soft dependency (fuzzy search) or optional field

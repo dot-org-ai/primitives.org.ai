@@ -64,8 +64,8 @@ export function toKebabCase(s: string): string {
 /** Check if we should double the final consonant (CVC pattern) */
 function shouldDoubleConsonant(verb: string): boolean {
   if (verb.length < 2) return false
-  const last = verb[verb.length - 1]!
-  const secondLast = verb[verb.length - 2]!
+  const last = verb.charAt(verb.length - 1)
+  const secondLast = verb.charAt(verb.length - 2)
   // Don't double w, x, y
   if ('wxy'.includes(last)) return false
   // Must end in consonant preceded by vowel

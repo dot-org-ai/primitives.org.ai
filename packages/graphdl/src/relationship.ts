@@ -124,6 +124,11 @@ export const OPERATORS: readonly RelationshipOperator[] = ['~>', '<~', '->', '<-
  * ```
  */
 export function parseOperator(definition: string): ParsedRelationship | null {
+  // Handle empty or whitespace-only input
+  if (!definition || !definition.trim()) {
+    return null
+  }
+
   for (const op of OPERATORS) {
     const opIndex = definition.indexOf(op)
     if (opIndex !== -1) {

@@ -60,6 +60,7 @@ export {
 // =============================================================================
 
 export { Verbs, conjugate, getVerbFields, isStandardVerb, getStandardVerbs } from './verb.js'
+export type { StandardVerbKey } from './verb.js'
 
 // =============================================================================
 // Nouns

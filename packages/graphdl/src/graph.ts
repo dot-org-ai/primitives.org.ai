@@ -21,26 +21,13 @@ import { parseOperator } from './relationship.js'
 // Constants
 // =============================================================================
 
-/**
- * Valid primitive types
- */
-const PRIMITIVE_TYPES: Set<PrimitiveType> = new Set([
-  'string',
-  'number',
-  'boolean',
-  'date',
-  'datetime',
-  'json',
-  'markdown',
-  'url',
-  'email',
-])
+import { PRIMITIVE_TYPES } from './dependency-graph.js'
 
 /**
  * Check if a type string represents a primitive type
  */
 function isPrimitiveType(type: string): type is PrimitiveType {
-  return PRIMITIVE_TYPES.has(type as PrimitiveType)
+  return PRIMITIVE_TYPES.has(type)
 }
 
 // =============================================================================
@@ -105,7 +92,7 @@ function parseField(name: string, definition: string | [string]): ParsedField {
     const [entityName, backrefName] = type.split('.')
     relatedType = entityName
     backref = backrefName
-    type = entityName!
+    type = entityName ?? type
   } else if (
     type[0] === type[0]?.toUpperCase() &&
     !isPrimitiveType(type) &&
@@ -238,6 +225,11 @@ function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
 export function Graph(input: GraphInput): ParsedGraph {
   const entities = new Map<string, ParsedEntity>()
   const typeUris = new Map<string, string>()
+
+  // Handle empty input - return empty graph
+  if (!input || Object.keys(input).length === 0) {
+    return { entities, typeUris }
+  }
 
   // First pass: parse all entities
   for (const [entityName, definition] of Object.entries(input)) {

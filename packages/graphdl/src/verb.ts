@@ -129,6 +129,11 @@ export const Verbs = {
   },
 } as const satisfies Record<string, Verb>
 
+/**
+ * Type representing all standard verb keys
+ */
+export type StandardVerbKey = keyof typeof Verbs
+
 // =============================================================================
 // Conjugate Function
 // =============================================================================
