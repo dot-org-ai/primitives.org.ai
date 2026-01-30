@@ -12,8 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import { DB } from '../src/schema.js'
 
-// TODO: Advanced feature tests - needs investigation
-describe.skip('Context Propagation via $instructions and $context', () => {
+describe('Context Propagation via $instructions and $context', () => {
   describe('$instructions for entity-level prompting', () => {
     it('should use $instructions for entity-level prompting', async () => {
       const { db } = DB({

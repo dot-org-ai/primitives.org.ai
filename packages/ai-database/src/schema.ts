@@ -625,6 +625,12 @@ export interface ReferenceSpec {
   prompt?: string
   /** Generated natural language text (before resolution) */
   generatedText?: string
+  /** Instructions from the source entity's $instructions metadata */
+  sourceInstructions?: string
+  /** Fuzzy match threshold */
+  threshold?: number
+  /** Union types for polymorphic references */
+  unionTypes?: string[]
 }
 
 /**
@@ -4839,16 +4845,35 @@ async function resolveReferenceSpec(
     // For fuzzy references, try to find an existing entity first
     if (hasSemanticSearch(provider)) {
       const searchQuery = spec.generatedText || spec.prompt || spec.field
-      const matches = await provider.semanticSearch(spec.type, searchQuery, {
-        minScore: 0.5,
-        limit: 1,
-      })
+      const threshold = spec.threshold ?? 0.75
+      // Search across all union types (or just the single type)
+      const typesToSearch = spec.unionTypes || [spec.type]
 
-      if (matches.length > 0) {
-        const firstMatch = matches[0]
-        if (firstMatch) {
-          return firstMatch.$id
+      let bestMatch: { $id: string; $score: number; $matchedType: string } | null = null
+
+      for (const searchType of typesToSearch) {
+        const matches = await provider.semanticSearch(searchType, searchQuery, {
+          minScore: threshold,
+          limit: 1,
+        })
+
+        if (matches.length > 0 && matches[0]) {
+          if (!bestMatch || matches[0].$score > bestMatch.$score) {
+            bestMatch = {
+              $id: matches[0].$id,
+              $score: matches[0].$score,
+              $matchedType: searchType,
+            }
+          }
         }
+      }
+
+      if (bestMatch) {
+        // Set metadata on contextData so it's available in the resolved entity
+        contextData[`${spec.field}$matched`] = true
+        contextData[`${spec.field}$score`] = bestMatch.$score
+        contextData[`${spec.field}$matchedType`] = bestMatch.$matchedType
+        return bestMatch.$id
       }
     }
 
@@ -5049,7 +5074,7 @@ function createEntityOperations<T>(
 
         // Also create an Edge entity to store the fuzzy match metadata
         // Use a unique ID based on the relationship
-        const edgeId = `${typeName}:${rel.fieldName}:${entityId}:${rel.targetId}`
+        const edgeId = `${typeName}-${rel.fieldName}-${entityId}-${rel.targetId}`
         if (!createdEdgeIds.has(edgeId)) {
           createdEdgeIds.add(edgeId)
           try {
