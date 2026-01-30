@@ -59,6 +59,16 @@ export const OPERATORS: readonly RelationshipOperator[] = ['~>', '<~', '->', '<-
  * - `'->Type?'`          - Optional reference
  * - `'->Type[]'`         - Array of references
  * - `'~>Type(0.8)'`      - Fuzzy with threshold
+ * - `'->Type!'`          - Required/unique reference
+ * - `'->Type#'`          - Indexed reference
+ *
+ * ## Field Modifiers
+ *
+ * Modifiers can be combined in any order at the end of the type:
+ * - `?` - Optional (field may be null/undefined)
+ * - `[]` - Array (field contains multiple values)
+ * - `!` - Required/Unique (field must have a value and be unique)
+ * - `#` - Indexed (field should be indexed for fast lookup)
  *
  * @param definition - The field definition string to parse
  * @returns Parsed relationship, or null if no operator found
@@ -120,6 +130,20 @@ export const OPERATORS: readonly RelationshipOperator[] = ['~>', '<~', '->', '<-
  * //   matchMode: 'fuzzy',
  * //   targetType: 'Category',
  * //   threshold: 0.8
+ * // }
+ * ```
+ *
+ * @example With modifiers
+ * ```ts
+ * parseOperator('->User!#')
+ * // => {
+ * //   operator: '->',
+ * //   direction: 'forward',
+ * //   matchMode: 'exact',
+ * //   targetType: 'User',
+ * //   isRequired: true,
+ * //   isUnique: true,
+ * //   isIndexed: true
  * // }
  * ```
  */
