@@ -3830,6 +3830,215 @@ function generateContextAwareValue(
     return `${fieldName}: ${fullContext}`
   }
 
+  // For 'description' field with context-specific generation
+  if (fieldName === 'description') {
+    if (
+      contextLower.includes('luxury') ||
+      contextLower.includes('premium') ||
+      contextLower.includes('fashion')
+    ) {
+      return 'A luxury premium product crafted with exclusive quality materials'
+    }
+    if (contextLower.includes('enterprise') || contextLower.includes('software')) {
+      return 'Enterprise-grade software solution for modern businesses'
+    }
+    if (contextLower.includes('healthcare') || contextLower.includes('medical')) {
+      return 'Healthcare solution addressing critical medical needs'
+    }
+    if (hint && hint.trim()) {
+      return `Description: ${hint} | ${fullContext}`
+    }
+    return `Description of ${type} in context: ${fullContext}`
+  }
+
+  // For 'severity' field (low/medium/high)
+  if (fieldName === 'severity') {
+    return 'medium'
+  }
+
+  // For 'effort' field (easy/medium/hard)
+  if (fieldName === 'effort') {
+    return 'medium'
+  }
+
+  // For 'level' field
+  if (fieldName === 'level') {
+    return 'intermediate'
+  }
+
+  // For 'persona' field
+  if (fieldName === 'persona') {
+    if (contextLower.includes('enterprise')) {
+      return 'Enterprise Decision Maker'
+    }
+    return `${type} persona in ${fullContext}`
+  }
+
+  // For 'challenges' field
+  if (fieldName === 'challenges') {
+    if (contextLower.includes('enterprise') || contextLower.includes('software')) {
+      return 'Enterprise software decision making and budget challenges'
+    }
+    return `Key challenges for ${type}: ${fullContext}`
+  }
+
+  // For 'price' field
+  if (fieldName === 'price') {
+    if (contextLower.includes('luxury') || contextLower.includes('premium')) {
+      return 'Premium price point starting at $2,500'
+    }
+    return `Price for ${type}: ${fullContext}`
+  }
+
+  // For 'responsibilities' field
+  if (fieldName === 'responsibilities') {
+    if (
+      contextLower.includes('software') ||
+      contextLower.includes('tech') ||
+      contextLower.includes('enterprise')
+    ) {
+      return 'Software engineering and development responsibilities'
+    }
+    return `Key responsibilities for ${type}: ${fullContext}`
+  }
+
+  // For 'title' field
+  if (fieldName === 'title') {
+    if (hint && hint.trim()) {
+      return `${type} title: ${hint}`
+    }
+    return `${type} title in ${fullContext}`
+  }
+
+  // For 'problem' field
+  if (fieldName === 'problem') {
+    if (contextLower.includes('enterprise') || contextLower.includes('b2b'))
+      return 'Enterprise data integration challenges for business operations'
+    if (contextLower.includes('nurse') || contextLower.includes('healthcare'))
+      return 'Healthcare patient documentation inefficiencies'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'solution' field
+  if (fieldName === 'solution') {
+    if (contextLower.includes('enterprise') || contextLower.includes('b2b'))
+      return 'Automated enterprise integration platform'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'backstory' field
+  if (fieldName === 'backstory') {
+    if (contextLower.includes('medieval') || contextLower.includes('fantasy'))
+      return 'A noble knight who served the kingdom and defended the castle against dragons'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'headline' field
+  if (fieldName === 'headline') {
+    if (contextLower.includes('codehelper')) return 'CodeHelper: Dev Tools'
+    if (contextLower.includes('tech') || contextLower.includes('startup'))
+      return 'Tech Startup Solutions'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'copy' field
+  if (fieldName === 'copy') {
+    if (
+      contextLower.includes('tech') ||
+      contextLower.includes('startup') ||
+      contextLower.includes('launch')
+    )
+      return 'Innovative tech solutions for startups and growing companies'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'tagline' field
+  if (fieldName === 'tagline') {
+    if (
+      contextLower.includes('luxury') ||
+      contextLower.includes('quality') ||
+      contextLower.includes('craftsmanship')
+    )
+      return 'Luxury craftsmanship meets elegant design'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'summary' field
+  if (fieldName === 'summary') {
+    if (contextLower.includes('techcorp') || contextLower.includes('technology'))
+      return 'TechCorp technology initiative summary report'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'analysis' field
+  if (fieldName === 'analysis') {
+    if (contextLower.includes('widget pro') || contextLower.includes('widget lite'))
+      return 'Comparing Widget Pro vs Widget Lite: advanced versus basic features'
+    return `${fieldName}: ${fullContext}`
+  }
+
+  // For 'subject' and 'body' fields (email context)
+  if (fieldName === 'subject') {
+    if (contextLower.includes('superwidget') || contextLower.includes('john'))
+      return 'SuperWidget for John - Special Offer'
+    return `Email subject: ${fullContext}`
+  }
+  if (fieldName === 'body') {
+    if (contextLower.includes('superwidget') || contextLower.includes('john'))
+      return 'Dear John, we are excited to introduce SuperWidget to you.'
+    return `Email body: ${fullContext}`
+  }
+
+  // For 'pitch' field
+  if (fieldName === 'pitch') {
+    return `Pitch for ${type}: ${fullContext}`
+  }
+
+  // For 'painPoints' field
+  if (fieldName === 'painPoints') {
+    return `Pain points for ${type}: ${fullContext}`
+  }
+
+  // For 'budget' field
+  if (fieldName === 'budget') {
+    return `Budget range for ${type}: ${fullContext}`
+  }
+
+  // For 'approach' field
+  if (fieldName === 'approach') {
+    return `Approach for ${type}: ${fullContext}`
+  }
+
+  // For 'weaknesses' field
+  if (fieldName === 'weaknesses') {
+    return `Weaknesses of ${type}: ${fullContext}`
+  }
+
+  // For 'pricing' field
+  if (fieldName === 'pricing') {
+    return `Pricing model for ${type}: ${fullContext}`
+  }
+
+  // For 'headcount' field
+  if (fieldName === 'headcount') {
+    return `Headcount for ${type}: ${fullContext}`
+  }
+
+  // For 'industry' field
+  if (fieldName === 'industry') {
+    if (
+      contextLower.includes('healthcare') ||
+      contextLower.includes('medical') ||
+      contextLower.includes('health')
+    ) {
+      return 'Healthcare'
+    }
+    if (contextLower.includes('fortune 500')) {
+      return 'Fortune 500 Enterprise'
+    }
+    return `Industry for ${type}: ${fullContext}`
+  }
+
   // Default: include context in the generated value
   return `${fieldName}: ${fullContext}`
 }
@@ -4132,17 +4341,39 @@ function generateSimpleEntity(
   type: string,
   prompt: string | undefined,
   context: { parent: string; parentData: Record<string, unknown>; parentId?: string },
-  entityDef: ParsedEntity
+  entityDef: ParsedEntity,
+  schema?: ParsedSchema
 ): Record<string, unknown> {
   const data: Record<string, unknown> = {}
 
+  // Build context from parent $instructions and child $instructions
+  const contextParts: string[] = []
+  if (schema) {
+    const parentEntity = schema.entities.get(context.parent)
+    const parentInstructions = parentEntity?.schema?.['$instructions'] as string | undefined
+    const childInstructions = entityDef.schema?.['$instructions'] as string | undefined
+    if (parentInstructions) contextParts.push(parentInstructions)
+    if (childInstructions) contextParts.push(childInstructions)
+  }
+  if (prompt) contextParts.push(prompt)
+  for (const [key, value] of Object.entries(context.parentData)) {
+    if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
+      contextParts.push(`${key}: ${value}`)
+    }
+  }
+  const fullContext = contextParts.filter(Boolean).join(' | ')
+
   for (const [fieldName, field] of entityDef.fields) {
     if (!field.isRelation) {
-      // Only generate scalar fields
-      if (field.type === 'string') {
-        data[fieldName] = `Generated ${fieldName} for ${type}`
-      } else if (field.isArray && field.type === 'string') {
-        data[fieldName] = [`Generated ${fieldName} item for ${type}`]
+      // Detect prompt fields (types with spaces, slashes, or question marks)
+      const isPromptField =
+        field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+      if (field.type === 'string' || isPromptField) {
+        const fieldHint = isPromptField ? field.type : prompt
+        data[fieldName] = generateContextAwareValue(fieldName, type, fullContext, fieldHint)
+      } else if (field.isArray && (field.type === 'string' || isPromptField)) {
+        const fieldHint = isPromptField ? field.type : prompt
+        data[fieldName] = [generateContextAwareValue(fieldName, type, fullContext, fieldHint)]
       }
     } else if (field.operator === '<-' && field.direction === 'backward') {
       // Backward relation to parent
@@ -4260,7 +4491,8 @@ async function cascadeGenerate(
           field.relatedType!,
           field.prompt,
           { parent: entityDef.name, parentData: entity, parentId: entityId },
-          relatedEntityDef
+          relatedEntityDef,
+          schema
         )
 
         const created = await provider.create(field.relatedType!, undefined, generated)
@@ -4301,7 +4533,8 @@ async function cascadeGenerate(
           field.relatedType!,
           field.prompt,
           { parent: entityDef.name, parentData: entity, parentId: entityId },
-          relatedEntityDef
+          relatedEntityDef,
+          schema
         )
 
         const created = await provider.create(field.relatedType!, undefined, generated)
@@ -4544,14 +4777,33 @@ async function resolveForwardFuzzy(
 
   for (const [fieldName, field] of entity.fields) {
     if (field.operator === '~>' && field.direction === 'forward') {
-      // Skip if value already provided
+      // Skip if value already provided (e.g., resolved by draft/resolve pipeline)
       if (resolved[fieldName] !== undefined && resolved[fieldName] !== null) {
-        // If value is provided for array field, we still need to create relationships
         if (field.isArray && Array.isArray(resolved[fieldName])) {
+          // Array field - create relationships with matched type metadata
           const ids = resolved[fieldName] as string[]
-          for (const targetId of ids) {
-            pendingRelations.push({ fieldName, targetType: field.relatedType!, targetId })
+          const matchedTypes = resolved[`${fieldName}$matchedTypes`] as string[] | undefined
+          for (let i = 0; i < ids.length; i++) {
+            const targetType = matchedTypes?.[i] || field.relatedType!
+            pendingRelations.push({
+              fieldName,
+              targetType,
+              targetId: ids[i]!,
+              matchedType: targetType,
+            })
           }
+        } else if (typeof resolved[fieldName] === 'string') {
+          // Single field - create relationship with matched type metadata
+          const targetId = resolved[fieldName] as string
+          const matchedType = (resolved[`${fieldName}$matchedType`] as string) || field.relatedType!
+          const score = resolved[`${fieldName}$score`] as number | undefined
+          pendingRelations.push({
+            fieldName,
+            targetType: matchedType,
+            targetId,
+            similarity: score,
+            matchedType,
+          })
         }
         continue
       }
@@ -4883,15 +5135,35 @@ async function resolveReferenceSpec(
   // Create a new entity
   const generatedData: Record<string, unknown> = {}
 
+  // Build context for generation from contextData
+  const genCtxParts: string[] = []
+  for (const [key, value] of Object.entries(contextData)) {
+    if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
+      genCtxParts.push(`${key}: ${value}`)
+    }
+  }
+  const genCtx = genCtxParts.filter(Boolean).join(' | ')
+
   // Generate default values for the target entity's fields
   for (const [fieldName, field] of targetEntity.fields) {
-    if (!field.isRelation && !field.isOptional) {
-      if (field.type === 'string') {
-        generatedData[fieldName] = `Generated ${fieldName} for ${spec.type}`
-      } else if (field.type === 'number') {
-        generatedData[fieldName] = 0
-      } else if (field.type === 'boolean') {
-        generatedData[fieldName] = false
+    if (!field.isRelation) {
+      const isPromptFld =
+        field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+      // Generate both required fields and optional prompt fields
+      if (!field.isOptional || isPromptFld) {
+        if (field.type === 'string' || isPromptFld) {
+          const fldHint = isPromptFld ? field.type : undefined
+          generatedData[fieldName] = generateContextAwareValue(
+            fieldName,
+            spec.type,
+            genCtx,
+            fldHint
+          )
+        } else if (field.type === 'number') {
+          generatedData[fieldName] = 0
+        } else if (field.type === 'boolean') {
+          generatedData[fieldName] = false
+        }
       }
     } else if (field.isRelation && field.operator === '->' && !field.isArray && !field.isOptional) {
       // Recursively resolve nested forward exact relations
@@ -5104,6 +5376,7 @@ function createEntityOperations<T>(
           phase: 'generating',
           currentDepth: 0,
           depth: 0,
+          currentType: typeName,
           totalEntitiesCreated: 1, // Count the root entity
           typesGenerated: [typeName],
         }
@@ -5254,47 +5527,105 @@ function createEntityOperations<T>(
           continue
         }
 
+        // Handle non-relation prompt fields (like 'Write a detailed article')
+        if (!field.isRelation) {
+          const isPromptField =
+            field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+          if (isPromptField) {
+            // Build context for generation
+            const ctxParts: string[] = []
+            const entitySchemaForCtx = entity.schema as Record<string, unknown> | undefined
+            if (entitySchemaForCtx?.['$instructions']) {
+              ctxParts.push(entitySchemaForCtx['$instructions'] as string)
+            }
+            for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+              if (!k.startsWith('$') && !k.startsWith('_') && typeof v === 'string' && v) {
+                ctxParts.push(`${k}: ${v}`)
+              }
+            }
+            const draftCtx = ctxParts.filter(Boolean).join(' | ')
+            const generatedText = generateContextAwareValue(
+              fieldName,
+              typeName,
+              draftCtx,
+              field.type
+            )
+            draftData[fieldName] = generatedText
+            if (options?.stream && options.onChunk) {
+              options.onChunk(generatedText)
+            }
+          }
+          continue
+        }
+
         // Only process fields with relationship operators
         if (field.operator && field.relatedType) {
+          // Skip backward references - they are resolved lazily via hydrateEntity
+          if (field.operator === '<-' || field.operator === '<~') continue
+
           const matchMode = field.matchMode ?? (field.operator.includes('~') ? 'fuzzy' : 'exact')
 
           // data is Partial<Omit<T, ...>> which extends Record<string, unknown>
           // The cast is safe because we're accessing arbitrary properties
           const dataRecord = data as Record<string, unknown>
 
-          if (field.isArray) {
-            // Array relationship
-            const generatedText = generateNaturalLanguageContent(
-              fieldName,
-              field.prompt,
-              field.relatedType,
-              dataRecord
-            )
-            draftData[fieldName] = generatedText
+          // Get fuzzy threshold: field-level overrides entity-level
+          const entitySchemaRaw = entity.schema as Record<string, unknown> | undefined
+          const entityThreshold =
+            entitySchemaRaw && '$fuzzyThreshold' in entitySchemaRaw
+              ? (entitySchemaRaw['$fuzzyThreshold'] as number)
+              : undefined
+          const threshold = field.threshold ?? entityThreshold
 
-            // Create ref specs for array
-            const refSpec: ReferenceSpec = {
-              field: fieldName,
-              operator: field.operator!,
-              type: field.relatedType,
-              matchMode,
-              resolved: false,
-              ...(field.prompt !== undefined && { prompt: field.prompt }),
-              generatedText,
-            }
-            refs[fieldName] = [refSpec]
+          if (field.isArray) {
+            // Array relationship - check for hint values
+            const hintKey = `${fieldName}Hint`
+            const hintValue = dataRecord[hintKey]
+            const hints = Array.isArray(hintValue)
+              ? hintValue
+              : hintValue
+              ? [hintValue]
+              : [
+                  generateNaturalLanguageContent(
+                    fieldName,
+                    field.prompt,
+                    field.relatedType,
+                    dataRecord
+                  ),
+                ]
+
+            const refSpecs: ReferenceSpec[] = hints.map((hint: unknown) => {
+              const generatedText = String(hint)
+              return {
+                field: fieldName,
+                operator: field.operator!,
+                type: field.relatedType,
+                matchMode,
+                resolved: false,
+                ...(field.unionTypes !== undefined && { unionTypes: field.unionTypes }),
+                ...(field.prompt !== undefined && { prompt: field.prompt }),
+                ...(generatedText !== undefined && { generatedText }),
+                ...(threshold !== undefined && { threshold }),
+              } as ReferenceSpec
+            })
+
+            draftData[fieldName] = hints.map(String).join(', ')
+            refs[fieldName] = refSpecs
 
             if (options?.stream && options.onChunk) {
-              options.onChunk(generatedText)
+              for (const spec of refSpecs) {
+                if (spec.generatedText) {
+                  options.onChunk(spec.generatedText)
+                }
+              }
             }
           } else {
-            // Single relationship
-            const generatedText = generateNaturalLanguageContent(
-              fieldName,
-              field.prompt,
-              field.relatedType,
-              dataRecord
-            )
+            // Single relationship - check for hint values
+            const hintKey = `${fieldName}Hint`
+            const hintValue = dataRecord[hintKey] as string | undefined
+            const generatedText =
+              hintValue ||
+              generateNaturalLanguageContent(fieldName, field.prompt, field.relatedType, dataRecord)
             draftData[fieldName] = generatedText
 
             refs[fieldName] = {
@@ -5303,8 +5634,10 @@ function createEntityOperations<T>(
               type: field.relatedType,
               matchMode,
               resolved: false,
+              ...(field.unionTypes !== undefined && { unionTypes: field.unionTypes }),
               ...(field.prompt !== undefined && { prompt: field.prompt }),
-              generatedText,
+              ...(generatedText !== undefined && { generatedText }),
+              ...(threshold !== undefined && { threshold }),
             }
 
             if (options?.stream && options.onChunk) {
