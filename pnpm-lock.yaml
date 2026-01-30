@@ -50,6 +50,9 @@ importers:
 
   packages/ai-database:
     dependencies:
+      '@graphdl/core':
+        specifier: workspace:*
+        version: link:../graphdl
       '@org.ai/types':
         specifier: workspace:*
         version: link:../types
@@ -59,6 +62,12 @@ importers:
       digital-objects:
         specifier: workspace:*
         version: link:../digital-objects
+      hyparquet:
+        specifier: ^1.24.1
+        version: 1.24.1
+      hyparquet-writer:
+        specifier: ^0.12.0
+        version: 0.12.0
       mdxld:
         specifier: ^1.0.1
         version: 1.0.1(@mdx-js/mdx@3.1.1)(web-streams-polyfill@4.0.0-beta.3)
@@ -69,9 +78,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250124.0
         version: 4.20251202.0
-      '@graphdl/core':
-        specifier: workspace:*
-        version: link:../graphdl
       vitest:
         specifier: 3.0.4
         version: 3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
@@ -4922,6 +4928,12 @@ packages:
 
   humanize-ms@1.2.1:
     resolution: {integrity: sha512-Fl70vYtsAFb/C06PTS9dZBo7ihau+Tu/DNCk/OyHhea07S+aeMWpFFkUaXRa8fI+ScZbEI8dfSxwY7gxZ9SAVQ==}
+
+  hyparquet-writer@0.12.0:
+    resolution: {integrity: sha512-HpklbNdmtHgnUXJd10jo1v30oU8gmDhHaIra72wum8zrjVKj/AKOSiPrMtFph3X4ChxiRAUtMfeXnc4CcUM4Tw==}
+
+  hyparquet@1.24.1:
+    resolution: {integrity: sha512-t8mZwSrV7BFhJ0HuXK2dARkPIGqTMfIYmNa2ZhbTIwH/OLFwfNQmXGz1TzCSuX+Nu46KVgmHplc14COq/sMcfA==}
 
   iconv-lite@0.7.0:
     resolution: {integrity: sha512-cf6L2Ds3h57VVmkZe+Pn+5APsT7FpqJtEhhieDCvrE2MK5Qk9MyffgQyuxQTm6BChfeZNtcOLHp9IcWRVcIcBQ==}
@@ -12191,6 +12203,12 @@ snapshots:
   humanize-ms@1.2.1:
     dependencies:
       ms: 2.1.3
+
+  hyparquet-writer@0.12.0:
+    dependencies:
+      hyparquet: 1.24.1
+
+  hyparquet@1.24.1: {}
 
   iconv-lite@0.7.0:
     dependencies:

@@ -43,6 +43,8 @@
     "@org.ai/types": "workspace:*",
     "ai-functions": "workspace:*",
     "digital-objects": "workspace:*",
+    "hyparquet": "^1.24.1",
+    "hyparquet-writer": "^0.12.0",
     "mdxld": "^1.0.1"
   },
   "devDependencies": {
