@@ -138,6 +138,25 @@ export interface Verb {
 
 /**
  * Primitive field types supported in schema definitions
+ *
+ * Includes both general types and precision numeric types for
+ * compatibility with IceType and database schemas.
+ *
+ * | Type | Description |
+ * |------|-------------|
+ * | `string` | Text/varchar |
+ * | `number` | General numeric (float64 equivalent) |
+ * | `int` | 32-bit integer |
+ * | `float` | 32-bit floating point |
+ * | `double` | 64-bit floating point |
+ * | `decimal` | Arbitrary precision decimal |
+ * | `boolean` | True/false |
+ * | `date` | Date without time |
+ * | `datetime` | Date with time |
+ * | `json` | JSON object |
+ * | `markdown` | Markdown text |
+ * | `url` | URL string |
+ * | `email` | Email address |
  */
 export type PrimitiveType =
   | 'string'

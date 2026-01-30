@@ -62,21 +62,32 @@ export interface DependencyGraph {
 
 /**
  * Primitive types that don't create dependencies
+ *
+ * These types are leaf values and do not reference other entity types.
+ * Includes precision numeric types (int, float, double, decimal) for
+ * compatibility with IceType schemas.
+ *
+ * @remarks
+ * When checking if a field type is a primitive, use `PRIMITIVE_TYPES.has(type)`.
+ * Non-primitive types (PascalCase names) are treated as entity references.
  */
 export const PRIMITIVE_TYPES = new Set([
+  // Text types
   'string',
+  'markdown',
+  'url',
+  'email',
+  // Numeric types
   'number',
   'int',
   'float',
   'double',
   'decimal',
+  // Other types
   'boolean',
   'date',
   'datetime',
   'json',
-  'markdown',
-  'url',
-  'email',
   'object',
   'array',
 ])
