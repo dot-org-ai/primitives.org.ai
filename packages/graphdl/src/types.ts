@@ -55,6 +55,12 @@ export interface ParsedRelationship {
   isArray?: boolean
   /** Whether this is an optional relationship */
   isOptional?: boolean
+  /** Whether this is a required relationship (! modifier) */
+  isRequired?: boolean
+  /** Whether the relationship must be unique (! modifier) */
+  isUnique?: boolean
+  /** Whether the relationship is indexed (# modifier) */
+  isIndexed?: boolean
   /** Union types for polymorphic references (e.g., ->A|B|C parses to ['A', 'B', 'C']) */
   unionTypes?: string[]
   /** Similarity threshold for fuzzy matching (0-1), parsed from ~>Type(0.9) syntax */
@@ -326,6 +332,12 @@ export interface ParsedField {
   isOptional: boolean
   /** Whether this is a relationship field */
   isRelation: boolean
+  /** Whether the field is required (! modifier) */
+  isRequired?: boolean
+  /** Whether the field must be unique (! modifier) */
+  isUnique?: boolean
+  /** Whether the field is indexed (# modifier) */
+  isIndexed?: boolean
   /** Related type name for relationship fields */
   relatedType?: string
   /** Back-reference field name for inverse relationships */

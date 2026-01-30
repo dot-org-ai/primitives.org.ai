@@ -64,26 +64,45 @@ function parseField(name: string, definition: string | [string]): ParsedField {
     if (operatorResult.threshold !== undefined) result.threshold = operatorResult.threshold
     if (operatorResult.unionTypes !== undefined) result.unionTypes = operatorResult.unionTypes
     if (operatorResult.prompt !== undefined) result.prompt = operatorResult.prompt
+    if (operatorResult.isRequired) result.isRequired = true
+    if (operatorResult.isUnique) result.isUnique = true
+    if (operatorResult.isIndexed) result.isIndexed = true
     return result
   }
 
   // Not an operator - parse as regular field
   let isArray = false
   let isOptional = false
+  let isRequired = false
+  let isUnique = false
+  let isIndexed = false
   let isRelation = false
   let relatedType: string | undefined
   let backref: string | undefined
 
-  // Check for optional modifier (only if it doesn't contain spaces - prompts may have ?)
-  if (type.endsWith('?') && !type.includes(' ')) {
-    isOptional = true
-    type = type.slice(0, -1)
-  }
-
-  // Check for array modifier
-  if (type.endsWith('[]')) {
-    isArray = true
-    type = type.slice(0, -2)
+  // Parse modifiers from the end, handling any order
+  // Modifiers are: ?, [], !, #
+  // Only parse if type doesn't contain spaces (prompts may have these characters)
+  if (!type.includes(' ')) {
+    let parsing = true
+    while (parsing) {
+      if (type.endsWith('#')) {
+        isIndexed = true
+        type = type.slice(0, -1)
+      } else if (type.endsWith('!')) {
+        isRequired = true
+        isUnique = true
+        type = type.slice(0, -1)
+      } else if (type.endsWith('?')) {
+        isOptional = true
+        type = type.slice(0, -1)
+      } else if (type.endsWith('[]')) {
+        isArray = true
+        type = type.slice(0, -2)
+      } else {
+        parsing = false
+      }
+    }
   }
 
   // Check for backref syntax (Type.field)
@@ -111,6 +130,9 @@ function parseField(name: string, definition: string | [string]): ParsedField {
     isOptional,
     isRelation,
   }
+  if (isRequired) result.isRequired = true
+  if (isUnique) result.isUnique = true
+  if (isIndexed) result.isIndexed = true
   if (relatedType !== undefined) result.relatedType = relatedType
   if (backref !== undefined) result.backref = backref
   return result

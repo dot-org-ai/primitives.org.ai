@@ -164,23 +164,33 @@ export function parseOperator(definition: string): ParsedRelationship | null {
         }
       }
 
-      // Parse optional and array modifiers
+      // Parse modifiers: ?, [], !, #
+      // Modifiers can appear in any order at the end of the type
       let isOptional = false
       let isArray = false
+      let isRequired = false
+      let isUnique = false
+      let isIndexed = false
 
-      if (targetType.endsWith('?')) {
-        isOptional = true
-        targetType = targetType.slice(0, -1)
-      }
-      if (targetType.endsWith('[]')) {
-        isArray = true
-        targetType = targetType.slice(0, -2)
-      }
-      // Handle []? order
-      if (targetType.endsWith('[]?')) {
-        isOptional = true
-        isArray = true
-        targetType = targetType.slice(0, -3)
+      // Parse modifiers from the end, handling any order
+      let parsing = true
+      while (parsing) {
+        if (targetType.endsWith('#')) {
+          isIndexed = true
+          targetType = targetType.slice(0, -1)
+        } else if (targetType.endsWith('!')) {
+          isRequired = true
+          isUnique = true
+          targetType = targetType.slice(0, -1)
+        } else if (targetType.endsWith('?')) {
+          isOptional = true
+          targetType = targetType.slice(0, -1)
+        } else if (targetType.endsWith('[]')) {
+          isArray = true
+          targetType = targetType.slice(0, -2)
+        } else {
+          parsing = false
+        }
       }
 
       // Parse backref syntax (Type.field)
@@ -212,6 +222,9 @@ export function parseOperator(definition: string): ParsedRelationship | null {
       if (backref !== undefined) result.backref = backref
       if (isArray) result.isArray = true
       if (isOptional) result.isOptional = true
+      if (isRequired) result.isRequired = true
+      if (isUnique) result.isUnique = true
+      if (isIndexed) result.isIndexed = true
       if (unionTypes !== undefined && unionTypes.length > 1) result.unionTypes = unionTypes
       if (threshold !== undefined) result.threshold = threshold
       return result
