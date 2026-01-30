@@ -491,6 +491,12 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
+  packages/graphdl:
+    devDependencies:
+      vitest:
+        specifier: 3.0.4
+        version: 3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+
   packages/human-in-the-loop:
     dependencies:
       ai-functions:

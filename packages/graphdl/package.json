@@ -1,0 +1,48 @@
+{
+  "name": "@graphdl/core",
+  "version": "0.1.0",
+  "description": "Pure TypeScript DSL for defining entity graphs with noun/verb semantics and relationship operators",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ai-primitives/primitives.org.ai.git",
+    "directory": "packages/graphdl"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "vitest": "3.0.4"
+  },
+  "keywords": [
+    "graphdl",
+    "schema",
+    "dsl",
+    "entity",
+    "graph",
+    "typescript",
+    "noun",
+    "verb",
+    "relationships"
+  ],
+  "license": "MIT"
+}
