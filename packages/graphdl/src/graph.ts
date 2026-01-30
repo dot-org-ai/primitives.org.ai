@@ -140,6 +140,15 @@ function parseField(name: string, definition: string | [string]): ParsedField {
 
 /**
  * Parse an entity definition
+ *
+ * Handles both simple type URI strings and object definitions with fields.
+ * Collects $ prefixed properties as directives for downstream consumers,
+ * supporting passthrough of IceType-style configuration like $partitionBy,
+ * $index, $fts, $vector, etc.
+ *
+ * @param name - Entity name
+ * @param definition - Entity definition (string URI or object with fields)
+ * @returns Parsed entity with fields and directives
  */
 function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
   // Simple type URI string
@@ -222,6 +231,25 @@ function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
  *     name: 'string',
  *   },
  * })
+ * ```
+ *
+ * ### With Passthrough Directives
+ * ```ts
+ * const schema = Graph({
+ *   User: {
+ *     $type: 'https://schema.org.ai/Person',
+ *     $partitionBy: ['tenantId'],     // IceType partition key
+ *     $index: [['email'], ['createdAt']], // Secondary indexes
+ *     $fts: ['bio'],                  // Full-text search fields
+ *     id: 'uuid!',
+ *     email: 'string!#',
+ *     tenantId: 'string',
+ *   },
+ * })
+ *
+ * // Access directives
+ * schema.entities.get('User')?.directives
+ * // => { $partitionBy: ['tenantId'], $index: [['email'], ['createdAt']], $fts: ['bio'] }
  * ```
  *
  * @param input - Entity definitions
