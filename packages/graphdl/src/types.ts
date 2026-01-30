@@ -191,6 +191,9 @@ export type PrimitiveType =
   | 'time'
   | 'uuid'
   | 'binary'
+  | 'varchar'
+  | 'char'
+  | 'fixed'
   | 'json'
   | 'markdown'
   | 'url'
@@ -371,6 +374,12 @@ export interface ParsedField {
   unionTypes?: string[]
   /** Natural language prompt for generation */
   prompt?: string
+  /** Numeric precision for parametric types like decimal(precision, scale) */
+  precision?: number
+  /** Numeric scale for parametric types like decimal(precision, scale) */
+  scale?: number
+  /** Length parameter for parametric types like varchar(length), char(length), fixed(length) */
+  length?: number
 }
 
 /**

@@ -38,6 +38,18 @@ export const TYPE_ALIASES: Record<string, string> = {
 }
 
 /**
+ * Parametric types that accept parameters in parentheses.
+ *
+ * | Type | Parameters | Example |
+ * |------|------------|---------|
+ * | `decimal` | precision, scale | `decimal(10,2)` |
+ * | `varchar` | length | `varchar(255)` |
+ * | `char` | length | `char(10)` |
+ * | `fixed` | length | `fixed(256)` |
+ */
+export const PARAMETRIC_TYPES = new Set(['decimal', 'varchar', 'char', 'fixed'])
+
+/**
  * Check if a type string represents a primitive type
  */
 function isPrimitiveType(type: string): type is PrimitiveType {
@@ -119,6 +131,26 @@ function parseField(name: string, definition: string | [string]): ParsedField {
     }
   }
 
+  // Parse parametric types: decimal(10,2), varchar(255), char(10), fixed(256)
+  let precision: number | undefined
+  let scale: number | undefined
+  let length: number | undefined
+  const parametricMatch = type.match(/^(\w+)\((.+)\)$/)
+  if (parametricMatch) {
+    const [, baseType, params] = parametricMatch
+    if (baseType && PARAMETRIC_TYPES.has(baseType)) {
+      type = baseType
+      const paramParts = params!.split(',').map((p) => p.trim())
+      if (baseType === 'decimal') {
+        if (paramParts.length >= 1 && paramParts[0]) precision = parseInt(paramParts[0], 10)
+        if (paramParts.length >= 2 && paramParts[1]) scale = parseInt(paramParts[1], 10)
+      } else {
+        // varchar, char, fixed all take a length parameter
+        if (paramParts.length >= 1 && paramParts[0]) length = parseInt(paramParts[0], 10)
+      }
+    }
+  }
+
   // Resolve type aliases (e.g., bool -> boolean)
   if (type in TYPE_ALIASES) {
     type = TYPE_ALIASES[type]!
@@ -154,6 +186,9 @@ function parseField(name: string, definition: string | [string]): ParsedField {
   if (isIndexed) result.isIndexed = true
   if (relatedType !== undefined) result.relatedType = relatedType
   if (backref !== undefined) result.backref = backref
+  if (precision !== undefined) result.precision = precision
+  if (scale !== undefined) result.scale = scale
+  if (length !== undefined) result.length = length
   return result
 }
 

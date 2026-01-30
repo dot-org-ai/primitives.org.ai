@@ -99,6 +99,10 @@ export const PRIMITIVE_TYPES = new Set([
   'uuid',
   // Binary types
   'binary',
+  // Parametric types (also usable without parameters)
+  'varchar',
+  'char',
+  'fixed',
   // Structured types
   'json',
   'object',

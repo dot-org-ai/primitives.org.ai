@@ -55,6 +55,7 @@ export {
   getRelationshipFields,
   getReferencingEntities,
   TYPE_ALIASES,
+  PARAMETRIC_TYPES,
 } from './graph.js'
 
 // =============================================================================
