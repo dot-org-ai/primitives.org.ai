@@ -66,6 +66,10 @@ export interface DependencyGraph {
 export const PRIMITIVE_TYPES = new Set([
   'string',
   'number',
+  'int',
+  'float',
+  'double',
+  'decimal',
   'boolean',
   'date',
   'datetime',

@@ -142,6 +142,10 @@ export interface Verb {
 export type PrimitiveType =
   | 'string'
   | 'number'
+  | 'int'
+  | 'float'
+  | 'double'
+  | 'decimal'
   | 'boolean'
   | 'date'
   | 'datetime'
