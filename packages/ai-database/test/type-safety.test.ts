@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, expectTypeOf } from 'vitest'
 import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 import type { DBPromise } from '../src/ai-promise-db.js'
+import type { InferEntity } from '../src/schema/index.js'
 import {
   hasEntityMarker,
   isValueOfable,
@@ -41,6 +42,90 @@ interface Team {
   name: string
   members: string[] // User IDs
 }
+
+// Schema for InferEntity type-level tests
+const inferTestSchema = {
+  User: {
+    name: 'string' as const,
+    age: 'number' as const,
+    active: 'boolean' as const,
+    tags: ['string'] as const,
+    role: 'admin | editor | viewer' as const,
+  },
+  Post: {
+    title: 'string' as const,
+    author: '->User' as const,
+    categories: ['~>Category'] as const,
+  },
+  Category: {
+    name: 'string' as const,
+    posts: ['<-Post'] as const,
+  },
+  Comment: {
+    text: 'string' as const,
+    post: '<-Post' as const,
+    reviewer: '~>User' as const,
+    editor: '<~User' as const,
+  },
+} as const
+
+type TestSchema = typeof inferTestSchema
+
+describe('InferEntity type inference', () => {
+  it('infers primitive fields', () => {
+    type U = InferEntity<TestSchema, 'User'>
+    expectTypeOf<U['name']>().toEqualTypeOf<string>()
+    expectTypeOf<U['age']>().toEqualTypeOf<number>()
+    expectTypeOf<U['active']>().toEqualTypeOf<boolean>()
+    expectTypeOf<U['$id']>().toEqualTypeOf<string>()
+  })
+
+  it('infers tuple types as arrays', () => {
+    type U = InferEntity<TestSchema, 'User'>
+    expectTypeOf<U['tags']>().toEqualTypeOf<string[]>()
+  })
+
+  it('infers forward exact refs (->Entity)', () => {
+    type P = InferEntity<TestSchema, 'Post'>
+    type U = InferEntity<TestSchema, 'User'>
+    expectTypeOf<P['author']>().toEqualTypeOf<U>()
+  })
+
+  it('infers backward refs (<-Entity)', () => {
+    type C = InferEntity<TestSchema, 'Comment'>
+    type P = InferEntity<TestSchema, 'Post'>
+    expectTypeOf<C['post']>().toEqualTypeOf<P>()
+  })
+
+  it('infers forward fuzzy refs (~>Entity)', () => {
+    type C = InferEntity<TestSchema, 'Comment'>
+    type U = InferEntity<TestSchema, 'User'>
+    expectTypeOf<C['reviewer']>().toEqualTypeOf<U>()
+  })
+
+  it('infers backward fuzzy refs (<~Entity)', () => {
+    type C = InferEntity<TestSchema, 'Comment'>
+    type U = InferEntity<TestSchema, 'User'>
+    expectTypeOf<C['editor']>().toEqualTypeOf<U>()
+  })
+
+  it('infers tuple ref types as arrays', () => {
+    type P = InferEntity<TestSchema, 'Post'>
+    type Cat = InferEntity<TestSchema, 'Category'>
+    expectTypeOf<P['categories']>().toEqualTypeOf<Cat[]>()
+  })
+
+  it('infers backward ref tuples as arrays', () => {
+    type Cat = InferEntity<TestSchema, 'Category'>
+    type P = InferEntity<TestSchema, 'Post'>
+    expectTypeOf<Cat['posts']>().toEqualTypeOf<P[]>()
+  })
+
+  it('infers union string types', () => {
+    type U = InferEntity<TestSchema, 'User'>
+    expectTypeOf<U['role']>().toEqualTypeOf<'admin' | 'editor' | 'viewer'>()
+  })
+})
 
 // TODO: Advanced feature tests - needs investigation
 describe('Type Safety Tests', () => {
@@ -323,6 +408,111 @@ describe('Type Safety Tests', () => {
         const memberId = extractEntityId(member)
         expect(typeof memberId).toBe('string')
       }
+    })
+  })
+
+  describe('Compile-time Schema Type Inference', () => {
+    it('infers primitive field types from schema strings', () => {
+      const schema = {
+        User: { name: 'string', email: 'string', age: 'number', active: 'boolean' },
+      } as const
+      const { db } = DB(schema)
+      type UserEntity = Awaited<ReturnType<typeof db.User.list>>[number]
+
+      const _nameCheck: string = '' as UserEntity['name']
+      const _ageCheck: number = 0 as UserEntity['age']
+      const _activeCheck: boolean = false as UserEntity['active']
+      const _idCheck: string = '' as UserEntity['$id']
+
+      expect(true).toBe(true)
+    })
+
+    it('infers ->Entity relation fields as entity types', () => {
+      const schema = {
+        User: { name: 'string' },
+        Post: { title: 'string', author: '->User' },
+      } as const
+      const { db } = DB(schema)
+      type PostEntity = Awaited<ReturnType<typeof db.Post.list>>[number]
+      type AuthorType = PostEntity['author']
+      const _authorHasId: string = '' as AuthorType['$id']
+      const _authorHasName: string = '' as AuthorType['name']
+
+      expect(true).toBe(true)
+    })
+
+    it('infers union string fields as literal union types', () => {
+      const schema = {
+        Task: { title: 'string', status: 'todo | doing | done' },
+      } as const
+      const { db } = DB(schema)
+      type TaskEntity = Awaited<ReturnType<typeof db.Task.list>>[number]
+      type StatusType = TaskEntity['status']
+
+      const _a: StatusType = 'todo'
+      const _b: StatusType = 'doing'
+      const _c: StatusType = 'done'
+
+      expect(true).toBe(true)
+    })
+
+    it('infers array tuple fields as typed arrays', () => {
+      const schema = {
+        User: { name: 'string' },
+        Team: { name: 'string', members: ['->User'] as [string] },
+      } as const
+      const { db } = DB(schema)
+      type TeamEntity = Awaited<ReturnType<typeof db.Team.list>>[number]
+      type MembersType = TeamEntity['members']
+      const _arr: MembersType = [] as MembersType
+
+      expect(true).toBe(true)
+    })
+
+    it('infers optional fields with undefined', () => {
+      const schema = {
+        Item: { name: 'string', notes: 'string?' },
+      } as const
+      const { db } = DB(schema)
+      type ItemEntity = Awaited<ReturnType<typeof db.Item.list>>[number]
+      const _notes: ItemEntity['notes'] = undefined
+
+      expect(true).toBe(true)
+    })
+
+    it('create method accepts correct field types from schema', async () => {
+      const schema = {
+        User: { name: 'string', email: 'string', age: 'number' },
+      } as const
+      const { db } = DB(schema)
+
+      const user = await db.User.create({
+        name: 'Alice',
+        email: 'alice@test.com',
+        age: 30,
+      })
+
+      expect(user.$id).toBeDefined()
+      expect(user.name).toBe('Alice')
+      expect(user.email).toBe('alice@test.com')
+      expect(user.age).toBe(30)
+    })
+
+    it('InferEntity type utility works standalone', () => {
+      type Schema = {
+        readonly User: { readonly name: 'string'; readonly email: 'string'; readonly age: 'number' }
+        readonly Post: { readonly title: 'string'; readonly author: '->User' }
+      }
+
+      type User = import('../src/index.js').InferEntity<Schema, 'User'>
+      type Post = import('../src/index.js').InferEntity<Schema, 'Post'>
+
+      const _userName: string = '' as User['name']
+      const _userAge: number = 0 as User['age']
+      const _postTitle: string = '' as Post['title']
+      const _postAuthorName: string = '' as Post['author']['name']
+
+      expect(true).toBe(true)
     })
   })
 

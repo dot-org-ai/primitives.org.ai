@@ -21,6 +21,50 @@ import type {
 import { setProviderResolver } from '../ai-promise-db.js'
 
 // =============================================================================
+// Transaction Types
+// =============================================================================
+
+/**
+ * A transaction wraps get/put/delete operations and applies them atomically.
+ *
+ * Writes are buffered until commit() is called. On rollback(), all buffered
+ * writes are discarded. Reading within a transaction sees buffered writes.
+ */
+export interface Transaction {
+  /** Get an entity (reads buffered writes first, then falls through to provider) */
+  get(type: string, id: string): Promise<Record<string, unknown> | null>
+
+  /** Create an entity (buffered until commit) */
+  create(
+    type: string,
+    id: string | undefined,
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>>
+
+  /** Update an entity (buffered until commit) */
+  update(type: string, id: string, data: Record<string, unknown>): Promise<Record<string, unknown>>
+
+  /** Delete an entity (buffered until commit) */
+  delete(type: string, id: string): Promise<boolean>
+
+  /** Create a relationship (buffered until commit) */
+  relate(
+    fromType: string,
+    fromId: string,
+    relation: string,
+    toType: string,
+    toId: string,
+    metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number; matchedType?: string }
+  ): Promise<void>
+
+  /** Apply all buffered writes atomically */
+  commit(): Promise<void>
+
+  /** Discard all buffered writes */
+  rollback(): Promise<void>
+}
+
+// =============================================================================
 // Provider Interfaces
 // =============================================================================
 
@@ -90,6 +134,9 @@ export interface DBProvider {
     toType: string,
     toId: string
   ): Promise<void>
+
+  /** Begin a transaction (optional - not all providers support this) */
+  beginTransaction?(): Promise<Transaction>
 }
 
 /**
@@ -230,6 +277,15 @@ export function hasArtifactsAPI(
 ): provider is DBProvider &
   Pick<DBProviderExtended, 'getArtifact' | 'setArtifact' | 'deleteArtifact' | 'listArtifacts'> {
   return 'getArtifact' in provider && 'setArtifact' in provider
+}
+
+/**
+ * Type guard to check if provider supports transactions
+ */
+export function hasTransactionSupport(
+  provider: DBProvider
+): provider is DBProvider & { beginTransaction(): Promise<Transaction> } {
+  return 'beginTransaction' in provider && typeof (provider as any).beginTransaction === 'function'
 }
 
 /**

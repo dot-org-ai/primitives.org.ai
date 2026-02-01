@@ -57,6 +57,7 @@ import {
 } from './type-guards.js'
 
 import { parseOperator as graphdlParseOperator } from '@graphdl/core'
+import { loadEntity } from './dataloader.js'
 
 // =============================================================================
 // Re-exports from modular files
@@ -1146,23 +1147,73 @@ type FieldToTS<T extends string> = T extends 'string'
   : unknown
 
 /**
+ * Parse a union string like 'A | B | C' into a union type
+ */
+type ParseUnion<T extends string> = T extends `${infer A} | ${infer B}` ? A | ParseUnion<B> : T
+
+/**
+ * Infer the TypeScript type for a single field string value, given the full schema
+ */
+type InferFieldValue<TSchema extends DatabaseSchema, V extends string> =
+  // Forward exact ref: '->Entity'
+  V extends `->${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Backward exact ref: '<-Entity'
+    V extends `<-${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Forward fuzzy ref: '~>Entity'
+    V extends `~>${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Backward fuzzy ref: '<~Entity'
+    V extends `<~${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Dotted relation: 'Entity.field'
+    V extends `${infer Type}.${string}`
+    ? Type extends keyof TSchema
+      ? InferEntity<TSchema, Type>
+      : unknown
+    : // Array suffix: 'Type[]'
+    V extends `${infer Type}[]`
+    ? Type extends keyof TSchema
+      ? InferEntity<TSchema, Type>[]
+      : FieldToTS<Type>[]
+    : // Optional suffix: 'Type?'
+    V extends `${infer Type}?`
+    ? FieldToTS<Type> | undefined
+    : // Union string: 'A | B | C'
+    V extends `${string} | ${string}`
+    ? ParseUnion<V>
+    : // Plain field type
+      FieldToTS<V>
+
+/**
  * Infer entity type from schema definition
  */
 export type InferEntity<TSchema extends DatabaseSchema, TEntity extends keyof TSchema> = {
   $id: string
   $type: TEntity
 } & {
-  [K in keyof TSchema[TEntity]]: TSchema[TEntity][K] extends `${infer Type}.${string}`
-    ? Type extends keyof TSchema
-      ? InferEntity<TSchema, Type>
-      : unknown
-    : TSchema[TEntity][K] extends `${infer Type}[]`
-    ? Type extends keyof TSchema
-      ? InferEntity<TSchema, Type>[]
-      : FieldToTS<Type>[]
-    : TSchema[TEntity][K] extends `${infer Type}?`
-    ? FieldToTS<Type> | undefined
-    : FieldToTS<TSchema[TEntity][K] & string>
+  [K in keyof TSchema[TEntity]]: // Tuple types like ['string'] or ['->Entity']
+  TSchema[TEntity][K] extends readonly [infer Inner extends string]
+    ? InferFieldValue<TSchema, Inner> extends infer R
+      ? R[]
+      : never
+    : TSchema[TEntity][K] extends [infer Inner extends string]
+    ? InferFieldValue<TSchema, Inner> extends infer R
+      ? R[]
+      : never
+    : // String field definitions
+    TSchema[TEntity][K] extends string
+    ? InferFieldValue<TSchema, TSchema[TEntity][K]>
+    : unknown
 }
 
 // =============================================================================
@@ -3291,21 +3342,30 @@ export function DB<TSchema extends DatabaseSchema>(
       // Special handling for Edge entity - query from in-memory edge records + runtime edges
       const edgeOps = createEdgeEntityOperations(allEdgeRecords, resolveProvider)
       entityOperations[entityName] = makeCallableEntityOps(
-        wrapEntityOperations(entityName, edgeOps, forEachActionsAPI) as Record<string, unknown>,
+        wrapEntityOperations(entityName, edgeOps, forEachActionsAPI) as unknown as Record<
+          string,
+          unknown
+        >,
         entityName
       )
     } else if (entityName === 'Noun') {
       // Noun entity - auto-generated from schema entity types
       const nounOps = createNounEntityOperations(allNounRecords)
       entityOperations[entityName] = makeCallableEntityOps(
-        wrapEntityOperations(entityName, nounOps, forEachActionsAPI) as Record<string, unknown>,
+        wrapEntityOperations(entityName, nounOps, forEachActionsAPI) as unknown as Record<
+          string,
+          unknown
+        >,
         entityName
       )
     } else if (entityName === 'Verb') {
       // Verb entity - standard verbs with conjugation forms
       const verbOps = createVerbEntityOperations(allVerbRecords)
       entityOperations[entityName] = makeCallableEntityOps(
-        wrapEntityOperations(entityName, verbOps, forEachActionsAPI) as Record<string, unknown>,
+        wrapEntityOperations(entityName, verbOps, forEachActionsAPI) as unknown as Record<
+          string,
+          unknown
+        >,
         entityName
       )
     } else {
@@ -3424,7 +3484,9 @@ export function DB<TSchema extends DatabaseSchema>(
       // Add seed method if entity has seed configuration
       if (entity.seedConfig) {
         const seedConfig = entity.seedConfig
-        ;(wrappedOps as Record<string, unknown>)['seed'] = async (): Promise<{ count: number }> => {
+        ;(wrappedOps as unknown as Record<string, unknown>)['seed'] = async (): Promise<{
+          count: number
+        }> => {
           const { loadSeedData } = await import('./schema/seed.js')
           const records = await loadSeedData(seedConfig)
           const provider = await resolveProvider()
@@ -3445,7 +3507,7 @@ export function DB<TSchema extends DatabaseSchema>(
       }
 
       entityOperations[entityName] = makeCallableEntityOps(
-        wrappedOps as Record<string, unknown>,
+        wrappedOps as unknown as Record<string, unknown>,
         entityName
       )
     }
@@ -5990,7 +6052,7 @@ function hydrateEntity(
               return (resolve: (value: unknown) => void, reject: (reason: unknown) => void) => {
                 return (async () => {
                   const provider = await resolveProvider()
-                  const result = await provider.get(matchedType, storedId)
+                  const result = await loadEntity(provider, matchedType, storedId)
                   if (!result) return null
                   const hydratedResult = hydrateEntity(
                     result,
@@ -6044,7 +6106,7 @@ function hydrateEntity(
                   return (resolve: (value: unknown) => void, reject: (reason: unknown) => void) => {
                     return (async () => {
                       const prov = await resolveProvider()
-                      const result = await prov.get(targetType, targetId)
+                      const result = await loadEntity(prov, targetType, targetId)
                       if (!result) return null
                       const hydratedResult = hydrateEntity(
                         result,
@@ -6091,7 +6153,7 @@ function hydrateEntity(
                   const targetType =
                     (field.unionTypes && matchedTypes?.[index]) || field.relatedType!
                   const targetEntity = schema.entities.get(targetType) || relatedEntity
-                  const result = await prov.get(targetType, targetId)
+                  const result = await loadEntity(prov, targetType, targetId)
                   if (!result) return null
                   const hydratedResult = hydrateEntity(
                     result,

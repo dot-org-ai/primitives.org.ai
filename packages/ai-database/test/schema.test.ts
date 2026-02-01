@@ -33,6 +33,14 @@ import {
   setProvider,
   configureAIGeneration,
 } from '../src/schema.js'
+import {
+  createMockProvider,
+  defaultNameScorer,
+  exactOnlyScorer,
+  firstWordNameScorer,
+  titleFirstWordScorer,
+  thresholdTestScorer,
+} from './utils/mock-provider-factory.js'
 import type {
   DatabaseSchema,
   ParsedField,
@@ -1308,87 +1316,16 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       // Create a mock provider that:
       // 1. Has some existing categories for semantic search to find
       // 2. Returns scores for semantic search
-      const existingCategories = [
-        { $id: 'cat-electronics', $type: 'Category', name: 'Electronics', slug: 'electronics' },
-        { $id: 'cat-clothing', $type: 'Category', name: 'Clothing', slug: 'clothing' },
-      ]
-
-      const mockProvider = {
-        entities: new Map<string, Map<string, Record<string, unknown>>>([
-          ['Category', new Map(existingCategories.map((c) => [c.$id, c]))],
-          ['Product', new Map()],
-        ]),
-        relations: new Map(),
-
-        async get(type: string, id: string) {
-          return this.entities.get(type)?.get(id) ?? null
+      const mockProvider = createMockProvider({
+        entities: {
+          Category: [
+            { $id: 'cat-electronics', $type: 'Category', name: 'Electronics', slug: 'electronics' },
+            { $id: 'cat-clothing', $type: 'Category', name: 'Clothing', slug: 'clothing' },
+          ],
+          Product: [],
         },
-
-        async list(type: string) {
-          return Array.from(this.entities.get(type)?.values() ?? [])
-        },
-
-        async search() {
-          return []
-        },
-
-        async create(type: string, id: string | undefined, data: Record<string, unknown>) {
-          const entityId = id || `${type.toLowerCase()}-${Date.now()}`
-          const entity = { $id: entityId, $type: type, ...data }
-          if (!this.entities.has(type)) {
-            this.entities.set(type, new Map())
-          }
-          this.entities.get(type)!.set(entityId, entity)
-          return entity
-        },
-
-        async update(type: string, id: string, data: Record<string, unknown>) {
-          const existing = await this.get(type, id)
-          if (!existing) throw new Error(`Not found: ${type}/${id}`)
-          const updated = { ...existing, ...data }
-          this.entities.get(type)!.set(id, updated)
-          return updated
-        },
-
-        async delete(type: string, id: string) {
-          return this.entities.get(type)?.delete(id) ?? false
-        },
-
-        async relate() {},
-        async unrelate() {},
-        async related() {
-          return []
-        },
-
-        // Semantic search mock - returns matches based on name similarity
-        async semanticSearch(
-          type: string,
-          query: string,
-          options?: { minScore?: number; limit?: number }
-        ) {
-          const minScore = options?.minScore ?? 0.75
-          const entities = Array.from(this.entities.get(type)?.values() ?? [])
-
-          // Simple mock: exact name match = 0.95, partial = 0.80, no match = 0.3
-          const results = entities
-            .map((entity) => {
-              const name = (entity.name as string).toLowerCase()
-              const queryLower = query.toLowerCase()
-              let score = 0.3 // Default low score
-
-              if (name === queryLower) {
-                score = 0.95
-              } else if (name.includes(queryLower) || queryLower.includes(name)) {
-                score = 0.8
-              }
-
-              return { ...entity, $score: score }
-            })
-            .filter((r) => r.$score >= minScore)
-
-          return results.sort((a, b) => b.$score - a.$score)
-        },
-      }
+        scorer: defaultNameScorer,
+      })
 
       setProvider(mockProvider as any)
 
@@ -1444,95 +1381,18 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       const { db } = DB(schema)
 
       // Mock provider with tags at different similarity levels
-      const existingTags = [
-        { $id: 'tag-javascript', $type: 'Tag', name: 'JavaScript' },
-        { $id: 'tag-typescript', $type: 'Tag', name: 'TypeScript' },
-        { $id: 'tag-react', $type: 'Tag', name: 'React' },
-      ]
-
-      const mockProvider = {
-        entities: new Map([
-          ['Tag', new Map(existingTags.map((t) => [t.$id, t]))],
-          ['Post', new Map()],
-        ]),
-        relations: new Map(),
-
-        async get(type: string, id: string) {
-          return this.entities.get(type)?.get(id) ?? null
+      const mockProvider = createMockProvider({
+        entities: {
+          Tag: [
+            { $id: 'tag-javascript', $type: 'Tag', name: 'JavaScript' },
+            { $id: 'tag-typescript', $type: 'Tag', name: 'TypeScript' },
+            { $id: 'tag-react', $type: 'Tag', name: 'React' },
+          ],
+          Post: [],
         },
-
-        async list(type: string) {
-          return Array.from(this.entities.get(type)?.values() ?? [])
-        },
-
-        async search() {
-          return []
-        },
-
-        async create(type: string, id: string | undefined, data: Record<string, unknown>) {
-          const entityId = id || `${type.toLowerCase()}-${Date.now()}`
-          const entity = { $id: entityId, $type: type, ...data }
-          if (!this.entities.has(type)) {
-            this.entities.set(type, new Map())
-          }
-          this.entities.get(type)!.set(entityId, entity)
-          return entity
-        },
-
-        async update(type: string, id: string, data: Record<string, unknown>) {
-          const existing = await this.get(type, id)
-          if (!existing) throw new Error(`Not found: ${type}/${id}`)
-          const updated = { ...existing, ...data }
-          this.entities.get(type)!.set(id, updated)
-          return updated
-        },
-
-        async delete(type: string, id: string) {
-          return this.entities.get(type)?.delete(id) ?? false
-        },
-
-        async relate() {},
-        async unrelate() {},
-        async related() {
-          return []
-        },
-
-        async semanticSearch(
-          type: string,
-          query: string,
-          options?: { minScore?: number; limit?: number }
-        ) {
-          const minScore = options?.minScore ?? 0.75
-          const entities = Array.from(this.entities.get(type)?.values() ?? [])
-
-          // Scores designed to test threshold behavior:
-          // - "javascript" exact match = 0.95 (above 0.85 threshold)
-          // - "typescript" gets 0.82 because the hint is "typescript" vs stored "TypeScript"
-          //   (simulate embeddings not being exact)
-          // - "vue" no match = 0.3 (below any threshold)
-          const results = entities
-            .map((entity) => {
-              const name = (entity.name as string).toLowerCase()
-              const queryLower = query.toLowerCase()
-
-              let score = 0.3
-              // Only exact match for "javascript" gets 0.95
-              if (name === queryLower && queryLower === 'javascript') {
-                score = 0.95
-              } else if (name === queryLower) {
-                // Other exact matches (like typescript) get 0.82 to test threshold
-                score = 0.82
-              } else if (name.includes(queryLower) || queryLower.includes(name)) {
-                score = 0.7
-              }
-
-              return { ...entity, $score: score }
-            })
-            .filter((r) => r.$score >= minScore)
-
-          return results.sort((a, b) => b.$score - a.$score)
-        },
-      }
+        // "javascript" exact = 0.95, other exact = 0.82, partial = 0.7, none = 0.3
+        scorer: thresholdTestScorer,
+      })
 
       setProvider(mockProvider as any)
 
@@ -1581,75 +1441,16 @@ describe('Forward Fuzzy Resolution (~>)', () => {
 
       const { db } = DB(schema)
 
-      const existingAuthors = [
-        { $id: 'author-alice', $type: 'Author', name: 'Alice Smith' },
-        { $id: 'author-bob', $type: 'Author', name: 'Bob Jones' },
-      ]
-
-      const mockProvider = {
-        entities: new Map([
-          ['Author', new Map(existingAuthors.map((a) => [a.$id, a]))],
-          ['Article', new Map()],
-        ]),
-        relations: new Map(),
-
-        async get(type: string, id: string) {
-          return this.entities.get(type)?.get(id) ?? null
+      const mockProvider = createMockProvider({
+        entities: {
+          Author: [
+            { $id: 'author-alice', $type: 'Author', name: 'Alice Smith' },
+            { $id: 'author-bob', $type: 'Author', name: 'Bob Jones' },
+          ],
+          Article: [],
         },
-
-        async list(type: string) {
-          return Array.from(this.entities.get(type)?.values() ?? [])
-        },
-
-        async search() {
-          return []
-        },
-
-        async create(type: string, id: string | undefined, data: Record<string, unknown>) {
-          const entityId = id || `${type.toLowerCase()}-${Date.now()}`
-          const entity = { $id: entityId, $type: type, ...data }
-          if (!this.entities.has(type)) {
-            this.entities.set(type, new Map())
-          }
-          this.entities.get(type)!.set(entityId, entity)
-          return entity
-        },
-
-        async update(type: string, id: string, data: Record<string, unknown>) {
-          const existing = await this.get(type, id)
-          if (!existing) throw new Error(`Not found: ${type}/${id}`)
-          return { ...existing, ...data }
-        },
-
-        async delete() {
-          return false
-        },
-        async relate() {},
-        async unrelate() {},
-        async related() {
-          return []
-        },
-
-        async semanticSearch(type: string, query: string, options?: { minScore?: number }) {
-          const minScore = options?.minScore ?? 0.75
-          const entities = Array.from(this.entities.get(type)?.values() ?? [])
-
-          const results = entities
-            .map((entity) => {
-              const name = (entity.name as string).toLowerCase()
-              const queryLower = query.toLowerCase()
-              // Exact name match
-              const score =
-                name.includes(queryLower) || queryLower.includes(name.split(' ')[0] || '')
-                  ? 0.9
-                  : 0.3
-              return { ...entity, $score: score }
-            })
-            .filter((r) => r.$score >= minScore)
-
-          return results
-        },
-      }
+        scorer: firstWordNameScorer,
+      })
 
       setProvider(mockProvider as any)
 
@@ -1686,56 +1487,14 @@ describe('Forward Fuzzy Resolution (~>)', () => {
 
       const { db } = DB(schema)
 
-      // Empty database - no existing technologies
-      const mockProvider = {
-        entities: new Map([
-          ['Technology', new Map()],
-          ['Project', new Map()],
-        ]),
-        relations: new Map(),
-
-        async get(type: string, id: string) {
-          return this.entities.get(type)?.get(id) ?? null
+      // Empty database - no existing technologies, all should be generated
+      const mockProvider = createMockProvider({
+        entities: {
+          Technology: [],
+          Project: [],
         },
-
-        async list(type: string) {
-          return Array.from(this.entities.get(type)?.values() ?? [])
-        },
-
-        async search() {
-          return []
-        },
-
-        async create(type: string, id: string | undefined, data: Record<string, unknown>) {
-          const entityId = id || `${type.toLowerCase()}-${Date.now()}`
-          const entity = { $id: entityId, $type: type, ...data }
-          if (!this.entities.has(type)) {
-            this.entities.set(type, new Map())
-          }
-          this.entities.get(type)!.set(entityId, entity)
-          return entity
-        },
-
-        async update(type: string, id: string, data: Record<string, unknown>) {
-          const existing = await this.get(type, id)
-          if (!existing) throw new Error(`Not found: ${type}/${id}`)
-          return { ...existing, ...data }
-        },
-
-        async delete() {
-          return false
-        },
-        async relate() {},
-        async unrelate() {},
-        async related() {
-          return []
-        },
-
-        // No matches - everything should be generated
-        async semanticSearch() {
-          return []
-        },
-      }
+        noSemanticResults: true,
+      })
 
       setProvider(mockProvider as any)
 
@@ -1775,72 +1534,15 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       const { db } = DB(schema)
 
       // Only one existing department
-      const existingDepartments = [
-        { $id: 'dept-electronics', $type: 'Department', name: 'Electronics', floor: 1 },
-      ]
-
-      const mockProvider = {
-        entities: new Map([
-          ['Department', new Map(existingDepartments.map((d) => [d.$id, d]))],
-          ['Store', new Map()],
-        ]),
-        relations: new Map(),
-
-        async get(type: string, id: string) {
-          return this.entities.get(type)?.get(id) ?? null
+      const mockProvider = createMockProvider({
+        entities: {
+          Department: [
+            { $id: 'dept-electronics', $type: 'Department', name: 'Electronics', floor: 1 },
+          ],
+          Store: [],
         },
-
-        async list(type: string) {
-          return Array.from(this.entities.get(type)?.values() ?? [])
-        },
-
-        async search() {
-          return []
-        },
-
-        async create(type: string, id: string | undefined, data: Record<string, unknown>) {
-          const entityId =
-            id || `${type.toLowerCase()}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-          const entity = { $id: entityId, $type: type, ...data }
-          if (!this.entities.has(type)) {
-            this.entities.set(type, new Map())
-          }
-          this.entities.get(type)!.set(entityId, entity)
-          return entity
-        },
-
-        async update(type: string, id: string, data: Record<string, unknown>) {
-          const existing = await this.get(type, id)
-          if (!existing) throw new Error(`Not found: ${type}/${id}`)
-          return { ...existing, ...data }
-        },
-
-        async delete() {
-          return false
-        },
-        async relate() {},
-        async unrelate() {},
-        async related() {
-          return []
-        },
-
-        async semanticSearch(type: string, query: string, options?: { minScore?: number }) {
-          const minScore = options?.minScore ?? 0.75
-          const entities = Array.from(this.entities.get(type)?.values() ?? [])
-
-          // Only "electronics" will match
-          const results = entities
-            .map((entity) => {
-              const name = (entity.name as string).toLowerCase()
-              const queryLower = query.toLowerCase()
-              const score = name === queryLower ? 0.95 : 0.2
-              return { ...entity, $score: score }
-            })
-            .filter((r) => r.$score >= minScore)
-
-          return results
-        },
-      }
+        scorer: exactOnlyScorer,
+      })
 
       setProvider(mockProvider as any)
 
@@ -1886,71 +1588,15 @@ describe('Forward Fuzzy Resolution (~>)', () => {
 
       const { db } = DB(schema)
 
-      const existingDocs = [
-        { $id: 'doc-ai', $type: 'Document', title: 'Introduction to AI' },
-        { $id: 'doc-ml', $type: 'Document', title: 'Machine Learning Basics' },
-      ]
-
-      const mockProvider = {
-        entities: new Map([['Document', new Map(existingDocs.map((d) => [d.$id, d]))]]),
-        relations: new Map(),
-
-        async get(type: string, id: string) {
-          return this.entities.get(type)?.get(id) ?? null
+      const mockProvider = createMockProvider({
+        entities: {
+          Document: [
+            { $id: 'doc-ai', $type: 'Document', title: 'Introduction to AI' },
+            { $id: 'doc-ml', $type: 'Document', title: 'Machine Learning Basics' },
+          ],
         },
-
-        async list(type: string) {
-          return Array.from(this.entities.get(type)?.values() ?? [])
-        },
-
-        async search() {
-          return []
-        },
-
-        async create(type: string, id: string | undefined, data: Record<string, unknown>) {
-          const entityId = id || `${type.toLowerCase()}-${Date.now()}`
-          const entity = { $id: entityId, $type: type, ...data }
-          if (!this.entities.has(type)) {
-            this.entities.set(type, new Map())
-          }
-          this.entities.get(type)!.set(entityId, entity)
-          return entity
-        },
-
-        async update(type: string, id: string, data: Record<string, unknown>) {
-          const existing = await this.get(type, id)
-          if (!existing) throw new Error(`Not found: ${type}/${id}`)
-          return { ...existing, ...data }
-        },
-
-        async delete() {
-          return false
-        },
-        async relate() {},
-        async unrelate() {},
-        async related() {
-          return []
-        },
-
-        async semanticSearch(type: string, query: string, options?: { minScore?: number }) {
-          const minScore = options?.minScore ?? 0.75
-          const entities = Array.from(this.entities.get(type)?.values() ?? [])
-
-          const results = entities
-            .map((entity) => {
-              const title = (entity.title as string).toLowerCase()
-              const queryLower = query.toLowerCase()
-              let score = 0.3
-              if (title.includes(queryLower) || queryLower.includes(title.split(' ')[0] || '')) {
-                score = 0.88 // Return specific score we can verify
-              }
-              return { ...entity, $score: score }
-            })
-            .filter((r) => r.$score >= minScore)
-
-          return results
-        },
-      }
+        scorer: titleFirstWordScorer,
+      })
 
       setProvider(mockProvider as any)
 

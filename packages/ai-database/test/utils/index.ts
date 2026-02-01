@@ -37,3 +37,18 @@ export {
 } from './mock-semantic.js'
 
 export type { MockEmbeddingStore, MockSemanticProviderOptions } from './mock-semantic.js'
+
+export {
+  createMockProvider,
+  defaultNameScorer,
+  exactOnlyScorer,
+  firstWordNameScorer,
+  titleFirstWordScorer,
+  thresholdTestScorer,
+} from './mock-provider-factory.js'
+
+export type {
+  MockEntity,
+  SemanticScoreFn,
+  CreateMockProviderOptions,
+} from './mock-provider-factory.js'

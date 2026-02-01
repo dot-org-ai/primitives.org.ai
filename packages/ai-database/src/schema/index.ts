@@ -86,6 +86,7 @@ export type { SeedResult as SeedOperationResult } from './seed.js'
 export type {
   DBProvider,
   DBProviderExtended,
+  Transaction,
   SemanticSearchResult,
   HybridSearchResult,
 } from './provider.js'
@@ -98,6 +99,7 @@ export {
   hasActionsAPI,
   hasArtifactsAPI,
   hasEmbeddingsConfig,
+  hasTransactionSupport,
 } from './provider.js'
 
 // Import resolve functions used internally
@@ -523,23 +525,73 @@ type FieldToTS<T extends string> = T extends 'string'
   : unknown
 
 /**
+ * Parse a union string like 'A | B | C' into a union type
+ */
+type ParseUnion<T extends string> = T extends `${infer A} | ${infer B}` ? A | ParseUnion<B> : T
+
+/**
+ * Infer the TypeScript type for a single field string value, given the full schema
+ */
+type InferFieldValue<TSchema extends DatabaseSchema, V extends string> =
+  // Forward exact ref: '->Entity'
+  V extends `->${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Backward exact ref: '<-Entity'
+    V extends `<-${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Forward fuzzy ref: '~>Entity'
+    V extends `~>${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Backward fuzzy ref: '<~Entity'
+    V extends `<~${infer Target}`
+    ? Target extends keyof TSchema
+      ? InferEntity<TSchema, Target>
+      : string
+    : // Dotted relation: 'Entity.field'
+    V extends `${infer Type}.${string}`
+    ? Type extends keyof TSchema
+      ? InferEntity<TSchema, Type>
+      : unknown
+    : // Array suffix: 'Type[]'
+    V extends `${infer Type}[]`
+    ? Type extends keyof TSchema
+      ? InferEntity<TSchema, Type>[]
+      : FieldToTS<Type>[]
+    : // Optional suffix: 'Type?'
+    V extends `${infer Type}?`
+    ? FieldToTS<Type> | undefined
+    : // Union string: 'A | B | C'
+    V extends `${string} | ${string}`
+    ? ParseUnion<V>
+    : // Plain field type
+      FieldToTS<V>
+
+/**
  * Infer entity type from schema definition
  */
 export type InferEntity<TSchema extends DatabaseSchema, TEntity extends keyof TSchema> = {
   $id: string
   $type: TEntity
 } & {
-  [K in keyof TSchema[TEntity]]: TSchema[TEntity][K] extends `${infer Type}.${string}`
-    ? Type extends keyof TSchema
-      ? InferEntity<TSchema, Type>
-      : unknown
-    : TSchema[TEntity][K] extends `${infer Type}[]`
-    ? Type extends keyof TSchema
-      ? InferEntity<TSchema, Type>[]
-      : FieldToTS<Type>[]
-    : TSchema[TEntity][K] extends `${infer Type}?`
-    ? FieldToTS<Type> | undefined
-    : FieldToTS<TSchema[TEntity][K] & string>
+  [K in keyof TSchema[TEntity]]: // Tuple types like ['string'] or ['->Entity']
+  TSchema[TEntity][K] extends readonly [infer Inner extends string]
+    ? InferFieldValue<TSchema, Inner> extends infer R
+      ? R[]
+      : never
+    : TSchema[TEntity][K] extends [infer Inner extends string]
+    ? InferFieldValue<TSchema, Inner> extends infer R
+      ? R[]
+      : never
+    : // String field definitions
+    TSchema[TEntity][K] extends string
+    ? InferFieldValue<TSchema, TSchema[TEntity][K]>
+    : unknown
 }
 
 // =============================================================================
@@ -968,26 +1020,29 @@ export function DB<TSchema extends DatabaseSchema>(
     if (entityName === 'Edge') {
       // Edge entity - auto-generated from schema relationships
       const edgeOps = createEdgeEntityOperations(allEdgeRecords, resolveProvider)
-      const wrappedEdgeOps = wrapEntityOperations(entityName, edgeOps, actionsAPI) as Record<
-        string,
-        unknown
-      >
+      const wrappedEdgeOps = wrapEntityOperations(
+        entityName,
+        edgeOps,
+        actionsAPI
+      ) as unknown as Record<string, unknown>
       entityOperations[entityName] = makeCallableEntityOps(wrappedEdgeOps, entityName)
     } else if (entityName === 'Noun') {
       // Noun entity - auto-generated from schema entity types
       const nounOps = createNounEntityOperations(allNounRecords)
-      const wrappedNounOps = wrapEntityOperations(entityName, nounOps, actionsAPI) as Record<
-        string,
-        unknown
-      >
+      const wrappedNounOps = wrapEntityOperations(
+        entityName,
+        nounOps,
+        actionsAPI
+      ) as unknown as Record<string, unknown>
       entityOperations[entityName] = makeCallableEntityOps(wrappedNounOps, entityName)
     } else if (entityName === 'Verb') {
       // Verb entity - standard verbs with conjugation forms
       const verbOps = createVerbEntityOperations(allVerbRecords)
-      const wrappedVerbOps = wrapEntityOperations(entityName, verbOps, actionsAPI) as Record<
-        string,
-        unknown
-      >
+      const wrappedVerbOps = wrapEntityOperations(
+        entityName,
+        verbOps,
+        actionsAPI
+      ) as unknown as Record<string, unknown>
       entityOperations[entityName] = makeCallableEntityOps(wrappedVerbOps, entityName)
     } else {
       const baseOps = createEntityOperations(entityName, entity, parsedSchema)
@@ -1284,7 +1339,9 @@ export function DB<TSchema extends DatabaseSchema>(
       // Add seed method if entity has seed configuration
       if (entity.seedConfig) {
         const seedConfig = entity.seedConfig
-        ;(wrappedOps as Record<string, unknown>)['seed'] = async (): Promise<{ count: number }> => {
+        ;(wrappedOps as unknown as Record<string, unknown>)['seed'] = async (): Promise<{
+          count: number
+        }> => {
           const { loadSeedData } = await import('./seed.js')
           const records = await loadSeedData(seedConfig)
           const provider = await resolveProvider()
@@ -1306,7 +1363,7 @@ export function DB<TSchema extends DatabaseSchema>(
 
       // Make the entity operations callable as a tagged template literal
       entityOperations[entityName] = makeCallableEntityOps(
-        wrappedOps as Record<string, unknown>,
+        wrappedOps as unknown as Record<string, unknown>,
         entityName
       )
     }

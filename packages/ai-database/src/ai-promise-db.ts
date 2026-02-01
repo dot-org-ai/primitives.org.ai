@@ -1754,9 +1754,6 @@ interface WrapEntityOutput<T> {
   // These may be overwritten after wrapEntityOperations returns
   draft?: (data: EntityData<T>, options?: DraftOptions) => Promise<unknown>
   resolve?: (draft: unknown, options?: ResolveOptions) => Promise<unknown>
-  // Index signature for compatibility with Record<string, unknown>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any
 }
 
 /**

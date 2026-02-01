@@ -167,7 +167,21 @@ export {
 
 export type { AIGenerationConfig, EntityOperationsConfig, GenerationDetails } from './schema.js'
 
-export { MemoryProvider, createMemoryProvider, Semaphore } from './memory-provider.js'
+export {
+  MemoryProvider,
+  MemoryTransaction,
+  createMemoryProvider,
+  Semaphore,
+} from './memory-provider.js'
+
+export {
+  DataLoader,
+  createRequestLoader,
+  getRequestLoader,
+  clearRequestLoader,
+  withDataLoader,
+  loadEntity,
+} from './dataloader.js'
 
 export { createDigitalObjectsProvider } from './digital-objects-provider.js'
 

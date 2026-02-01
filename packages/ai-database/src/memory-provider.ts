@@ -14,6 +14,7 @@ import type {
   SemanticSearchOptions,
   HybridSearchOptions,
 } from './schema.js'
+import type { Transaction } from './schema/provider.js'
 import {
   cosineSimilarity,
   computeRRF,
@@ -2132,6 +2133,21 @@ export class MemoryProvider implements DBProvider {
     return this.semaphore.map(items, fn)
   }
 
+  // ===========================================================================
+  // Transactions
+  // ===========================================================================
+
+  /**
+   * Begin a new transaction.
+   *
+   * All writes (create, update, delete, relate) are buffered in memory.
+   * On commit(), they are applied to the provider atomically.
+   * On rollback(), all buffered writes are discarded.
+   */
+  async beginTransaction(): Promise<Transaction> {
+    return new MemoryTransaction(this)
+  }
+
   /**
    * Clear all data (useful for testing)
    */
@@ -2187,6 +2203,191 @@ export class MemoryProvider implements DBProvider {
         pending: this.semaphore.pending,
       },
     }
+  }
+}
+
+// =============================================================================
+// In-memory Transaction
+// =============================================================================
+
+type TxOp =
+  | {
+      kind: 'create'
+      type: string
+      id: string
+      data: Record<string, unknown>
+      result: Record<string, unknown>
+    }
+  | {
+      kind: 'update'
+      type: string
+      id: string
+      data: Record<string, unknown>
+      result: Record<string, unknown>
+    }
+  | { kind: 'delete'; type: string; id: string }
+  | {
+      kind: 'relate'
+      fromType: string
+      fromId: string
+      relation: string
+      toType: string
+      toId: string
+      metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number; matchedType?: string }
+    }
+
+/**
+ * In-memory transaction that buffers writes and applies them on commit.
+ *
+ * - get() checks the write buffer first, then falls through to the provider.
+ * - create/update/delete/relate are buffered.
+ * - commit() replays all buffered operations against the real provider.
+ * - rollback() discards the buffer.
+ */
+export class MemoryTransaction implements Transaction {
+  private ops: TxOp[] = []
+  private committed = false
+  private rolledBack = false
+
+  /** Buffered creates/updates: type -> id -> data */
+  private buffer = new Map<string, Map<string, Record<string, unknown>>>()
+  /** Buffered deletes: type -> Set<id> */
+  private deletions = new Map<string, Set<string>>()
+  /** Counter for generating temporary IDs */
+  private tempIdCounter = 0
+
+  constructor(private provider: MemoryProvider) {}
+
+  private assertActive(): void {
+    if (this.committed) throw new Error('Transaction already committed')
+    if (this.rolledBack) throw new Error('Transaction already rolled back')
+  }
+
+  private getBuffer(type: string): Map<string, Record<string, unknown>> {
+    if (!this.buffer.has(type)) {
+      this.buffer.set(type, new Map())
+    }
+    return this.buffer.get(type)!
+  }
+
+  async get(type: string, id: string): Promise<Record<string, unknown> | null> {
+    this.assertActive()
+    // Check if deleted in this transaction
+    if (this.deletions.get(type)?.has(id)) return null
+    // Check buffer first
+    const buf = this.buffer.get(type)
+    if (buf?.has(id)) {
+      return { ...buf.get(id)!, $id: id, $type: type }
+    }
+    // Fall through to provider
+    return this.provider.get(type, id)
+  }
+
+  async create(
+    type: string,
+    id: string | undefined,
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    this.assertActive()
+    const entityId = id || `txn-temp-${++this.tempIdCounter}`
+    const entity = {
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    this.getBuffer(type).set(entityId, entity)
+    const result = { ...entity, $id: entityId, $type: type }
+    this.ops.push({ kind: 'create', type, id: entityId, data, result })
+    return result
+  }
+
+  async update(
+    type: string,
+    id: string,
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    this.assertActive()
+    // Get current state (from buffer or provider)
+    const existing = await this.get(type, id)
+    if (!existing) throw new Error(`update ${type}/${id}: Entity not found`)
+    const { $id: _id, $type: _type, ...rest } = existing
+    const updated = { ...rest, ...data, updatedAt: new Date().toISOString() }
+    this.getBuffer(type).set(id, updated)
+    const result = { ...updated, $id: id, $type: type }
+    this.ops.push({ kind: 'update', type, id, data, result })
+    return result
+  }
+
+  async delete(type: string, id: string): Promise<boolean> {
+    this.assertActive()
+    // Check existence
+    const existing = await this.get(type, id)
+    if (!existing) return false
+    // Remove from buffer if present
+    this.buffer.get(type)?.delete(id)
+    // Mark as deleted
+    if (!this.deletions.has(type)) this.deletions.set(type, new Set())
+    this.deletions.get(type)!.add(id)
+    this.ops.push({ kind: 'delete', type, id })
+    return true
+  }
+
+  async relate(
+    fromType: string,
+    fromId: string,
+    relation: string,
+    toType: string,
+    toId: string,
+    metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number; matchedType?: string }
+  ): Promise<void> {
+    this.assertActive()
+    this.ops.push({
+      kind: 'relate' as const,
+      fromType,
+      fromId,
+      relation,
+      toType,
+      toId,
+      ...(metadata != null ? { metadata } : {}),
+    })
+  }
+
+  async commit(): Promise<void> {
+    this.assertActive()
+    this.committed = true
+
+    // Replay all operations against the real provider
+    for (const op of this.ops) {
+      switch (op.kind) {
+        case 'create':
+          await this.provider.create(op.type, op.id, op.data)
+          break
+        case 'update':
+          await this.provider.update(op.type, op.id, op.data)
+          break
+        case 'delete':
+          await this.provider.delete(op.type, op.id)
+          break
+        case 'relate':
+          await this.provider.relate(
+            op.fromType,
+            op.fromId,
+            op.relation,
+            op.toType,
+            op.toId,
+            op.metadata
+          )
+          break
+      }
+    }
+  }
+
+  async rollback(): Promise<void> {
+    this.assertActive()
+    this.rolledBack = true
+    this.ops = []
+    this.buffer.clear()
+    this.deletions.clear()
   }
 }
 

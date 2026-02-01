@@ -23,7 +23,12 @@ import type {
 } from './types.js'
 
 import type { DBProvider, SemanticSearchResult, HybridSearchResult } from './provider.js'
-import { resolveProvider, hasSemanticSearch, hasHybridSearch } from './provider.js'
+import {
+  resolveProvider,
+  hasSemanticSearch,
+  hasHybridSearch,
+  hasTransactionSupport,
+} from './provider.js'
 import { hydrateEntity, resolveReferenceSpec, isPromptField } from './resolve.js'
 import {
   resolveForwardExact,
@@ -174,73 +179,107 @@ export function createEntityOperations<T>(
       try {
         const provider = await resolveProvider()
 
-        const { data: resolvedData, pendingRelations } = await resolveForwardExact(
-          typeName,
-          data,
-          entity,
-          schema,
-          provider,
-          entityId
-        )
+        // Use transaction if provider supports it, to ensure atomicity of cascade
+        const useTransaction = hasTransactionSupport(provider)
+        const txn = useTransaction ? await provider.beginTransaction() : null
+        // The target for write operations: transaction if available, otherwise provider directly
+        const writeTarget = txn ?? provider
 
-        const { data: fuzzyResolvedData, pendingRelations: fuzzyPendingRelations } =
-          await resolveForwardFuzzy(typeName, resolvedData, entity, schema, provider, entityId)
+        try {
+          const { data: resolvedData, pendingRelations } = await resolveForwardExact(
+            typeName,
+            data,
+            entity,
+            schema,
+            provider,
+            entityId
+          )
 
-        const backwardResolvedData = await resolveBackwardFuzzy(
-          typeName,
-          fuzzyResolvedData,
-          entity,
-          schema,
-          provider
-        )
+          const { data: fuzzyResolvedData, pendingRelations: fuzzyPendingRelations } =
+            await resolveForwardFuzzy(typeName, resolvedData, entity, schema, provider, entityId)
 
-        const finalData = await generateAIFields(
-          backwardResolvedData,
-          typeName,
-          entity,
-          schema,
-          provider
-        )
+          const backwardResolvedData = await resolveBackwardFuzzy(
+            typeName,
+            fuzzyResolvedData,
+            entity,
+            schema,
+            provider
+          )
 
-        const result = await provider.create(typeName, entityId, finalData)
+          const finalData = await generateAIFields(
+            backwardResolvedData,
+            typeName,
+            entity,
+            schema,
+            provider
+          )
 
-        for (const rel of pendingRelations) {
-          await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId)
-        }
+          const result = await writeTarget.create(typeName, entityId, finalData)
 
-        const createdEdgeIds = new Set<string>()
-        for (const rel of fuzzyPendingRelations) {
-          await provider.relate(typeName, entityId, rel.fieldName, rel.targetType, rel.targetId, {
-            matchMode: 'fuzzy',
-            ...(rel.similarity !== undefined && { similarity: rel.similarity }),
-            ...(rel.matchedType !== undefined && { matchedType: rel.matchedType }),
-          })
+          for (const rel of pendingRelations) {
+            await writeTarget.relate(
+              typeName,
+              entityId,
+              rel.fieldName,
+              rel.targetType,
+              rel.targetId
+            )
+          }
 
-          const edgeId = `${typeName}_${rel.fieldName}_${entityId}_${rel.targetId}`
-          if (!createdEdgeIds.has(edgeId)) {
-            createdEdgeIds.add(edgeId)
-            try {
-              await provider.create('Edge', edgeId, {
-                from: typeName,
-                name: rel.fieldName,
-                to: rel.targetType,
-                direction: 'forward',
+          const createdEdgeIds = new Set<string>()
+          for (const rel of fuzzyPendingRelations) {
+            await writeTarget.relate(
+              typeName,
+              entityId,
+              rel.fieldName,
+              rel.targetType,
+              rel.targetId,
+              {
                 matchMode: 'fuzzy',
-                similarity: rel.similarity,
-                matchedType: rel.matchedType,
-                fromId: entityId,
-                toId: rel.targetId,
-              })
-            } catch (error) {
-              // Only ignore actual duplicate key errors, propagate other errors
-              if (!isEntityExistsError(error)) {
-                throw wrapDatabaseError(error, 'create', 'Edge', edgeId)
+                ...(rel.similarity !== undefined && { similarity: rel.similarity }),
+                ...(rel.matchedType !== undefined && { matchedType: rel.matchedType }),
+              }
+            )
+
+            const edgeId = `${typeName}_${rel.fieldName}_${entityId}_${rel.targetId}`
+            if (!createdEdgeIds.has(edgeId)) {
+              createdEdgeIds.add(edgeId)
+              try {
+                await writeTarget.create('Edge', edgeId, {
+                  from: typeName,
+                  name: rel.fieldName,
+                  to: rel.targetType,
+                  direction: 'forward',
+                  matchMode: 'fuzzy',
+                  similarity: rel.similarity,
+                  matchedType: rel.matchedType,
+                  fromId: entityId,
+                  toId: rel.targetId,
+                })
+              } catch (error) {
+                // Only ignore actual duplicate key errors, propagate other errors
+                if (!isEntityExistsError(error)) {
+                  throw wrapDatabaseError(error, 'create', 'Edge', edgeId)
+                }
               }
             }
           }
-        }
 
-        return hydrateEntity(result, entity, schema, resolveProvider) as T
+          // Commit the transaction if we used one
+          if (txn) await txn.commit()
+
+          return hydrateEntity(result, entity, schema, resolveProvider) as T
+        } catch (innerError) {
+          // Rollback on any error if we have a transaction
+          if (txn) {
+            try {
+              await txn.rollback()
+            } catch {
+              // Ignore rollback errors
+            }
+          }
+          throw innerError
+        }
       } catch (error) {
         // Wrap provider errors with context
         if (error instanceof DatabaseError) throw error
