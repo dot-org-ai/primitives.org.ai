@@ -14,6 +14,10 @@
       "import": "./dist/worker.js",
       "types": "./dist/worker.d.ts"
     },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
+    },
     "./tests": {
       "import": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
@@ -45,7 +49,8 @@
     "digital-objects": "workspace:*",
     "hyparquet": "^1.24.1",
     "hyparquet-writer": "^0.12.0",
-    "mdxld": "^1.0.1"
+    "mdxld": "^1.0.1",
+    "rpc.do": "^0.2.3"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

@@ -462,8 +462,7 @@ describe('Union Type Fallback Search', () => {
       expect(field?.unionTypes).toEqual(['Document', 'Video', 'Expert'])
     })
 
-    // TODO: Backward fuzzy resolution integration needs investigation
-    it.skip('should search union types with fallback in backward fuzzy resolution', async () => {
+    it('should search union types with fallback in backward fuzzy resolution', async () => {
       const { db } = DB({
         // Order matters: FAQ is searched first, then Tutorial, then Documentation
         Query: { answer: '<~FAQ|Tutorial|Documentation' },
@@ -500,7 +499,7 @@ describe('Union Type Fallback Search', () => {
       }
     })
 
-    it.skip('should fall back to next type when no match in first type', async () => {
+    it('should fall back to next type when no match in first type', async () => {
       const { db } = DB({
         Search: { result: '<~PrimarySource|SecondarySource|Archive' },
         PrimarySource: { title: 'string', verified: 'boolean' },
@@ -528,7 +527,7 @@ describe('Union Type Fallback Search', () => {
       }
     })
 
-    it.skip('should track matched type in result metadata', async () => {
+    it('should track matched type in result metadata', async () => {
       const { db } = DB({
         Reference: { source: '<~Book|Article|Website' },
         Book: { title: 'string', author: 'string' },

@@ -318,8 +318,7 @@ describe('Union Type Fallback Integration', () => {
       expect(result.matches[0]!.$type).toBe('TypeA')
     })
 
-    // TODO: Backward fuzzy integration needs investigation
-    it.skip('should track matchedType in integrated backward fuzzy resolution', async () => {
+    it('should track matchedType in integrated backward fuzzy resolution', async () => {
       const { db } = DB({
         Reference: { source: '<~Book|Article|Website' },
         Book: { title: 'string', author: 'string' },
@@ -394,7 +393,7 @@ describe('Union Type Fallback Integration', () => {
       expect(result.fallbackTriggered).toBe(false)
     })
 
-    it.skip('should track fallbackUsed in integrated schema resolution', async () => {
+    it('should track fallbackUsed in integrated schema resolution', async () => {
       const { db } = DB({
         Search: { result: '<~PrimarySource|SecondarySource|Archive' },
         PrimarySource: { title: 'string', verified: 'boolean' },
@@ -496,7 +495,7 @@ describe('Union Type Fallback Integration', () => {
       expect(result.allTypesExhausted).toBe(true)
     })
 
-    it.skip('should return null/undefined in integrated backward fuzzy when exhausted', async () => {
+    it('should return null/undefined in integrated backward fuzzy when exhausted', async () => {
       // Configure to return no matches
       mockProvider.mocks.findSimilar.mockReturnValue([])
 
@@ -611,7 +610,7 @@ describe('Union Type Fallback Integration', () => {
   // ===========================================================================
 
   describe('Full integration with DB and semantic resolution', () => {
-    it.skip('should properly set metadata fields through complete resolution flow', async () => {
+    it('should properly set metadata fields through complete resolution flow', async () => {
       // Reset mock to track calls
       mockProvider.mocks.findSimilar.mockClear()
 
@@ -641,7 +640,7 @@ describe('Union Type Fallback Integration', () => {
       expect(typeof query['resource$score']).toBe('number')
     })
 
-    it.skip('should set fallbackUsed when match is from non-first type', async () => {
+    it('should set fallbackUsed when match is from non-first type', async () => {
       // Configure mock to return no matches for first two types, only third
       const callCounts: Record<string, number> = {}
       mockProvider.mocks.findSimilar.mockImplementation((_query, _embeddings, items, _options) => {
@@ -681,7 +680,7 @@ describe('Union Type Fallback Integration', () => {
       expect(query['resource$searchOrder']).toEqual(['Document', 'Video', 'Expert'])
     })
 
-    it.skip('should not set fallbackUsed when match is from first type', async () => {
+    it('should not set fallbackUsed when match is from first type', async () => {
       // Configure mock to return matches for first type
       mockProvider.mocks.findSimilar.mockImplementation((_query, _embeddings, items, _options) => {
         return items.map((item: { entity: Record<string, unknown> }, index: number) => ({
@@ -710,7 +709,7 @@ describe('Union Type Fallback Integration', () => {
       expect(query['resource$fallbackUsed']).toBeUndefined()
     })
 
-    it.skip('should return null and leave field undefined when all types exhausted', async () => {
+    it('should return null and leave field undefined when all types exhausted', async () => {
       // Configure mock to return no matches for any type
       mockProvider.mocks.findSimilar.mockReturnValue([])
 

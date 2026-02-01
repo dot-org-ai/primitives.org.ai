@@ -71,6 +71,9 @@ importers:
       mdxld:
         specifier: ^1.0.1
         version: 1.0.1(@mdx-js/mdx@3.1.1)(web-streams-polyfill@4.0.0-beta.3)
+      rpc.do:
+        specifier: ^0.2.3
+        version: 0.2.3(oauth.do@0.2.3(hono@4.11.7)(react-dom@19.2.1(react@19.2.0))(react@19.2.0))
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.0

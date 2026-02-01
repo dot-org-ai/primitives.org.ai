@@ -59,7 +59,7 @@ describe('Backward Fuzzy (<~) Reference Grounding', () => {
 
     // Note: The expected behavior of <~ is to search only and not generate.
     // This test documents expected behavior; implementation may vary.
-    it.skip('should return null when no match found (NEVER generate) - TODO: verify implementation', async () => {
+    it('should return null when no match found (NEVER generate)', async () => {
       const schema = {
         ICP: {
           occupation: '<~Occupation?', // Optional field
@@ -183,7 +183,7 @@ describe('Backward Fuzzy (<~) Reference Grounding', () => {
     // <~ (backward fuzzy) should only search, never generate.
     // These tests document expected behavior that may need implementation updates.
 
-    it.skip('should never generate new entities unlike ~> (TODO: implementation pending)', async () => {
+    it('should never generate new entities unlike ~>', async () => {
       const schema = {
         Lead: {
           category: '<~Category?', // backward fuzzy - search only
