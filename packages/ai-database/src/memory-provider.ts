@@ -1685,9 +1685,9 @@ export class MemoryProvider implements DBProvider {
   private getEventHandlers(type: string): Array<(event: Event) => void | Promise<void>> {
     const handlers: Array<(event: Event) => void | Promise<void>> = []
 
-    for (const [pattern, patternHandlers] of this.eventHandlers) {
+    for (const [pattern, patternHandlers] of [...this.eventHandlers]) {
       if (this.matchesPattern(type, pattern)) {
-        handlers.push(...patternHandlers)
+        handlers.push(...[...patternHandlers])
       }
     }
 

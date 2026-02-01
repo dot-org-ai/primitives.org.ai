@@ -24,7 +24,7 @@ import type {
 
 import type { DBProvider, SemanticSearchResult, HybridSearchResult } from './provider.js'
 import { resolveProvider, hasSemanticSearch, hasHybridSearch } from './provider.js'
-import { hydrateEntity, resolveReferenceSpec } from './resolve.js'
+import { hydrateEntity, resolveReferenceSpec, isPromptField } from './resolve.js'
 import {
   resolveForwardExact,
   generateAIFields,
@@ -484,11 +484,9 @@ export function createEntityOperations<T>(
           }
         } else if (!field.isRelation) {
           // Non-relationship field - check if it's a prompt field
-          // Prompt fields have a type that contains spaces, slashes, or question marks
-          const isPromptField =
-            field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+          const isPrompt = isPromptField(field)
 
-          if (isPromptField && !hasContextDependencies) {
+          if (isPrompt && !hasContextDependencies) {
             // Generate content for prompt field using the type as the prompt
             // NOTE: Skip generation when entity has $context dependencies, as those fields
             // need the pre-fetched context to generate properly (done in generateAIFields)

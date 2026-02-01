@@ -295,14 +295,11 @@ export async function prefetchContext(
 }
 
 /**
- * Check if a field type is a prompt (contains spaces, indicating AI generation)
+ * Check if a field type is a prompt (contains spaces, slashes, or question marks indicating AI generation).
+ * Examples: 'Describe the product', 'low/medium/high', 'What is the severity?'
  */
 export function isPromptField(field: ParsedField): boolean {
-  // Fields with spaces in their type are prompts for AI generation
-  return (
-    field.type.includes(' ') ||
-    (field.type === 'string' && !field.isRelation && !isPrimitiveType(field.type))
-  )
+  return field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
 }
 
 // =============================================================================
@@ -482,13 +479,11 @@ export async function resolveReferenceSpec(
     // Generate default values for the target entity's fields
     for (const [fieldName, field] of targetEntity.fields) {
       if (!field.isRelation && !field.isOptional) {
-        // Check if it's a prompt field (type contains spaces, slashes, or question marks)
-        const isPromptField =
-          field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+        const isPrompt = isPromptField(field)
 
-        if (field.type === 'string' || isPromptField) {
+        if (field.type === 'string' || isPrompt) {
           // For prompt fields, use the type as additional context for generation
-          const fieldHint = isPromptField ? field.type : hint
+          const fieldHint = isPrompt ? field.type : hint
           generatedData[fieldName] = generateContextAwareValue(
             fieldName,
             spec.type,

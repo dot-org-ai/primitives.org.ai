@@ -12,9 +12,21 @@ import { AIGenerationError } from '../errors.js'
 
 import type { DBProvider } from './provider.js'
 import { isPrimitiveType } from './parse.js'
-import { resolveNestedPending, prefetchContext, resolveInstructions } from './resolve.js'
+import {
+  resolveNestedPending,
+  prefetchContext,
+  resolveInstructions,
+  isPromptField,
+} from './resolve.js'
 import { PlaceholderValueGenerator } from './value-generators/index.js'
 import type { ValueGenerator } from './value-generators/types.js'
+
+/**
+ * Hard safety limit for cascade/entity generation recursion depth.
+ * Applied even when maxDepth is not explicitly configured to prevent
+ * infinite recursion with circular schemas.
+ */
+export const DEFAULT_MAX_DEPTH = 10
 
 // Create a singleton placeholder generator for synchronous calls
 const placeholderGenerator = new PlaceholderValueGenerator()
@@ -52,6 +64,26 @@ export function getValueGenerator(): ValueGenerator {
 // =============================================================================
 
 /**
+ * Details about an AI generation call, passed to onGenerate callback
+ */
+export interface GenerationDetails {
+  /** Entity type being generated */
+  entityType: string
+  /** Model used for generation */
+  model: string
+  /** The prompt sent to the model */
+  prompt: string
+  /** Generated result (null if failed) */
+  result: Record<string, unknown> | null
+  /** Time taken in milliseconds */
+  latencyMs: number
+  /** Error message if generation failed */
+  error?: string
+  /** Timestamp of generation */
+  timestamp: Date
+}
+
+/**
  * Configuration for AI-powered generation
  */
 export interface AIGenerationConfig {
@@ -59,6 +91,8 @@ export interface AIGenerationConfig {
   model: string
   /** Whether AI generation is enabled (default: true when generateObject is available) */
   enabled: boolean
+  /** Callback fired after each generation attempt */
+  onGenerate?: (details: GenerationDetails) => void
 }
 
 // Default configuration - uses 'sonnet' as the default model
@@ -99,15 +133,12 @@ function buildSchemaForEntity(entity: ParsedEntity): Record<string, string> {
   for (const [fieldName, field] of entity.fields) {
     // Only include non-relation scalar fields
     if (!field.isRelation) {
-      // Detect prompt fields: types containing spaces, slashes, or question marks
-      // e.g., 'What are their main challenges?' or 'low/medium/high'
-      const isPromptField =
-        field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+      const isPrompt = isPromptField(field)
 
       if (field.type === 'string') {
         // Use the field prompt if available, otherwise a generic description
         schema[fieldName] = field.prompt || `Generate a ${fieldName}`
-      } else if (isPromptField) {
+      } else if (isPrompt) {
         // For prompt fields, use the type (which is the prompt) as the schema
         schema[fieldName] = field.type
       } else if (field.type === 'number') {
@@ -192,15 +223,42 @@ async function generateEntityDataWithAI(
 
     const fullPrompt = promptParts.join('\n')
 
-    // Call generateObject with the schema and prompt
+    // Call generateObject with the schema and prompt, tracking timing
+    const startTime = Date.now()
     const result = await generateObject({
       model: aiConfig.model,
       schema,
       prompt: fullPrompt,
     })
+    const latencyMs = Date.now() - startTime
+
+    // Call onGenerate callback if configured
+    if (aiConfig.onGenerate) {
+      aiConfig.onGenerate({
+        entityType: type,
+        model: aiConfig.model,
+        prompt: fullPrompt,
+        result: result.object as Record<string, unknown>,
+        latencyMs,
+        timestamp: new Date(),
+      })
+    }
 
     return result.object as Record<string, unknown>
   } catch (error) {
+    // Call onGenerate callback with error if configured
+    if (aiConfig.onGenerate) {
+      aiConfig.onGenerate({
+        entityType: type,
+        model: aiConfig.model,
+        prompt: prompt || '',
+        result: null,
+        latencyMs: 0,
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: new Date(),
+      })
+    }
+
     // Throw AIGenerationError - don't silently fall back to placeholder
     const cause = error instanceof Error ? error : undefined
     throw new AIGenerationError(
@@ -420,25 +478,20 @@ export async function generateAIFields(
       continue
     }
 
-    // Check if this is a prompt field - prompt fields have a type that contains:
-    // - Spaces: 'Describe the product', 'What is the severity?'
-    // - Slashes: 'low/medium/high', 'beginner/intermediate/expert'
-    // - Question marks: 'What is the price?'
-    const isPromptField =
-      field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+    const isPrompt = isPromptField(field)
 
     // Skip if value already provided (unless AI can improve it)
     if (result[fieldName] !== undefined && result[fieldName] !== null) {
       // When AI is enabled, always attempt to generate prompt fields
       // (overriding draft-generated placeholder values with AI-generated content).
       // When AI is disabled, skip already-populated fields unless rich context is available.
-      if (isPromptField && (aiConfig.enabled || hasRichContext)) {
+      if (isPrompt && (aiConfig.enabled || hasRichContext)) {
         fieldsToGenerate.push({ fieldName, prompt: field.type })
       }
       continue
     }
 
-    if (isPromptField) {
+    if (isPrompt) {
       // Use the field type (which is actually the prompt) as the prompt
       fieldsToGenerate.push({ fieldName, prompt: field.type })
     } else if (field.type === 'string' && instructions) {
@@ -540,8 +593,14 @@ export async function generateEntity(
   type: string,
   prompt: string | undefined,
   context: { parent: string; parentData: Record<string, unknown>; parentId?: string },
-  schema: ParsedSchema
+  schema: ParsedSchema,
+  _depth: number = 0
 ): Promise<Record<string, unknown>> {
+  // Hard recursion guard to prevent infinite recursion with circular schemas
+  if (_depth >= DEFAULT_MAX_DEPTH) {
+    return {}
+  }
+
   const entity = schema.entities.get(type)
   if (!entity) throw new Error(`Unknown type: ${type}`)
 
@@ -578,7 +637,8 @@ export async function generateEntity(
               field.relatedType!,
               field.prompt,
               { parent: type, parentData: data },
-              schema
+              schema,
+              _depth + 1
             )
             data[`_pending_${fieldName}`] = { type: field.relatedType!, data: nestedGenerated }
           }
@@ -610,13 +670,11 @@ export async function generateEntity(
   const data: Record<string, unknown> = {}
   for (const [fieldName, field] of entity.fields) {
     if (!field.isRelation) {
-      // Check if it's a prompt field (type contains spaces, slashes, or question marks)
-      const isPromptField =
-        field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+      const isPrompt = isPromptField(field)
 
-      if (field.type === 'string' || isPromptField) {
+      if (field.type === 'string' || isPrompt) {
         // Generate context-aware content - use field type as hint for prompt fields
-        const fieldHint = isPromptField ? field.type : prompt
+        const fieldHint = isPrompt ? field.type : prompt
         data[fieldName] = generateContextAwareValue(
           fieldName,
           type,
@@ -624,9 +682,9 @@ export async function generateEntity(
           fieldHint,
           context.parentData
         )
-      } else if (field.isArray && (field.type === 'string' || isPromptField)) {
+      } else if (field.isArray && (field.type === 'string' || isPrompt)) {
         // Generate array of strings
-        const fieldHint = isPromptField ? field.type : prompt
+        const fieldHint = isPrompt ? field.type : prompt
         data[fieldName] = [
           generateContextAwareValue(fieldName, type, fullContext, fieldHint, context.parentData),
         ]
@@ -646,7 +704,8 @@ export async function generateEntity(
           field.relatedType!,
           field.prompt,
           { parent: type, parentData: data },
-          schema
+          schema,
+          _depth + 1
         )
         // We need to create the nested entity too, but we can't do that here
         // because we don't have access to the provider yet.

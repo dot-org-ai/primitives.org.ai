@@ -165,7 +165,7 @@ export {
   createNLQueryFn,
 } from './schema.js'
 
-export type { AIGenerationConfig, EntityOperationsConfig } from './schema.js'
+export type { AIGenerationConfig, EntityOperationsConfig, GenerationDetails } from './schema.js'
 
 export { MemoryProvider, createMemoryProvider, Semaphore } from './memory-provider.js'
 

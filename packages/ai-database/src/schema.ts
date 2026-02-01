@@ -141,9 +141,18 @@ export {
 } from './schema/index.js'
 
 // Import generateAIFields and generateEntity directly from cascade.js to avoid potential circular dependency
-import { generateAIFields, generateEntity as cascadeGenerateEntity } from './schema/cascade.js'
+import {
+  generateAIFields,
+  generateEntity as cascadeGenerateEntity,
+  DEFAULT_MAX_DEPTH,
+} from './schema/cascade.js'
 
-export type { AIGenerationConfig, EntityOperationsConfig, SeedResult } from './schema/index.js'
+export type {
+  AIGenerationConfig,
+  EntityOperationsConfig,
+  GenerationDetails,
+  SeedResult,
+} from './schema/index.js'
 
 // Import type guards for internal use
 import {
@@ -153,6 +162,7 @@ import {
   hasActionsAPI,
   hasArtifactsAPI,
   hasEmbeddingsConfig,
+  isPromptField,
 } from './schema/index.js'
 
 // Import extended provider types for type assertions
@@ -3151,11 +3161,15 @@ export function DB<TSchema extends DatabaseSchema>(
   // Configure provider with embeddings settings if provided
   if (options?.embeddings) {
     const embeddingsConfig = options.embeddings
-    resolveProvider().then((provider) => {
-      if (hasEmbeddingsConfig(provider)) {
-        provider.setEmbeddingsConfig(embeddingsConfig)
-      }
-    })
+    resolveProvider()
+      .then((provider) => {
+        if (hasEmbeddingsConfig(provider)) {
+          provider.setEmbeddingsConfig(embeddingsConfig)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to configure embeddings on provider:', error)
+      })
   }
 
   // System entity names for filtering
@@ -3245,7 +3259,8 @@ export function DB<TSchema extends DatabaseSchema>(
   function emitInternalEventForOps(eventType: string, data: unknown): void {
     const handlers = eventHandlersForOps.get(eventType)
     if (handlers) {
-      for (const handler of handlers) {
+      const snapshot = [...handlers]
+      for (const handler of snapshot) {
         try {
           handler(data)
         } catch (e) {
@@ -3578,11 +3593,15 @@ export function DB<TSchema extends DatabaseSchema>(
     on(pattern, handler) {
       // Get provider and delegate - need async resolution
       let unsubscribe = () => {}
-      resolveProvider().then((provider) => {
-        if (hasEventsAPI(provider)) {
-          unsubscribe = provider.on(pattern, handler)
-        }
-      })
+      resolveProvider()
+        .then((provider) => {
+          if (hasEventsAPI(provider)) {
+            unsubscribe = provider.on(pattern, handler)
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to subscribe to events:', error)
+        })
       return () => unsubscribe()
     },
 
@@ -4519,14 +4538,12 @@ function generateSimpleEntity(
 
   for (const [fieldName, field] of entityDef.fields) {
     if (!field.isRelation) {
-      // Detect prompt fields (types with spaces, slashes, or question marks)
-      const isPromptField =
-        field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
-      if (field.type === 'string' || isPromptField) {
-        const fieldHint = isPromptField ? field.type : prompt
+      const isPrompt = isPromptField(field)
+      if (field.type === 'string' || isPrompt) {
+        const fieldHint = isPrompt ? field.type : prompt
         data[fieldName] = generateContextAwareValue(fieldName, type, fullContext, fieldHint)
-      } else if (field.isArray && (field.type === 'string' || isPromptField)) {
-        const fieldHint = isPromptField ? field.type : prompt
+      } else if (field.isArray && (field.type === 'string' || isPrompt)) {
+        const fieldHint = isPrompt ? field.type : prompt
         data[fieldName] = [generateContextAwareValue(fieldName, type, fullContext, fieldHint)]
       }
     } else if (field.operator === '<-' && field.direction === 'backward') {
@@ -4566,8 +4583,11 @@ async function cascadeGenerate(
 ): Promise<void> {
   const maxDepth = options.maxDepth ?? 3
 
+  // Hard safety cap to prevent infinite recursion with circular schemas
+  const effectiveMax = Math.min(maxDepth, DEFAULT_MAX_DEPTH)
+
   // Stop if we've reached max depth
-  if (depth >= maxDepth) return
+  if (depth >= effectiveMax) return
 
   // Report progress at this depth (even if no relations to process)
   progress.currentDepth = depth
@@ -4952,7 +4972,7 @@ async function resolveForwardFuzzy(
             fieldName,
             targetType: matchedType,
             targetId,
-            similarity: score,
+            ...(score !== undefined ? { similarity: score } : {}),
             matchedType,
           })
         }
@@ -5311,12 +5331,11 @@ async function resolveReferenceSpec(
   // Generate default values for the target entity's fields
   for (const [fieldName, field] of targetEntity.fields) {
     if (!field.isRelation) {
-      const isPromptFld =
-        field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
+      const isPrompt = isPromptField(field)
       // Generate both required fields and optional prompt fields
-      if (!field.isOptional || isPromptFld) {
-        if (field.type === 'string' || isPromptFld) {
-          const fldHint = isPromptFld ? field.type : undefined
+      if (!field.isOptional || isPrompt) {
+        if (field.type === 'string' || isPrompt) {
+          const fldHint = isPrompt ? field.type : undefined
           generatedData[fieldName] = generateContextAwareValue(
             fieldName,
             spec.type,
@@ -5695,9 +5714,8 @@ function createEntityOperations<T>(
 
         // Handle non-relation prompt fields (like 'Write a detailed article')
         if (!field.isRelation) {
-          const isPromptField =
-            field.type.includes(' ') || field.type.includes('/') || field.type.includes('?')
-          if (isPromptField) {
+          const isPrompt = isPromptField(field)
+          if (isPrompt) {
             // Build context for generation
             const ctxParts: string[] = []
             const entitySchemaForCtx = entity.schema as Record<string, unknown> | undefined
@@ -6058,11 +6076,11 @@ function hydrateEntity(
           })
 
           // Mark the array as an entity array
-          ;(arrayResult as Record<string, unknown>).$type = field.relatedType
-          ;(arrayResult as Record<string, unknown>).$isArrayRelation = true
+          ;(arrayResult as unknown as Record<string, unknown>)['$type'] = field.relatedType
+          ;(arrayResult as unknown as Record<string, unknown>)['$isArrayRelation'] = true
 
           // Add thenable behavior so `await team.members` resolves all elements
-          ;(arrayResult as Record<string, unknown>).then = (
+          ;(arrayResult as unknown as Record<string, unknown>)['then'] = (
             resolve: (value: unknown) => void,
             reject: (reason: unknown) => void
           ) => {
@@ -6103,10 +6121,10 @@ function hydrateEntity(
         (data[fieldName] as unknown[]).length === 0
       ) {
         const emptyArray: unknown[] = []
-        ;(emptyArray as Record<string, unknown>).$type = field.relatedType
-        ;(emptyArray as Record<string, unknown>).$isArrayRelation = true
+        ;(emptyArray as unknown as Record<string, unknown>)['$type'] = field.relatedType
+        ;(emptyArray as unknown as Record<string, unknown>)['$isArrayRelation'] = true
         // Add thenable behavior that resolves to empty array
-        ;(emptyArray as Record<string, unknown>).then = (
+        ;(emptyArray as unknown as Record<string, unknown>)['then'] = (
           resolve: (value: unknown) => void,
           _reject: (reason: unknown) => void
         ) => {

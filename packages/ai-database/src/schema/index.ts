@@ -100,6 +100,9 @@ export {
   hasEmbeddingsConfig,
 } from './provider.js'
 
+// Import resolve functions used internally
+import { isPromptField } from './resolve.js'
+
 // Re-export resolve functions
 export {
   isEntityId,
@@ -125,6 +128,7 @@ export {
   configureAIGeneration,
   getAIGenerationConfig,
   type AIGenerationConfig,
+  type GenerationDetails,
   // Value generator configuration
   setValueGenerator,
   getValueGenerator,
@@ -927,7 +931,8 @@ export function DB<TSchema extends DatabaseSchema>(
   function emitInternalEventForOps(eventType: string, data: unknown): void {
     const handlers = eventHandlersForOps.get(eventType)
     if (handlers) {
-      for (const handler of handlers) {
+      const snapshot = [...handlers]
+      for (const handler of snapshot) {
         try {
           handler(data)
         } catch (e) {
@@ -1135,15 +1140,11 @@ export function DB<TSchema extends DatabaseSchema>(
                   const fullContext = contextParts.join(' | ')
 
                   for (const [childFieldName, childField] of relatedEntity.fields) {
-                    // Check if it's a prompt field (type contains spaces, slashes, or question marks)
-                    const isPromptField =
-                      childField.type.includes(' ') ||
-                      childField.type.includes('/') ||
-                      childField.type.includes('?')
+                    const isPrompt = isPromptField(childField)
 
-                    if (!childField.isRelation && (childField.type === 'string' || isPromptField)) {
+                    if (!childField.isRelation && (childField.type === 'string' || isPrompt)) {
                       // Use field type as hint for prompt fields
-                      const fieldHint = isPromptField ? childField.type : undefined
+                      const fieldHint = isPrompt ? childField.type : undefined
                       childEntityData[childFieldName] = generateContextAwareValue(
                         childFieldName,
                         field.relatedType,

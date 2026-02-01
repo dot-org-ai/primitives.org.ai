@@ -10,13 +10,10 @@
  */
 
 import {
-  generateObject as sdkGenerateObject,
   generateText as sdkGenerateText,
-  streamObject as sdkStreamObject,
   streamText as sdkStreamText,
-  type GenerateObjectResult,
+  Output,
   type GenerateTextResult,
-  type StreamObjectResult,
   type StreamTextResult,
   type LanguageModel,
 } from 'ai'
@@ -139,16 +136,16 @@ function resolveSchema(schemaArg: SchemaArg): ZodTypeAny {
  */
 export async function generateObject<T>(
   options: GenerateObjectOptions<T>
-): Promise<GenerateObjectResult<T>> {
+): Promise<{ object: T; usage?: unknown; warnings?: unknown[] | undefined }> {
   const model = await resolveModel(options.model)
   const schema = resolveSchema(options.schema as SchemaArg)
-  // Use 'as any' to handle AI SDK v4 API variance
-  return sdkGenerateObject({
-    ...options,
+  const { schema: _schema, mode: _mode, ...rest } = options
+  const result = await sdkGenerateText({
+    ...rest,
     model,
-    schema,
-    output: 'object',
-  } as any) as Promise<GenerateObjectResult<T>>
+    output: Output.object({ schema }),
+  } as any)
+  return { object: result.output as T, usage: result.usage, warnings: result.warnings }
 }
 
 /**
@@ -204,20 +201,18 @@ export async function generateText(
  */
 export async function streamObject<T>(
   options: GenerateObjectOptions<T>
-): Promise<StreamObjectResult<T, T, never>> {
+): Promise<{ partialObjectStream: AsyncIterable<T> }> {
   const model = await resolveModel(options.model)
   const schema = resolveSchema(options.schema as SchemaArg)
-  // NOTE: Type assertion required due to AI SDK's complex conditional return types.
-  // The SDK uses different return types based on output mode ('object' | 'array' | 'enum' | 'no-schema')
-  // and schema definition presence. Our wrapper simplifies this to always use 'object' output mode.
-  // This cast is safe because we control the input parameters.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return sdkStreamObject({
-    ...options,
+  const { schema: _schema, mode: _mode, ...rest } = options
+  const result = await sdkStreamText({
+    ...rest,
     model,
-    schema,
-    output: 'object',
-  } as any) as StreamObjectResult<T, T, never>
+    output: Output.object({ schema }),
+  } as any)
+  return {
+    partialObjectStream: result.partialOutputStream as AsyncIterable<T>,
+  }
 }
 
 /**
