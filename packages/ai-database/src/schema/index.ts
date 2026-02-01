@@ -203,6 +203,44 @@ export {
   type BuildContextOptions,
 } from './generation-context.js'
 
+// Re-export schema versioning functions
+export {
+  computeSchemaHash,
+  getSchemaVersion,
+  setSchemaVersion,
+  hasSchemaChanged,
+  type SchemaVersionInfo,
+} from './version.js'
+
+// Re-export schema diff functions
+export {
+  diffSchemas,
+  describeDiff,
+  type FieldChange,
+  type PossibleRename,
+  type EntityDiff,
+  type SchemaDiff,
+} from './diff.js'
+
+// Re-export migration functions
+export {
+  defineMigration,
+  runMigrations,
+  getPendingMigrations,
+  rollbackLastMigration,
+  type MigrationOperationType,
+  type AddEntityOperation,
+  type RemoveEntityOperation,
+  type AddFieldOperation,
+  type RemoveFieldOperation,
+  type RenameFieldOperation,
+  type ChangeTypeOperation,
+  type TransformDataOperation,
+  type MigrationOperation,
+  type Migration,
+  type MigrationResult,
+} from './migration.js'
+
 // Re-export verb derivation functions
 export {
   FORWARD_TO_REVERSE,
@@ -579,8 +617,7 @@ export type InferEntity<TSchema extends DatabaseSchema, TEntity extends keyof TS
   $id: string
   $type: TEntity
 } & {
-  [K in keyof TSchema[TEntity]]: // Tuple types like ['string'] or ['->Entity']
-  TSchema[TEntity][K] extends readonly [infer Inner extends string]
+  [K in keyof TSchema[TEntity]]: TSchema[TEntity][K] extends readonly [infer Inner extends string] // Tuple types like ['string'] or ['->Entity']
     ? InferFieldValue<TSchema, Inner> extends infer R
       ? R[]
       : never
@@ -859,6 +896,44 @@ export function DB<TSchema extends DatabaseSchema>(
   }
   parsedSchema.entities.set('Edge', edgeEntity)
 
+  // Create local getProvider function for dependency injection
+  // If options.provider is provided, use it; otherwise fall back to global resolveProvider()
+  let cachedProvider: DBProvider | null = null
+  let providerPromise: Promise<DBProvider> | null = null
+
+  async function getProvider(): Promise<DBProvider> {
+    // Return cached provider if available
+    if (cachedProvider) return cachedProvider
+
+    // Return pending promise if resolution is in progress
+    if (providerPromise) return providerPromise
+
+    // Check if options.provider is provided (dependency injection)
+    if (options?.provider) {
+      providerPromise = (async () => {
+        const providerOption = options.provider!
+        if (typeof providerOption === 'function') {
+          // It's a factory function - call it
+          const result = providerOption()
+          // Handle both sync and async factory functions
+          cachedProvider = result instanceof Promise ? await result : result
+        } else {
+          // It's a direct provider instance
+          cachedProvider = providerOption
+        }
+        return cachedProvider
+      })()
+      return providerPromise
+    }
+
+    // Fall back to global resolveProvider()
+    providerPromise = resolveProvider().then((p) => {
+      cachedProvider = p
+      return p
+    })
+    return providerPromise
+  }
+
   // Configure value generator if provided
   if (options?.valueGenerator) {
     setValueGenerator(options.valueGenerator)
@@ -866,7 +941,7 @@ export function DB<TSchema extends DatabaseSchema>(
 
   // Configure provider with embeddings settings if provided
   if (options?.embeddings) {
-    resolveProvider().then((provider) => {
+    getProvider().then((provider) => {
       if (hasEmbeddingsConfig(provider)) {
         provider.setEmbeddingsConfig(options.embeddings!)
       }
@@ -920,7 +995,7 @@ export function DB<TSchema extends DatabaseSchema>(
   // This API adapts DBAction to ForEachActionsAPI interface
   const actionsAPI: import('../ai-promise-db.js').ForEachActionsAPI = {
     async create(data: { type: string; data: unknown; total?: number }) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         const action = await provider.createAction(data)
         return { id: action.id }
@@ -928,7 +1003,7 @@ export function DB<TSchema extends DatabaseSchema>(
       throw new Error('Provider does not support actions')
     },
     async get(id: string): Promise<import('../ai-promise-db.js').ForEachActionState | null> {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         const action = await provider.getAction(id)
         if (!action) return null
@@ -949,7 +1024,7 @@ export function DB<TSchema extends DatabaseSchema>(
       return null
     },
     async update(id: string, updates: Partial<import('../ai-promise-db.js').ForEachActionState>) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         const updatePayload: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>> =
           {}
@@ -1019,7 +1094,7 @@ export function DB<TSchema extends DatabaseSchema>(
   for (const [entityName, entity] of parsedSchema.entities) {
     if (entityName === 'Edge') {
       // Edge entity - auto-generated from schema relationships
-      const edgeOps = createEdgeEntityOperations(allEdgeRecords, resolveProvider)
+      const edgeOps = createEdgeEntityOperations(allEdgeRecords, getProvider)
       const wrappedEdgeOps = wrapEntityOperations(
         entityName,
         edgeOps,
@@ -1125,7 +1200,7 @@ export function DB<TSchema extends DatabaseSchema>(
         // Cascade takes priority over two-phase processing when enabled
         // Cascade handles generating related entities through the graph
         if (options?.cascade && effectiveMaxDepth > 0) {
-          const provider = await resolveProvider()
+          const provider = await getProvider()
           const entityDef = parsedSchema.entities.get(entityName)
           if (entityDef) {
             // CreateEntityOptions now includes _cascadeState as an optional property
@@ -1288,7 +1363,7 @@ export function DB<TSchema extends DatabaseSchema>(
           // The draft phase skips prompt fields for entities with $context because
           // those fields need pre-fetched context data to generate properly.
           // generateAIFields handles this context pre-fetching and field generation.
-          const provider = await resolveProvider()
+          const provider = await getProvider()
           const entityDefForAI = parsedSchema.entities.get(entityName)
           let finalCleanData = cleanData
           if (entityDefForAI) {
@@ -1344,7 +1419,7 @@ export function DB<TSchema extends DatabaseSchema>(
         }> => {
           const { loadSeedData } = await import('./seed.js')
           const records = await loadSeedData(seedConfig)
-          const provider = await resolveProvider()
+          const provider = await getProvider()
 
           for (const record of records) {
             const { $id, ...data } = record
@@ -1393,13 +1468,13 @@ export function DB<TSchema extends DatabaseSchema>(
     $schema: parsedSchema,
 
     async get(url: string) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const parsed = parseUrl(url)
       return provider.get(parsed.type, parsed.id)
     },
 
     async search(query: string, options?: SearchOptions) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const results: unknown[] = []
       for (const [typeName] of parsedSchema.entities) {
         const typeResults = await provider.search(typeName, query, options)
@@ -1409,7 +1484,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async semanticSearch(query: string, options?: SemanticSearchOptions) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const results: Array<{ $id: string; $type: string; $score: number; [key: string]: unknown }> =
         []
 
@@ -1430,7 +1505,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async count(type: string, where?: Record<string, unknown>) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const listOpts: ListOptions = {}
       if (where !== undefined) listOpts.where = where
       const results = await provider.list(type, listOpts)
@@ -1441,7 +1516,7 @@ export function DB<TSchema extends DatabaseSchema>(
       options: { type: string; where?: Record<string, unknown>; concurrency?: number },
       callback: (entity: unknown) => void | Promise<void>
     ) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const listOpts: ListOptions = {}
       if (options.where !== undefined) listOpts.where = options.where
       const results = await provider.list(options.type, listOpts)
@@ -1459,7 +1534,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async set(type: string, id: string, data: Record<string, unknown>) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const existing = await provider.get(type, id)
       if (existing) {
         return provider.update(type, id, data)
@@ -1468,7 +1543,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async generate(options: GenerateOptions) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (options.mode === 'background') {
         const { createMemoryProvider } = await import('../memory-provider.js')
         const memProvider = provider as ReturnType<typeof createMemoryProvider>
@@ -1492,7 +1567,7 @@ export function DB<TSchema extends DatabaseSchema>(
   const events: EventsAPI = {
     on(pattern, handler) {
       let unsubscribe = () => {}
-      resolveProvider().then((provider) => {
+      getProvider().then((provider) => {
         if (hasEventsAPI(provider)) {
           unsubscribe = provider.on(pattern, handler)
         }
@@ -1501,7 +1576,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async emit(optionsOrType: CreateEventOptions | string, data?: unknown): Promise<DBEvent> {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasEventsAPI(provider)) {
         // The provider.emit has overloads: (options: CreateEventOptions) or (type: string, data: unknown)
         if (typeof optionsOrType === 'string') {
@@ -1536,7 +1611,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async list(options) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasEventsAPI(provider)) {
         return provider.listEvents(options)
       }
@@ -1544,7 +1619,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async replay(options) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasEventsAPI(provider)) {
         await provider.replayEvents(options)
       }
@@ -1554,7 +1629,7 @@ export function DB<TSchema extends DatabaseSchema>(
   // Create Actions API (public version with full DBAction types)
   const actions: ActionsAPI = {
     async create(options: CreateActionOptions | { type: string; data: unknown; total?: number }) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.createAction(options)
       }
@@ -1562,7 +1637,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async get(id: string) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.getAction(id)
       }
@@ -1573,7 +1648,7 @@ export function DB<TSchema extends DatabaseSchema>(
       id: string,
       updates: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>>
     ) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.updateAction(id, updates)
       }
@@ -1581,7 +1656,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async list(options) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.listActions(options)
       }
@@ -1589,7 +1664,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async retry(id) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.retryAction(id)
       }
@@ -1597,7 +1672,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async cancel(id) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         await provider.cancelAction(id)
       }
@@ -1609,7 +1684,7 @@ export function DB<TSchema extends DatabaseSchema>(
   // Create Artifacts API
   const artifacts: ArtifactsAPI = {
     async get(url, type) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasArtifactsAPI(provider)) {
         return provider.getArtifact(url, type)
       }
@@ -1617,21 +1692,21 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async set(url, type, data) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasArtifactsAPI(provider)) {
         await provider.setArtifact(url, type, data)
       }
     },
 
     async delete(url, type) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasArtifactsAPI(provider)) {
         await provider.deleteArtifact(url, type)
       }
     },
 
     async list(url) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasArtifactsAPI(provider)) {
         return provider.listArtifacts(url)
       }

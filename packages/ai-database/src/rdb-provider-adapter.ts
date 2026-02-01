@@ -196,6 +196,9 @@ export class RDBProviderAdapter implements DBProvider {
 
   /**
    * List entities of a type
+   *
+   * If a `where` filter is provided, we apply it client-side after fetching
+   * since RDB's list() method doesn't support where filters natively.
    */
   async list(type: string, options?: ListOptions): Promise<Record<string, unknown>[]> {
     const listOptions: {
@@ -205,12 +208,19 @@ export class RDBProviderAdapter implements DBProvider {
       order?: 'asc' | 'desc'
     } = {}
 
-    if (options?.limit !== undefined) {
-      listOptions.limit = options.limit
+    // If we have where filters, we need to fetch all and filter client-side
+    // We apply pagination after filtering
+    const hasWhereFilter = options?.where && Object.keys(options.where).length > 0
+
+    if (!hasWhereFilter) {
+      if (options?.limit !== undefined) {
+        listOptions.limit = options.limit
+      }
+      if (options?.offset !== undefined) {
+        listOptions.offset = options.offset
+      }
     }
-    if (options?.offset !== undefined) {
-      listOptions.offset = options.offset
-    }
+
     if (options?.orderBy !== undefined) {
       listOptions.orderBy = options.orderBy
     }
@@ -218,8 +228,34 @@ export class RDBProviderAdapter implements DBProvider {
       listOptions.order = options.order
     }
 
-    const entities = await this.rdb.list(type, listOptions)
-    return entities.map(normalizeEntity)
+    let entities = await this.rdb.list(type, listOptions)
+
+    // Apply where filter client-side
+    if (hasWhereFilter && options?.where) {
+      const whereFilter = options.where
+      entities = entities.filter((entity) => {
+        for (const [key, value] of Object.entries(whereFilter)) {
+          if (entity[key] !== value) {
+            return false
+          }
+        }
+        return true
+      })
+    }
+
+    let results = entities.map(normalizeEntity)
+
+    // Apply pagination after client-side filtering
+    if (hasWhereFilter) {
+      if (options?.offset) {
+        results = results.slice(options.offset)
+      }
+      if (options?.limit) {
+        results = results.slice(0, options.limit)
+      }
+    }
+
+    return results
   }
 
   /**
@@ -263,8 +299,21 @@ export class RDBProviderAdapter implements DBProvider {
       }
     }
 
-    // Apply limit and offset after collecting all results
+    // Apply where filter client-side
     let finalResults = results
+    if (options?.where && Object.keys(options.where).length > 0) {
+      const whereFilter = options.where
+      finalResults = finalResults.filter((entity) => {
+        for (const [key, value] of Object.entries(whereFilter)) {
+          if (entity[key] !== value) {
+            return false
+          }
+        }
+        return true
+      })
+    }
+
+    // Apply limit and offset after collecting and filtering all results
     if (options?.offset) {
       finalResults = finalResults.slice(options.offset)
     }

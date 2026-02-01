@@ -1297,8 +1297,7 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       configureAIGeneration({ enabled: true, model: 'sonnet' })
     })
 
-    // TODO: These tests require AI generation and semantic search which need more investigation
-    it.skip('mixes found and generated entities for ~>Category[] field', async () => {
+    it('mixes found and generated entities for ~>Category[] field', async () => {
       // Schema with fuzzy forward array reference
       const schema: DatabaseSchema = {
         Product: {
@@ -1341,9 +1340,8 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       // Verify total count: should have 3 categories
       expect(product.categories).toHaveLength(3)
 
-      // Get the actual category entities
-      const categoryIds = product.categories as string[]
-      const categories = await Promise.all(categoryIds.map((id) => db.Category.get(id)))
+      // Await the thenable array to resolve all entities
+      const categories = await product.categories
 
       // Should have found 2 existing categories
       const foundCategories = categories.filter((c) => !c?.$generated || c.$generated === false)
@@ -1366,7 +1364,7 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       expect(outdoorCategory?.slug.length).toBeGreaterThan(0)
     })
 
-    it.skip('applies threshold per-entity in array', async () => {
+    it('applies threshold per-entity in array', async () => {
       const schema: DatabaseSchema = {
         Post: {
           title: 'string',
@@ -1407,8 +1405,8 @@ describe('Forward Fuzzy Resolution (~>)', () => {
 
       expect(post.tags).toHaveLength(3)
 
-      const tagIds = post.tags as string[]
-      const tags = await Promise.all(tagIds.map((id) => db.Tag.get(id)))
+      // Await the thenable array to resolve all entities
+      const tags = await post.tags
 
       // Only javascript should be found (exact match above 0.85)
       const foundTags = tags.filter((t) => !t?.$generated || t.$generated === false)
@@ -1428,7 +1426,7 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       }
     })
 
-    it.skip('found entities have $generated: false or undefined', async () => {
+    it('found entities have $generated: false or undefined', async () => {
       const schema: DatabaseSchema = {
         Article: {
           title: 'string',
@@ -1462,8 +1460,8 @@ describe('Forward Fuzzy Resolution (~>)', () => {
 
       expect(article.authors).toHaveLength(2)
 
-      const authorIds = article.authors as string[]
-      const authors = await Promise.all(authorIds.map((id) => db.Author.get(id)))
+      // Await the thenable array to resolve all entities
+      const authors = await article.authors
 
       // All found entities should NOT have $generated: true
       for (const author of authors) {
@@ -1473,7 +1471,7 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       }
     })
 
-    it.skip('generated entities have $generated: true', async () => {
+    it('generated entities have $generated: true', async () => {
       const schema: DatabaseSchema = {
         Project: {
           name: 'string',
@@ -1506,8 +1504,8 @@ describe('Forward Fuzzy Resolution (~>)', () => {
 
       expect(project.technologies).toHaveLength(3)
 
-      const techIds = project.technologies as string[]
-      const technologies = await Promise.all(techIds.map((id) => db.Technology.get(id)))
+      // Await the thenable array to resolve all entities
+      const technologies = await project.technologies
 
       // ALL should be generated (database was empty)
       for (const tech of technologies) {
@@ -1519,7 +1517,7 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       }
     })
 
-    it.skip('maintains correct count: 3 requested, 1 found, 2 generated', async () => {
+    it('maintains correct count: 3 requested, 1 found, 2 generated', async () => {
       const schema: DatabaseSchema = {
         Store: {
           name: 'string',
@@ -1555,8 +1553,8 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       // Should have exactly 3 departments
       expect(store.departments).toHaveLength(3)
 
-      const deptIds = store.departments as string[]
-      const departments = await Promise.all(deptIds.map((id) => db.Department.get(id)))
+      // Await the thenable array to resolve all entities
+      const departments = await store.departments
 
       // Count found vs generated
       const found = departments.filter((d) => !d?.$generated || d.$generated === false)
@@ -1578,7 +1576,7 @@ describe('Forward Fuzzy Resolution (~>)', () => {
       }
     })
 
-    it.skip('includes similarity scores on found entities', async () => {
+    it('includes similarity scores on found entities', async () => {
       const schema: DatabaseSchema = {
         Document: {
           title: 'string',

@@ -139,6 +139,19 @@ export {
   hasActionsAPI,
   hasArtifactsAPI,
   hasEmbeddingsConfig,
+  // Schema versioning
+  computeSchemaHash,
+  getSchemaVersion,
+  setSchemaVersion,
+  hasSchemaChanged,
+  // Schema diff
+  diffSchemas,
+  describeDiff,
+  // Migrations
+  defineMigration,
+  runMigrations,
+  getPendingMigrations,
+  rollbackLastMigration,
 } from './schema/index.js'
 
 // Import generateAIFields and generateEntity directly from cascade.js to avoid potential circular dependency
@@ -148,11 +161,33 @@ import {
   DEFAULT_MAX_DEPTH,
 } from './schema/cascade.js'
 
+// Import AIGenerationConfig type for local use (then re-exported below)
+import type { AIGenerationConfig } from './schema/cascade.js'
+
 export type {
   AIGenerationConfig,
   EntityOperationsConfig,
   GenerationDetails,
   SeedResult,
+  // Schema versioning types
+  SchemaVersionInfo,
+  // Schema diff types
+  FieldChange,
+  PossibleRename,
+  EntityDiff,
+  SchemaDiff,
+  // Migration types
+  MigrationOperationType,
+  AddEntityOperation,
+  RemoveEntityOperation,
+  AddFieldOperation,
+  RemoveFieldOperation,
+  RenameFieldOperation,
+  ChangeTypeOperation,
+  TransformDataOperation,
+  MigrationOperation,
+  Migration,
+  MigrationResult,
 } from './schema/index.js'
 
 // Import type guards for internal use
@@ -168,6 +203,17 @@ import {
 
 // Import extended provider types for type assertions
 import type { DBProviderExtended, SemanticSearchResult } from './schema/index.js'
+
+// Import extracted DB() helper modules
+import { addSystemEntities, SYSTEM_ENTITY_NAMES } from './schema/system-entities.js'
+import { buildDefinitionCaches } from './schema/definition-caches.js'
+import {
+  createEventsAPI,
+  createActionsPublicAPI,
+  createArtifactsAPI,
+  createNounsAPI,
+  createVerbsAPI,
+} from './schema/sub-apis.js'
 
 // Import module-level state setters for bridging state between schema.ts and schema/ modules
 import { setProvider as setModuleProvider } from './schema/provider.js'
@@ -1201,8 +1247,7 @@ export type InferEntity<TSchema extends DatabaseSchema, TEntity extends keyof TS
   $id: string
   $type: TEntity
 } & {
-  [K in keyof TSchema[TEntity]]: // Tuple types like ['string'] or ['->Entity']
-  TSchema[TEntity][K] extends readonly [infer Inner extends string]
+  [K in keyof TSchema[TEntity]]: TSchema[TEntity][K] extends readonly [infer Inner extends string] // Tuple types like ['string'] or ['->Entity']
     ? InferFieldValue<TSchema, Inner> extends infer R
       ? R[]
       : never
@@ -1491,6 +1536,38 @@ export interface EmbeddingTypeConfig {
 export interface DBOptions {
   /** Embedding configuration per type */
   embeddings?: EmbeddingsConfig
+  /**
+   * Database provider instance or factory function.
+   * When provided, this provider is used instead of the global provider.
+   * This enables dependency injection for testing and isolated DB instances.
+   *
+   * @example
+   * ```ts
+   * // Direct provider instance
+   * const db = DB(schema, { provider: myProvider })
+   *
+   * // Lazy factory function (created on first use)
+   * const db = DB(schema, { provider: () => createMyProvider() })
+   * ```
+   */
+  provider?: DBProvider | (() => DBProvider) | (() => Promise<DBProvider>)
+  /**
+   * AI generation configuration.
+   * When provided, these settings are used instead of the global aiConfig.
+   * This enables dependency injection for testing and isolated DB instances.
+   *
+   * @example
+   * ```ts
+   * const db = DB(schema, {
+   *   aiGeneration: {
+   *     model: 'gpt-4',
+   *     enabled: true,
+   *     onGenerate: (details) => console.log('Generated:', details)
+   *   }
+   * })
+   * ```
+   */
+  aiGeneration?: Partial<AIGenerationConfig>
 }
 
 // =============================================================================
@@ -3056,163 +3133,50 @@ export function DB<TSchema extends DatabaseSchema>(
   setSchemaRelationInfo(relationInfo)
 
   // Add system entities to the parsed schema (Noun, Verb, Edge)
+  addSystemEntities(parsedSchema)
 
-  // Noun entity - represents type definitions
-  const nounEntity: ParsedEntity = {
-    name: 'Noun',
-    fields: new Map([
-      [
-        'name',
-        { name: 'name', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      [
-        'singular',
-        { name: 'singular', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      [
-        'plural',
-        { name: 'plural', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      [
-        'slug',
-        { name: 'slug', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      [
-        'slugPlural',
-        {
-          name: 'slugPlural',
-          type: 'string',
-          isArray: false,
-          isOptional: false,
-          isRelation: false,
-        },
-      ],
-      [
-        'description',
-        {
-          name: 'description',
-          type: 'string',
-          isArray: false,
-          isOptional: true,
-          isRelation: false,
-        },
-      ],
-      [
-        'properties',
-        { name: 'properties', type: 'json', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'relationships',
-        {
-          name: 'relationships',
-          type: 'json',
-          isArray: false,
-          isOptional: true,
-          isRelation: false,
-        },
-      ],
-      [
-        'actions',
-        { name: 'actions', type: 'json', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'events',
-        { name: 'events', type: 'json', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'metadata',
-        { name: 'metadata', type: 'json', isArray: false, isOptional: true, isRelation: false },
-      ],
-    ]),
-  }
-  parsedSchema.entities.set('Noun', nounEntity)
+  // Create local getProvider function for dependency injection
+  // If options.provider is provided, use it; otherwise fall back to global resolveProvider()
+  let cachedProvider: DBProvider | null = null
+  let localProviderPromise: Promise<DBProvider> | null = null
 
-  // Verb entity - represents action definitions
-  const verbEntity: ParsedEntity = {
-    name: 'Verb',
-    fields: new Map([
-      [
-        'action',
-        { name: 'action', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      [
-        'actor',
-        { name: 'actor', type: 'string', isArray: false, isOptional: true, isRelation: false },
-      ],
-      ['act', { name: 'act', type: 'string', isArray: false, isOptional: true, isRelation: false }],
-      [
-        'activity',
-        { name: 'activity', type: 'string', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'result',
-        { name: 'result', type: 'string', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'reverse',
-        { name: 'reverse', type: 'json', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'inverse',
-        { name: 'inverse', type: 'string', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'description',
-        {
-          name: 'description',
-          type: 'string',
-          isArray: false,
-          isOptional: true,
-          isRelation: false,
-        },
-      ],
-    ]),
-  }
-  parsedSchema.entities.set('Verb', verbEntity)
+  async function getProvider(): Promise<DBProvider> {
+    // Return cached provider if available
+    if (cachedProvider) return cachedProvider
 
-  // Edge entity - represents relationships
-  const edgeEntity: ParsedEntity = {
-    name: 'Edge',
-    fields: new Map([
-      [
-        'from',
-        { name: 'from', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      [
-        'name',
-        { name: 'name', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      ['to', { name: 'to', type: 'string', isArray: false, isOptional: false, isRelation: false }],
-      [
-        'backref',
-        { name: 'backref', type: 'string', isArray: false, isOptional: true, isRelation: false },
-      ],
-      [
-        'cardinality',
-        {
-          name: 'cardinality',
-          type: 'string',
-          isArray: false,
-          isOptional: false,
-          isRelation: false,
-        },
-      ],
-      [
-        'direction',
-        { name: 'direction', type: 'string', isArray: false, isOptional: false, isRelation: false },
-      ],
-      [
-        'matchMode',
-        { name: 'matchMode', type: 'string', isArray: false, isOptional: true, isRelation: false },
-      ],
-    ]),
+    // Return pending promise if resolution is in progress
+    if (localProviderPromise) return localProviderPromise
+
+    // Check if options.provider is provided (dependency injection)
+    if (options?.provider) {
+      localProviderPromise = (async () => {
+        const providerOption = options.provider!
+        if (typeof providerOption === 'function') {
+          // It's a factory function - call it
+          const result = providerOption()
+          // Handle both sync and async factory functions
+          cachedProvider = result instanceof Promise ? await result : result
+        } else {
+          // It's a direct provider instance
+          cachedProvider = providerOption
+        }
+        return cachedProvider
+      })()
+      return localProviderPromise
+    }
+
+    // Fall back to global resolveProvider()
+    localProviderPromise = resolveProvider().then((p) => {
+      cachedProvider = p
+      return p
+    })
+    return localProviderPromise
   }
-  parsedSchema.entities.set('Edge', edgeEntity)
 
   // Configure provider with embeddings settings if provided
   if (options?.embeddings) {
     const embeddingsConfig = options.embeddings
-    resolveProvider()
+    getProvider()
       .then((provider) => {
         if (hasEmbeddingsConfig(provider)) {
           provider.setEmbeddingsConfig(embeddingsConfig)
@@ -3223,13 +3187,10 @@ export function DB<TSchema extends DatabaseSchema>(
       })
   }
 
-  // System entity names for filtering
-  const systemEntityNames = new Set(['Noun', 'Verb', 'Edge'])
-
   // Collect all edge records from the schema (user-defined entities only)
   const allEdgeRecords: Array<Record<string, unknown>> = []
   for (const [entityName, entity] of parsedSchema.entities) {
-    if (!systemEntityNames.has(entityName)) {
+    if (!SYSTEM_ENTITY_NAMES.has(entityName)) {
       const edgeRecords = createEdgeRecords(entityName, schema[entityName] ?? {}, entity)
       allEdgeRecords.push(...edgeRecords)
     }
@@ -3238,7 +3199,7 @@ export function DB<TSchema extends DatabaseSchema>(
   // Collect all noun records from the schema (user-defined entities only)
   const allNounRecords: Array<Record<string, unknown>> = []
   for (const [entityName] of parsedSchema.entities) {
-    if (!systemEntityNames.has(entityName)) {
+    if (!SYSTEM_ENTITY_NAMES.has(entityName)) {
       const nounRecord = createNounRecord(entityName, schema[entityName])
       allNounRecords.push(nounRecord)
     }
@@ -3254,14 +3215,14 @@ export function DB<TSchema extends DatabaseSchema>(
   // Create Actions API early so it can be injected into entity operations
   const actionsAPI = {
     async create(options: CreateActionOptions | { type: string; data: unknown; total?: number }) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.createAction(options)
       }
       throw new Error('Provider does not support actions')
     },
     async get(id: string) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.getAction(id)
       }
@@ -3271,7 +3232,7 @@ export function DB<TSchema extends DatabaseSchema>(
       id: string,
       updates: Partial<Pick<DBAction, 'status' | 'progress' | 'result' | 'error'>>
     ) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (hasActionsAPI(provider)) {
         return provider.updateAction(id, updates)
       }
@@ -3409,7 +3370,7 @@ export function DB<TSchema extends DatabaseSchema>(
       }
       wrappedOps.resolve = resolveFn
 
-      // Update create to support draftOnly option
+      // Update create to support draftOnly option and wire through draft/resolve
       const originalCreate = wrappedOps.create
       wrappedOps.create = async (...args: unknown[]): Promise<unknown> => {
         // Parse arguments - can be (data, options?) or (id, data, options?)
@@ -3437,7 +3398,7 @@ export function DB<TSchema extends DatabaseSchema>(
         // This allows generated child entities to reference the parent via $generatedBy
         const preGeneratedId = typeof args[0] === 'string' ? args[0] : crypto.randomUUID()
 
-        // Run draft phase first - draftFn returns an object with draft properties
+        // Run draft phase first - draftFn returns an object with draft properties and emits 'draft' event
         const draftResult = await draftFn(data)
         const draft = isPlainObject(draftResult) ? draftResult : {}
         // Inject $id into draft so resolve can pass it as context to resolveReferenceSpec
@@ -3457,7 +3418,7 @@ export function DB<TSchema extends DatabaseSchema>(
           }
         }
 
-        // Then resolve
+        // Then resolve - resolveFn emits 'resolve' event
         const resolveResult = await resolveFn(draft)
         const resolved = isPlainObject(resolveResult) ? resolveResult : {}
         // Create the final entity (without phase markers)
@@ -3467,17 +3428,14 @@ export function DB<TSchema extends DatabaseSchema>(
         delete finalData['$errors']
         delete finalData['$type']
 
-        // Note: generateAIFields is called by originalCreate (entity-operations.create)
-        // so we don't need to call it here. The originalCreate flow handles:
-        // resolveForwardExact → resolveForwardFuzzy → resolveBackwardFuzzy → generateAIFields → provider.create
-
         // Call originalCreate with the resolved data using the pre-generated ID
+        // Pass _preResolved flag to skip internal draft/resolve in entity-operations.create()
         // Type assertion to Function is necessary for dynamic method call with spread args
         return (originalCreate as (...a: unknown[]) => Promise<unknown>).call(
           wrappedOps,
           preGeneratedId,
           finalData,
-          options
+          { ...options, _preResolved: true }
         )
       }
 
@@ -3489,7 +3447,7 @@ export function DB<TSchema extends DatabaseSchema>(
         }> => {
           const { loadSeedData } = await import('./schema/seed.js')
           const records = await loadSeedData(seedConfig)
-          const provider = await resolveProvider()
+          const provider = await getProvider()
 
           for (const record of records) {
             const { $id, ...data } = record
@@ -3513,17 +3471,8 @@ export function DB<TSchema extends DatabaseSchema>(
     }
   }
 
-  // Noun definitions cache
-  const nounDefinitions = new Map<string, Noun>()
-
-  // Initialize nouns from schema
-  for (const [entityName] of parsedSchema.entities) {
-    const noun = inferNoun(entityName)
-    nounDefinitions.set(entityName, noun)
-  }
-
-  // Verb definitions cache
-  const verbDefinitions = new Map<string, Verb>(Object.entries(Verbs).map(([k, v]) => [k, v]))
+  // Build noun and verb definition caches
+  const { nounDefinitions, verbDefinitions } = buildDefinitionCaches(parsedSchema)
 
   // Use the event handlers defined earlier for entity operations
   function onInternal(eventType: string, handler: (data: unknown) => void): () => void {
@@ -3541,13 +3490,13 @@ export function DB<TSchema extends DatabaseSchema>(
     $schema: parsedSchema,
 
     async get(url: string) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const parsed = parseUrl(url)
       return provider.get(parsed.type, parsed.id)
     },
 
     async search(query: string, options?: SearchOptions) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const results: unknown[] = []
       for (const [typeName] of parsedSchema.entities) {
         const typeResults = await provider.search(typeName, query, options)
@@ -3557,7 +3506,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async semanticSearch(query: string, options?: SemanticSearchOptions) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
 
       if (!hasSemanticSearch(provider)) {
         throw new CapabilityNotSupportedError(
@@ -3585,7 +3534,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async count(type: string, where?: Record<string, unknown>) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const results = await provider.list(type, where ? { where } : undefined)
       return results.length
     },
@@ -3594,7 +3543,7 @@ export function DB<TSchema extends DatabaseSchema>(
       options: { type: string; where?: Record<string, unknown>; concurrency?: number },
       callback: (entity: unknown) => void | Promise<void>
     ) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const results = await provider.list(
         options.type,
         options.where ? { where: options.where } : undefined
@@ -3614,7 +3563,7 @@ export function DB<TSchema extends DatabaseSchema>(
     },
 
     async set(type: string, id: string, data: Record<string, unknown>) {
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       const existing = await provider.get(type, id)
       if (existing) {
         // Replace entirely (not merge)
@@ -3626,7 +3575,7 @@ export function DB<TSchema extends DatabaseSchema>(
     async generate(options: GenerateOptions) {
       // Placeholder - actual AI generation would be implemented here
       // For now, just create with provided data
-      const provider = await resolveProvider()
+      const provider = await getProvider()
       if (options.mode === 'background') {
         // Return action ID for tracking
         const { createMemoryProvider } = await import('./memory-provider.js')
@@ -3650,168 +3599,12 @@ export function DB<TSchema extends DatabaseSchema>(
     ...entityOperations,
   } as TypedDB<TSchema>
 
-  // Create Events API
-  const events: EventsAPI = {
-    on(pattern, handler) {
-      // Get provider and delegate - need async resolution
-      let unsubscribe = () => {}
-      resolveProvider()
-        .then((provider) => {
-          if (hasEventsAPI(provider)) {
-            unsubscribe = provider.on(pattern, handler)
-          }
-        })
-        .catch((error) => {
-          console.error('Failed to subscribe to events:', error)
-        })
-      return () => unsubscribe()
-    },
-
-    async emit(optionsOrType: CreateEventOptions | string, data?: unknown): Promise<DBEvent> {
-      const provider = await resolveProvider()
-      if (hasEventsAPI(provider)) {
-        if (typeof optionsOrType === 'string') {
-          return provider.emit(optionsOrType, data)
-        }
-        return provider.emit(optionsOrType)
-      }
-      // Return minimal event if provider doesn't support emit
-      const now = new Date()
-      if (typeof optionsOrType === 'string') {
-        // data parameter is typed as unknown, but we expect it to be an optional object
-        const objectData = isPlainObject(data) ? data : undefined
-        return {
-          id: crypto.randomUUID(),
-          actor: 'system',
-          event: optionsOrType,
-          ...(objectData !== undefined && { objectData }),
-          timestamp: now,
-        }
-      }
-      return {
-        id: crypto.randomUUID(),
-        actor: optionsOrType.actor,
-        ...(optionsOrType.actorData !== undefined && { actorData: optionsOrType.actorData }),
-        event: optionsOrType.event,
-        ...(optionsOrType.object !== undefined && { object: optionsOrType.object }),
-        ...(optionsOrType.objectData !== undefined && { objectData: optionsOrType.objectData }),
-        ...(optionsOrType.result !== undefined && { result: optionsOrType.result }),
-        ...(optionsOrType.resultData !== undefined && { resultData: optionsOrType.resultData }),
-        ...(optionsOrType.meta !== undefined && { meta: optionsOrType.meta }),
-        timestamp: now,
-      }
-    },
-
-    async list(options) {
-      const provider = await resolveProvider()
-      if (hasEventsAPI(provider)) {
-        return provider.listEvents(options)
-      }
-      return []
-    },
-
-    async replay(options) {
-      const provider = await resolveProvider()
-      if (hasEventsAPI(provider)) {
-        await provider.replayEvents(options)
-      }
-    },
-  }
-
-  // Create Actions API (extends actionsAPI with list, retry, cancel)
-  const actions: ActionsAPI = {
-    ...actionsAPI,
-
-    async list(options) {
-      const provider = await resolveProvider()
-      if (hasActionsAPI(provider)) {
-        return provider.listActions(options)
-      }
-      return []
-    },
-
-    async retry(id) {
-      const provider = await resolveProvider()
-      if (hasActionsAPI(provider)) {
-        return provider.retryAction(id)
-      }
-      throw new Error('Provider does not support actions')
-    },
-
-    async cancel(id) {
-      const provider = await resolveProvider()
-      if (hasActionsAPI(provider)) {
-        await provider.cancelAction(id)
-      }
-    },
-
-    conjugate,
-  }
-
-  // Create Artifacts API
-  const artifacts: ArtifactsAPI = {
-    async get(url, type) {
-      const provider = await resolveProvider()
-      if (hasArtifactsAPI(provider)) {
-        return provider.getArtifact(url, type)
-      }
-      return null
-    },
-
-    async set(url, type, data) {
-      const provider = await resolveProvider()
-      if (hasArtifactsAPI(provider)) {
-        await provider.setArtifact(url, type, data)
-      }
-    },
-
-    async delete(url, type) {
-      const provider = await resolveProvider()
-      if (hasArtifactsAPI(provider)) {
-        await provider.deleteArtifact(url, type)
-      }
-    },
-
-    async list(url) {
-      const provider = await resolveProvider()
-      if (hasArtifactsAPI(provider)) {
-        return provider.listArtifacts(url)
-      }
-      return []
-    },
-  }
-
-  // Create Nouns API
-  const nouns: NounsAPI = {
-    async get(name) {
-      return nounDefinitions.get(name) ?? null
-    },
-
-    async list() {
-      return Array.from(nounDefinitions.values())
-    },
-
-    async define(noun) {
-      nounDefinitions.set(noun.singular, noun)
-    },
-  }
-
-  // Create Verbs API
-  const verbs: VerbsAPI = {
-    get(action) {
-      return verbDefinitions.get(action) ?? null
-    },
-
-    list() {
-      return Array.from(verbDefinitions.values())
-    },
-
-    define(verb) {
-      verbDefinitions.set(verb.action, verb)
-    },
-
-    conjugate,
-  }
+  // Create sub-APIs using extracted factory functions
+  const events = createEventsAPI(getProvider)
+  const actions = createActionsPublicAPI(getProvider)
+  const artifacts = createArtifactsAPI(getProvider)
+  const nouns = createNounsAPI(nounDefinitions)
+  const verbs = createVerbsAPI(verbDefinitions)
 
   // Return combined object that supports both direct usage and destructuring
   // db.User.create() works, db.events.on() works

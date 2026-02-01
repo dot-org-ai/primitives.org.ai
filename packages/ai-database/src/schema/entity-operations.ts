@@ -20,6 +20,7 @@ import type {
   ReferenceSpec,
   Draft,
   Resolved,
+  CreateEntityOptions,
 } from './types.js'
 
 import type { DBProvider, SemanticSearchResult, HybridSearchResult } from './provider.js'
@@ -166,13 +167,17 @@ export function createEntityOperations<T>(
 
     async create(
       idOrData: string | Omit<T, '$id' | '$type'>,
-      maybeData?: Omit<T, '$id' | '$type'>
+      maybeData?: Omit<T, '$id' | '$type'>,
+      maybeOptions?: CreateEntityOptions
     ): Promise<T> {
       const providedId = typeof idOrData === 'string' ? idOrData : undefined
       const data =
         typeof idOrData === 'string'
           ? (maybeData as Record<string, unknown>)
           : (idOrData as Record<string, unknown>)
+      // Options can be passed as third arg when id is provided, or as second arg when id is not
+      const options =
+        typeof idOrData === 'string' ? maybeOptions : (maybeData as CreateEntityOptions | undefined)
 
       const entityId = providedId || crypto.randomUUID()
 
@@ -186,36 +191,218 @@ export function createEntityOperations<T>(
         const writeTarget = txn ?? provider
 
         try {
-          const { data: resolvedData, pendingRelations } = await resolveForwardExact(
-            typeName,
-            data,
-            entity,
-            schema,
-            provider,
-            entityId
-          )
+          let finalData: Record<string, unknown>
+          let pendingRelations: Array<{
+            fieldName: string
+            targetType: string
+            targetId: string
+          }> = []
+          let fuzzyPendingRelations: Array<{
+            fieldName: string
+            targetType: string
+            targetId: string
+            similarity?: number
+            matchedType?: string
+          }> = []
 
-          const { data: fuzzyResolvedData, pendingRelations: fuzzyPendingRelations } =
-            await resolveForwardFuzzy(typeName, resolvedData, entity, schema, provider, entityId)
+          // Check if data has already been through draft/resolve (called from schema.ts wrapper)
+          if (options?._preResolved) {
+            // Data is already resolved - skip draft/resolve phases
+            // Clean up any metadata fields that might have leaked through
+            const cleanedData: Record<string, unknown> = {}
+            for (const [key, value] of Object.entries(data)) {
+              if (
+                key.startsWith('$') ||
+                key.endsWith('$matchedType') ||
+                key.endsWith('$score') ||
+                key.endsWith('$fallbackUsed') ||
+                key.endsWith('$searchedTypes')
+              ) {
+                continue
+              }
+              cleanedData[key] = value
+            }
 
-          const backwardResolvedData = await resolveBackwardFuzzy(
-            typeName,
-            fuzzyResolvedData,
-            entity,
-            schema,
-            provider
-          )
+            // Still need to resolve backward fuzzy references and generate AI fields
+            const backwardResolvedData = await resolveBackwardFuzzy(
+              typeName,
+              cleanedData,
+              entity,
+              schema,
+              provider
+            )
 
-          const finalData = await generateAIFields(
-            backwardResolvedData,
-            typeName,
-            entity,
-            schema,
-            provider
-          )
+            finalData = await generateAIFields(
+              backwardResolvedData,
+              typeName,
+              entity,
+              schema,
+              provider
+            )
 
+            // Extract pending relations from already-resolved data by checking field values
+            // that look like entity IDs and match relation field definitions
+            for (const [fieldName, field] of entity.fields) {
+              if (field.isRelation && field.relatedType) {
+                const resolvedValue = cleanedData[fieldName]
+                if (!resolvedValue) continue
+
+                const isFuzzy =
+                  field.operator === '~>' || (field.matchMode && field.matchMode === 'fuzzy')
+
+                if (Array.isArray(resolvedValue)) {
+                  for (const targetId of resolvedValue) {
+                    if (typeof targetId === 'string') {
+                      if (isFuzzy) {
+                        fuzzyPendingRelations.push({
+                          fieldName,
+                          targetType: field.relatedType,
+                          targetId,
+                        })
+                      } else {
+                        pendingRelations.push({
+                          fieldName,
+                          targetType: field.relatedType,
+                          targetId,
+                        })
+                      }
+                    }
+                  }
+                } else if (typeof resolvedValue === 'string') {
+                  if (isFuzzy) {
+                    fuzzyPendingRelations.push({
+                      fieldName,
+                      targetType: field.relatedType,
+                      targetId: resolvedValue,
+                    })
+                  } else {
+                    pendingRelations.push({
+                      fieldName,
+                      targetType: field.relatedType,
+                      targetId: resolvedValue,
+                    })
+                  }
+                }
+              }
+            }
+          } else {
+            // Phase 1: Draft - generate entity with $refs for unresolved references
+            // Use _skipPromptlessRefs to avoid generating refs for array fields without prompts
+            // (those are handled by cascade generation when enabled)
+            const draft = await this.draft!(data as Partial<Omit<T, '$id' | '$type'>>, {
+              _skipPromptlessRefs: true,
+            })
+
+            // Phase 2: Resolve - resolve $refs to actual entity IDs
+            // Inject $id and $type into draft for context during resolution
+            const draftWithContext = draft as Record<string, unknown>
+            draftWithContext['$id'] = entityId
+            draftWithContext['$type'] = typeName
+
+            const resolved = await this.resolve!(draft)
+            const resolvedData = resolved as Record<string, unknown>
+
+            // Extract pending relations from resolved data
+            // The resolve phase sets metadata fields like ${field}$matchedType and ${field}$score
+            const refs = (draft as Record<string, unknown>)['$refs'] as
+              | Record<string, ReferenceSpec | ReferenceSpec[]>
+              | undefined
+            if (refs) {
+              for (const [fieldName, refSpec] of Object.entries(refs)) {
+                const resolvedValue = resolvedData[fieldName]
+                if (!resolvedValue) continue
+
+                if (Array.isArray(refSpec)) {
+                  // Array of references
+                  const resolvedIds = Array.isArray(resolvedValue) ? resolvedValue : [resolvedValue]
+                  for (let i = 0; i < resolvedIds.length; i++) {
+                    const targetId = resolvedIds[i] as string
+                    const spec = refSpec[i] || refSpec[0]!
+                    if (spec.matchMode === 'fuzzy') {
+                      const matchedType = resolvedData[`${fieldName}$matchedType`] as
+                        | string
+                        | undefined
+                      const similarity = resolvedData[`${fieldName}$score`] as number | undefined
+                      fuzzyPendingRelations.push({
+                        fieldName,
+                        targetType: matchedType || spec.type,
+                        targetId,
+                        ...(similarity !== undefined && { similarity }),
+                        ...(matchedType !== undefined && { matchedType }),
+                      })
+                    } else {
+                      pendingRelations.push({
+                        fieldName,
+                        targetType: spec.type,
+                        targetId,
+                      })
+                    }
+                  }
+                } else {
+                  // Single reference
+                  const targetId = resolvedValue as string
+                  if (refSpec.matchMode === 'fuzzy') {
+                    const matchedType = resolvedData[`${fieldName}$matchedType`] as
+                      | string
+                      | undefined
+                    const similarity = resolvedData[`${fieldName}$score`] as number | undefined
+                    fuzzyPendingRelations.push({
+                      fieldName,
+                      targetType: matchedType || refSpec.type,
+                      targetId,
+                      ...(similarity !== undefined && { similarity }),
+                      ...(matchedType !== undefined && { matchedType }),
+                    })
+                  } else {
+                    pendingRelations.push({
+                      fieldName,
+                      targetType: refSpec.type,
+                      targetId,
+                    })
+                  }
+                }
+              }
+            }
+
+            // Clean up resolution metadata from the data before further processing
+            const cleanedData: Record<string, unknown> = {}
+            for (const [key, value] of Object.entries(resolvedData)) {
+              // Skip internal fields and resolution metadata
+              if (
+                key.startsWith('$') ||
+                key.endsWith('$matchedType') ||
+                key.endsWith('$score') ||
+                key.endsWith('$fallbackUsed') ||
+                key.endsWith('$searchedTypes')
+              ) {
+                continue
+              }
+              cleanedData[key] = value
+            }
+
+            // Phase 3: Resolve backward fuzzy references (<~)
+            const backwardResolvedData = await resolveBackwardFuzzy(
+              typeName,
+              cleanedData,
+              entity,
+              schema,
+              provider
+            )
+
+            // Phase 4: Generate AI fields based on $instructions and $context
+            finalData = await generateAIFields(
+              backwardResolvedData,
+              typeName,
+              entity,
+              schema,
+              provider
+            )
+          }
+
+          // Phase 5: Persist the entity
           const result = await writeTarget.create(typeName, entityId, finalData)
 
+          // Phase 6: Create relationship edges for exact forward references
           for (const rel of pendingRelations) {
             await writeTarget.relate(
               typeName,
@@ -226,6 +413,7 @@ export function createEntityOperations<T>(
             )
           }
 
+          // Phase 7: Create relationship edges for fuzzy forward references
           const createdEdgeIds = new Set<string>()
           for (const rel of fuzzyPendingRelations) {
             await writeTarget.relate(

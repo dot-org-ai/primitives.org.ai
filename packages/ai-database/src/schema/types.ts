@@ -165,6 +165,8 @@ export interface CreateEntityOptions {
   cascadeTypes?: string[]
   /** @internal Internal cascade state - do not set directly */
   _cascadeState?: CascadeState
+  /** @internal Data has already been through draft/resolve phase - skip internal resolution */
+  _preResolved?: boolean
 }
 
 /**
@@ -606,9 +608,42 @@ export interface GenerateOptions {
 // =============================================================================
 
 import type { EmbeddingsConfig } from '../semantic.js'
+import type { DBProvider } from './provider.js'
 
 // Re-export EmbeddingsConfig for use in other schema modules
 export type { EmbeddingsConfig }
+
+/**
+ * Configuration for AI-powered generation (for dependency injection)
+ */
+export interface AIGenerationConfig {
+  /** Model alias or identifier to use for generation */
+  model: string
+  /** Whether AI generation is enabled (default: true when generateObject is available) */
+  enabled: boolean
+  /** Callback fired after each generation attempt */
+  onGenerate?: (details: GenerationDetails) => void
+}
+
+/**
+ * Details about an AI generation call, passed to onGenerate callback
+ */
+export interface GenerationDetails {
+  /** Entity type being generated */
+  entityType: string
+  /** Model used for generation */
+  model: string
+  /** The prompt sent to the model */
+  prompt: string
+  /** Generated result (null if failed) */
+  result: Record<string, unknown> | null
+  /** Time taken in milliseconds */
+  latencyMs: number
+  /** Error message if generation failed */
+  error?: string
+  /** Timestamp of generation */
+  timestamp: Date
+}
 
 /**
  * DB Options for configuring embeddings and other settings
@@ -618,4 +653,36 @@ export interface DBOptions {
   embeddings?: EmbeddingsConfig
   /** Value generator for field generation (defaults to PlaceholderValueGenerator) */
   valueGenerator?: ValueGenerator
+  /**
+   * Database provider instance or factory function.
+   * When provided, this provider is used instead of the global provider.
+   * This enables dependency injection for testing and isolated DB instances.
+   *
+   * @example
+   * ```ts
+   * // Direct provider instance
+   * const db = DB(schema, { provider: myProvider })
+   *
+   * // Lazy factory function (created on first use)
+   * const db = DB(schema, { provider: () => createMyProvider() })
+   * ```
+   */
+  provider?: DBProvider | (() => DBProvider) | (() => Promise<DBProvider>)
+  /**
+   * AI generation configuration.
+   * When provided, these settings are used instead of the global aiConfig.
+   * This enables dependency injection for testing and isolated DB instances.
+   *
+   * @example
+   * ```ts
+   * const db = DB(schema, {
+   *   aiGeneration: {
+   *     model: 'gpt-4',
+   *     enabled: true,
+   *     onGenerate: (details) => console.log('Generated:', details)
+   *   }
+   * })
+   * ```
+   */
+  aiGeneration?: Partial<AIGenerationConfig>
 }

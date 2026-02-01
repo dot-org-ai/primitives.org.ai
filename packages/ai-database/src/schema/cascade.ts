@@ -11,6 +11,7 @@ import type { ParsedEntity, ParsedSchema } from '../types.js'
 import { AIGenerationError } from '../errors.js'
 
 import type { DBProvider } from './provider.js'
+import type { AIGenerationConfig, GenerationDetails } from './types.js'
 import { isPrimitiveType } from './parse.js'
 import {
   resolveNestedPending,
@@ -20,6 +21,9 @@ import {
 } from './resolve.js'
 import { PlaceholderValueGenerator } from './value-generators/index.js'
 import type { ValueGenerator } from './value-generators/types.js'
+
+// Re-export for backward compatibility
+export type { AIGenerationConfig, GenerationDetails } from './types.js'
 
 /**
  * Hard safety limit for cascade/entity generation recursion depth.
@@ -62,38 +66,6 @@ export function getValueGenerator(): ValueGenerator {
 // =============================================================================
 // AI Generation Configuration
 // =============================================================================
-
-/**
- * Details about an AI generation call, passed to onGenerate callback
- */
-export interface GenerationDetails {
-  /** Entity type being generated */
-  entityType: string
-  /** Model used for generation */
-  model: string
-  /** The prompt sent to the model */
-  prompt: string
-  /** Generated result (null if failed) */
-  result: Record<string, unknown> | null
-  /** Time taken in milliseconds */
-  latencyMs: number
-  /** Error message if generation failed */
-  error?: string
-  /** Timestamp of generation */
-  timestamp: Date
-}
-
-/**
- * Configuration for AI-powered generation
- */
-export interface AIGenerationConfig {
-  /** Model alias or identifier to use for generation */
-  model: string
-  /** Whether AI generation is enabled (default: true when generateObject is available) */
-  enabled: boolean
-  /** Callback fired after each generation attempt */
-  onGenerate?: (details: GenerationDetails) => void
-}
 
 // Default configuration - uses 'sonnet' as the default model
 let aiConfig: AIGenerationConfig = {
@@ -160,6 +132,7 @@ function buildSchemaForEntity(entity: ParsedEntity): Record<string, string> {
  * @param entity - The parsed entity definition
  * @param prompt - The generation prompt (from field definition)
  * @param context - Context from parent entity for informed generation
+ * @param injectedConfig - Optional AI config to use instead of module-level config (for DI)
  * @returns Generated entity data, or null if AI generation failed/unavailable
  */
 async function generateEntityDataWithAI(
@@ -170,9 +143,12 @@ async function generateEntityDataWithAI(
     parentData: Record<string, unknown>
     instructions?: string
     schemaContext?: string
-  }
+  },
+  injectedConfig?: AIGenerationConfig
 ): Promise<Record<string, unknown> | null> {
-  if (!aiConfig.enabled) {
+  // Use injected config if provided, otherwise fall back to module-level config
+  const config = injectedConfig ?? aiConfig
+  if (!config.enabled) {
     return null
   }
 
@@ -226,17 +202,17 @@ async function generateEntityDataWithAI(
     // Call generateObject with the schema and prompt, tracking timing
     const startTime = Date.now()
     const result = await generateObject({
-      model: aiConfig.model,
+      model: config.model,
       schema,
       prompt: fullPrompt,
     })
     const latencyMs = Date.now() - startTime
 
     // Call onGenerate callback if configured
-    if (aiConfig.onGenerate) {
-      aiConfig.onGenerate({
+    if (config.onGenerate) {
+      config.onGenerate({
         entityType: type,
-        model: aiConfig.model,
+        model: config.model,
         prompt: fullPrompt,
         result: result.object as Record<string, unknown>,
         latencyMs,
@@ -247,10 +223,10 @@ async function generateEntityDataWithAI(
     return result.object as Record<string, unknown>
   } catch (error) {
     // Call onGenerate callback with error if configured
-    if (aiConfig.onGenerate) {
-      aiConfig.onGenerate({
+    if (config.onGenerate) {
+      config.onGenerate({
         entityType: type,
-        model: aiConfig.model,
+        model: config.model,
         prompt: prompt || '',
         result: null,
         latencyMs: 0,
@@ -356,6 +332,7 @@ export function generateContextAwareValue(
  * @param entityDef - The parsed entity definition
  * @param schema - The parsed schema
  * @param provider - The database provider
+ * @param injectedConfig - Optional AI config to use instead of module-level config (for DI)
  * @returns The data with AI-generated fields populated
  */
 export async function generateAIFields(
@@ -363,8 +340,11 @@ export async function generateAIFields(
   typeName: string,
   entityDef: ParsedEntity,
   schema: ParsedSchema,
-  provider: DBProvider
+  provider: DBProvider,
+  injectedConfig?: AIGenerationConfig
 ): Promise<Record<string, unknown>> {
+  // Use injected config if provided, otherwise fall back to module-level config
+  const config = injectedConfig ?? aiConfig
   const result = { ...data }
   const entitySchema = entityDef.schema || {}
   const instructions = entitySchema['$instructions'] as string | undefined
@@ -485,7 +465,7 @@ export async function generateAIFields(
       // When AI is enabled, always attempt to generate prompt fields
       // (overriding draft-generated placeholder values with AI-generated content).
       // When AI is disabled, skip already-populated fields unless rich context is available.
-      if (isPrompt && (aiConfig.enabled || hasRichContext)) {
+      if (isPrompt && (config.enabled || hasRichContext)) {
         fieldsToGenerate.push({ fieldName, prompt: field.type })
       }
       continue
@@ -501,7 +481,7 @@ export async function generateAIFields(
   }
 
   // Try AI generation for all fields that need it
-  if (fieldsToGenerate.length > 0 && aiConfig.enabled) {
+  if (fieldsToGenerate.length > 0 && config.enabled) {
     try {
       const { generateObject } = await import('ai-functions')
 
@@ -520,7 +500,7 @@ export async function generateAIFields(
       const aiPrompt = promptParts.join('\n')
 
       const aiResult = await generateObject({
-        model: aiConfig.model,
+        model: config.model,
         schema: fieldsSchema,
         prompt: aiPrompt,
       })
@@ -588,13 +568,16 @@ export async function generateAIFields(
  * @param prompt - Optional prompt for generation context
  * @param context - Parent context information (parent type name, parentData, and optional parentId)
  * @param schema - The parsed schema
+ * @param _depth - Current recursion depth (internal)
+ * @param injectedConfig - Optional AI config to use instead of module-level config (for DI)
  */
 export async function generateEntity(
   type: string,
   prompt: string | undefined,
   context: { parent: string; parentData: Record<string, unknown>; parentId?: string },
   schema: ParsedSchema,
-  _depth: number = 0
+  _depth: number = 0,
+  injectedConfig?: AIGenerationConfig
 ): Promise<Record<string, unknown>> {
   // Hard recursion guard to prevent infinite recursion with circular schemas
   if (_depth >= DEFAULT_MAX_DEPTH) {
@@ -611,11 +594,27 @@ export async function generateEntity(
   const schemaContext = parentSchema['$context'] as string | undefined
 
   // Try AI-powered generation first
-  const aiGeneratedData = await generateEntityDataWithAI(type, entity, prompt, {
-    parentData: context.parentData,
-    ...(instructions !== undefined && { instructions }),
-    ...(schemaContext !== undefined && { schemaContext }),
-  })
+  let aiGeneratedData: Record<string, unknown> | null = null
+  try {
+    aiGeneratedData = await generateEntityDataWithAI(
+      type,
+      entity,
+      prompt,
+      {
+        parentData: context.parentData,
+        ...(instructions !== undefined && { instructions }),
+        ...(schemaContext !== undefined && { schemaContext }),
+      },
+      injectedConfig
+    )
+  } catch (error) {
+    // If AI generation fails (e.g., ai-functions not available in tests),
+    // fall through to placeholder generation below
+    if (!(error instanceof AIGenerationError)) {
+      throw error // Re-throw unexpected errors
+    }
+    // AIGenerationError: fall through to placeholder generation
+  }
 
   // If AI generation succeeded, use that data but still handle relations
   if (aiGeneratedData) {
@@ -638,7 +637,8 @@ export async function generateEntity(
               field.prompt,
               { parent: type, parentData: data },
               schema,
-              _depth + 1
+              _depth + 1,
+              injectedConfig
             )
             data[`_pending_${fieldName}`] = { type: field.relatedType!, data: nestedGenerated }
           }
@@ -705,7 +705,8 @@ export async function generateEntity(
           field.prompt,
           { parent: type, parentData: data },
           schema,
-          _depth + 1
+          _depth + 1,
+          injectedConfig
         )
         // We need to create the nested entity too, but we can't do that here
         // because we don't have access to the provider yet.

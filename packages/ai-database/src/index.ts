@@ -163,9 +163,31 @@ export {
   buildNLQueryContext,
   executeNLQuery,
   createNLQueryFn,
+  // Schema versioning
+  computeSchemaHash,
+  getSchemaVersion,
+  setSchemaVersion,
+  // Schema diff
+  diffSchemas,
+  // Migrations
+  defineMigration,
+  runMigrations,
 } from './schema.js'
 
-export type { AIGenerationConfig, EntityOperationsConfig, GenerationDetails } from './schema.js'
+export type {
+  AIGenerationConfig,
+  EntityOperationsConfig,
+  GenerationDetails,
+  // Schema versioning types
+  SchemaVersionInfo,
+  // Schema diff types
+  SchemaDiff,
+  EntityDiff,
+  // Migration types
+  Migration,
+  MigrationOperation,
+  MigrationResult,
+} from './schema.js'
 
 export {
   MemoryProvider,
