@@ -140,11 +140,12 @@ export async function generateObject<T>(
   const model = await resolveModel(options.model)
   const schema = resolveSchema(options.schema as SchemaArg)
   const { schema: _schema, mode: _mode, ...rest } = options
+  // Using unknown cast for SDK compatibility - the AI SDK has complex type unions
   const result = await sdkGenerateText({
     ...rest,
     model,
     output: Output.object({ schema }),
-  } as any)
+  } as unknown as Parameters<typeof sdkGenerateText>[0])
   return { object: result.output as T, usage: result.usage, warnings: result.warnings }
 }
 
@@ -205,11 +206,12 @@ export async function streamObject<T>(
   const model = await resolveModel(options.model)
   const schema = resolveSchema(options.schema as SchemaArg)
   const { schema: _schema, mode: _mode, ...rest } = options
+  // Using unknown cast for SDK compatibility - the AI SDK has complex type unions
   const result = await sdkStreamText({
     ...rest,
     model,
     output: Output.object({ schema }),
-  } as any)
+  } as unknown as Parameters<typeof sdkStreamText>[0])
   return {
     partialObjectStream: result.partialOutputStream as AsyncIterable<T>,
   }

@@ -45,11 +45,12 @@
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^3.0.0",
     "ai": "^6.0.0",
-    "digital-objects": "workspace:^",
     "ai-providers": "workspace:^",
+    "digital-objects": "workspace:^",
     "language-models": "workspace:*",
     "yaml": "^2.8.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.25.1"
   },
   "optionalDependencies": {
     "oauth.do": "^0.2.1"

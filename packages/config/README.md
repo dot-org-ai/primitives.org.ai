@@ -1,5 +1,7 @@
 # @org.ai/config
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Shared TypeScript and ESLint configurations for the primitives.org.ai monorepo.
 
 ## TypeScript Configurations

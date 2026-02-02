@@ -279,13 +279,19 @@ export function hasArtifactsAPI(
   return 'getArtifact' in provider && 'setArtifact' in provider
 }
 
+/** Provider with transaction support */
+interface TransactionalProvider extends DBProvider {
+  beginTransaction(): Promise<Transaction>
+}
+
 /**
  * Type guard to check if provider supports transactions
  */
-export function hasTransactionSupport(
-  provider: DBProvider
-): provider is DBProvider & { beginTransaction(): Promise<Transaction> } {
-  return 'beginTransaction' in provider && typeof (provider as any).beginTransaction === 'function'
+export function hasTransactionSupport(provider: DBProvider): provider is TransactionalProvider {
+  return (
+    'beginTransaction' in provider &&
+    typeof (provider as TransactionalProvider).beginTransaction === 'function'
+  )
 }
 
 /**

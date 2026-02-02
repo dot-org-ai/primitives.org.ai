@@ -1,5 +1,7 @@
 # ai-props
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 **Stop manually writing placeholder props. Let AI fill in the blanks.**
 
 You've built a beautiful component library. But every time you use a component, you're stuck inventing placeholder text, mock data, and dummy content. Your `<UserCard />` needs a bio. Your `<ProductCard />` needs a description. Your `<SEOHead />` needs meta tags.

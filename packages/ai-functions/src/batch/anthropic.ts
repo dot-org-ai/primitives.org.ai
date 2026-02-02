@@ -336,11 +336,23 @@ const anthropicAdapter: BatchAdapter = {
 // Helpers
 // ============================================================================
 
+/** Zod schema definition structure for type introspection */
+interface ZodDef {
+  typeName?: string
+  type?: unknown
+  shape?: () => Record<string, unknown>
+}
+
+/** Zod schema with _def property for introspection */
+interface ZodSchemaLike {
+  _def?: ZodDef
+}
+
 /**
  * Simple Zod to JSON Schema converter
  */
 function zodToJsonSchema(zodSchema: unknown): Record<string, unknown> {
-  const schema = zodSchema as { _def?: { typeName?: string; shape?: unknown } }
+  const schema = zodSchema as ZodSchemaLike
 
   if (!schema._def) {
     return { type: 'object' }
@@ -356,9 +368,9 @@ function zodToJsonSchema(zodSchema: unknown): Record<string, unknown> {
     case 'ZodBoolean':
       return { type: 'boolean' }
     case 'ZodArray':
-      return { type: 'array', items: zodToJsonSchema((schema._def as any).type) }
+      return { type: 'array', items: zodToJsonSchema(schema._def.type) }
     case 'ZodObject': {
-      const shape = (schema._def as any).shape()
+      const shape = schema._def.shape?.() ?? {}
       const properties: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(shape)) {
         properties[key] = zodToJsonSchema(value)

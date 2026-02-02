@@ -1,5 +1,7 @@
 # @org.ai/types
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 **Foundation type definitions for the AI primitives ecosystem.**
 
 > **Note for Consumers**: This is an internal foundation package. For application development, use [`org.ai`](../org.ai) instead, which re-exports all types from this package plus additional organizational types (Role, Team, Goal, KPI, OKR).

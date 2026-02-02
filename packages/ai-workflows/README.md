@@ -1,5 +1,7 @@
 # ai-workflows
 
+![Stability: Beta](https://img.shields.io/badge/stability-beta-yellow)
+
 **Event-driven AI workflows shouldn't require a PhD in distributed systems.**
 
 You have business logic that needs to react to events, run on schedules, and coordinate parallel tasks. Traditional workflow engines make you wade through XML configs, learn proprietary DSLs, and debug mysterious state machines. You just want to write `$.on.Order.placed(handler)` and have it work.

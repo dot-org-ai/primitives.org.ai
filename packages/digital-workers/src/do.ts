@@ -24,7 +24,6 @@
  * @module
  */
 
-import { define } from 'ai-functions'
 import type { TaskResult, DoOptions } from './types.js'
 
 /**
@@ -94,52 +93,76 @@ export async function doTask<T = unknown>(
   const startTime = Date.now()
   const steps: TaskResult<T>['steps'] = []
 
-  // Use agentic function for complex tasks
-  const taskFn = define.agentic({
-    name: 'executeTask',
-    description: 'Execute a task using available tools and capabilities',
-    args: {
-      task: 'Description of the task to execute',
-      contextInfo: 'Additional context and parameters for the task',
-    },
-    returnType: {
-      result: 'The result of executing the task',
-      steps: ['List of steps taken to complete the task'],
-    },
-    instructions: `Execute the following task:
-
-${task}
-
-${context ? `Context: ${JSON.stringify(context, null, 2)}` : ''}
-
-Work step-by-step to complete the task. Use available tools as needed.
-Document each step you take for transparency.`,
-    maxIterations: 10,
-    tools: [], // Tools would be provided by the execution environment
-  })
-
   let retries = 0
   let lastError: Error | undefined
 
   while (retries <= maxRetries) {
     try {
-      const response = (await Promise.race([
-        taskFn.call({ task, contextInfo: context ? JSON.stringify(context) : '' }),
-        timeout
-          ? new Promise((_, reject) => setTimeout(() => reject(new Error('Task timeout')), timeout))
-          : new Promise(() => {}), // Never resolves if no timeout
-      ])) as unknown
+      // Use generateObject directly for more reliable execution
+      const { generateObject } = await import('ai-functions')
 
-      const typedResponse = response as {
+      const executeTask = async (): Promise<{
         result: T
-        steps?: Array<{ action: string; result: unknown }>
+        steps: Array<{ action: string; result: unknown }>
+      }> => {
+        const response = await generateObject({
+          model: 'sonnet',
+          schema: {
+            result: 'The result of executing the task - provide a detailed response',
+            steps: [
+              {
+                action: 'Description of what was done in this step',
+                result: 'Outcome of this step',
+              },
+            ],
+            success: 'Whether the task was completed successfully (boolean)',
+          },
+          system: `You are a capable AI worker executing tasks. You have access to the following context:
+
+${context ? JSON.stringify(context, null, 2) : 'No additional context provided.'}
+
+Execute the task step-by-step, documenting each action you take.
+Provide detailed, actionable results that can be used directly.`,
+          prompt: `Execute the following task and provide the result:
+
+Task: ${task}
+
+Work through this task carefully:
+1. Analyze what needs to be done
+2. Execute each step
+3. Provide the final result
+
+Return a detailed result that fulfills the task requirements.`,
+        })
+
+        const obj = response.object as unknown as {
+          result: T
+          steps: Array<{ action: string; result: unknown }>
+          success: boolean
+        }
+
+        if (!obj.success) {
+          throw new Error('Task execution failed')
+        }
+
+        return { result: obj.result, steps: obj.steps }
       }
 
+      const response = await Promise.race([
+        executeTask(),
+        timeout
+          ? new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Task timeout')), timeout)
+            )
+          : new Promise<never>(() => {}), // Never resolves if no timeout
+      ])
+
       // Track steps if provided
-      if (typedResponse.steps) {
+      if (response.steps) {
         steps.push(
-          ...typedResponse.steps.map((step) => ({
-            ...step,
+          ...response.steps.map((step) => ({
+            action: String(step.action),
+            result: step.result,
             timestamp: new Date(),
           }))
         )
@@ -148,7 +171,7 @@ Document each step you take for transparency.`,
       const duration = Date.now() - startTime
 
       return {
-        result: typedResponse.result,
+        result: response.result,
         success: true,
         duration,
         steps,

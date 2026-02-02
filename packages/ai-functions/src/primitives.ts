@@ -641,7 +641,7 @@ export function decide(
 
     // Override resolve to return the actual option
     const originalResolve = promise.resolve.bind(promise)
-    ;(promise as any).resolve = async () => {
+    ;(promise as { resolve: () => Promise<T> }).resolve = async () => {
       const result = (await originalResolve()) as { chosenIndex: string | number }
       const index =
         typeof result.chosenIndex === 'string'

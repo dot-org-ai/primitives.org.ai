@@ -1,5 +1,7 @@
 # human-in-the-loop
 
+![Stability: Alpha](https://img.shields.io/badge/stability-alpha-orange)
+
 Primitives for integrating human oversight and intervention in AI workflows. Implements the digital-workers interface for humans operating within a company boundary.
 
 ## Overview

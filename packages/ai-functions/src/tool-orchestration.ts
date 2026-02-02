@@ -157,12 +157,25 @@ export interface LoopOptions {
 }
 
 /**
+ * Model generation options passed to the model
+ */
+export interface ModelGenerationOptions {
+  /** Messages for the conversation */
+  messages: Message[]
+  /** Tools available for use */
+  tools: Record<
+    string,
+    { description: string; parameters: unknown; execute: (args: unknown) => Promise<unknown> }
+  >
+}
+
+/**
  * Options for running the loop
  */
 export interface RunOptions {
   /** Model to use for generation */
   model: {
-    generate: (options: any) => Promise<ModelResponse>
+    generate: (options: ModelGenerationOptions) => Promise<ModelResponse>
   }
   /** Initial prompt */
   prompt: string
@@ -416,7 +429,10 @@ export class AgenticLoop {
     string,
     { description: string; parameters: unknown; execute: (args: unknown) => Promise<unknown> }
   > {
-    const tools: Record<string, any> = {}
+    const tools: Record<
+      string,
+      { description: string; parameters: unknown; execute: (args: unknown) => Promise<unknown> }
+    > = {}
     for (const tool of this.options.tools) {
       tools[tool.name] = {
         description: tool.description,

@@ -1,5 +1,7 @@
 # language-models
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 **Stop memorizing model IDs. Start shipping.**
 
 You're building AI-powered applications, but every provider has different naming conventions. Is it `claude-opus-4-5-20251101` or `anthropic/claude-opus-4.5`? Was it `gpt-4o` or `openai/gpt-4o`? You shouldn't have to care.

@@ -124,6 +124,11 @@ export class CircuitOpenError extends Error {
   }
 }
 
+/** Error with status property (e.g., HTTP errors) */
+interface ErrorWithStatus extends Error {
+  status?: number
+}
+
 /**
  * Classify an error into a category for retry decisions
  */
@@ -133,7 +138,7 @@ export function classifyError(error: unknown): ErrorCategory {
   }
 
   const message = error.message.toLowerCase()
-  const status = (error as any).status as number | undefined
+  const status = (error as ErrorWithStatus).status
 
   // Network errors
   if (
@@ -446,7 +451,7 @@ export class RetryPolicy {
 
     // Check error's own retryable property
     if (error && typeof error === 'object' && 'retryable' in error) {
-      return (error as any).retryable === true
+      return (error as { retryable: boolean }).retryable === true
     }
 
     // Classify error and determine retryability
@@ -766,15 +771,15 @@ export class FallbackChain<T = unknown, P = unknown> {
  * const response = await reliableFetch('https://api.example.com')
  * ```
  */
-export function withRetry<T extends (...args: any[]) => Promise<any>>(
-  fn: T,
+export function withRetry<TArgs extends unknown[], TResult>(
+  fn: (...args: TArgs) => Promise<TResult>,
   options: RetryOptions = {}
-): T {
+): (...args: TArgs) => Promise<TResult> {
   const policy = new RetryPolicy(options)
 
-  return (async (...args: Parameters<T>) => {
+  return async (...args: TArgs): Promise<TResult> => {
     return policy.execute(() => fn(...args))
-  }) as T
+  }
 }
 
 // ============================================================================

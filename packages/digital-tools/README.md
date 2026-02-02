@@ -1,5 +1,7 @@
 # Digital Tools
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Entity types (Nouns) and providers for digital tools usable by both humans and AI agents.
 
 ## Categories

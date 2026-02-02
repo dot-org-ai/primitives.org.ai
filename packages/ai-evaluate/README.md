@@ -1,5 +1,7 @@
 # ai-evaluate
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 **You need to run user code. But untrusted code is terrifying.**
 
 One malicious snippet could crash your server, access your file system, or make unauthorized network requests. You've seen the horror stories. You know the risks.

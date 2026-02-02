@@ -1,5 +1,7 @@
 # ai-providers
 
+![Stability: Stable](https://img.shields.io/badge/stability-stable-green)
+
 **Stop juggling API keys. Start building.**
 
 You're building AI features, not managing provider configurations. But every model needs its own SDK, its own API key, its own quirks. OpenAI, Anthropic, Google, Llama, Mistral... each one is another dependency to install, another secret to manage, another authentication pattern to remember.

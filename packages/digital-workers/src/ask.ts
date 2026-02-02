@@ -327,17 +327,52 @@ async function sendQuestion<T>(
     throw new Error(`No ${channel} contact configured`)
   }
 
-  // In a real implementation, this would:
-  // 1. Format the question for the channel
-  // 2. Send via the appropriate API
-  // 3. Wait for response (polling, webhook, etc.)
-  // 4. Parse and validate the response
+  // Import transport functions dynamically to avoid circular dependencies
+  const { channelToTransport, sendViaTransport, hasTransport, resolveAddress } = await import(
+    './transports.js'
+  )
 
-  // For now, simulate a pending response
-  await new Promise((resolve) => setTimeout(resolve, 10))
+  const transport = channelToTransport(channel)
+  const address = resolveAddress(contacts, channel)
 
-  // Return a placeholder - real impl would wait for actual response
+  // If transport is registered, use it for real delivery
+  if (hasTransport(transport) && address) {
+    const { generateRequestId } = await import('./utils/id.js')
+    const requestId = generateRequestId('ask')
+
+    const payload = {
+      to: address.value,
+      body: question,
+      type: 'question' as const,
+      priority: 'normal' as const,
+      threadId: requestId,
+      ...(options.schema !== undefined && { schema: options.schema }),
+      ...(options.timeout !== undefined && { timeout: options.timeout }),
+      metadata: {
+        ...options.context,
+        recipient: options.recipient,
+      },
+    }
+
+    const result = await sendViaTransport(transport, payload)
+
+    if (result.success) {
+      // For real transports, we need to wait for a response
+      // This would integrate with the runtime's HumanRequestProcessor
+      // For now, return pending state - the response comes via webhook
+      return {
+        answer: `Question sent via ${transport}. Awaiting response. Request ID: ${requestId}` as T,
+      }
+    } else {
+      throw new Error(`Failed to send question via ${transport}: ${result.error}`)
+    }
+  }
+
+  // No transport registered - return pending state
+  // In a real workflow, this would be processed when a transport is configured
+  // or the runtime handles the request via HumanRequestProcessor
   return {
-    answer: 'Waiting for response...' as T,
+    answer:
+      `Question pending - no transport registered for ${channel}. Configure a transport handler to enable real delivery.` as T,
   }
 }

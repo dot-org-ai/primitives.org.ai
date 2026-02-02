@@ -1,5 +1,7 @@
 # autonomous-agents
 
+![Stability: Beta](https://img.shields.io/badge/stability-beta-yellow)
+
 Primitives for building and orchestrating autonomous AI agents. Implements the `digital-workers` interface for AI agents operating within a company boundary.
 
 ## Overview

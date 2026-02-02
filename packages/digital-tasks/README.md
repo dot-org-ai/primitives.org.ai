@@ -1,5 +1,7 @@
 # digital-tasks
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Task management primitives for digital workers (agents and humans).
 
 ## Overview

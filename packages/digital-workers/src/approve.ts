@@ -332,18 +332,57 @@ async function sendApprovalRequest(
     throw new Error(`No ${channel} contact configured`)
   }
 
-  // In a real implementation, this would:
-  // 1. Format the request for the channel (Slack blocks, email HTML, etc.)
-  // 2. Send via the appropriate API
-  // 3. Wait for response (polling, webhook, interactive message, etc.)
-  // 4. Handle timeout and escalation
+  // Import transport functions dynamically to avoid circular dependencies
+  const { channelToTransport, sendViaTransport, hasTransport, resolveAddress } = await import(
+    './transports.js'
+  )
 
-  // For now, simulate a pending response
-  await new Promise((resolve) => setTimeout(resolve, 10))
+  const transport = channelToTransport(channel)
+  const address = resolveAddress(contacts, channel)
 
-  // Return a placeholder - real impl would wait for actual response
+  // If transport is registered, use it for real delivery
+  if (hasTransport(transport) && address) {
+    const { generateRequestId } = await import('./utils/id.js')
+    const requestId = generateRequestId('apr')
+
+    const payload = {
+      to: address.value,
+      body: request,
+      type: 'approval' as const,
+      priority: 'normal' as const,
+      threadId: requestId,
+      actions: [
+        { id: 'approve', label: 'Approve', style: 'primary' as const, value: true },
+        { id: 'reject', label: 'Reject', style: 'danger' as const, value: false },
+      ],
+      metadata: {
+        ...options.context,
+        approver: options.approver,
+        escalate: options.escalate,
+      },
+      ...(options.timeout !== undefined && { timeout: options.timeout }),
+    }
+
+    const result = await sendViaTransport(transport, payload)
+
+    if (result.success) {
+      // For real transports, we need to wait for a response
+      // This would integrate with the runtime's HumanRequestProcessor
+      // For now, return pending state - the response comes via webhook
+      return {
+        approved: false,
+        notes: `Approval request sent via ${transport}. Awaiting response. Request ID: ${requestId}`,
+      }
+    } else {
+      throw new Error(`Failed to send approval request via ${transport}: ${result.error}`)
+    }
+  }
+
+  // No transport registered - return pending state
+  // In a real workflow, this would be processed when a transport is configured
+  // or the runtime handles the request via HumanRequestProcessor
   return {
     approved: false,
-    notes: 'Approval pending - waiting for response',
+    notes: `Approval request pending - no transport registered for ${channel}. Configure a transport handler to enable real delivery.`,
   }
 }

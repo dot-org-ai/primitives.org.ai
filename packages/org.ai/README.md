@@ -1,5 +1,7 @@
 # org.ai
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 **The primary consumer-facing types package for AI-powered organizations.**
 
 `org.ai` consolidates foundation types from `@org.ai/types` with organizational types (Role, Team, Goal, KPI, OKR) into a single, unified package. **Consumers should import from `org.ai`, not `@org.ai/types` directly.**

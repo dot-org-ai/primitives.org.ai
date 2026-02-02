@@ -1672,6 +1672,8 @@ import type {
   CreateEntityOptions,
   DraftOptions,
   ResolveOptions,
+  Draft,
+  Resolved,
 } from './schema/types.js'
 
 /** Type for entity data without system fields */
@@ -1712,11 +1714,10 @@ interface WrapEntityInput<T> {
     (callback: (entity: T) => void | Promise<void>): Promise<void>
     (options: ListOptions, callback: (entity: T) => void | Promise<void>): Promise<void>
   }
-  // Optional draft/resolve from two-phase API (accepting wider types for compatibility)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  draft?: (data: Partial<EntityData<T>>, options?: DraftOptions) => Promise<any>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  resolve?: (draft: any, options?: ResolveOptions) => Promise<any>
+  // Optional draft/resolve from two-phase API
+  // Using Draft<T>/Resolved<T> types to match EntityOperations signature
+  draft?: (data: Partial<EntityData<T>>, options?: DraftOptions) => Promise<Draft<T>>
+  resolve?: (draft: Draft<T>, options?: ResolveOptions) => Promise<Resolved<T>>
 }
 
 /**
@@ -1752,6 +1753,7 @@ interface WrapEntityOutput<T> {
   ) => Promise<ForEachResult>
   first: () => DBPromise<T | null>
   // These may be overwritten after wrapEntityOperations returns
+  // Using unknown return type for compatibility - actual returns are Draft<T>/Resolved<T>
   draft?: (data: EntityData<T>, options?: DraftOptions) => Promise<unknown>
   resolve?: (draft: unknown, options?: ResolveOptions) => Promise<unknown>
 }

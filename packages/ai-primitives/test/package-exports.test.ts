@@ -1031,9 +1031,11 @@ describe('Functional tests for utilities', () => {
         age: 'Age in years (number)',
       })
       expect(result).toBeDefined()
-      // schema() returns a ZodTypeAny which has _def and parse methods
-      expect(result._def).toBeDefined()
+      // schema() returns a ZodTypeAny which has parse and safeParse methods
       expect(typeof result.parse).toBe('function')
+      expect(typeof result.safeParse).toBe('function')
+      // Verify it validates correctly
+      expect(result.safeParse({ name: 'John', age: 30 }).success).toBe(true)
     })
   })
 

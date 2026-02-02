@@ -1,5 +1,7 @@
 # ai-functions
 
+![Stability: Stable](https://img.shields.io/badge/stability-stable-green)
+
 **Calling AI models shouldn't require 50 lines of boilerplate.**
 
 You just want to get a response from Claude, GPT, or Gemini. Instead, you're drowning in SDK initialization, error handling, retry logic, JSON parsing, and type coercion. Every AI call becomes a small engineering project.

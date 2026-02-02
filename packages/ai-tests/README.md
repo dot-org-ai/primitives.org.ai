@@ -1,5 +1,7 @@
 # ai-tests
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Test utilities via RPC. Run tests anywhere—Workers, sandboxes, or locally.
 
 ```typescript

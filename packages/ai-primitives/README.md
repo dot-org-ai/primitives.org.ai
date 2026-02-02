@@ -1,5 +1,7 @@
 # ai-primitives
 
+![Stability: Alpha](https://img.shields.io/badge/stability-alpha-orange)
+
 All AI primitives for building intelligent applications - a unified package that re-exports primitives from the entire ecosystem.
 
 ## Installation

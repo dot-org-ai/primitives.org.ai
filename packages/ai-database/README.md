@@ -1,5 +1,7 @@
 # ai-database
 
+![Stability: Stable](https://img.shields.io/badge/stability-stable-green)
+
 **AI hallucinates. Your database shouldn't.**
 
 When AI generates a "Software Developer" for your customer profile, does it match your existing O\*NET occupation data? Does "Enterprise SaaS" connect to your NAICS industry codes? Traditional approaches fragment context—AI juggles content creation and referential integrity simultaneously, producing plausible-sounding but disconnected data.

@@ -1,5 +1,7 @@
 # digital-products
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Primitives for defining and building digital products.
 
 ## Overview

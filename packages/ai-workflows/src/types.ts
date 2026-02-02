@@ -9,7 +9,7 @@ import type { WorkflowContextType } from '@org.ai/types'
  */
 export interface HandlerFunction<T = unknown> {
   /** The actual function */
-  fn: (...args: any[]) => void | Promise<void>
+  fn: (...args: unknown[]) => void | Promise<void>
   /** Source code string for remote execution */
   source: string
   /** Handler name (for debugging) */
@@ -35,9 +35,7 @@ export type EventHandler<TOutput = unknown, TInput = unknown> = (
 /**
  * Schedule handler function type
  */
-export type ScheduleHandler = (
-  $: WorkflowContext
-) => void | Promise<void>
+export type ScheduleHandler = ($: WorkflowContext) => void | Promise<void>
 
 /**
  * Workflow context ($) passed to handlers.
@@ -258,7 +256,10 @@ export type EveryProxy = {
   weeks: (value: number) => (handler: ScheduleHandler) => void
 
   // Index signature for dynamic patterns
-  [key: string]: ((handler: ScheduleHandler) => void) | ((value: number) => (handler: ScheduleHandler) => void) | DayScheduleProxy
+  [key: string]:
+    | ((handler: ScheduleHandler) => void)
+    | ((value: number) => (handler: ScheduleHandler) => void)
+    | DayScheduleProxy
 }
 
 /**
@@ -280,7 +281,10 @@ export interface OnProxyHandler extends ProxyHandler<Record<string, NounEventPro
 /**
  * ProxyHandler type for the inner noun level (event accessors)
  */
-export interface NounEventProxyHandler extends ProxyHandler<Record<string, (handler: EventHandler, dependencies?: DependencyConfig) => void>> {
+export interface NounEventProxyHandler
+  extends ProxyHandler<
+    Record<string, (handler: EventHandler, dependencies?: DependencyConfig) => void>
+  > {
   get(
     target: Record<string, (handler: EventHandler, dependencies?: DependencyConfig) => void>,
     event: string,
@@ -307,11 +311,7 @@ export interface DayScheduleProxyHandler extends ProxyHandler<(handler: Schedule
     timeKey: string,
     receiver: unknown
   ): ((handler: ScheduleHandler) => void) | undefined
-  apply(
-    target: (handler: ScheduleHandler) => void,
-    thisArg: unknown,
-    args: [ScheduleHandler]
-  ): void
+  apply(target: (handler: ScheduleHandler) => void, thisArg: unknown, args: [ScheduleHandler]): void
 }
 
 /**
@@ -408,7 +408,9 @@ export type PluralUnitKey = keyof PluralUnitMapping
  * Type guard to check if a string is a valid plural unit key
  */
 export function isPluralUnitKey(key: string): key is PluralUnitKey {
-  return key === 'seconds' || key === 'minutes' || key === 'hours' || key === 'days' || key === 'weeks'
+  return (
+    key === 'seconds' || key === 'minutes' || key === 'hours' || key === 'days' || key === 'weeks'
+  )
 }
 
 /**

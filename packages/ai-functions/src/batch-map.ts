@@ -575,6 +575,6 @@ export function isBatchMapPromise(value: unknown): value is BatchMapPromise<unkn
     value !== null &&
     typeof value === 'object' &&
     BATCH_MAP_SYMBOL in value &&
-    (value as any)[BATCH_MAP_SYMBOL] === true
+    (value as Record<symbol, unknown>)[BATCH_MAP_SYMBOL] === true
   )
 }

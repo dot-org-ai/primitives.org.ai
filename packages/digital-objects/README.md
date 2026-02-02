@@ -1,5 +1,7 @@
 # digital-objects
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Unified storage primitive for AI primitives - a linguistically-aware entity and graph system.
 
 > **Documentation:** For comprehensive guides and examples, see the [Digital Objects documentation](https://primitives.org.ai/digital-objects).

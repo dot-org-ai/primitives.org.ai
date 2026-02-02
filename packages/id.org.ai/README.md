@@ -1,5 +1,7 @@
 # id.org.ai
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Identity primitives for AI systems following [schema.org.ai](https://schema.org.ai) conventions.
 
 ## Overview

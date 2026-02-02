@@ -1,5 +1,7 @@
 # services-as-software
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Primitives for building AI-powered services that operate as software. Services are a superset of digital-workers with a payment/business overlay, capable of crossing company/business boundaries.
 
 ## Installation

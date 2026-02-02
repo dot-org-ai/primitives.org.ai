@@ -1,5 +1,7 @@
 # ai-experiments
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 AI-powered experimentation primitives for testing and evaluating models.
 
 ## Overview

@@ -1,5 +1,7 @@
 # business-as-code
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 Primitives for expressing business logic, strategy, and operations as code. Define your entire business model—from vision and goals to products, services, processes, KPIs, OKRs, and financials—in a declarative, type-safe way.
 
 ## Installation

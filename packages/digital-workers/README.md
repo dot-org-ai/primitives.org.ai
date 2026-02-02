@@ -1,5 +1,7 @@
 # digital-workers
 
+![Stability: Beta](https://img.shields.io/badge/stability-beta-yellow)
+
 **You're building AI-powered workflows. But who should actually do the work?**
 
 Sometimes it's an AI agent operating autonomously. Sometimes it requires human judgment. Often it's both working together. And as AI capabilities evolve, you need workflows that can adapt without rewriting everything.

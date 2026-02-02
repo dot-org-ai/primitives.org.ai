@@ -319,13 +319,41 @@ async function sendToChannel(
     throw new Error(`No ${channel} contact configured`)
   }
 
-  // In a real implementation, this would:
-  // 1. Format the message for the channel
-  // 2. Send via the appropriate API (Slack, SendGrid, Twilio, etc.)
-  // 3. Handle delivery confirmation
+  // Import transport functions dynamically to avoid circular dependencies
+  const { channelToTransport, sendViaTransport, hasTransport, resolveAddress } = await import(
+    './transports.js'
+  )
 
-  // For now, simulate success
-  await new Promise((resolve) => setTimeout(resolve, 10))
+  const transport = channelToTransport(channel)
+  const address = resolveAddress(contacts, channel)
+
+  // If transport is registered, use it for real delivery
+  if (hasTransport(transport) && address) {
+    const payload = {
+      to: address.value,
+      body: message,
+      type: 'notification' as const,
+      priority: (options.priority || 'normal') as 'low' | 'normal' | 'high' | 'urgent',
+      ...(options.metadata !== undefined && { metadata: options.metadata }),
+    }
+
+    const result = await sendViaTransport(transport, payload)
+
+    if (!result.success) {
+      throw new Error(`Failed to send notification via ${transport}: ${result.error}`)
+    }
+    return
+  }
+
+  // No transport registered - log to console for development/testing
+  // This provides visibility into what would be sent
+  console.log(`[digital-workers] Notification (${channel}):`, {
+    to: typeof contact === 'string' ? contact : JSON.stringify(contact),
+    message,
+    priority: options.priority || 'normal',
+    metadata: options.metadata,
+    note: `No transport registered for '${transport}'. Register a transport handler to enable real delivery.`,
+  })
 }
 
 /**

@@ -1,5 +1,7 @@
 # @graphdl/core
 
+![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
+
 **Define entity graphs with the expressiveness of natural language**
 
 A pure TypeScript DSL for defining entity graphs with noun/verb semantics, relationship operators, and MDXLD conventions. Zero runtime dependencies, fully typesafe, and designed for AI-powered applications.
