@@ -22,7 +22,9 @@
   "dependencies": {
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
-    "digital-workers": "workspace:*",
+    "digital-workers": "workspace:*"
+  },
+  "devDependencies": {
     "org.ai": "workspace:*"
   },
   "keywords": [

@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
+    "business-as-code": "workspace:*",
     "digital-workers": "workspace:*",
     "org.ai": "workspace:*",
     "rpc.do": "*"

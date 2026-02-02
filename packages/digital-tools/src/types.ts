@@ -38,10 +38,10 @@ export type ToolCategory =
 export type CommunicationSubcategory =
   | 'email'
   | 'sms'
-  | 'channel'        // Brand-agnostic team messaging (Slack/Teams/Discord)
-  | 'workspace'      // Team messaging workspace/organization
+  | 'channel' // Brand-agnostic team messaging (Slack/Teams/Discord)
+  | 'workspace' // Team messaging workspace/organization
   | 'direct-message' // Private/DM conversations
-  | 'chat'           // Generic chat
+  | 'chat' // Generic chat
   | 'notification'
   | 'voice'
   | 'video-call'
@@ -288,10 +288,55 @@ export interface ToolOutput {
 // ============================================================================
 
 /**
- * Core Tool definition - the foundational type
+ * Core Tool definition - the foundational type for digital tools.
  *
- * Tools can be used by both humans and AI agents. They provide
- * a standardized interface for performing actions.
+ * Tools can be used by both humans and AI agents. They provide a standardized
+ * interface for performing actions across various categories including
+ * communication, data, development, documents, finance, and more.
+ *
+ * @typeParam TInput - The type of input the tool handler accepts
+ * @typeParam TOutput - The type of output the tool handler returns
+ *
+ * @example Basic tool definition
+ * ```typescript
+ * import { Tool, defineTool } from 'digital-tools'
+ *
+ * const greetTool: Tool<{ name: string }, string> = {
+ *   id: 'communication.greeting.hello',
+ *   name: 'Greet User',
+ *   description: 'Generates a greeting message for the specified user',
+ *   category: 'communication',
+ *   parameters: [{
+ *     name: 'name',
+ *     description: 'Name of the person to greet',
+ *     schema: { type: 'string' },
+ *     required: true,
+ *   }],
+ *   handler: ({ name }) => `Hello, ${name}!`,
+ * }
+ * ```
+ *
+ * @example Using defineTool helper with Zod schema
+ * ```typescript
+ * import { defineTool } from 'digital-tools'
+ * import { z } from 'zod'
+ *
+ * const fetchTool = defineTool({
+ *   id: 'web.fetch.url',
+ *   name: 'Fetch URL',
+ *   description: 'Fetches content from a URL',
+ *   category: 'web',
+ *   input: z.object({ url: z.string().url() }),
+ *   handler: async ({ url }) => {
+ *     const response = await fetch(url)
+ *     return response.text()
+ *   },
+ * })
+ * ```
+ *
+ * @see {@link ToolCategory} for available categories
+ * @see {@link ToolRegistry} for tool registration and discovery
+ * @see {@link defineTool} for the recommended way to create tools
  */
 export interface Tool<TInput = unknown, TOutput = unknown> {
   /** Unique tool identifier (e.g., 'communication.email.send') */
@@ -360,8 +405,22 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
 }
 
 /**
- * Any tool type - used for arrays and collections of tools
- * with different input/output types
+ * Any tool type - used for arrays and collections of tools with different
+ * input/output types.
+ *
+ * Use this type when you need to work with heterogeneous collections of tools,
+ * such as in registries, tool lists, or when the specific input/output types
+ * are not known at compile time.
+ *
+ * @example Tool collection
+ * ```typescript
+ * import { AnyTool } from 'digital-tools'
+ *
+ * const tools: AnyTool[] = [emailTool, slackTool, fetchTool]
+ * tools.forEach(tool => console.log(tool.name))
+ * ```
+ *
+ * @see {@link Tool} for the base tool type with specific type parameters
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTool = Tool<any, any>
@@ -391,7 +450,12 @@ export interface DefineToolOptions<TInput, TOutput> {
   /** The handler function */
   handler: (input: TInput) => TOutput | Promise<TOutput>
   /** Additional options */
-  options?: Partial<Omit<Tool<TInput, TOutput>, 'id' | 'name' | 'description' | 'category' | 'parameters' | 'handler'>>
+  options?: Partial<
+    Omit<
+      Tool<TInput, TOutput>,
+      'id' | 'name' | 'description' | 'category' | 'parameters' | 'handler'
+    >
+  >
 }
 
 /**

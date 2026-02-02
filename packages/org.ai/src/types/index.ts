@@ -5,8 +5,8 @@
  * the best features from multiple packages in the AI primitives ecosystem.
  */
 
-// Role types
-export type { Role, RoleType, RoleWorkerType } from './role.js'
+// Role types (RoleType excluded as it's in @org.ai/types)
+export type { Role, RoleWorkerType } from './role.js'
 export { isRole, createRole } from './role.js'
 
 // Team types

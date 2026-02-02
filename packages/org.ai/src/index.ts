@@ -27,6 +27,8 @@
  *     └── OKR - Objectives and Key Results
  * ```
  *
+ * For business entity types (Business, Company, Organization), import from `business-as-code`.
+ *
  * ## Why org.ai Instead of @org.ai/types?
  *
  * 1. **Single Import Source**: Import all types from one package
@@ -44,6 +46,9 @@
  *   // Organizational types (from org.ai)
  *   Role, Team, Goal, KPI, OKR,
  * } from 'org.ai'
+ *
+ * // Business entity types from business-as-code
+ * import type { Business, Company, Organization } from 'business-as-code'
  * ```
  *
  * @example Using type guards
@@ -108,6 +113,22 @@ export * from '@org.ai/types'
  * These types are unique to org.ai and not available in @org.ai/types.
  */
 export * from './types/index.js'
+
+// ============================================================================
+// BUSINESS ENTITY TYPES
+// ============================================================================
+/**
+ * Business entity types are available in the `business-as-code` package.
+ *
+ * For organizational hierarchy types (Business, Company, Org, Organization),
+ * import directly from business-as-code:
+ *
+ * @example
+ * ```typescript
+ * import type { Business, Organization, Company } from 'business-as-code'
+ * import { resolvePermissions, getApprovalChainForRequest } from 'business-as-code'
+ * ```
+ */
 
 // ============================================================================
 // UTILITY FUNCTIONS - Progress calculations, etc.

@@ -64,8 +64,171 @@ export {
   getDefaultHuman,
 } from './helpers.js'
 
-// Re-export consolidated types from org.ai for convenience
-export type { Role, Team, Goal, Goals, KPI, OKR, KeyResult } from 'org.ai'
+// Re-export organizational types from org.ai for convenience
+export type {
+  // Organizational types
+  Role,
+  Team,
+  Goal,
+  Goals,
+  KPI,
+  OKR,
+  KeyResult,
+} from 'org.ai'
+
+// Re-export business entity types from business-as-code
+export type {
+  BusinessDefinition as Business,
+  Organization as Company,
+  Organization as Org,
+  Organization,
+  OrgTeam,
+} from 'business-as-code'
+
+// ============================================================================
+// Digital Tools Types (schema.org.ai)
+// ============================================================================
+
+/**
+ * Tool, Integration, and Capability types from @org.ai/types.
+ *
+ * These types represent the capabilities and integrations available to workers
+ * and systems in the digital-workers ecosystem:
+ *
+ * - **Tool**: Functions/APIs that agents can invoke to accomplish tasks
+ * - **Integration**: Connections to external services (Stripe, Slack, etc.)
+ * - **Capability**: What a Worker/Agent/Tool can do (read, write, execute, etc.)
+ *
+ * @example
+ * ```typescript
+ * import type { ToolType, IntegrationType, CapabilityType } from 'human-in-the-loop'
+ * import { createTool, createIntegration, createCapability, isTool, isIntegration, isCapability } from 'human-in-the-loop'
+ *
+ * // Create a tool
+ * const searchTool = createTool({
+ *   name: 'web-search',
+ *   description: 'Search the web for information',
+ *   inputs: [{ name: 'query', type: 'string', required: true }],
+ *   outputs: { type: 'object' },
+ * })
+ *
+ * // Create an integration
+ * const slackIntegration = createIntegration({
+ *   name: 'slack',
+ *   provider: 'slack',
+ *   category: 'message',
+ *   capabilities: ['send_message', 'read_channel'],
+ * })
+ *
+ * // Create a capability
+ * const readCapability = createCapability({
+ *   name: 'read-files',
+ *   description: 'Read files from the filesystem',
+ *   category: 'read',
+ * })
+ * ```
+ */
+
+// Re-export Tool types and utilities
+export type {
+  // Tool types
+  ToolType,
+  ToolParameterType,
+  ToolInputType,
+  ToolOutputType,
+  ToolExecutionResultType,
+  ToolValidationErrorType,
+  ToolValidationResultType,
+  ToolExecutorType,
+  ToolCapabilityType,
+  ExecutableToolType,
+  ValidatableToolType,
+  ToolsType,
+  ToolboxType,
+  ToolId,
+} from 'org.ai'
+
+export {
+  // Tool constants
+  TOOL_TYPE,
+  StandardToolTypes,
+  StandardCapabilities,
+  // Tool runtime markers
+  Tool,
+  ToolInput,
+  ToolOutput,
+  ToolParameter,
+  ToolExecutionResult,
+  ToolValidationError,
+  ToolValidationResult,
+  ToolExecutor,
+  ExecutableTool,
+  ValidatableTool,
+  Tools,
+  Toolbox,
+  ToolCapability,
+  // Tool ID runtime marker (overloaded as type and symbol)
+  ToolId as ToolIdMarker,
+  // Tool type guards
+  isTool,
+  isToolId,
+  isToolParameter,
+  isToolExecutionResult,
+  isToolValidationError,
+} from 'org.ai'
+
+// Re-export Integration types and utilities
+export type {
+  // Integration types
+  IntegrationType,
+  IntegrationStatusType,
+  IntegrationCategoryType,
+  IntegrationId,
+} from 'org.ai'
+
+export {
+  // Integration constants
+  INTEGRATION_TYPE,
+  IntegrationStatus,
+  IntegrationCategory,
+  // Integration runtime markers
+  Integration,
+  Integrations,
+  IntegrationId as IntegrationIdMarker,
+  // Integration schema
+  IntegrationSchema,
+  // Integration type guards and factory
+  isIntegration,
+  isIntegrationId,
+  createIntegration,
+} from 'org.ai'
+
+// Re-export Capability types and utilities
+export type {
+  // Capability types
+  CapabilityType,
+  CapabilityCategoryType,
+  CapabilityLevelType,
+  CapabilityId,
+} from 'org.ai'
+
+export {
+  // Capability constants
+  CAPABILITY_TYPE,
+  CapabilityCategory,
+  CapabilityLevel,
+  // Capability runtime markers
+  Capability,
+  Capabilities,
+  CapabilityId as CapabilityIdMarker,
+  // Capability schema
+  CapabilitySchema,
+  // Capability type guards and factory
+  isCapability,
+  isCapabilityId,
+  createCapability,
+  hasCapability,
+} from 'org.ai'
 
 // Export store implementations
 export { InMemoryHumanStore } from './store.js'
