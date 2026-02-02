@@ -9,7 +9,18 @@ export default defineConfig({
     fileParallelism: false,
 
     globals: true,
+    environment: 'node',
     include: ['test/**/*.test.ts', 'src/**/*.test.ts'],
+    testTimeout: 30000,
+    hookTimeout: 15000,
+
+    // Run tests sequentially with better memory isolation
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
 
     // Coverage configuration
     coverage: {

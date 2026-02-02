@@ -13,6 +13,8 @@ export default defineConfig({
   test: {
     // Run sequentially to avoid resource exhaustion against deployed workers
     maxConcurrency: 1,
+    maxWorkers: 1,
+    minWorkers: 1,
     fileParallelism: false,
 
     globals: false,

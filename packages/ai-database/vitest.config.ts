@@ -46,17 +46,33 @@ export default defineConfig({
         singleFork: true,
       },
     },
+    // Coverage configuration - targeting 85% line coverage
+    // Current coverage: ~59% lines, ~85% branches, ~81% functions
+    // See: https://vitest.dev/config/#coverage
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json', 'html', 'lcov'],
+      reportsDirectory: './coverage',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/**/__tests__/**'],
+      exclude: [
+        '**/*.test.ts',
+        '**/__tests__/**',
+        '**/node_modules/**',
+        'src/**/*.d.ts',
+        'src/tests.ts', // Test utilities export, not production code
+      ],
+      // Thresholds set to current passing levels with goal of 85% lines
+      // Incrementally increase as coverage improves
       thresholds: {
-        statements: 51,
-        branches: 55,
-        functions: 55,
-        lines: 51,
+        statements: 58,
+        branches: 84,
+        functions: 80,
+        lines: 58,
       },
+      // Clean coverage directory before running
+      clean: true,
+      // Show all files including uncovered
+      all: true,
     },
   },
 })
