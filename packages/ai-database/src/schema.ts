@@ -60,6 +60,7 @@ import { createEventBridge, type EventBridgeAPI } from './eventbridge.js'
 export type { EventBridgeAPI } from './eventbridge.js'
 
 import { loadEntity } from './dataloader.js'
+import { logWarn } from './logger.js'
 
 // =============================================================================
 // Re-exports from modular files
@@ -2332,6 +2333,12 @@ export function DB<TSchema extends DatabaseSchema>(
       .then((provider) => {
         if (hasEmbeddingsConfig(provider)) {
           provider.setEmbeddingsConfig(embeddingsConfig)
+        } else {
+          // Warn that embeddings configuration was provided but provider doesn't support it
+          logWarn(
+            'Embeddings configuration provided but current provider does not support semantic search. ' +
+              'Embeddings will not be generated. Use a provider with embedding support (e.g., createMemoryProvider()).'
+          )
         }
       })
       .catch((error) => {
