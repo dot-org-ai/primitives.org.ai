@@ -1,7 +1,7 @@
 /**
- * AIPromise - RPC-style promise pipelining for AI functions
+ * AIPromise - Promise pipelining for AI functions
  *
- * Inspired by capnweb's RpcPromise, this enables:
+ * This enables:
  * - Property access tracking for dynamic schema inference
  * - Promise pipelining without await
  * - Magical .map() for batch processing
@@ -132,7 +132,7 @@ let resolutionScheduled = false
 // ============================================================================
 
 /**
- * AIPromise - Like capnweb's RpcPromise but for AI functions
+ * AIPromise - Promise wrapper for AI functions
  *
  * Acts as both a Promise AND a stub that:
  * - Tracks property accesses for dynamic schema inference

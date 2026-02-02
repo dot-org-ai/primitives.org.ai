@@ -8,6 +8,17 @@
 import { generateObject, generateText } from '../generate.js'
 import { schema } from '../schema.js'
 import { createModelVariants, getModelPricing, type EvalModel, type ModelTier } from './models.js'
+import { getLogger } from '../logger.js'
+
+/**
+ * Output function type for eval progress reporting
+ */
+export type EvalOutputFn = (message: string) => void
+
+/**
+ * Default output function uses logger.info
+ */
+const defaultOutput: EvalOutputFn = (message: string) => getLogger().info(message)
 
 export interface EvalCase<TInput = unknown, TExpected = unknown> {
   name: string
@@ -59,6 +70,10 @@ export interface RunEvalOptions<TInput, TOutput, TExpected> {
   tiers?: ModelTier[]
   providers?: string[]
   concurrency?: number
+  /** Custom output function for progress reporting (defaults to logger.info) */
+  output?: EvalOutputFn
+  /** Whether to suppress progress output (defaults to false) */
+  quiet?: boolean
 }
 
 /**
@@ -67,7 +82,8 @@ export interface RunEvalOptions<TInput, TOutput, TExpected> {
 export async function runEval<TInput, TOutput, TExpected>(
   options: RunEvalOptions<TInput, TOutput, TExpected>
 ): Promise<EvalSummary> {
-  const { name, cases, task, scorers, concurrency = 3 } = options
+  const { name, cases, task, scorers, concurrency = 3, quiet = false } = options
+  const log = quiet ? () => {} : options.output ?? defaultOutput
 
   // Get models to test
   const variantOptions: { tiers?: ModelTier[]; providers?: string[] } = {}
@@ -78,10 +94,10 @@ export async function runEval<TInput, TOutput, TExpected>(
   const results: EvalResult<TOutput>[] = []
   const startTime = Date.now()
 
-  console.log(`\n🧪 Running eval: ${name}`)
-  console.log(`   Models: ${models.map((m) => m.name).join(', ')}`)
-  console.log(`   Cases: ${cases.length}`)
-  console.log('')
+  log(`\nRunning eval: ${name}`)
+  log(`   Models: ${models.map((m) => m.name).join(', ')}`)
+  log(`   Cases: ${cases.length}`)
+  log('')
 
   // Run all model/case combinations
   const jobs: Array<{ model: EvalModel; case: EvalCase<TInput, TExpected> }> = []
@@ -101,7 +117,7 @@ export async function runEval<TInput, TOutput, TExpected>(
 
         try {
           // Run the task
-          const output = await task(job.case.input, job.model)
+          const taskOutput = await task(job.case.input, job.model)
           const latencyMs = Date.now() - caseStart
 
           // Run scorers
@@ -110,7 +126,7 @@ export async function runEval<TInput, TOutput, TExpected>(
             try {
               const score = await s.scorer({
                 input: job.case.input,
-                output,
+                output: taskOutput,
                 ...(job.case.expected !== undefined && { expected: job.case.expected }),
               })
               scores.push({
@@ -142,8 +158,8 @@ export async function runEval<TInput, TOutput, TExpected>(
           const avgScore =
             scores.length > 0 ? scores.reduce((sum, s) => sum + s.score, 0) / scores.length : 0
 
-          const symbol = avgScore >= 0.8 ? '✓' : avgScore >= 0.5 ? '~' : '✗'
-          console.log(
+          const symbol = avgScore >= 0.8 ? 'PASS' : avgScore >= 0.5 ? 'WARN' : 'FAIL'
+          log(
             `   ${symbol} ${job.model.name} | ${job.case.name} | ${(avgScore * 100).toFixed(
               0
             )}% | ${latencyMs}ms`
@@ -152,13 +168,13 @@ export async function runEval<TInput, TOutput, TExpected>(
           return {
             model: job.model,
             case: job.case,
-            output,
+            output: taskOutput,
             scores,
             latencyMs,
             cost,
           }
         } catch (err) {
-          console.log(`   ✗ ${job.model.name} | ${job.case.name} | ERROR: ${err}`)
+          log(`   FAIL ${job.model.name} | ${job.case.name} | ERROR: ${err}`)
 
           return {
             model: job.model,
@@ -201,15 +217,15 @@ export async function runEval<TInput, TOutput, TExpected>(
     }
   }
 
-  console.log('')
-  console.log(`📊 Results:`)
-  console.log(`   Overall: ${(avgScore * 100).toFixed(1)}%`)
-  console.log(`   Time: ${(totalTime / 1000).toFixed(1)}s`)
-  console.log(`   Cost: $${totalCost.toFixed(4)}`)
-  console.log('')
-  console.log('   By Model:')
+  log('')
+  log(`Results:`)
+  log(`   Overall: ${(avgScore * 100).toFixed(1)}%`)
+  log(`   Time: ${(totalTime / 1000).toFixed(1)}s`)
+  log(`   Cost: $${totalCost.toFixed(4)}`)
+  log('')
+  log('   By Model:')
   for (const [modelId, stats] of Object.entries(byModel)) {
-    console.log(`   - ${modelId}: ${(stats.avgScore * 100).toFixed(1)}%`)
+    log(`   - ${modelId}: ${(stats.avgScore * 100).toFixed(1)}%`)
   }
 
   return {

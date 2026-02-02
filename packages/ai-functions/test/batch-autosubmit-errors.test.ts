@@ -150,7 +150,7 @@ function createRateLimitAdapter(): BatchAdapter {
   return createFailingAdapter(
     Object.assign(new Error('Rate limit exceeded'), {
       status: 429,
-      headers: { 'retry-after': '60' }
+      headers: { 'retry-after': '60' },
     })
   )
 }
@@ -181,14 +181,16 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 3
+        maxItems: 3,
       })
 
       // Subscribe to error events (this is what we expect to exist)
       // This will fail because BatchQueue doesn't emit events
       if ('on' in batch) {
-        (batch as BatchQueue & { on: (event: string, handler: (e: Error) => void) => void })
-          .on('error', errorHandler)
+        ;(batch as BatchQueue & { on: (event: string, handler: (e: Error) => void) => void }).on(
+          'error',
+          errorHandler
+        )
       }
 
       // Add items to trigger auto-submit
@@ -197,7 +199,7 @@ describe('Batch auto-submit error handling', () => {
       batch.add('prompt 3') // This should trigger auto-submit
 
       // Wait for async auto-submit to complete
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // FAILING: Currently errors are swallowed, errorHandler never called
       // The error should be propagated to the error handler
@@ -211,7 +213,7 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 3
+        maxItems: 3,
       })
 
       // Get item references before auto-submit triggers
@@ -220,7 +222,7 @@ describe('Batch auto-submit error handling', () => {
       const item3 = batch.add('prompt 3') // Triggers auto-submit
 
       // Wait for async auto-submit to complete
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // FAILING: Items should have error status after failed auto-submit
       // Currently they remain in 'pending' status with no indication of failure
@@ -237,7 +239,7 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 3
+        maxItems: 3,
       })
 
       batch.add('prompt 1')
@@ -252,7 +254,8 @@ describe('Batch auto-submit error handling', () => {
       expect('autoSubmitPromise' in batch).toBe(true)
 
       // The promise should be available for awaiting
-      const autoSubmitPromise = (batch as BatchQueue & { autoSubmitPromise?: Promise<void> }).autoSubmitPromise
+      const autoSubmitPromise = (batch as BatchQueue & { autoSubmitPromise?: Promise<void> })
+        .autoSubmitPromise
       expect(autoSubmitPromise).toBeDefined()
 
       // Awaiting it should surface the error
@@ -267,13 +270,13 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 2
+        maxItems: 2,
       })
 
       batch.add('prompt 1')
       batch.add('prompt 2') // Triggers auto-submit
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // FAILING: Rate limit error should be exposed to caller
       // Currently it's only logged to console.error
@@ -292,13 +295,13 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 2
+        maxItems: 2,
       })
 
       batch.add('prompt 1')
       batch.add('prompt 2')
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // FAILING: Rate limit metadata should be accessible
       const job = batch.getJob()
@@ -315,17 +318,18 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 2
+        maxItems: 2,
       })
 
       batch.add('prompt 1')
       batch.add('prompt 2')
 
       // Wait for timeout to occur
-      await new Promise(resolve => setTimeout(resolve, 200))
+      await new Promise((resolve) => setTimeout(resolve, 200))
 
       // FAILING: Timeout error should be captured and accessible
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.any(Error))
+      // Logger calls with format: 'Batch auto-submit failed:', error
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Batch auto-submit failed:', expect.any(Error))
 
       // Items should reflect the failure
       const items = batch.getItems()
@@ -342,13 +346,13 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 2
+        maxItems: 2,
       })
 
       batch.add('prompt 1')
       batch.add('prompt 2') // Triggers auto-submit (fails)
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // Replace with working adapter
       registerBatchAdapter('openai', createSuccessAdapter())
@@ -372,13 +376,13 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 2
+        maxItems: 2,
       })
 
       batch.add('prompt 1')
       batch.add('prompt 2') // Triggers auto-submit (fails)
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // Replace with working adapter
       registerBatchAdapter('openai', createSuccessAdapter())
@@ -411,8 +415,8 @@ describe('Batch auto-submit error handling', () => {
               provider: 'openai',
               status: 'completed',
               totalItems: items.length,
-              completedItems: results.filter(r => r.status === 'completed').length,
-              failedItems: results.filter(r => r.status === 'failed').length,
+              completedItems: results.filter((r) => r.status === 'completed').length,
+              failedItems: results.filter((r) => r.status === 'failed').length,
               createdAt: new Date(),
             },
             completion: Promise.resolve(results),
@@ -444,14 +448,17 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 4
+        maxItems: 4,
       })
 
       // FAILING: There should be a way to subscribe to partial failure events
       // This tests that callers can be notified when some items fail
       if ('on' in batch) {
-        (batch as BatchQueue & { on: (event: string, handler: (results: BatchResult[]) => void) => void })
-          .on('partial-failure', partialFailureHandler)
+        ;(
+          batch as BatchQueue & {
+            on: (event: string, handler: (results: BatchResult[]) => void) => void
+          }
+        ).on('partial-failure', partialFailureHandler)
       }
 
       batch.add('prompt 1')
@@ -460,13 +467,13 @@ describe('Batch auto-submit error handling', () => {
       batch.add('prompt 4') // Triggers auto-submit
 
       // Wait for auto-submit to complete
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // FAILING: Partial failure handler should be called with failed items
       expect(partialFailureHandler).toHaveBeenCalled()
       expect(partialFailureHandler).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ status: 'failed', error: 'Processing failed' })
+          expect.objectContaining({ status: 'failed', error: 'Processing failed' }),
         ])
       )
     })
@@ -487,8 +494,8 @@ describe('Batch auto-submit error handling', () => {
               provider: 'openai',
               status: 'completed',
               totalItems: items.length,
-              completedItems: results.filter(r => r.status === 'completed').length,
-              failedItems: results.filter(r => r.status === 'failed').length,
+              completedItems: results.filter((r) => r.status === 'completed').length,
+              failedItems: results.filter((r) => r.status === 'failed').length,
               createdAt: new Date(),
             },
             completion: Promise.resolve(results),
@@ -519,7 +526,7 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 4
+        maxItems: 4,
       })
 
       batch.add('prompt 1')
@@ -527,10 +534,12 @@ describe('Batch auto-submit error handling', () => {
       batch.add('prompt 3')
       batch.add('prompt 4') // Triggers auto-submit
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // FAILING: There should be a way to get failure summary
-      const failedItems = (batch as BatchQueue & { getFailedItems?: () => BatchItem[] }).getFailedItems?.()
+      const failedItems = (
+        batch as BatchQueue & { getFailedItems?: () => BatchItem[] }
+      ).getFailedItems?.()
       expect(failedItems).toBeDefined()
       expect(failedItems?.length).toBe(2)
     })
@@ -544,16 +553,17 @@ describe('Batch auto-submit error handling', () => {
       const batch = createBatch({
         provider: 'openai',
         autoSubmit: true,
-        maxItems: 2
+        maxItems: 2,
       })
 
       batch.add('prompt 1')
       batch.add('prompt 2') // Triggers auto-submit
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       // This passes - errors ARE logged
-      expect(consoleErrorSpy).toHaveBeenCalledWith(testError)
+      // Logger calls with format: 'Batch auto-submit failed:', error
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Batch auto-submit failed:', testError)
 
       // But there's no other way to access the error
       // - No error event emitted
@@ -576,7 +586,7 @@ describe('Suggested API improvements', () => {
     const batch = createBatch({
       provider: 'openai',
       autoSubmit: true,
-      maxItems: 5
+      maxItems: 5,
     })
 
     // 1. Event-based error handling
@@ -585,7 +595,9 @@ describe('Suggested API improvements', () => {
 
     // 2. Promise-based error handling
     expect('awaitAutoSubmit' in batch).toBe(true)
-    expect(typeof (batch as unknown as { awaitAutoSubmit?: unknown }).awaitAutoSubmit).toBe('function')
+    expect(typeof (batch as unknown as { awaitAutoSubmit?: unknown }).awaitAutoSubmit).toBe(
+      'function'
+    )
 
     // 3. Error state inspection
     expect('submissionError' in batch).toBe(true)

@@ -27,6 +27,7 @@ import {
   isFlexAvailable,
   type ExecutionTier,
 } from './context.js'
+import { getLogger } from './logger.js'
 import { createBatch, getBatchAdapter, type BatchItem, type BatchResult } from './batch-queue.js'
 import { generateObject, generateText } from './generate.js'
 import type { SimpleSchema } from './schema.js'
@@ -140,7 +141,7 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
         if (isFlexAvailable()) {
           return this._resolveViaFlex()
         }
-        console.warn(
+        getLogger().warn(
           `Flex processing not available for ${getProvider()}, using immediate execution`
         )
         return this._resolveImmediately()
@@ -198,7 +199,7 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
       return this._reconstructResults(results, itemOperationMap)
     } catch {
       // Flex adapter not available, fall back to batch or immediate
-      console.warn(`Flex adapter not available, falling back to batch API`)
+      getLogger().warn(`Flex adapter not available, falling back to batch API`)
       return this._resolveViaBatchAPI()
     }
   }
@@ -217,7 +218,7 @@ export class BatchMapPromise<T> implements PromiseLike<T[]> {
       adapter = getBatchAdapter(provider)
     } catch {
       // Adapter not registered, fall back to immediate execution
-      console.warn(
+      getLogger().warn(
         `Batch adapter for ${provider} not available, falling back to immediate execution`
       )
       return this._resolveImmediately()

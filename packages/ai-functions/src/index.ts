@@ -157,6 +157,14 @@ export {
   resetGlobalRegistry,
   withTemplate,
   type AIProxy,
+  // Also export from new split modules
+  createSchemaFunctions,
+  type AISchemaOptions,
+  type SchemaFunctions,
+  type InferSimpleSchemaResult,
+  createDefinedFunction,
+  convertArgsToJSONSchema,
+  fillTemplate,
 } from './ai.js'
 
 // Also export 'ai' primitive as 'aiPrompt' for convenience
@@ -351,3 +359,14 @@ export {
   type FunctionCallData,
   type DigitalObjectsRegistryOptions,
 } from './digital-objects-registry.js'
+
+// Export configurable logger
+export {
+  configureLogger,
+  getLogger,
+  resetLogger,
+  getLogLevel,
+  setLogLevel,
+  type Logger,
+  type LoggerConfig,
+} from './logger.js'

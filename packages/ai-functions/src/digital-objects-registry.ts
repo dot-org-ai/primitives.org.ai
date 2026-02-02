@@ -30,6 +30,7 @@ import type {
   AgenticFunctionDefinition,
   HumanFunctionDefinition,
 } from './types.js'
+import { getLogger } from './logger.js'
 
 /**
  * Noun names for function types
@@ -447,7 +448,7 @@ export class DigitalObjectsFunctionRegistry implements FunctionRegistry {
 
     // Store in digital-objects asynchronously (fire and forget for sync interface)
     this.setAsync(name, fn).catch((err) => {
-      console.error(`Failed to persist function '${name}' to digital-objects:`, err)
+      getLogger().error(`Failed to persist function '${name}' to digital-objects:`, err)
     })
   }
 
@@ -547,7 +548,7 @@ export class DigitalObjectsFunctionRegistry implements FunctionRegistry {
 
     // Delete from storage asynchronously
     this.deleteAsync(name).catch((err) => {
-      console.error(`Failed to delete function '${name}' from digital-objects:`, err)
+      getLogger().error(`Failed to delete function '${name}' from digital-objects:`, err)
     })
 
     return existed
@@ -581,7 +582,7 @@ export class DigitalObjectsFunctionRegistry implements FunctionRegistry {
 
     // Clear storage asynchronously
     this.clearAsync().catch((err) => {
-      console.error('Failed to clear functions from digital-objects:', err)
+      getLogger().error('Failed to clear functions from digital-objects:', err)
     })
   }
 

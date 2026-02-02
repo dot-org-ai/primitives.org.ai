@@ -65,8 +65,14 @@ export function createChainablePromise<T>(
   executor: (options?: FunctionOptions) => Promise<T>,
   defaultOptions?: FunctionOptions
 ): ChainablePromise<T> {
-  // Create the base promise
+  // Create the base promise with a no-op catch to prevent unhandled rejection
+  // The actual error will still be thrown when .then() or await is called
   const basePromise = executor(defaultOptions)
+
+  // Prevent unhandled rejection warning by attaching a no-op catch
+  // This doesn't swallow the error - it just prevents the warning when the
+  // promise is not immediately awaited (e.g., when chaining options)
+  basePromise.catch(() => {})
 
   // Create a function that accepts options
   const chainable = ((options?: FunctionOptions) => {
@@ -134,9 +140,7 @@ export function withBatch<T, TInput = string>(
 /**
  * Create an async iterable from a streaming generator
  */
-export function createAsyncIterable<T>(
-  items: T[] | (() => AsyncGenerator<T>)
-): AsyncIterable<T> {
+export function createAsyncIterable<T>(items: T[] | (() => AsyncGenerator<T>)): AsyncIterable<T> {
   if (Array.isArray(items)) {
     return {
       async *[Symbol.asyncIterator]() {

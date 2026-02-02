@@ -22,6 +22,7 @@ import {
   type BatchStatus,
 } from '../batch-queue.js'
 import { schema as convertSchema } from '../schema.js'
+import { getLogger } from '../logger.js'
 
 // ============================================================================
 // Types
@@ -229,7 +230,7 @@ async function signRequest(
   } catch {
     // AWS SDK not available - return basic headers
     // In production, the SDK should always be available
-    console.warn(
+    getLogger().warn(
       'AWS SDK not available for request signing. Install @smithy/signature-v4 and @aws-crypto/sha256-js'
     )
     return headers
@@ -351,7 +352,7 @@ const bedrockAdapter: BatchAdapter = {
             headers: await signRequest('POST', url, '', config, 'bedrock'),
           })
         } catch (error) {
-          console.warn('Failed to cancel Bedrock job:', error)
+          getLogger().warn('Failed to cancel Bedrock job:', error)
         }
       }
     }

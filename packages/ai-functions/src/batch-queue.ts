@@ -26,6 +26,7 @@
 
 import type { FunctionOptions } from './template.js'
 import type { SimpleSchema } from './schema.js'
+import { getLogger } from './logger.js'
 
 // ============================================================================
 // Types
@@ -385,8 +386,8 @@ export class BatchQueue {
           // Emit error event
           this.emit('error', error)
 
-          // Log to console (current behavior) and re-throw
-          console.error(error)
+          // Log error and re-throw
+          getLogger().error('Batch auto-submit failed:', error)
           throw error
         })
     }
