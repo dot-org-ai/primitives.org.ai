@@ -1,15 +1,15 @@
-import { RootProvider } from 'fumadocs-ui/provider/next';
-import './global.css';
-import { Inter } from 'next/font/google';
-import type { Metadata } from 'next';
+import { RootProvider } from 'fumadocs-ui/provider/next'
+import './global.css'
+import { Inter } from 'next/font/google'
+import type { Metadata } from 'next'
 
 const inter = Inter({
   subsets: ['latin'],
-});
+})
 
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-  ? new URL(process.env.NEXT_PUBLIC_BASE_URL)
-  : new URL('https://primitives.org.ai');
+const baseUrl = process.env['NEXT_PUBLIC_BASE_URL']
+  ? new URL(process.env['NEXT_PUBLIC_BASE_URL'])
+  : new URL('https://primitives.org.ai')
 
 export const metadata: Metadata = {
   metadataBase: baseUrl,
@@ -17,8 +17,18 @@ export const metadata: Metadata = {
     default: 'Primitives.org.ai',
     template: '%s | Primitives.org.ai',
   },
-  description: 'The fundamental abstractions for building AI-native software. Functions, Databases, Workflows, Agents, Products, Services, and Businesses.',
-  keywords: ['AI', 'primitives', 'functions', 'agents', 'workflows', 'AI-native', 'business-as-code', 'services-as-software'],
+  description:
+    'The fundamental abstractions for building AI-native software. Functions, Databases, Workflows, Agents, Products, Services, and Businesses.',
+  keywords: [
+    'AI',
+    'primitives',
+    'functions',
+    'agents',
+    'workflows',
+    'AI-native',
+    'business-as-code',
+    'services-as-software',
+  ],
   authors: [{ name: 'Primitives.org.ai' }],
   creator: 'Primitives.org.ai',
   openGraph: {
@@ -54,7 +64,7 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-};
+}
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (
@@ -63,5 +73,5 @@ export default function Layout({ children }: LayoutProps<'/'>) {
         <RootProvider>{children}</RootProvider>
       </body>
     </html>
-  );
+  )
 }

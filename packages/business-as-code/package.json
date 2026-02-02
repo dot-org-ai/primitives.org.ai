@@ -22,11 +22,10 @@
   "dependencies": {
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
-    "digital-workers": "workspace:*"
-  },
-  "devDependencies": {
+    "digital-workers": "workspace:*",
     "org.ai": "workspace:*"
   },
+  "devDependencies": {},
   "keywords": [
     "business",
     "logic",

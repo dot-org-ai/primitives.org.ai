@@ -741,7 +741,7 @@ export function resolvePermissions(
   // Search through hierarchy
   for (const dept of org.departments || []) {
     for (const t of dept.teams || []) {
-      const pos = t.positions?.find(p => p.id === positionId)
+      const pos = t.positions?.find((p) => p.id === positionId)
       if (pos) {
         position = pos
         team = t
@@ -755,7 +755,7 @@ export function resolvePermissions(
   // Also check standalone teams
   if (!position) {
     for (const t of org.teams || []) {
-      const pos = t.positions?.find(p => p.id === positionId)
+      const pos = t.positions?.find((p) => p.id === positionId)
       if (pos) {
         position = pos
         team = t
@@ -767,7 +767,7 @@ export function resolvePermissions(
   if (!position) return null
 
   // Find the role
-  const role = org.roles?.find(r => r.id === position.roleId)
+  const role = org.roles?.find((r) => r['id'] === position.roleId)
 
   // Build inheritance chain
   const inheritanceChain: string[] = []
@@ -803,16 +803,16 @@ export function resolvePermissions(
 
   // 4. Role permissions
   if (role?.permissions) {
-    inheritanceChain.push(`role:${role.id}`)
+    inheritanceChain.push(`role:${role['id']}`)
     mergePermissions(permissions, role.permissions)
   }
 
   // 5. Role capabilities
-  if (role?.canApprove) {
-    canApprove.push(...role.canApprove)
+  if (role?.['canApprove']) {
+    canApprove.push(...role['canApprove'])
   }
-  if (role?.canHandle) {
-    canHandle.push(...role.canHandle)
+  if (role?.['canHandle']) {
+    canHandle.push(...role['canHandle'])
   }
 
   // 6. Position-specific permissions
@@ -867,7 +867,7 @@ export function getApprovalChainForRequest(
   requestType: string,
   amount?: number
 ): ApproverSpec[] {
-  const chain = org.approvalChains?.find(c => c.type === requestType && c.active !== false)
+  const chain = org.approvalChains?.find((c) => c.type === requestType && c.active !== false)
   if (!chain) return []
 
   // Find the appropriate level based on amount
@@ -886,19 +886,16 @@ export function getApprovalChainForRequest(
 /**
  * Find manager for a position (follows reportsTo chain)
  */
-export function findManager(
-  org: Organization,
-  positionId: string
-): Position | null {
+export function findManager(org: Organization, positionId: string): Position | null {
   // Find the position
   for (const dept of org.departments || []) {
     for (const team of dept.teams || []) {
-      const position = team.positions?.find(p => p.id === positionId)
+      const position = team.positions?.find((p) => p.id === positionId)
       if (position?.reportsTo) {
         // Find the manager position
         for (const d of org.departments || []) {
           for (const t of d.teams || []) {
-            const manager = t.positions?.find(p => p.id === position.reportsTo)
+            const manager = t.positions?.find((p) => p.id === position.reportsTo)
             if (manager) return manager
           }
         }

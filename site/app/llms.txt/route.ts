@@ -1,14 +1,14 @@
-import { source } from '@/lib/source';
+import { source } from '@/lib/source'
 
-export const revalidate = false;
+export const revalidate = false
 
 export async function GET() {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://primitives.org.ai';
+  const baseUrl = process.env['NEXT_PUBLIC_BASE_URL'] || 'https://primitives.org.ai'
 
-  const pages = source.getPages();
+  const pages = source.getPages()
   const pageList = pages
     .map((page) => `- [${page.data.title}](${baseUrl}${page.url}): ${page.data.description || ''}`)
-    .join('\n');
+    .join('\n')
 
   const content = `# Primitives.org.ai
 
@@ -33,11 +33,11 @@ ${pageList}
 ## Full Documentation
 
 For the complete documentation in a single file, see: ${baseUrl}/llms-full.txt
-`;
+`
 
   return new Response(content, {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
     },
-  });
+  })
 }

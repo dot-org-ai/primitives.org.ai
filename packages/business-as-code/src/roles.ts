@@ -552,8 +552,8 @@ export function createBusinessRole(
 
   return {
     id,
-    name: standard.name || template,
-    type: standard.type || template,
+    name: standard['name'] || template,
+    type: standard['type'] || template,
     ...standard,
     ...overrides,
   } as BusinessRole
@@ -594,24 +594,24 @@ export function hasPermission(role: BusinessRole, resourceType: string, action: 
  * Check if a role can handle a task type
  */
 export function canHandleTask(role: BusinessRole, taskType: string): boolean {
-  if (!role.canHandle) return false
-  return role.canHandle.includes(taskType) || role.canHandle.includes('*')
+  if (!role['canHandle']) return false
+  return role['canHandle'].includes(taskType) || role['canHandle'].includes('*')
 }
 
 /**
  * Check if a role can approve a request type
  */
 export function canApproveRequest(role: BusinessRole, requestType: string): boolean {
-  if (!role.canApprove) return false
-  return role.canApprove.includes(requestType) || role.canApprove.includes('*')
+  if (!role['canApprove']) return false
+  return role['canApprove'].includes(requestType) || role['canApprove'].includes('*')
 }
 
 /**
  * Check if a role can delegate a task type
  */
 export function canDelegateTask(role: BusinessRole, taskType: string): boolean {
-  if (!role.canDelegate) return false
-  return role.canDelegate.includes(taskType) || role.canDelegate.includes('*')
+  if (!role['canDelegate']) return false
+  return role['canDelegate'].includes(taskType) || role['canDelegate'].includes('*')
 }
 
 /**

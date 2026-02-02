@@ -12,11 +12,34 @@
  * @packageDocumentation
  */
 
-// Export all types
+// Export all types from types.ts
 export type * from './types.js'
 
-// Re-export AnyTool as a convenience value export
-export type { AnyTool, Tool, ToolCategory, ToolSubcategory, ToolRegistry } from './types.js'
+// Re-export commonly used types explicitly for better discoverability
+// Core types
+export type {
+  Tool,
+  AnyTool,
+  ToolCategory,
+  ToolSubcategory,
+  // Execution types
+  ToolResult,
+  ToolContext,
+  // Configuration types
+  ToolParameter,
+  ToolOutput,
+  ToolPermission,
+  ToolAudience,
+  // Registry types
+  ToolRegistry,
+  ToolQuery,
+  // Builder types
+  DefineToolOptions,
+  // MCP compatibility
+  MCPTool,
+  MCPToolCall,
+  MCPToolResult,
+} from './types.js'
 
 // Export entity type definitions (Nouns for digital tools)
 export {

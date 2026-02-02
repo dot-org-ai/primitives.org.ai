@@ -7,9 +7,10 @@
  */
 
 /**
- * RoleType - Standard business role types
+ * BusinessRoleType - Standard business role types
+ * Named to avoid conflict with RoleType interface from @org.ai/types
  */
-export type RoleType =
+export type BusinessRoleType =
   // Executive
   | 'ceo'
   | 'cto'
@@ -65,7 +66,7 @@ export interface Role {
 
   // Business context (from business-as-code)
   /** Role type classification */
-  type?: RoleType | string
+  type?: BusinessRoleType | string
   /** Department this role belongs to */
   department?: string
   /** List of responsibilities */
@@ -121,7 +122,7 @@ export interface CreateRoleInput {
   permissions?: string[]
   tools?: string[]
   outputs?: string[]
-  type?: RoleType | string
+  type?: BusinessRoleType | string
   department?: string
   responsibilities?: string[]
   canHandle?: string[]

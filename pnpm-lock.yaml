@@ -122,6 +122,9 @@ importers:
       '@ai-sdk/amazon-bedrock':
         specifier: ^3.0.0
         version: 3.0.68(zod@3.25.76)
+      '@org.ai/types':
+        specifier: workspace:*
+        version: link:../types
       ai:
         specifier: ^6.0.0
         version: 6.0.67(zod@3.25.76)
@@ -306,6 +309,9 @@ importers:
       '@org.ai/types':
         specifier: workspace:*
         version: link:../types
+      digital-objects:
+        specifier: workspace:*
+        version: link:../digital-objects
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.0
@@ -362,6 +368,7 @@ importers:
       digital-workers:
         specifier: workspace:*
         version: link:../digital-workers
+    devDependencies:
       org.ai:
         specifier: workspace:*
         version: link:../org.ai
@@ -517,6 +524,9 @@ importers:
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
+      business-as-code:
+        specifier: workspace:*
+        version: link:../business-as-code
       digital-workers:
         specifier: workspace:*
         version: link:../digital-workers
