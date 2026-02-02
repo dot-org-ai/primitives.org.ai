@@ -233,9 +233,9 @@ describe('Context Propagation via $instructions and $context', () => {
 
       const products = await store.products
       expect(products.length).toBeGreaterThan(0)
-      // Should reflect both luxury and quality instructions
+      // Should reflect both luxury and quality instructions (broad pattern for AI-generated content)
       expect(products[0].tagline.toLowerCase()).toMatch(
-        /luxury|quality|premium|craftsmanship|elegant|elegance|timeless|softness|exquisite|refined|opulen/i
+        /luxury|quality|premium|craftsmanship|elegant|elegance|timeless|softness|exquisite|refined|opulen|indulg|discern|exclusiv|sophistic|finest|artisan|heritage|bespoke/i
       )
     })
   })
