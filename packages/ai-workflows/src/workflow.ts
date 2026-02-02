@@ -37,6 +37,9 @@ import {
   getTimerIdsForWorkflow,
   registerProcessCleanup,
 } from './timer-registry.js'
+import { createCronJob, stopCronJob, type CronJob } from './cron-scheduler.js'
+import { toCron } from './every.js'
+import { getLogger } from './logger.js'
 
 /**
  * Well-known cron patterns for common schedules
@@ -189,6 +192,8 @@ export function Workflow(
 
   // Schedule timers (local reference, actual timers are in registry)
   let scheduleTimers: NodeJS.Timeout[] = []
+  // Cron jobs for cron/natural schedules
+  const cronJobs: CronJob[] = []
 
   /**
    * Add to history
@@ -311,7 +316,7 @@ export function Workflow(
   const deliverEvent = async (event: string, data: unknown): Promise<void> => {
     const parsed = parseEvent(event)
     if (!parsed) {
-      console.warn(`Invalid event format: ${event}. Expected Noun.event`)
+      getLogger().warn(`Invalid event format: ${event}. Expected Noun.event`)
       return
     }
 
@@ -326,7 +331,7 @@ export function Workflow(
         try {
           await handler(data, $)
         } catch (error) {
-          console.error(`Error in handler for ${event}:`, error)
+          getLogger().error(`Error in handler for ${event}:`, error)
         }
       })
     )
@@ -370,7 +375,7 @@ export function Workflow(
     } catch (error) {
       if (durable) {
         // Could implement retry logic here
-        console.error(`[workflow] Durable action failed for ${event}:`, error)
+        getLogger().error(`[workflow] Durable action failed for ${event}:`, error)
       }
       throw error
     }
@@ -397,13 +402,13 @@ export function Workflow(
       // Record to database if connected (durable) - fire async
       if (options.db) {
         options.db.recordEvent(event, { ...(data as object), _eventId: eventId }).catch((err) => {
-          console.error(`[workflow] Failed to record event ${event}:`, err)
+          getLogger().error(`[workflow] Failed to record event ${event}:`, err)
         })
       }
 
       // Deliver event asynchronously
       deliverEvent(event, { ...(data as object), _eventId: eventId }).catch((err) => {
-        console.error(`[workflow] Failed to deliver event ${event}:`, err)
+        getLogger().error(`[workflow] Failed to deliver event ${event}:`, err)
       })
 
       return eventId
@@ -452,7 +457,7 @@ export function Workflow(
 
     log(message: string, data?: unknown): void {
       addHistory({ type: 'action', name: 'log', data: { message, data } })
-      console.log(`[workflow] ${message}`, data ?? '')
+      getLogger().log(`[workflow] ${message}`, data ?? '')
     },
 
     ...(options.db !== undefined && { db: options.db }),
@@ -488,24 +493,74 @@ export function Workflow(
         case 'week':
           ms = (interval.value ?? 1) * 7 * 24 * 60 * 60 * 1000
           break
-        case 'cron':
-        case 'natural':
-          // Cron/natural need special handling - throw error to avoid silent failures
-          throw new Error(
-            `Cron scheduling not yet implemented: "${
-              interval.type === 'cron' ? interval.expression : interval.description
-            }". ` +
-              `Use interval-based patterns like $.every.seconds(30), $.every.minutes(5), or $.every.hours(1) instead.`
+        case 'cron': {
+          // Schedule using cron expression
+          const cronExpression = interval.expression
+          const job = createCronJob(
+            cronExpression,
+            async () => {
+              try {
+                addHistory({ type: 'schedule', name: interval.natural ?? `cron:${cronExpression}` })
+                await handler($)
+              } catch (error) {
+                getLogger().error('[workflow] Cron schedule handler error:', error)
+              }
+            },
+            {
+              id: `${workflowId}-cron-${scheduleRegistry.indexOf(schedule)}`,
+              onError: (error) => {
+                getLogger().error('[workflow] Cron job error:', error)
+              },
+            }
           )
+          cronJobs.push(job)
+          break
+        }
+        case 'natural': {
+          // Convert natural language to cron using toCron()
+          // This may be async if AI converter is set
+          const naturalDesc = interval.description
+          toCron(naturalDesc)
+            .then((cronExpression) => {
+              const job = createCronJob(
+                cronExpression,
+                async () => {
+                  try {
+                    addHistory({ type: 'schedule', name: naturalDesc })
+                    await handler($)
+                  } catch (error) {
+                    getLogger().error('[workflow] Natural schedule handler error:', error)
+                  }
+                },
+                {
+                  id: `${workflowId}-natural-${scheduleRegistry.indexOf(schedule)}`,
+                  onError: (error) => {
+                    getLogger().error('[workflow] Natural schedule job error:', error)
+                  },
+                }
+              )
+              cronJobs.push(job)
+            })
+            .catch((error) => {
+              getLogger().error(
+                `[workflow] Failed to parse natural schedule "${naturalDesc}":`,
+                error
+              )
+            })
+          break
+        }
       }
 
       if (ms > 0) {
+        // Get schedule name based on interval type
+        const scheduleName =
+          'natural' in interval && interval.natural ? interval.natural : interval.type
         const timer = setInterval(async () => {
           try {
-            addHistory({ type: 'schedule', name: interval.natural ?? interval.type })
+            addHistory({ type: 'schedule', name: scheduleName })
             await handler($)
           } catch (error) {
-            console.error('[workflow] Schedule handler error:', error)
+            getLogger().error('[workflow] Schedule handler error:', error)
           }
         }, ms)
         scheduleTimers.push(timer)
@@ -523,6 +578,11 @@ export function Workflow(
     clearTimersForWorkflow(workflowId)
     // Clear local references
     scheduleTimers = []
+    // Stop all cron jobs
+    for (const job of cronJobs) {
+      stopCronJob(job)
+    }
+    cronJobs.length = 0
   }
 
   const instance: WorkflowInstance = {
@@ -544,14 +604,14 @@ export function Workflow(
     },
 
     async start(): Promise<void> {
-      console.log(
+      getLogger().log(
         `[workflow] Starting with ${eventRegistry.length} event handlers and ${scheduleRegistry.length} schedules`
       )
       await startSchedules()
     },
 
     async stop(): Promise<void> {
-      console.log('[workflow] Stopping')
+      getLogger().log('[workflow] Stopping')
       cleanup()
     },
 
@@ -568,7 +628,7 @@ export function Workflow(
     },
 
     get timerCount(): number {
-      return getTimerIdsForWorkflow(workflowId).length
+      return getTimerIdsForWorkflow(workflowId).length + cronJobs.filter((j) => !j.stopped).length
     },
 
     getTimerIds(): string[] {
@@ -654,7 +714,7 @@ export function createTestContext(): WorkflowContext & {
     },
 
     log(message: string, data?: unknown) {
-      console.log(`[test] ${message}`, data ?? '')
+      getLogger().log(`[test] ${message}`, data ?? '')
     },
   }
 

@@ -10,8 +10,11 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { Workflow } from '../src/workflow.js'
 import { clearEventHandlers } from '../src/on.js'
 import { clearScheduleHandlers } from '../src/every.js'
-// Import timer registry to ensure global functions are registered
-import { clearAllTimers } from '../src/timer-registry.js'
+// Import timer registry - global functions require explicit opt-in
+import { clearAllTimers, enableGlobalTimerRegistry } from '../src/timer-registry.js'
+
+// Enable global timer registry for tests that use global.getActiveWorkflowTimerCount, etc.
+enableGlobalTimerRegistry()
 
 describe('Schedule Timer Cleanup', () => {
   beforeEach(() => {
@@ -33,7 +36,7 @@ describe('Schedule Timer Cleanup', () => {
 
       // Create workflow in a scope and let it go out of scope without stopping
       function createAndAbandonWorkflow() {
-        const workflow = Workflow($ => {
+        const workflow = Workflow(($) => {
           $.every.seconds(1)(handler)
         })
         // Start the workflow - this creates the timer
@@ -60,11 +63,11 @@ describe('Schedule Timer Cleanup', () => {
       const handler1 = vi.fn()
       const handler2 = vi.fn()
 
-      const workflow1 = Workflow($ => {
+      const workflow1 = Workflow(($) => {
         $.every.seconds(1)(handler1)
       })
 
-      const workflow2 = Workflow($ => {
+      const workflow2 = Workflow(($) => {
         $.every.seconds(1)(handler2)
       })
 
@@ -76,8 +79,8 @@ describe('Schedule Timer Cleanup', () => {
       const getActiveTimerCount = () => {
         // @ts-expect-error - This function doesn't exist yet
         return typeof global.getActiveWorkflowTimerCount === 'function'
-          // @ts-expect-error - This function doesn't exist yet
-          ? global.getActiveWorkflowTimerCount()
+          ? // @ts-expect-error - This function doesn't exist yet
+            global.getActiveWorkflowTimerCount()
           : -1 // Return -1 to indicate the function doesn't exist
       }
 
@@ -95,10 +98,10 @@ describe('Schedule Timer Cleanup', () => {
       const handler = vi.fn()
 
       // Create multiple workflows
-      const workflow1 = Workflow($ => {
+      const workflow1 = Workflow(($) => {
         $.every.seconds(1)(handler)
       })
-      const workflow2 = Workflow($ => {
+      const workflow2 = Workflow(($) => {
         $.every.seconds(2)(handler)
       })
 
@@ -137,7 +140,7 @@ describe('Schedule Timer Cleanup', () => {
       // Test that a destroy() method exists and cleans up timers
       const handler = vi.fn()
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(handler)
       })
 
@@ -151,7 +154,7 @@ describe('Schedule Timer Cleanup', () => {
       // This API doesn't exist yet - only stop() exists
       const destroyWorkflow = () => {
         if ('destroy' in workflow && typeof workflow.destroy === 'function') {
-          (workflow as { destroy: () => Promise<void> }).destroy()
+          ;(workflow as { destroy: () => Promise<void> }).destroy()
           return true
         }
         return false
@@ -170,7 +173,7 @@ describe('Schedule Timer Cleanup', () => {
       const iterations = 10
 
       for (let i = 0; i < iterations; i++) {
-        const workflow = Workflow($ => {
+        const workflow = Workflow(($) => {
           $.every.seconds(1)(handler)
         })
         await workflow.start()
@@ -191,7 +194,7 @@ describe('Schedule Timer Cleanup', () => {
       // Test using Symbol.dispose for automatic cleanup (requires proper implementation)
       const handler = vi.fn()
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(handler)
       })
 
@@ -206,9 +209,9 @@ describe('Schedule Timer Cleanup', () => {
       // If dispose exists, calling it should stop all timers
       if (hasDispose) {
         if (Symbol.dispose in workflow) {
-          (workflow as { [Symbol.dispose]: () => void })[Symbol.dispose]()
+          ;(workflow as { [Symbol.dispose]: () => void })[Symbol.dispose]()
         } else if ('dispose' in workflow) {
-          (workflow as { dispose: () => void }).dispose()
+          ;(workflow as { dispose: () => void }).dispose()
         }
 
         handler.mockClear()
@@ -220,7 +223,7 @@ describe('Schedule Timer Cleanup', () => {
 
   describe('Timer Registration Tracking', () => {
     it('should expose the number of registered timers on a workflow', async () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(() => {})
         $.every.seconds(2)(() => {})
         $.every.seconds(3)(() => {})
@@ -233,7 +236,10 @@ describe('Schedule Timer Cleanup', () => {
         if ('timerCount' in workflow) {
           return (workflow as { timerCount: number }).timerCount
         }
-        if ('getTimerCount' in workflow && typeof (workflow as { getTimerCount: () => number }).getTimerCount === 'function') {
+        if (
+          'getTimerCount' in workflow &&
+          typeof (workflow as { getTimerCount: () => number }).getTimerCount === 'function'
+        ) {
           return (workflow as { getTimerCount: () => number }).getTimerCount()
         }
         return -1
@@ -248,7 +254,7 @@ describe('Schedule Timer Cleanup', () => {
     })
 
     it('should decrement timer count when stop is called', async () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(() => {})
         $.every.seconds(2)(() => {})
       })
@@ -290,7 +296,7 @@ describe('Schedule Timer Cleanup', () => {
     it('should allow clearing specific workflow timers from registry', async () => {
       const handler = vi.fn()
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(handler)
       })
 
@@ -298,7 +304,10 @@ describe('Schedule Timer Cleanup', () => {
 
       // There should be a way to get the workflow's timer IDs
       const getTimerIds = () => {
-        if ('getTimerIds' in workflow && typeof (workflow as { getTimerIds: () => string[] }).getTimerIds === 'function') {
+        if (
+          'getTimerIds' in workflow &&
+          typeof (workflow as { getTimerIds: () => string[] }).getTimerIds === 'function'
+        ) {
           return (workflow as { getTimerIds: () => string[] }).getTimerIds()
         }
         return null
@@ -321,7 +330,7 @@ describe('Schedule Timer Cleanup', () => {
       // Note: The cleanup handler may be registered at module import time,
       // so we just verify that listeners exist (not that new ones are added)
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(() => {})
       })
 

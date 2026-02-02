@@ -9,6 +9,7 @@
 import { getEventHandlers } from './on.js'
 import { createWorkflowContext } from './context.js'
 import { parseEvent } from './workflow.js'
+import { getLogger } from './logger.js'
 
 /**
  * Event bus for managing event delivery
@@ -48,14 +49,12 @@ class EventBus {
   private async deliver(event: string, data: unknown): Promise<void> {
     const parsed = parseEvent(event)
     if (!parsed) {
-      console.warn(`Invalid event format: ${event}. Expected Noun.event`)
+      getLogger().warn(`Invalid event format: ${event}. Expected Noun.event`)
       return
     }
 
     const handlers = getEventHandlers()
-    const matching = handlers.filter(
-      h => h.noun === parsed.noun && h.event === parsed.event
-    )
+    const matching = handlers.filter((h) => h.noun === parsed.noun && h.event === parsed.event)
 
     if (matching.length === 0) {
       // No handlers registered - that's okay, event is just not handled
@@ -71,7 +70,7 @@ class EventBus {
         try {
           await handler(data, ctx)
         } catch (error) {
-          console.error(`Error in handler for ${event}:`, error)
+          getLogger().error(`Error in handler for ${event}:`, error)
         }
       })
     )

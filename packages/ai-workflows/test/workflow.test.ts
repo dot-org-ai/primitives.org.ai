@@ -16,7 +16,7 @@ describe('Workflow - unified $ API', () => {
 
   describe('Workflow()', () => {
     it('should create a workflow with $ context', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         // Just accessing $ to verify it works
         expect($).toBeDefined()
         expect($.on).toBeDefined()
@@ -36,7 +36,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should capture event handlers registered via $.on', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.on.Customer.created(() => {})
         $.on.Order.completed(() => {})
       })
@@ -49,7 +49,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should capture schedule handlers registered via $.every', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.hour(() => {})
         $.every.Monday.at9am(() => {})
       })
@@ -58,7 +58,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should capture function source code', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.on.Test.event(async (data, ctx) => {
           ctx.log('Test event', data)
         })
@@ -73,7 +73,7 @@ describe('Workflow - unified $ API', () => {
     it('should deliver events to registered handlers', async () => {
       const handler = vi.fn()
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.on.Customer.created(handler)
       })
 
@@ -82,7 +82,7 @@ describe('Workflow - unified $ API', () => {
 
       expect(handler).toHaveBeenCalledTimes(1)
       expect(handler).toHaveBeenCalledWith(
-        { id: '123', name: 'John' },
+        expect.objectContaining({ id: '123', name: 'John' }),
         expect.objectContaining({
           send: expect.any(Function),
           log: expect.any(Function),
@@ -93,7 +93,7 @@ describe('Workflow - unified $ API', () => {
     it('should allow chained event sending from handlers', async () => {
       const welcomeHandler = vi.fn()
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.on.Customer.created(async (customer, $) => {
           await $.send('Email.welcome', { to: customer.email })
         })
@@ -105,13 +105,13 @@ describe('Workflow - unified $ API', () => {
       await workflow.send('Customer.created', { name: 'John', email: 'john@example.com' })
 
       expect(welcomeHandler).toHaveBeenCalledWith(
-        { to: 'john@example.com' },
+        expect.objectContaining({ to: 'john@example.com' }),
         expect.anything()
       )
     })
 
     it('should track events in state history', async () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.on.Test.event(() => {})
       })
 
@@ -129,7 +129,7 @@ describe('Workflow - unified $ API', () => {
     it('should trigger schedule handlers', async () => {
       const handler = vi.fn()
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(handler)
       })
 
@@ -147,7 +147,7 @@ describe('Workflow - unified $ API', () => {
     it('should stop schedule handlers on stop', async () => {
       const handler = vi.fn()
 
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.seconds(1)(handler)
       })
 
@@ -161,7 +161,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should support $.set and $.get for context data', async () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.on.Test.set(async (data, $) => {
           $.set('value', data.value)
         })
@@ -180,10 +180,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should use initial context from options', () => {
-      const workflow = Workflow(
-        $ => {},
-        { context: { counter: 100 } }
-      )
+      const workflow = Workflow(($) => {}, { context: { counter: 100 } })
 
       expect(workflow.state.context.counter).toBe(100)
     })
@@ -225,8 +222,14 @@ describe('Workflow - unified $ API', () => {
       await $.send('Test.event2', { b: 2 })
 
       expect($.emittedEvents).toHaveLength(2)
-      expect($.emittedEvents[0]).toEqual({ event: 'Test.event1', data: { a: 1 } })
-      expect($.emittedEvents[1]).toEqual({ event: 'Test.event2', data: { b: 2 } })
+      expect($.emittedEvents[0]).toEqual({
+        event: 'Test.event1',
+        data: expect.objectContaining({ a: 1 }),
+      })
+      expect($.emittedEvents[1]).toEqual({
+        event: 'Test.event2',
+        data: expect.objectContaining({ b: 2 }),
+      })
     })
 
     it('should support get/set', () => {
@@ -239,7 +242,7 @@ describe('Workflow - unified $ API', () => {
 
   describe('$.every patterns', () => {
     it('should support $.every.hour', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.hour(() => {})
       })
 
@@ -251,7 +254,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should support $.every.Monday.at9am', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.Monday.at9am(() => {})
       })
 
@@ -263,7 +266,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should support $.every.minutes(30)', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every.minutes(30)(() => {})
       })
 
@@ -275,7 +278,7 @@ describe('Workflow - unified $ API', () => {
     })
 
     it('should support $.every("natural language")', () => {
-      const workflow = Workflow($ => {
+      const workflow = Workflow(($) => {
         $.every('first Monday of the month', () => {})
       })
 

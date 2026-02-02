@@ -11,6 +11,7 @@ import type {
   EveryProxyTarget,
   ScheduleHandler,
 } from './types.js'
+import { getLogger } from './logger.js'
 
 /**
  * Event bus interface (imported from send.ts to avoid circular dependency)
@@ -77,7 +78,7 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
       addHistory({ type: 'event', name: event, data })
       // Fire async but don't await - guaranteed delivery via event bus
       eventBus.emit(event, { ...(data as object), _eventId: eventId }).catch((err) => {
-        console.error(`[workflow] Failed to send event ${event}:`, err)
+        getLogger().error(`[workflow] Failed to send event ${event}:`, err)
       })
       return eventId
     },
@@ -114,7 +115,7 @@ export function createWorkflowContext(eventBus: EventBusLike): WorkflowContext {
 
     log(message: string, data?: unknown): void {
       addHistory({ type: 'action', name: 'log', data: { message, data } })
-      console.log(`[workflow] ${message}`, data ?? '')
+      getLogger().log(`[workflow] ${message}`, data ?? '')
     },
   }
 }

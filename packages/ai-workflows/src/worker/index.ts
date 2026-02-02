@@ -21,6 +21,15 @@
  * - **WorkflowStateAdapter**: Persistent storage for workflow state using
  *   ai-database, with optimistic locking, checkpoints, and snapshots
  *
+ * - **TopologicalExecutor**: Parallel step execution based on dependency graph.
+ *   Executes steps in topological order, running independent steps concurrently.
+ *
+ * - **DurableGraph**: Higher-level API for building and executing workflow
+ *   step graphs with durable semantics.
+ *
+ * - **Graph Utilities**: Re-exports from main package including topologicalSort,
+ *   getExecutionLevels, DependencyGraph, and related types for convenience.
+ *
  * @example
  * ```typescript
  * import {
@@ -146,6 +155,51 @@ export {
   type SnapshotInfo,
   type DatabaseConnection,
 } from './state-adapter.js'
+
+// =============================================================================
+// TopologicalExecutor & DurableGraph - Parallel step execution
+// =============================================================================
+
+export {
+  TopologicalExecutor,
+  DurableGraph,
+  createExecutor,
+  createGraph,
+  type StepExecutor,
+  type StepDefinition as GraphStepDefinition,
+  type ExecutionContext as GraphExecutionContext,
+  type ProgressCallback,
+  type ExecutionResult,
+  type ExecutorConfig,
+} from './topological-executor.js'
+
+// =============================================================================
+// Graph Utilities - Re-export from main package for convenience
+// =============================================================================
+
+export {
+  topologicalSort,
+  topologicalSortKahn,
+  topologicalSortDFS,
+  getExecutionLevels,
+  CycleDetectedError,
+  MissingNodeError,
+  type SortableNode,
+  type ExecutionLevel,
+  type TopologicalSortOptions,
+  type TopologicalSortResult,
+} from '../graph/topological-sort.js'
+
+export {
+  DependencyGraph,
+  CircularDependencyError,
+  MissingDependencyError,
+  type GraphNode,
+  type ParallelGroup,
+  type GraphJSON,
+  type DependencyConfig,
+  type DependencyType,
+} from '../dependency-graph.js'
 
 // =============================================================================
 // Types - Re-export commonly needed types from main package

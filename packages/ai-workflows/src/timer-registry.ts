@@ -110,9 +110,10 @@ export const timerRegistry = {
   getAll: () => Array.from(activeTimers.entries()),
 }
 
-// Register global cleanup functions immediately on module load
-// Register on both globalThis and global for maximum compatibility
+// Global registration is opt-in to avoid namespace pollution
 declare const global: typeof globalThis
+
+let globalRegistrationEnabled = false
 
 function registerGlobalFunctions(target: typeof globalThis) {
   ;(target as unknown as Record<string, unknown>)['getActiveWorkflowTimerCount'] =
@@ -120,14 +121,46 @@ function registerGlobalFunctions(target: typeof globalThis) {
   ;(target as unknown as Record<string, unknown>)['clearAllWorkflowTimers'] = clearAllTimers
 }
 
-// Register on globalThis (standard)
-if (typeof globalThis !== 'undefined') {
-  registerGlobalFunctions(globalThis)
+/**
+ * Enable global timer registry functions.
+ *
+ * This opt-in function registers `getActiveWorkflowTimerCount` and `clearAllWorkflowTimers`
+ * on the global scope for debugging and cleanup purposes.
+ *
+ * Call this function explicitly if you need global access to timer management:
+ *
+ * @example
+ * ```ts
+ * import { enableGlobalTimerRegistry } from 'ai-workflows'
+ *
+ * // Enable global registration
+ * enableGlobalTimerRegistry()
+ *
+ * // Now these are available globally:
+ * // globalThis.getActiveWorkflowTimerCount()
+ * // globalThis.clearAllWorkflowTimers()
+ * ```
+ */
+export function enableGlobalTimerRegistry(): void {
+  if (globalRegistrationEnabled) return
+  globalRegistrationEnabled = true
+
+  // Register on globalThis (standard)
+  if (typeof globalThis !== 'undefined') {
+    registerGlobalFunctions(globalThis)
+  }
+
+  // Also register on global (Node.js specific, used in some test environments)
+  if (typeof global !== 'undefined' && global !== globalThis) {
+    registerGlobalFunctions(global)
+  }
 }
 
-// Also register on global (Node.js specific, used in some test environments)
-if (typeof global !== 'undefined' && global !== globalThis) {
-  registerGlobalFunctions(global)
+/**
+ * Check if global timer registry is enabled
+ */
+export function isGlobalTimerRegistryEnabled(): boolean {
+  return globalRegistrationEnabled
 }
 
 // Register process exit handlers for cleanup
