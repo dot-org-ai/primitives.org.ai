@@ -7,15 +7,17 @@
  * - Executing a single batch query for related entities
  * - Hydrating results with loaded entities
  *
- * Currently executeBatchLoads() returns empty (placeholder).
- *
  * @packageDocumentation
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 
-// TODO: Advanced feature tests - needs investigation
+/** Generic entity record for test assertions */
+interface TestRecord {
+  [key: string]: unknown
+}
+
 describe('Batch Relationship Loading', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())
@@ -59,13 +61,12 @@ describe('Batch Relationship Loading', () => {
       fetchCount = 0
 
       const posts = await trackedDb.Post.list()
-      const enriched = await posts.map((p: any) => ({
+      const enriched = await posts.map((p: TestRecord) => ({
         title: p.title,
         authorName: p.author.name, // Should batch load authors
       }))
 
-      // Should have made 1 batch call, not 3 individual calls
-      // Currently this will fail because executeBatchLoads returns empty
+      // Should batch load authors (1 batch call, not 3 individual calls)
       expect(enriched.length).toBe(3)
       expect(enriched[0].authorName).toBe('John')
       expect(enriched[1].authorName).toBe('John')
@@ -90,7 +91,7 @@ describe('Batch Relationship Loading', () => {
       await db.Order.create({ number: 'ORD-2', customer: customer.$id, product: product.$id })
 
       const orders = await db.Order.list()
-      const enriched = await orders.map((o: any) => ({
+      const enriched = await orders.map((o: TestRecord) => ({
         number: o.number,
         customerName: o.customer.name,
         productName: o.product.name,
@@ -113,14 +114,14 @@ describe('Batch Relationship Loading', () => {
       await db.Task.create({ title: 'Task 2', assignee: user.$id })
 
       const tasks = await db.Task.list()
-      const enriched = await tasks.map((t: any) => ({
+      const enriched = await tasks.map((t: TestRecord) => ({
         title: t.title,
         assigneeName: t.assignee?.name ?? 'Unassigned',
       }))
 
       expect(enriched.length).toBe(2)
       // One should have assignee, one should be unassigned
-      const names = enriched.map((e: any) => e.assigneeName)
+      const names = enriched.map((e: TestRecord) => e.assigneeName)
       expect(names).toContain('Bob')
       expect(names).toContain('Unassigned')
     })
@@ -137,7 +138,7 @@ describe('Batch Relationship Loading', () => {
       await db.Lead.create({ name: 'John', company: company.$id, score: 85 })
 
       const leads = db.Lead.list()
-      const projected = leads.map((l: any) => ({ name: l.name, company: l.company }))
+      const projected = leads.map((l: TestRecord) => ({ name: l.name, company: l.company }))
 
       // Should only fetch name and company, not score
       // Access the $accessedFields property to verify tracking
@@ -158,7 +159,7 @@ describe('Batch Relationship Loading', () => {
       await db.Invoice.create({ number: 'INV-1', customer: customer.$id })
 
       const invoices = await db.Invoice.list()
-      const enriched = await invoices.map((inv: any) => ({
+      const enriched = await invoices.map((inv: TestRecord) => ({
         number: inv.number,
         customerCity: inv.customer.address.city, // Nested access
       }))
@@ -190,7 +191,7 @@ describe('Batch Relationship Loading', () => {
       // Without batch loading: 100 queries for authors
       // With batch loading: 1 batch query for unique author IDs
       const comments = await db.Comment.list()
-      const enriched = await comments.map((c: any) => ({
+      const enriched = await comments.map((c: TestRecord) => ({
         text: c.text,
         authorName: c.author.name,
       }))
@@ -216,7 +217,7 @@ describe('Batch Relationship Loading', () => {
       }
 
       const articles = await db.Article.list()
-      const enriched = await articles.map((a: any) => ({
+      const enriched = await articles.map((a: TestRecord) => ({
         title: a.title,
         categoryName: a.category.name,
       }))
@@ -243,14 +244,14 @@ describe('Batch Relationship Loading', () => {
       await db.Project.create({ name: 'Project B', members: [user1.$id] })
 
       const projects = await db.Project.list()
-      const enriched = await projects.map((p: any) => ({
+      const enriched = await projects.map((p: TestRecord) => ({
         name: p.name,
-        memberNames: p.members.map((m: any) => m.name),
+        memberNames: p.members.map((m: TestRecord) => m.name),
       }))
 
       expect(enriched.length).toBe(2)
       // Project A should have both members
-      const projectA = enriched.find((p: any) => p.name === 'Project A')
+      const projectA = enriched.find((p: TestRecord) => p.name === 'Project A')
       expect(projectA?.memberNames).toContain('Alice')
       expect(projectA?.memberNames).toContain('Bob')
     })
@@ -266,14 +267,14 @@ describe('Batch Relationship Loading', () => {
       await db.Team.create({ name: 'Small Team', members: [person.$id] })
 
       const teams = await db.Team.list()
-      const enriched = await teams.map((t: any) => ({
+      const enriched = await teams.map((t: TestRecord) => ({
         name: t.name,
         memberCount: t.members.length,
       }))
 
       expect(enriched.length).toBe(2)
-      const emptyTeam = enriched.find((t: any) => t.name === 'Empty Team')
-      const smallTeam = enriched.find((t: any) => t.name === 'Small Team')
+      const emptyTeam = enriched.find((t: TestRecord) => t.name === 'Empty Team')
+      const smallTeam = enriched.find((t: TestRecord) => t.name === 'Small Team')
       expect(emptyTeam?.memberCount).toBe(0)
       expect(smallTeam?.memberCount).toBe(1)
     })
@@ -290,7 +291,7 @@ describe('Batch Relationship Loading', () => {
       await db.Reference.create({ name: 'Broken', target: 'nonexistent-id' })
 
       const refs = await db.Reference.list()
-      const enriched = await refs.map((r: any) => ({
+      const enriched = await refs.map((r: TestRecord) => ({
         name: r.name,
         targetValue: r.target?.value ?? 'NOT FOUND',
       }))
@@ -311,7 +312,7 @@ describe('Batch Relationship Loading', () => {
 
       // Map with a throwing callback
       await expect(
-        items.map((item: any) => {
+        items.map((item: TestRecord) => {
           if (item.name === 'Item 2') {
             throw new Error('Test error')
           }
@@ -336,14 +337,14 @@ describe('Batch Relationship Loading', () => {
       await db.Sale.create({ amount: 200, rep: rep1.$id })
 
       const sales = db.Sale.list()
-      const bigSales = sales.filter((s: any) => s.amount >= 100)
-      const enriched = await bigSales.map((s: any) => ({
+      const bigSales = sales.filter((s: TestRecord) => s.amount >= 100)
+      const enriched = await bigSales.map((s: TestRecord) => ({
         amount: s.amount,
         repName: s.rep.name,
       }))
 
       expect(enriched.length).toBe(2) // Only 100 and 200 sales
-      expect(enriched.every((s: any) => s.repName === 'Alice')).toBe(true)
+      expect(enriched.every((s: TestRecord) => s.repName === 'Alice')).toBe(true)
     })
 
     it('should work with limit before map', async () => {
@@ -359,13 +360,13 @@ describe('Batch Relationship Loading', () => {
 
       const logs = db.Log.list()
       const limited = logs.limit(3)
-      const enriched = await limited.map((l: any) => ({
+      const enriched = await limited.map((l: TestRecord) => ({
         message: l.message,
         userName: l.user.name,
       }))
 
       expect(enriched.length).toBe(3)
-      expect(enriched.every((l: any) => l.userName === 'Admin')).toBe(true)
+      expect(enriched.every((l: TestRecord) => l.userName === 'Admin')).toBe(true)
     })
   })
 })

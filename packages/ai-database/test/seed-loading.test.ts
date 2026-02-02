@@ -29,7 +29,6 @@ const MOCK_CSV_DATA = `id,name,category
 2,Banana,Fruit
 3,Carrot,Vegetable`
 
-// TODO: Advanced feature tests - needs investigation
 describe('$seed Reference Data Loading', () => {
   let originalFetch: typeof globalThis.fetch
 

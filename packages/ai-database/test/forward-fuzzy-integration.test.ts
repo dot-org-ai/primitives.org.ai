@@ -206,10 +206,7 @@ describe('Forward Fuzzy (~>) Semantic Search', () => {
   })
 
   describe('array forward fuzzy fields', () => {
-    // Note: This test is skipped due to edge ID validation issues with colons
-    // The array ~> syntax generates edge IDs like "Team:members:team1:person2"
-    // which fail validation. This is a known limitation to be fixed separately.
-    it.skip('should find multiple matches for array ~> fields', async () => {
+    it('should find multiple matches for array ~> fields', async () => {
       const schema = {
         Team: {
           name: 'string',

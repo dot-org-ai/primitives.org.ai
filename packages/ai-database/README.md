@@ -587,6 +587,112 @@ DATABASE_URL=:memory:          # in-memory
 
 ---
 
+## Cloudflare Workers Deployment
+
+ai-database provides dedicated exports for Cloudflare Workers deployment and RPC client consumption.
+
+### /worker Export
+
+Use the `/worker` export when deploying ai-database as a Cloudflare Worker service:
+
+```typescript
+// worker.ts - the ai-database service
+import { DatabaseWorker, DatabaseDO } from 'ai-database/worker'
+
+export { DatabaseDO }
+export default DatabaseWorker
+```
+
+```jsonc
+// wrangler.jsonc
+{
+  "name": "ai-database",
+  "main": "src/worker.ts",
+  "compatibility_date": "2024-01-01",
+  "durable_objects": {
+    "bindings": [
+      { "name": "DATABASE_DO", "class_name": "DatabaseDO" }
+    ]
+  }
+}
+```
+
+### /client Export
+
+Use the `/client` export when consuming ai-database from another worker or HTTP client:
+
+**With Cloudflare Service Bindings (RPC):**
+
+```typescript
+// consumer-worker.ts
+import type { DatabaseService } from 'ai-database/worker'
+
+interface Env {
+  AI_DATABASE: Service<DatabaseService>
+}
+
+export default {
+  async fetch(request: Request, env: Env) {
+    // Direct RPC via service binding - no HTTP overhead
+    const service = env.AI_DATABASE.connect('my-namespace')
+    const post = await service.create('Post', { title: 'Hello' })
+    return Response.json(post)
+  }
+}
+```
+
+```jsonc
+// consumer wrangler.jsonc
+{
+  "services": [
+    { "binding": "AI_DATABASE", "service": "ai-database" }
+  ]
+}
+```
+
+**With HTTP Client (rpc.do):**
+
+```typescript
+import { createDatabaseClient, DB } from 'ai-database/client'
+
+// Connect to production
+const client = createDatabaseClient('https://ai-database.workers.dev')
+const service = client.connect('my-namespace')
+
+// CRUD operations
+const post = await service.create('Post', { title: 'Hello', content: 'World' })
+const posts = await service.list('Post', { limit: 10 })
+const found = await service.get('Post', post.$id)
+
+// Search
+const results = await service.search('Post', 'hello')
+const semantic = await service.semanticSearch('Post', 'greeting posts')
+
+// Relationships
+await service.relate('Post', post.$id, 'author', 'User', userId)
+const authors = await service.related('Post', post.$id, 'author')
+
+// Events
+await service.emit({ event: 'Post.published', actor: userId, object: post.$id })
+const events = await service.listEvents({ event: 'Post.published' })
+```
+
+### TypeScript Setup for Service Bindings
+
+For proper type inference with service bindings, import the worker types:
+
+```typescript
+// types.ts
+import type { DatabaseService } from 'ai-database/worker'
+
+export interface Env {
+  AI_DATABASE: Service<DatabaseService>
+  // ... other bindings
+}
+```
+
+---
+
 ## Common Patterns
 
 ### Self-Referential Trees
@@ -867,6 +973,325 @@ When using RDB as a provider:
 - **No semantic search**: Fuzzy operators (`~>`, `<~`) require vector embeddings. Use exact operators (`->`, `<-`) instead, or use MemoryProvider for semantic matching.
 - **No events/actions API**: RDB focuses on core CRUD and relationships.
 - **Text search only**: The `search()` method performs text matching, not semantic similarity.
+
+---
+
+## AI Integration
+
+ai-database integrates with AI providers for two core capabilities:
+
+1. **Entity Generation** - AI-powered content generation for schema fields using `ai-functions`
+2. **Semantic Search** - Vector embeddings for fuzzy matching (`~>`, `<~` operators) and similarity search
+
+### Supported AI Providers
+
+#### For Entity Generation
+
+Entity generation uses [ai-functions](https://github.com/ai-primitives/ai-primitives/tree/main/packages/ai-functions) which supports:
+
+| Provider | Models | Configuration |
+|----------|--------|---------------|
+| **Anthropic** | claude-3-5-sonnet, claude-3-opus, claude-3-haiku | `ANTHROPIC_API_KEY` |
+| **OpenAI** | gpt-4o, gpt-4-turbo, gpt-3.5-turbo | `OPENAI_API_KEY` |
+| **Google** | gemini-1.5-pro, gemini-1.5-flash | `GOOGLE_API_KEY` |
+| **Local Models** | Ollama, LM Studio, llama.cpp | `AI_BASE_URL` |
+
+```typescript
+import { DB, configureAIGeneration } from 'ai-database'
+
+// Configure the AI model for entity generation
+configureAIGeneration({
+  model: 'sonnet',        // Model alias (see ai-functions for full list)
+  enabled: true,          // Enable AI generation (default: true)
+  onGenerate: (details) => {
+    // Track generation calls for monitoring
+    console.log(`Generated ${details.entityType} in ${details.latencyMs}ms`)
+    if (details.error) console.error('Generation failed:', details.error)
+  }
+})
+
+const { db } = DB({
+  BlogPost: {
+    title: 'string',
+    content: 'Write a detailed blog post about this topic',  // AI generates this
+    summary: 'Summarize the content in 2 sentences',
+  }
+})
+```
+
+#### For Embeddings/Semantic Search
+
+Embedding generation for semantic search can use any provider that produces vector embeddings:
+
+| Provider | Models | Dimensions | Configuration |
+|----------|--------|------------|---------------|
+| **OpenAI** | text-embedding-3-small | 1536 | `OPENAI_API_KEY` |
+| **OpenAI** | text-embedding-3-large | 3072 | `OPENAI_API_KEY` |
+| **Cohere** | embed-english-v3.0 | 1024 | `COHERE_API_KEY` |
+| **Voyage AI** | voyage-large-2 | 1024-4096 | `VOYAGE_API_KEY` |
+| **Local** | sentence-transformers | 384 | Self-hosted |
+
+```typescript
+import { createMemoryProvider, setProvider } from 'ai-database'
+
+// Configure embedding dimensions to match your provider
+const provider = createMemoryProvider({
+  embeddingDimensions: 1536,  // Match OpenAI text-embedding-3-small
+})
+setProvider(provider)
+```
+
+---
+
+### Configuring Embedding Generation
+
+Control which fields are embedded for semantic search:
+
+```typescript
+import { DB } from 'ai-database'
+
+const { db } = DB({
+  Article: {
+    title: 'string',
+    content: 'markdown',
+    authorId: 'string',    // Won't be embedded (not text content)
+  },
+  InternalNote: {
+    text: 'string',
+  }
+}, {
+  embeddings: {
+    // Specify which fields to embed for Article
+    Article: { fields: ['title', 'content'] },
+
+    // Disable embeddings for InternalNote (won't appear in semantic search)
+    InternalNote: false,
+  }
+})
+```
+
+#### Embedding Configuration Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `fields` | `string[]` | Fields to include in embedding (default: auto-detect text fields) |
+| `false` | `boolean` | Disable embeddings for this entity type |
+
+#### Auto-Detection
+
+If no `embeddings` config is provided, ai-database automatically embeds:
+- All `string` fields (except those ending in `Id`, `At`, or starting with `$`/`_`)
+- All `markdown` fields
+- String arrays (concatenated)
+
+---
+
+### Cost and Token Implications
+
+Understanding token usage is critical for production deployments. Here's what triggers AI API calls:
+
+#### Entity Generation Costs
+
+| Operation | AI Calls | When |
+|-----------|----------|------|
+| `create()` with prompt fields | 1 per entity | Fields like `'Write a description'` |
+| `create({ cascade: true })` | 1 per cascaded entity | Each `->` forward relation |
+| `create()` with `~>` fuzzy | 1 embedding + search | If no semantic match found, may generate |
+
+**Example: Cascade Cost Estimation**
+
+```typescript
+const { db } = DB({
+  Blog: {
+    title: 'string',
+    topics: ['Generate 5 topics ->Topic'],     // Creates 5 Topic entities
+  },
+  Topic: {
+    name: 'string',
+    posts: ['Generate 3 posts ->Post'],        // Creates 3 Post entities per Topic
+  },
+  Post: {
+    title: 'string',
+    content: 'Write a 500-word blog post',     // AI generates ~500 words
+  }
+})
+
+// This single call generates:
+// - 1 Blog (1 generation call)
+// - 5 Topics (5 generation calls)
+// - 15 Posts (15 generation calls, each ~500 words)
+// Total: 21 AI generation calls
+const blog = await db.Blog.create(
+  { title: 'My Tech Blog' },
+  { cascade: true, maxDepth: 3 }
+)
+```
+
+**Cost Control Strategies:**
+
+```typescript
+// 1. Limit cascade depth to control entity count
+await db.Blog.create(data, { cascade: true, maxDepth: 1 })  // Only creates immediate children
+
+// 2. Filter which types cascade
+await db.Blog.create(data, {
+  cascade: true,
+  cascadeTypes: ['Topic']  // Only cascade to Topic, not Post
+})
+
+// 3. Track costs with onGenerate callback
+let totalTokens = 0
+configureAIGeneration({
+  model: 'sonnet',
+  onGenerate: (details) => {
+    if (details.result) {
+      // Estimate tokens (actual count depends on provider)
+      const inputTokens = details.prompt.length / 4
+      const outputTokens = JSON.stringify(details.result).length / 4
+      totalTokens += inputTokens + outputTokens
+      console.log(`Running total: ~${totalTokens} tokens`)
+    }
+  }
+})
+
+// 4. Use draftOnly for preview without committing
+const draft = await db.Blog.draft({ title: 'Test' })
+// Review draft before creating
+const entity = await draft.resolve()
+```
+
+#### Embedding Costs
+
+| Operation | Embedding Calls | Notes |
+|-----------|-----------------|-------|
+| `create()` | 1 per entity | Embeds text fields on creation |
+| `update()` | 1 if text changed | Re-embeds when text fields update |
+| `semanticSearch()` | 1 for query | Embeds query string |
+| `hybridSearch()` | 1 for query | Embeds query string |
+| `~>` or `<~` resolution | 1 per hint | Embeds the hint text for matching |
+
+---
+
+### Rate Limiting Best Practices
+
+ai-database provides built-in concurrency control to prevent API rate limit errors:
+
+#### Using forEach with Concurrency
+
+```typescript
+// Process entities with controlled concurrency
+const result = await db.Lead.forEach(async (lead) => {
+  const analysis = await generateAnalysis(lead)
+  await db.Lead.update(lead.$id, { analysis })
+}, {
+  concurrency: 10,         // Max 10 parallel operations
+  maxRetries: 3,           // Retry failed items up to 3 times
+  retryDelay: (attempt) => 1000 * Math.pow(2, attempt),  // Exponential backoff
+
+  // Handle rate limit errors specifically
+  onError: (error, lead) => {
+    if (error.message.includes('rate_limit') || error.message.includes('429')) {
+      return 'retry'       // Retry with exponential backoff
+    }
+    return 'continue'      // Skip this item and continue
+  },
+
+  onProgress: (progress) => {
+    console.log(`${progress.completed}/${progress.total} (${progress.failed} failed)`)
+  }
+})
+```
+
+#### Provider-Level Concurrency
+
+```typescript
+import { createMemoryProvider } from 'ai-database'
+
+// Configure concurrency at the provider level
+const provider = createMemoryProvider({
+  concurrency: 10,  // Global limit on parallel operations
+})
+```
+
+#### Execution Queue for Batch Operations
+
+For large-scale operations with different priority levels:
+
+```typescript
+import { ExecutionQueue } from 'ai-database'
+
+const queue = new ExecutionQueue({
+  concurrency: {
+    priority: 50,    // High-priority operations
+    standard: 20,    // Normal operations
+    flex: 10,        // Low-priority background operations
+    batch: 1000,     // Batch window operations
+  }
+})
+
+// Submit operations with priority
+await queue.submit(
+  () => db.Lead.create({ name: 'Important Lead' }),
+  { priority: 'priority' }  // Runs with higher concurrency
+)
+```
+
+#### Rate Limit Patterns by Provider
+
+| Provider | Rate Limits | Recommended Concurrency |
+|----------|-------------|------------------------|
+| **OpenAI** | 60-10000 RPM (varies by tier) | 5-50 |
+| **Anthropic** | 60-4000 RPM (varies by tier) | 5-40 |
+| **Cohere** | 100 RPM (trial), 10000 RPM (prod) | 5-100 |
+| **Local (Ollama)** | Limited by hardware | 1-4 |
+
+**Recommended Configuration by Use Case:**
+
+```typescript
+// Development/Testing - Low concurrency, fail fast
+configureAIGeneration({ model: 'sonnet', enabled: true })
+await db.Entity.forEach(fn, { concurrency: 2, maxRetries: 1 })
+
+// Production - Moderate concurrency with retries
+await db.Entity.forEach(fn, {
+  concurrency: 10,
+  maxRetries: 3,
+  retryDelay: attempt => 1000 * Math.pow(2, attempt)
+})
+
+// Batch Processing - Low concurrency, high retry tolerance
+await db.Entity.forEach(fn, {
+  concurrency: 5,
+  maxRetries: 5,
+  retryDelay: attempt => 2000 * Math.pow(2, attempt),
+  timeout: 60000,  // 60 second timeout per item
+  persist: 'batch-job-123',  // Resume on crash
+})
+```
+
+---
+
+### Disabling AI Generation
+
+For testing or when you want placeholder values instead of AI generation:
+
+```typescript
+import { configureAIGeneration } from 'ai-database'
+
+// Disable AI globally - uses deterministic placeholder values
+configureAIGeneration({ enabled: false })
+
+// Or per-DB instance
+const { db } = DB(schema, {
+  aiGeneration: { enabled: false }
+})
+```
+
+When AI is disabled:
+- Prompt fields generate deterministic placeholder text
+- Fuzzy operators (`~>`, `<~`) fall back to text search
+- No API calls are made to AI providers
+- Tests run faster and don't require API keys
 
 ---
 

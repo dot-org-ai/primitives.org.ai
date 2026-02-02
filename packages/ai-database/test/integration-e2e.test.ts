@@ -123,13 +123,7 @@ describe('E2E Integration: Generative Schema Features', () => {
       // Create the root entity with cascade generation
       const industry = await db.Industry.create(
         { name: 'Healthcare' },
-        {
-          cascade: true,
-          maxDepth: 6,
-          onProgress: (p) => {
-            console.log(`[${p.phase}] Generating ${p.currentType} at depth ${p.depth}`)
-          },
-        }
+        { cascade: true, maxDepth: 6 }
       )
 
       // Verify the industry was created with AI-generated description
@@ -206,8 +200,9 @@ describe('E2E Integration: Generative Schema Features', () => {
 
       // If any tools matched, they should be one of the expected types
       if (tools.length > 0) {
-        const types = tools.map((t: any) => t.$type)
-        expect(types.some((t: string) => ['Tool', 'Software', 'Service'].includes(t))).toBe(true)
+        const validTypes = ['Tool', 'Software', 'Service']
+        const hasValidType = tools.some((t: { $type: string }) => validTypes.includes(t.$type))
+        expect(hasValidType).toBe(true)
       }
     })
   })
@@ -339,12 +334,9 @@ describe('E2E Integration: Generative Schema Features', () => {
         name: 'AI-Powered Analytics Platform',
       })
 
-      // The backward fuzzy should find experts relevant to the project
       // Memory provider does not support semantic search, so teamLead may be null
       const teamLead = await project.teamLead
-      if (teamLead !== null && teamLead !== undefined) {
-        expect(teamLead).toBeDefined()
-        // Should match someone with AI/ML background
+      if (teamLead) {
         expect(teamLead.specialty.toLowerCase()).toMatch(/machine learning|ai|software|project/i)
       }
 
@@ -454,24 +446,6 @@ describe('E2E Integration: Generative Schema Features', () => {
         Company: {
           name: 'string',
           industry: 'string',
-        },
-        Department: {
-          $instructions: `
-            This department belongs to {company.name} in the {company.industry} industry.
-            Generate appropriate roles and responsibilities.
-          `,
-          company: '<-Company.departments',
-          name: 'string',
-          responsibilities: 'What are the key responsibilities?',
-          headcount: 'How many people typically work here?',
-        },
-      })
-
-      // Extend Company schema to have departments
-      const { db: extendedDb } = DB({
-        Company: {
-          name: 'string',
-          industry: 'string',
           departments: ['->Department'],
         },
         Department: {
@@ -481,7 +455,7 @@ describe('E2E Integration: Generative Schema Features', () => {
         },
       })
 
-      const company = await extendedDb.Company.create(
+      const company = await db.Company.create(
         {
           name: 'TechCorp',
           industry: 'Enterprise Software',
@@ -775,14 +749,20 @@ describe('E2E Integration: Generative Schema Features', () => {
         },
       })
 
-      const progress: any[] = []
+      interface ProgressEvent {
+        phase?: string
+        currentType?: string
+        depth?: number
+        totalEntitiesCreated?: number
+      }
+      const progress: ProgressEvent[] = []
 
       await db.Root.create(
         {},
         {
           cascade: true,
           maxDepth: 3,
-          onProgress: (p) => progress.push({ ...p }),
+          onProgress: (p: ProgressEvent) => progress.push({ ...p }),
         }
       )
 
@@ -795,7 +775,7 @@ describe('E2E Integration: Generative Schema Features', () => {
       // Should have completion event
       const complete = progress.find((p) => p.phase === 'complete')
       expect(complete).toBeDefined()
-      expect(complete.totalEntitiesCreated).toBeGreaterThanOrEqual(3)
+      expect(complete!.totalEntitiesCreated).toBeGreaterThanOrEqual(3)
 
       // Should track depths
       const depths = progress.filter((p) => p.depth !== undefined).map((p) => p.depth)
@@ -816,14 +796,14 @@ describe('E2E Integration: Generative Schema Features', () => {
         },
       })
 
-      const errors: any[] = []
+      const errors: Error[] = []
 
       const container = await db.Container.create(
         { name: 'TestContainer' },
         {
           cascade: true,
           maxDepth: 1,
-          onError: (err) => errors.push(err),
+          onError: (err: Error) => errors.push(err),
         }
       )
 

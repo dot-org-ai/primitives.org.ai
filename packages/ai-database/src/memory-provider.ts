@@ -22,6 +22,7 @@ import {
   generateContentHash,
 } from './semantic.js'
 import { DEFAULT_EMBEDDING_DIMENSIONS, EMBEDDING_DIMENSIONS } from './constants.js'
+import { SEMANTIC_VECTORS, DEFAULT_VECTOR, BASE_VECTOR_DIMENSIONS } from './semantic-vectors.js'
 import {
   validateTypeName,
   validateEntityId,
@@ -37,6 +38,7 @@ import {
   isDangerousField,
 } from './validation.js'
 import { EntityNotFoundError, EntityAlreadyExistsError } from './errors.js'
+import { logWarn } from './logger.js'
 
 // =============================================================================
 // Semaphore for Concurrency Control
@@ -291,6 +293,174 @@ function generateId(): string {
 }
 
 // =============================================================================
+// Embedding Helper Functions
+// =============================================================================
+
+/**
+ * Simple hash function for deterministic randomness
+ *
+ * Generates a consistent hash value for any input string, used for
+ * creating deterministic "random" variations in embedding generation.
+ *
+ * @param str - The string to hash
+ * @returns A positive integer hash value
+ *
+ * @internal
+ */
+function simpleHash(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = (hash << 5) - hash + char
+    hash = hash & hash // Convert to 32-bit integer
+  }
+  return Math.abs(hash)
+}
+
+/**
+ * Generate a deterministic pseudo-random number from seed
+ *
+ * Uses sin function to generate predictable values that appear random
+ * but are reproducible given the same seed and index.
+ *
+ * @param seed - The seed value (typically from a hash)
+ * @param index - The position in the sequence
+ * @returns A number between 0 and 1
+ *
+ * @internal
+ */
+function seededRandom(seed: number, index: number): number {
+  const x = Math.sin(seed + index) * 10000
+  return x - Math.floor(x)
+}
+
+/**
+ * Tokenize text into lowercase words
+ *
+ * Splits text on whitespace and punctuation, filters empty strings,
+ * and converts all words to lowercase for consistent matching.
+ *
+ * @param text - The text to tokenize
+ * @returns Array of lowercase word tokens
+ *
+ * @internal
+ */
+function tokenizeText(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 0)
+}
+
+/**
+ * Get semantic vector for a word
+ *
+ * Looks up the word in SEMANTIC_VECTORS, or generates a deterministic
+ * fallback vector based on the word's hash if not found.
+ *
+ * @param word - The word to get a vector for
+ * @returns A 4-dimensional semantic vector
+ *
+ * @internal
+ */
+function getWordVector(word: string): number[] {
+  const lower = word.toLowerCase()
+  const known = SEMANTIC_VECTORS[lower]
+  if (known) {
+    return known
+  }
+  // Generate deterministic vector based on word hash
+  const hash = simpleHash(lower)
+  return DEFAULT_VECTOR.map((v, i) => v + seededRandom(hash, i) * 0.1)
+}
+
+/**
+ * Aggregate word vectors into a single base vector
+ *
+ * Sums up the semantic vectors for all words in the input,
+ * creating a combined representation of the text's meaning.
+ *
+ * @param words - Array of word tokens
+ * @returns Aggregated 4-dimensional vector (not normalized)
+ *
+ * @internal
+ */
+function aggregateWordVectors(words: string[]): number[] {
+  const aggregated: number[] = new Array(BASE_VECTOR_DIMENSIONS).fill(0)
+
+  for (const word of words) {
+    const vec = getWordVector(word)
+    for (let i = 0; i < BASE_VECTOR_DIMENSIONS; i++) {
+      aggregated[i]! += vec[i]!
+    }
+  }
+
+  return aggregated
+}
+
+/**
+ * Normalize a vector to unit length
+ *
+ * Divides each component by the vector's magnitude to create
+ * a unit vector (length = 1), enabling cosine similarity comparison.
+ *
+ * @param vector - The vector to normalize
+ * @returns A new unit-length vector
+ *
+ * @internal
+ */
+function normalizeVector(vector: number[]): number[] {
+  const norm = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0))
+  return vector.map((v) => v / (norm || 1))
+}
+
+/**
+ * Expand base vector to full embedding dimensions
+ *
+ * Takes a 4-dimensional base vector and expands it to the target
+ * dimensions by cycling through base values and adding deterministic noise.
+ *
+ * @param normalized - Normalized base vector (4 dimensions)
+ * @param dimensions - Target number of dimensions
+ * @param textHash - Hash of original text for deterministic noise
+ * @returns Expanded vector (not normalized)
+ *
+ * @internal
+ */
+function expandToFullDimensions(
+  normalized: number[],
+  dimensions: number,
+  textHash: number
+): number[] {
+  const embedding = new Array(dimensions)
+
+  for (let i = 0; i < dimensions; i++) {
+    const baseIndex = i % BASE_VECTOR_DIMENSIONS
+    const base = normalized[baseIndex]!
+    const noise = seededRandom(textHash, i) * 0.1 - 0.05
+    embedding[i] = base + noise
+  }
+
+  return embedding
+}
+
+/**
+ * Generate embedding for empty text
+ *
+ * Creates a low-magnitude embedding for empty input,
+ * using deterministic small values based on position.
+ *
+ * @param dimensions - Number of embedding dimensions
+ * @returns A low-magnitude embedding vector
+ *
+ * @internal
+ */
+function generateEmptyEmbedding(dimensions: number): number[] {
+  return Array.from({ length: dimensions }, (_, i) => seededRandom(0, i) * 0.01)
+}
+
+// =============================================================================
 // Verb Conjugation (Linguistic Helpers)
 // =============================================================================
 
@@ -532,396 +702,31 @@ export class MemoryProvider implements DBProvider {
    *
    * Uses semantic word vectors to create meaningful embeddings
    * where similar concepts have higher cosine similarity.
+   *
+   * The embedding process:
+   * 1. Tokenize text into words
+   * 2. Look up semantic vectors for each word
+   * 3. Aggregate word vectors into a base vector
+   * 4. Normalize the aggregated vector
+   * 5. Expand to full embedding dimensions with deterministic noise
+   * 6. Final normalization to unit vector
+   *
+   * @param text - The text to generate an embedding for
+   * @returns A normalized embedding vector
    */
   private generateEmbedding(text: string): number[] {
-    // Import semantic vectors for deterministic embeddings
-    const SEMANTIC_VECTORS: Record<string, number[]> = {
-      // AI/ML domain
-      machine: [0.9, 0.1, 0.05, 0.02],
-      learning: [0.85, 0.15, 0.08, 0.03],
-      artificial: [0.88, 0.12, 0.06, 0.04],
-      intelligence: [0.87, 0.13, 0.07, 0.05],
-      neural: [0.82, 0.18, 0.09, 0.06],
-      network: [0.75, 0.2, 0.15, 0.1],
-      deep: [0.8, 0.17, 0.1, 0.08],
-      ai: [0.92, 0.08, 0.04, 0.02],
-      ml: [0.88, 0.12, 0.06, 0.03],
-
-      // Programming domain
-      programming: [0.15, 0.85, 0.1, 0.05],
-      code: [0.12, 0.88, 0.12, 0.06],
-      software: [0.18, 0.82, 0.15, 0.08],
-      development: [0.2, 0.8, 0.18, 0.1],
-      typescript: [0.1, 0.9, 0.08, 0.04],
-      javascript: [0.12, 0.88, 0.1, 0.05],
-      python: [0.25, 0.75, 0.12, 0.06],
-      react: [0.08, 0.85, 0.2, 0.1],
-      vue: [0.06, 0.84, 0.18, 0.08],
-      frontend: [0.05, 0.8, 0.25, 0.12],
-      programs: [0.14, 0.86, 0.1, 0.04], // computer programs - programming domain
-      program: [0.14, 0.86, 0.1, 0.04], // singular form
-      write: [0.12, 0.84, 0.08, 0.05], // writing code - programming context
-      develop: [0.18, 0.82, 0.12, 0.08], // develop software - programming domain
-      utility: [0.1, 0.8, 0.15, 0.1], // utility programs - programming domain
-      specialized: [0.15, 0.78, 0.12, 0.08], // specialized software - programming domain
-
-      // Database domain
-      database: [0.1, 0.7, 0.08, 0.6],
-      query: [0.12, 0.65, 0.1, 0.7],
-      sql: [0.08, 0.6, 0.05, 0.75],
-      index: [0.1, 0.58, 0.08, 0.72],
-      optimization: [0.15, 0.55, 0.12, 0.68],
-      performance: [0.18, 0.5, 0.15, 0.65],
-
-      // DevOps domain
-      kubernetes: [0.05, 0.6, 0.8, 0.15],
-      docker: [0.08, 0.55, 0.82, 0.12],
-      container: [0.06, 0.5, 0.85, 0.1],
-      deployment: [0.1, 0.45, 0.78, 0.18],
-      devops: [0.12, 0.48, 0.75, 0.2],
-
-      // Food domain (distinctly different direction - high in dim 3, low elsewhere)
-      cooking: [0.05, 0.08, 0.05, 0.95],
-      recipe: [0.06, 0.07, 0.04, 0.93],
-      food: [0.04, 0.06, 0.04, 0.96],
-      pasta: [0.03, 0.05, 0.03, 0.97],
-      pizza: [0.03, 0.06, 0.04, 0.96],
-      italian: [0.04, 0.07, 0.04, 0.94],
-      garden: [0.05, 0.04, 0.03, 0.92],
-      flowers: [0.04, 0.03, 0.03, 0.91],
-      chef: [0.05, 0.1, 0.05, 0.95],
-      restaurant: [0.06, 0.08, 0.04, 0.93],
-      kitchen: [0.05, 0.09, 0.05, 0.94],
-      antonio: [0.05, 0.08, 0.04, 0.92],
-
-      // Research/Academic domain (similar to AI/ML)
-      researcher: [0.82, 0.2, 0.1, 0.08],
-      phd: [0.8, 0.18, 0.12, 0.1],
-      research: [0.85, 0.15, 0.1, 0.07],
-      professor: [0.78, 0.22, 0.12, 0.1],
-      academic: [0.75, 0.2, 0.15, 0.12],
-
-      // Location/Venue domain (for fuzzy threshold tests - need distinct clusters)
-      // "conference center downtown" cluster - high values in different dimensions
-      conference: [0.2, 0.25, 0.85, 0.2],
-      center: [0.18, 0.22, 0.88, 0.18],
-      downtown: [0.15, 0.2, 0.9, 0.15],
-      // "tech hub 123 main st" cluster - completely different direction
-      hub: [0.85, 0.15, 0.2, 0.15],
-      main: [0.12, 0.12, 0.15, 0.1],
-      st: [0.1, 0.1, 0.12, 0.08],
-      '123': [0.08, 0.08, 0.1, 0.05],
-
-      // GraphQL/API
-      graphql: [0.1, 0.75, 0.15, 0.55],
-      // Note: api is defined in Documentation cluster below (strong in doc dimension)
-      rest: [0.12, 0.68, 0.18, 0.48],
-      queries: [0.14, 0.65, 0.12, 0.6],
-
-      // Testing
-      testing: [0.1, 0.78, 0.08, 0.15],
-      test: [0.08, 0.8, 0.06, 0.12],
-      unit: [0.06, 0.82, 0.05, 0.1],
-      integration: [0.12, 0.75, 0.1, 0.18],
-
-      // State management
-      state: [0.08, 0.82, 0.2, 0.08],
-      management: [0.15, 0.75, 0.25, 0.12],
-      hooks: [0.06, 0.88, 0.15, 0.05],
-      usestate: [0.05, 0.9, 0.12, 0.04],
-      useeffect: [0.04, 0.88, 0.1, 0.03],
-
-      // Related/Concept domain (for semantic similarity tests)
-      related: [0.5, 0.5, 0.5, 0.5],
-      concept: [0.55, 0.45, 0.55, 0.45],
-      similar: [0.52, 0.48, 0.52, 0.48],
-      different: [0.48, 0.52, 0.48, 0.52],
-      words: [0.45, 0.55, 0.45, 0.55],
-      semantically: [0.6, 0.4, 0.6, 0.4],
-
-      // Exact match domain (distinctly different vectors)
-      exact: [0.1, 0.1, 0.1, 0.9],
-      match: [0.15, 0.15, 0.1, 0.85],
-      title: [0.1, 0.2, 0.1, 0.8],
-      contains: [0.12, 0.18, 0.12, 0.78],
-      search: [0.08, 0.22, 0.08, 0.82],
-      terms: [0.05, 0.25, 0.05, 0.85],
-
-      // Business domain (for fuzzy forward resolution tests)
-      enterprise: [0.7, 0.3, 0.8, 0.6],
-      large: [0.65, 0.25, 0.75, 0.55],
-      corporations: [0.68, 0.28, 0.78, 0.58],
-      companies: [0.6, 0.4, 0.7, 0.5],
-      company: [0.62, 0.38, 0.72, 0.52],
-      thousands: [0.7, 0.2, 0.7, 0.5],
-      employees: [0.55, 0.35, 0.65, 0.45],
-      big: [0.68, 0.3, 0.75, 0.58],
-      small: [0.3, 0.6, 0.3, 0.4],
-      business: [0.5, 0.5, 0.6, 0.5],
-      owners: [0.4, 0.5, 0.5, 0.45],
-      consumer: [0.35, 0.55, 0.35, 0.35],
-      individual: [0.32, 0.58, 0.32, 0.32],
-      b2c: [0.3, 0.6, 0.3, 0.35],
-
-      // Management/Operations domain (distinctly different from programming - high in dim 3, low in dim 2)
-      operations: [0.6, 0.15, 0.85, 0.55], // operations management - NOT programming
-      coordinate: [0.55, 0.12, 0.82, 0.5], // coordinate teams - management
-      plan: [0.52, 0.18, 0.78, 0.48], // planning - management domain
-      direct: [0.58, 0.14, 0.8, 0.52], // direct teams - management
-      formulate: [0.5, 0.2, 0.75, 0.45], // formulate policies - executive
-      policies: [0.48, 0.15, 0.78, 0.5], // policies - executive/management
-      direction: [0.55, 0.18, 0.76, 0.48], // overall direction - executive
-      organizations: [0.6, 0.2, 0.8, 0.55], // organizations - management
-      sector: [0.58, 0.22, 0.75, 0.52], // public/private sector - business
-      determine: [0.52, 0.16, 0.72, 0.46], // determine policies - executive
-
-      // Tech professional domain
-      developer: [0.2, 0.85, 0.15, 0.1],
-      engineer: [0.25, 0.82, 0.18, 0.12],
-      engineers: [0.27, 0.8, 0.2, 0.14],
-      builds: [0.18, 0.78, 0.16, 0.08],
-      writes: [0.15, 0.75, 0.12, 0.06],
-      professional: [0.22, 0.72, 0.2, 0.15],
-      applications: [0.2, 0.78, 0.18, 0.1],
-      tech: [0.25, 0.8, 0.2, 0.12],
-      technology: [0.28, 0.78, 0.22, 0.14],
-      electronics: [0.3, 0.75, 0.25, 0.15],
-      device: [0.25, 0.82, 0.2, 0.1],
-      furniture: [0.1, 0.15, 0.2, 0.85],
-      home: [0.12, 0.18, 0.22, 0.8],
-      living: [0.1, 0.15, 0.2, 0.82],
-      goods: [0.3, 0.5, 0.35, 0.4],
-      leaders: [0.4, 0.5, 0.6, 0.4],
-      senior: [0.35, 0.55, 0.55, 0.35],
-
-      // Data science domain
-      data: [0.75, 0.3, 0.15, 0.55],
-      science: [0.78, 0.25, 0.12, 0.5],
-      scientist: [0.8, 0.28, 0.1, 0.52],
-      background: [0.72, 0.32, 0.14, 0.48],
-
-      // DevOps/cloud domain
-      cloud: [0.1, 0.55, 0.85, 0.15],
-      expertise: [0.15, 0.5, 0.8, 0.18],
-
-      // Support domain
-      support: [0.2, 0.45, 0.3, 0.55],
-      specialist: [0.22, 0.48, 0.32, 0.52],
-      technical: [0.25, 0.65, 0.35, 0.4],
-      issues: [0.18, 0.42, 0.28, 0.48],
-
-      // Security domain
-      security: [0.3, 0.6, 0.4, 0.7],
-      auth: [0.28, 0.58, 0.38, 0.72],
-      authentication: [0.32, 0.55, 0.42, 0.75],
-      identity: [0.35, 0.52, 0.45, 0.68],
-      oauth: [0.3, 0.62, 0.4, 0.7],
-
-      // CRM domain
-      crm: [0.45, 0.4, 0.7, 0.55],
-      sales: [0.42, 0.38, 0.68, 0.52],
-      salesforce: [0.48, 0.42, 0.72, 0.58],
-      provider: [0.5, 0.45, 0.65, 0.5],
-
-      // Electronics/Audio domain - cluster for electronic devices
-      electronic: [0.32, 0.76, 0.24, 0.14],
-      audio: [0.3, 0.74, 0.22, 0.12],
-      devices: [0.28, 0.78, 0.2, 0.1],
-
-      // Apparel/Fashion domain - distinctly different from electronics
-      apparel: [0.08, 0.12, 0.15, 0.92],
-      fashion: [0.1, 0.14, 0.12, 0.9],
-      clothing: [0.06, 0.1, 0.14, 0.94],
-
-      // iOS/iPhone/smartphone cluster - distinct from laptop
-      ios: [0.9, 0.7, 0.15, 0.05],
-      iphone: [0.88, 0.72, 0.16, 0.06],
-      smartphone: [0.85, 0.68, 0.18, 0.08],
-      mobile: [0.82, 0.65, 0.2, 0.1],
-      apple: [0.5, 0.6, 0.3, 0.2],
-
-      // MacBook/laptop cluster - distinctly different direction from smartphone
-      macbook: [0.15, 0.55, 0.85, 0.25],
-      laptop: [0.12, 0.52, 0.88, 0.28],
-      computer: [0.15, 0.7, 0.5, 0.2], // "computer" leans toward programming (high dim 2) for "computer programs/software"
-      macos: [0.18, 0.58, 0.82, 0.22],
-
-      // Samsung/Android cluster - similar to iOS cluster direction
-      samsung: [0.78, 0.62, 0.22, 0.14],
-      galaxy: [0.76, 0.6, 0.24, 0.16],
-      android: [0.8, 0.64, 0.2, 0.12],
-
-      // Audio accessories
-      wireless: [0.28, 0.72, 0.24, 0.14],
-      bluetooth: [0.26, 0.74, 0.22, 0.12],
-      headphones: [0.3, 0.76, 0.2, 0.1],
-
-      // Young professionals domain
-      young: [0.65, 0.35, 0.45, 0.15],
-      professionals: [0.68, 0.38, 0.42, 0.12],
-      working: [0.62, 0.32, 0.48, 0.18],
-      adults: [0.58, 0.3, 0.5, 0.22],
-      early: [0.64, 0.34, 0.46, 0.16],
-      careers: [0.7, 0.4, 0.4, 0.1],
-      career: [0.7, 0.4, 0.4, 0.1],
-      urban: [0.6, 0.36, 0.44, 0.2],
-      college: [0.66, 0.38, 0.42, 0.14],
-      educated: [0.68, 0.4, 0.4, 0.12],
-      ages: [0.5, 0.3, 0.4, 0.3],
-
-      // Senior citizens domain - distinctly different from young professionals
-      citizens: [0.15, 0.55, 0.35, 0.75],
-      retired: [0.12, 0.5, 0.38, 0.8],
-
-      // AI/Deep learning extension
-      models: [0.86, 0.14, 0.08, 0.04],
-
-      // Web development technologies
-      web: [0.1, 0.86, 0.12, 0.06],
-      technologies: [0.12, 0.84, 0.14, 0.08],
-      node: [0.1, 0.88, 0.1, 0.04],
-      js: [0.12, 0.86, 0.12, 0.06],
-      backend: [0.15, 0.82, 0.18, 0.1],
-
-      // Marketing domain
-      marketing: [0.4, 0.45, 0.55, 0.4],
-      manager: [0.38, 0.48, 0.52, 0.38],
-      strategy: [0.42, 0.5, 0.5, 0.35],
-      charge: [0.35, 0.42, 0.55, 0.42],
-
-      // Project management
-      project: [0.35, 0.55, 0.45, 0.35],
-      soft: [0.3, 0.52, 0.48, 0.4],
-      skills: [0.32, 0.58, 0.42, 0.32],
-
-      // Content types for union type resolution tests
-      // The key insight: make words that appear in BOTH query and target entity
-      // have strong alignment in the same cluster
-
-      // Tutorial cluster - strong in dim 1 (learning/educational)
-      // Query: "A step-by-step guide for learning React components" should match Tutorial
-      // Tutorial title: "Getting Started with React Hooks"
-      // Common context: "step", "guide", "learning", "react"
-      tutorial: [0.95, 0.1, 0.08, 0.02],
-      step: [0.92, 0.08, 0.05, 0.02], // key query word
-      steps: [0.92, 0.08, 0.05, 0.02], // pluralized
-      guide: [0.88, 0.1, 0.08, 0.04], // appears in query - bias toward tutorial
-      walkthrough: [0.9, 0.08, 0.06, 0.02],
-      getting: [0.92, 0.08, 0.05, 0.02], // Tutorial title starts with this
-      started: [0.9, 0.06, 0.04, 0.02], // Tutorial title word
-      components: [0.88, 0.15, 0.06, 0.03], // query word, tutorial context
-
-      // Video cluster - strong in dim 2 (media/visual)
-      // Query: "A video introduction to machine learning concepts" should match Video
-      // Video title: "Machine Learning Fundamentals"
-      // Common context: "video", "machine", "learning", "fundamentals"
-      video: [0.05, 0.95, 0.08, 0.04],
-      watch: [0.04, 0.9, 0.06, 0.03],
-      film: [0.03, 0.88, 0.05, 0.02],
-      movie: [0.02, 0.85, 0.04, 0.02],
-      introduction: [0.08, 0.9, 0.08, 0.05], // query word, video context
-      intro: [0.06, 0.88, 0.06, 0.04],
-      duration: [0.02, 0.82, 0.04, 0.02],
-      hours: [0.02, 0.8, 0.03, 0.02],
-      fundamentals: [0.08, 0.92, 0.06, 0.04], // Video title word
-      concepts: [0.1, 0.85, 0.08, 0.05], // query word, video context
-      mp4: [0.01, 0.98, 0.02, 0.01],
-      homepage: [0.04, 0.88, 0.06, 0.03],
-
-      // Documentation cluster - strong in dim 3 (reference/formal)
-      // Documentation title: "API Reference Guide"
-      // Note: "guide" also appears here but we bias it toward tutorial
-      documentation: [0.06, 0.1, 0.95, 0.04],
-      api: [0.05, 0.08, 0.92, 0.03], // Documentation title word - strong in doc cluster
-      reference: [0.04, 0.08, 0.92, 0.03], // Documentation title word
-      pages: [0.03, 0.06, 0.9, 0.02], // Documentation field
-      manual: [0.02, 0.05, 0.88, 0.02],
-
-      // Course cluster - strong in dim 4 (comprehensive/structured)
-      // Course title: "Full Stack Web Development Bootcamp"
-      course: [0.15, 0.2, 0.1, 0.92],
-      bootcamp: [0.12, 0.18, 0.08, 0.9],
-      modules: [0.1, 0.15, 0.06, 0.88],
-      curriculum: [0.08, 0.12, 0.05, 0.85],
-      comprehensive: [0.06, 0.1, 0.04, 0.82],
-      full: [0.1, 0.15, 0.08, 0.85],
-      stack: [0.12, 0.18, 0.1, 0.82],
-
-      // Image cluster - strong in dim 2+3 (visual media) - different direction from video
-      // Image should NOT be matched for "video" queries
-      image: [0.05, 0.45, 0.85, 0.08],
-      photo: [0.04, 0.42, 0.88, 0.06],
-      picture: [0.03, 0.4, 0.9, 0.05],
-      src: [0.06, 0.48, 0.82, 0.08],
-      alt: [0.05, 0.45, 0.8, 0.06],
-
-      // Document cluster - different from documentation
-      document: [0.08, 0.1, 0.78, 0.15],
-      file: [0.06, 0.12, 0.75, 0.12],
-      path: [0.05, 0.15, 0.72, 0.1],
-      format: [0.04, 0.18, 0.7, 0.08],
-    }
-
-    const DEFAULT_VECTOR = [0.1, 0.1, 0.1, 0.1]
-
-    // Simple hash function
-    const simpleHash = (str: string): number => {
-      let hash = 0
-      for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i)
-        hash = (hash << 5) - hash + char
-        hash = hash & hash
-      }
-      return Math.abs(hash)
-    }
-
-    // Seeded random
-    const seededRandom = (seed: number, index: number): number => {
-      const x = Math.sin(seed + index) * 10000
-      return x - Math.floor(x)
-    }
-
-    // Tokenize
-    const words = text
-      .toLowerCase()
-      .replace(/[^\w\s]/g, ' ')
-      .split(/\s+/)
-      .filter((w) => w.length > 0)
+    const words = tokenizeText(text)
 
     if (words.length === 0) {
-      return Array.from({ length: this.embeddingDimensions }, (_, i) => seededRandom(0, i) * 0.01)
+      return generateEmptyEmbedding(this.embeddingDimensions)
     }
 
-    // Aggregate word vectors
-    const aggregated: number[] = [0, 0, 0, 0]
-    for (const word of words) {
-      const lower = word.toLowerCase()
-      const vec =
-        SEMANTIC_VECTORS[lower] ??
-        DEFAULT_VECTOR.map((v, i) => v + seededRandom(simpleHash(lower), i) * 0.1)
-      for (let i = 0; i < 4; i++) {
-        aggregated[i]! += vec[i]!
-      }
-    }
-
-    // Normalize
-    const norm = Math.sqrt(aggregated.reduce((sum, v) => sum + v * v, 0))
-    const normalized = aggregated.map((v) => v / (norm || 1))
-
-    // Expand to full dimensions
+    const aggregated = aggregateWordVectors(words)
+    const normalized = normalizeVector(aggregated)
     const textHash = simpleHash(text)
-    const embedding = new Array(this.embeddingDimensions)
+    const expanded = expandToFullDimensions(normalized, this.embeddingDimensions, textHash)
 
-    for (let i = 0; i < this.embeddingDimensions; i++) {
-      const baseIndex = i % 4
-      const base = normalized[baseIndex]!
-      const noise = seededRandom(textHash, i) * 0.1 - 0.05
-      embedding[i] = base + noise
-    }
-
-    // Final normalization
-    const finalNorm = Math.sqrt(embedding.reduce((sum: number, v: number) => sum + v * v, 0))
-    return embedding.map((v: number) => v / (finalNorm || 1))
+    return normalizeVector(expanded)
   }
 
   /**
@@ -987,7 +792,7 @@ export class MemoryProvider implements DBProvider {
         dimensions = embedding.length
         source = 'custom-provider'
       } catch (err) {
-        console.warn('Custom embedding provider failed, falling back to mock:', err)
+        logWarn('Custom embedding provider failed, falling back to mock:', err)
         embedding = this.generateEmbedding(text)
       }
     } else if (this.useAiFunctions) {
@@ -999,7 +804,7 @@ export class MemoryProvider implements DBProvider {
         source = 'ai-functions'
       } catch (err) {
         // Fallback to mock embedding if ai-functions fails
-        console.warn('ai-functions embedTexts failed, falling back to mock:', err)
+        logWarn('ai-functions embedTexts failed, falling back to mock:', err)
         embedding = this.generateEmbedding(text)
       }
     } else {
@@ -1174,7 +979,7 @@ export class MemoryProvider implements DBProvider {
         const result = await this.embeddingProvider.embedTexts([query])
         queryEmbedding = result.embeddings[0] ?? this.generateEmbedding(query)
       } catch (err) {
-        console.warn('Custom embedding provider failed for query, falling back to mock:', err)
+        logWarn('Custom embedding provider failed for query, falling back to mock:', err)
         queryEmbedding = this.generateEmbedding(query)
       }
     } else if (this.useAiFunctions) {
@@ -1183,7 +988,7 @@ export class MemoryProvider implements DBProvider {
         const result = await embedTexts([query])
         queryEmbedding = result.embeddings[0] ?? this.generateEmbedding(query)
       } catch (err) {
-        console.warn('ai-functions embedTexts failed for query, falling back to mock:', err)
+        logWarn('ai-functions embedTexts failed for query, falling back to mock:', err)
         queryEmbedding = this.generateEmbedding(query)
       }
     } else {
@@ -1199,7 +1004,7 @@ export class MemoryProvider implements DBProvider {
         const { cosineSimilarity: aiCosineSimilarity } = await import('ai-functions')
         similarityFn = aiCosineSimilarity
       } catch (err) {
-        console.warn('ai-functions cosineSimilarity not available, using local:', err)
+        logWarn('ai-functions cosineSimilarity not available, using local:', err)
         similarityFn = cosineSimilarity
       }
     } else {
@@ -1234,7 +1039,7 @@ export class MemoryProvider implements DBProvider {
           $score: score,
         }))
       } catch (err) {
-        console.warn(
+        logWarn(
           'Custom embedding provider findSimilar failed, falling back to manual scoring:',
           err
         )
@@ -1252,7 +1057,7 @@ export class MemoryProvider implements DBProvider {
         }))
       } catch (err) {
         // Fall through to manual scoring if findSimilar fails
-        console.warn('ai-functions findSimilar failed, falling back to manual scoring:', err)
+        logWarn('ai-functions findSimilar failed, falling back to manual scoring:', err)
       }
     }
 
@@ -1426,8 +1231,16 @@ export class MemoryProvider implements DBProvider {
 
     // Emit type-specific and global events
     const eventData = { $id: entityId, $type: type, ...entity }
-    await this.emit(`${type}.created`, eventData)
-    await this.emit('entity:created', eventData)
+    await this.emit({
+      event: `${type}.created`,
+      object: `${type}/${entityId}`,
+      objectData: eventData,
+    })
+    await this.emit({
+      event: 'entity:created',
+      object: `${type}/${entityId}`,
+      objectData: eventData,
+    })
 
     return { ...entity, $id: entityId, $type: type }
   }
@@ -1464,8 +1277,16 @@ export class MemoryProvider implements DBProvider {
 
     // Emit type-specific and global events
     const eventData = { $id: id, $type: type, ...updated }
-    await this.emit(`${type}.updated`, eventData)
-    await this.emit('entity:updated', eventData)
+    await this.emit({
+      event: `${type}.updated`,
+      object: `${type}/${id}`,
+      objectData: eventData,
+    })
+    await this.emit({
+      event: 'entity:updated',
+      object: `${type}/${id}`,
+      objectData: eventData,
+    })
 
     return { ...updated, $id: id, $type: type }
   }
@@ -1484,8 +1305,16 @@ export class MemoryProvider implements DBProvider {
 
     // Emit type-specific and global events
     const eventData = { $id: id, $type: type }
-    await this.emit(`${type}.deleted`, eventData)
-    await this.emit('entity:deleted', eventData)
+    await this.emit({
+      event: `${type}.deleted`,
+      object: `${type}/${id}`,
+      objectData: eventData,
+    })
+    await this.emit({
+      event: 'entity:deleted',
+      object: `${type}/${id}`,
+      objectData: eventData,
+    })
 
     // Clean up relations
     for (const [key, targets] of this.relations) {
@@ -1651,8 +1480,9 @@ export class MemoryProvider implements DBProvider {
         actor: eventOrType.actor ?? 'system',
         event: eventOrType.event,
         timestamp: new Date(),
-        // Legacy fields
+        // Legacy fields for backward compatibility
         type: eventOrType.event,
+        ...(eventOrType.objectData !== undefined && { data: eventOrType.objectData }),
         ...(eventOrType.actorData !== undefined && { actorData: eventOrType.actorData }),
         ...(eventOrType.object !== undefined && { object: eventOrType.object }),
         ...(eventOrType.objectData !== undefined && { objectData: eventOrType.objectData }),

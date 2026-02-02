@@ -4,6 +4,9 @@
   //
   // The DatabaseDO class is a Durable Object with SQLite storage
   // that provides the core _data and _rels tables for ai-database
+  //
+  // The DatabaseService class is a WorkerEntrypoint that provides
+  // RPC access to the database via service bindings
 
   "name": "ai-database",
   "main": "src/worker.ts",
@@ -21,6 +24,15 @@
       { "name": "DATABASE", "class_name": "DatabaseDO" }
     ]
   },
+
+  // Service binding to self for WorkerEntrypoint RPC testing
+  // This allows tests to access DatabaseService via RPC
+  "services": [
+    {
+      "binding": "DATABASE_SERVICE",
+      "service": "ai-database"
+    }
+  ],
 
   // Migrations for Durable Objects
   "migrations": [

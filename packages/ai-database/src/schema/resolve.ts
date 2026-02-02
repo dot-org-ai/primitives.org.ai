@@ -437,14 +437,8 @@ export async function resolveReferenceSpec(
         // Resolve any nested pending relations (from generateEntity)
         generatedData = await resolveNestedPending(aiData, targetEntity, schema, provider)
       }
-    } catch (error) {
-      // Log AI generation failure for debugging before falling through to placeholder
-      // This prevents silent failures from hiding issues
-      console.debug(
-        `AI generation failed for ${spec.type} (parent: ${parentType}), falling back to placeholder:`,
-        error instanceof Error ? error.message : error
-      )
-      // Fall through to placeholder generation
+    } catch {
+      // AI generation failed - fall through to placeholder generation
     }
   }
 

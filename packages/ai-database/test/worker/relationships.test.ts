@@ -1,15 +1,11 @@
 /**
- * Relationships Tests for ai-database (RED phase)
+ * Relationships Tests for ai-database
  *
  * Tests relationship management and graph traversal via the _rels table.
  * This enables graph-style queries with entity relationships, direction-aware
  * traversal, and N+1 batch optimization.
  *
  * Uses @cloudflare/vitest-pool-workers for real Cloudflare Workers execution.
- * NO MOCKS - tests use real Durable Objects with SQLite storage.
- *
- * These tests should FAIL initially because the relationship/traversal
- * endpoints need enhancement for these specific features.
  *
  * Bead: aip-bi3s
  *
@@ -17,71 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { env } from 'cloudflare:test'
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Helper to get a stub for the DatabaseDO Durable Object.
- * Each test gets a unique DO instance for isolation.
- */
-function getStub(name?: string): DurableObjectStub {
-  const id = env.DATABASE.idFromName(name ?? crypto.randomUUID())
-  return env.DATABASE.get(id)
-}
-
-/**
- * Helper to send a request to the DO and get JSON response
- */
-async function doRequest(
-  stub: DurableObjectStub,
-  path: string,
-  options?: RequestInit
-): Promise<Response> {
-  return stub.fetch(`https://db.test${path}`, options)
-}
-
-/**
- * Helper to send JSON body request
- */
-async function doJSON(
-  stub: DurableObjectStub,
-  path: string,
-  body: unknown,
-  method = 'POST'
-): Promise<Response> {
-  return stub.fetch(`https://db.test${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-}
-
-/**
- * Shorthand to POST to /data and parse the JSON result.
- */
-async function insertData(
-  stub: DurableObjectStub,
-  record: { id?: string; type: string; data: Record<string, unknown> }
-): Promise<Record<string, unknown>> {
-  const res = await doJSON(stub, '/data', record)
-  expect(res.status).toBe(200)
-  return res.json() as Promise<Record<string, unknown>>
-}
-
-/**
- * Shorthand to POST to /rels and parse the JSON result.
- */
-async function insertRel(
-  stub: DurableObjectStub,
-  rel: { from_id: string; relation: string; to_id: string; metadata?: Record<string, unknown> }
-): Promise<Record<string, unknown>> {
-  const res = await doJSON(stub, '/rels', rel)
-  expect(res.status).toBe(200)
-  return res.json() as Promise<Record<string, unknown>>
-}
+import { getStub, doRequest, doJSON, insertData, insertRel } from './test-helpers.js'
 
 // =============================================================================
 // Relationships - relate/unrelate
@@ -739,7 +671,7 @@ describe('Relationships - Metadata queries', () => {
     const res = await doJSON(stub, '/traverse/filter', {
       from_id: 'user-1',
       relation: 'has_skill',
-      metadataFilter: { level: 'expert' },
+      filter: { level: 'expert' },
     })
     expect(res.status).toBe(200)
     const results = (await res.json()) as Array<Record<string, unknown>>
@@ -753,7 +685,7 @@ describe('Relationships - Metadata queries', () => {
     const res = await doJSON(stub, '/traverse/filter', {
       from_id: 'user-1',
       relation: 'has_skill',
-      metadataFilter: { years: { $gte: 2 } },
+      filter: { years: { $gte: 2 } },
     })
     expect(res.status).toBe(200)
     const results = (await res.json()) as Array<Record<string, unknown>>

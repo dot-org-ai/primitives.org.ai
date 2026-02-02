@@ -2,7 +2,7 @@
  * Type Guards for ai-promise-db.ts
  *
  * These type guards enable type-safe property access on proxy objects
- * and entity markers, reducing the need for `as any` casts.
+ * and entity markers, providing proper type narrowing.
  *
  * @packageDocumentation
  */
@@ -141,14 +141,12 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 
 /**
  * Check if an array contains relation elements (objects with $type markers).
- * Uses direct property access to match original behavior where $type !== undefined.
  */
 export function hasRelationElements(arr: unknown[]): arr is Array<Record<string, unknown>> {
   return arr.some((v) => {
     if (v === null || typeof v !== 'object') {
       return false
     }
-    // Use direct property access to match original behavior: (v as any).$type !== undefined
     const obj = v as Record<string, unknown>
     return obj['$type'] !== undefined
   })
@@ -218,7 +216,7 @@ export function extractEntityId(value: unknown): string | undefined {
 
 /**
  * Extract the $type marker from an entity or relation proxy.
- * Uses direct property access to handle proxy objects that may not expose 'in' trap.
+ * Uses direct property access to handle proxy objects that may not expose the 'in' trap.
  *
  * @example
  * ```ts
@@ -230,7 +228,6 @@ export function extractMarkerType(value: unknown): string | undefined {
   if (value === null || typeof value !== 'object') {
     return undefined
   }
-  // Use direct property access to handle proxies: (value as any).$type
   const obj = value as Record<string, unknown>
   const type = obj['$type']
   if (type !== undefined && typeof type === 'string') {
@@ -266,8 +263,7 @@ export function safeGet<T = unknown>(value: unknown, key: string): T | undefined
 
 /**
  * Assert that a value is a record (for use after type narrowing).
- * This is used internally to avoid as any when we've already verified
- * the value is an object.
+ * Use this after verifying that a value is an object to get proper type inference.
  */
 export function asRecord(value: object): Record<string, unknown> {
   return value as Record<string, unknown>
@@ -366,7 +362,7 @@ export function setProperty(obj: Record<string, unknown>, key: string, value: un
 
 /**
  * Validate that a dynamic import result has the expected factory function.
- * Used to replace dangerous double-casts (as unknown as SomeModule).
+ * Provides type-safe access to dynamically imported modules.
  *
  * @example
  * ```ts

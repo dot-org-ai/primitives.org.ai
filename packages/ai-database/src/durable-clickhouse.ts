@@ -11,6 +11,7 @@ import type { ExecutionPriority, DurablePromiseOptions, BatchScheduler } from '.
 import { DurablePromise, getCurrentContext, setBatchScheduler } from './durable-promise.js'
 import { Semaphore } from './memory-provider.js'
 import { EntityNotFoundError } from './errors.js'
+import { logError, logInfo } from './logger.js'
 
 // =============================================================================
 // Types
@@ -183,7 +184,7 @@ export class ClickHouseDurableProvider implements BatchScheduler {
 
     // Auto-recover on init
     if (this.config.autoRecover) {
-      this.recover().catch(console.error)
+      this.recover().catch((err) => logError('Auto-recover failed:', err))
     }
   }
 
@@ -397,7 +398,7 @@ export class ClickHouseDurableProvider implements BatchScheduler {
         ])
       }
 
-      console.log(`Batch ${batchId}: ${batch.length} ${provider} operations queued`)
+      logInfo(`Batch ${batchId}: ${batch.length} ${provider} operations queued`)
     }
 
     // Execute non-batch immediately with concurrency control
@@ -435,7 +436,7 @@ export class ClickHouseDurableProvider implements BatchScheduler {
       status: ['pending', 'active'],
     })
 
-    console.log(`Recovering ${actions.length} actions from ClickHouse`)
+    logInfo(`Recovering ${actions.length} actions from ClickHouse`)
 
     let recovered = 0
     for (const action of actions) {

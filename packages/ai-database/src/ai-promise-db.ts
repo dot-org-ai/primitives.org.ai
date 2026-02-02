@@ -1591,18 +1591,6 @@ function enrichItemWithLoadedRelations(
   return enriched
 }
 
-/**
- * Apply batch-loaded results to the mapped results (deprecated, kept for compatibility)
- */
-function applyBatchResults<U>(
-  results: U[],
-  loadedRelations: Map<string, Map<string, unknown>>,
-  originalItems: unknown[]
-): U[] {
-  // No longer used - enrichment happens before callback re-run
-  return results
-}
-
 // =============================================================================
 // Check Functions
 // =============================================================================

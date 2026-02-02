@@ -1,14 +1,11 @@
 /**
- * Query Operations Tests for ai-database (RED phase)
+ * Query Operations Tests for ai-database
  *
  * Tests the list, find, and search query operations against DO SQLite.
  * These operations provide flexible querying with filtering, pagination,
  * ordering, and text search capabilities.
  *
  * Uses @cloudflare/vitest-pool-workers for real Cloudflare Workers execution.
- * NO MOCKS - tests use real Durable Objects with SQLite storage.
- *
- * These tests should FAIL initially because the query endpoints don't exist yet.
  *
  * Bead: aip-8ldh
  *
@@ -16,49 +13,12 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { env } from 'cloudflare:test'
-
-/**
- * Helper to get a stub for the DatabaseDO Durable Object.
- * Each test gets a unique DO instance for isolation.
- */
-function getStub(name?: string): DurableObjectStub {
-  const id = env.DATABASE.idFromName(name ?? crypto.randomUUID())
-  return env.DATABASE.get(id)
-}
-
-/**
- * Helper to send a request to the DO and get JSON response
- */
-async function doRequest(
-  stub: DurableObjectStub,
-  path: string,
-  options?: RequestInit
-): Promise<Response> {
-  return stub.fetch(`https://db.test${path}`, options)
-}
-
-/**
- * Helper to send JSON body request
- */
-async function doJSON(
-  stub: DurableObjectStub,
-  path: string,
-  body: unknown,
-  method = 'POST'
-): Promise<Response> {
-  return stub.fetch(`https://db.test${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-}
+import { getStub, doRequest, doJSON } from './test-helpers.js'
 
 // =============================================================================
 // Query Operations - list
 // =============================================================================
 
-// TODO: Advanced feature tests - needs investigation
 describe('Query Operations - list', () => {
   let stub: DurableObjectStub
 

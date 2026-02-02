@@ -2,7 +2,7 @@
  * Type Safety Tests for ai-promise-db.ts
  *
  * These tests verify that the proxy implementation maintains proper type safety
- * and reduces the need for `as any` casts.
+ * through type guards and type inference utilities.
  *
  * @packageDocumentation
  */
@@ -127,7 +127,6 @@ describe('InferEntity type inference', () => {
   })
 })
 
-// TODO: Advanced feature tests - needs investigation
 describe('Type Safety Tests', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())

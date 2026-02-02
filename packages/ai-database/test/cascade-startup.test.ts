@@ -157,11 +157,6 @@ describe('Startup Cascade', () => {
         {
           cascade: true,
           maxDepth: 2,
-          onProgress: (p) => {
-            console.log(
-              `Cascade: depth=${p.currentDepth}, type=${p.currentType}, total=${p.totalEntitiesCreated}`
-            )
-          },
         }
       )
 
@@ -170,8 +165,6 @@ describe('Startup Cascade', () => {
       // Check cascade created entities
       const problems = await db.Problem.list()
       const solutions = await db.Solution.list()
-
-      console.log(`Created: ${problems.length} problems, ${solutions.length} solutions`)
 
       expect(problems.length).toBeGreaterThan(0)
       expect(solutions.length).toBeGreaterThan(0)
@@ -221,9 +214,6 @@ describe('Startup Cascade', () => {
         },
       })
 
-      console.log('\n=== Starting Full Cascade ===')
-      console.log('Task -> Problem -> Solution -> HeadlessSaaS -> ICP\n')
-
       const task = await db.Task.create(
         {
           title: 'Customer Support Ticket Routing',
@@ -232,18 +222,8 @@ describe('Startup Cascade', () => {
         {
           cascade: true,
           maxDepth: 4,
-          onProgress: (p) => {
-            console.log(
-              `[Depth ${p.currentDepth}] Creating ${p.currentType}... (${p.totalEntitiesCreated} total)`
-            )
-          },
-          onError: (err) => {
-            console.error('Cascade error:', err.message)
-          },
         }
       )
-
-      console.log('\n=== Cascade Complete ===')
 
       // Verify entities were created
       const tasks = await db.Task.list()
@@ -252,26 +232,12 @@ describe('Startup Cascade', () => {
       const products = await db.HeadlessSaaS.list()
       const icps = await db.ICP.list()
 
-      console.log('\nCreated entities:')
-      console.log(`  Tasks: ${tasks.length}`)
-      console.log(`  Problems: ${problems.length}`)
-      console.log(`  Solutions: ${solutions.length}`)
-      console.log(`  HeadlessSaaS: ${products.length}`)
-      console.log(`  ICPs: ${icps.length}`)
-
       expect(task).toBeTruthy()
+      expect(tasks.length).toBeGreaterThan(0)
       expect(problems.length).toBeGreaterThan(0)
       expect(solutions.length).toBeGreaterThan(0)
       expect(products.length).toBeGreaterThan(0)
       expect(icps.length).toBeGreaterThan(0)
-
-      // Log sample output
-      if (icps.length > 0) {
-        console.log('\nSample ICP:')
-        console.log(`  As: ${icps[0].as}`)
-        console.log(`  At: ${icps[0].at}`)
-        console.log(`  To: ${icps[0].to}`)
-      }
     }, 120000)
   })
 })

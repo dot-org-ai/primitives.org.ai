@@ -36,7 +36,6 @@ import type {
   Resolved,
 } from '../../src/schema/types.js'
 
-// TODO: Advanced feature tests - needs investigation
 describe('Entity Operations Module Interface', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())

@@ -11,13 +11,14 @@
  * 4. Exact relationship operations (-> and <-) work without semantic search
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 import {
   CapabilityNotSupportedError,
   isCapabilityNotSupportedError,
   detectCapabilities,
 } from '../src/index.js'
+import { setLogger } from '../src/logger.js'
 import type { DBProvider } from '../src/schema/provider.js'
 import type { DatabaseSchema } from '../src/index.js'
 
@@ -518,11 +519,15 @@ describe('ai-database without semantic search', () => {
   })
 
   describe('embedding configuration warnings', () => {
-    it.skip('warns when embeddings config provided but provider lacks support', async () => {
-      // This test is skipped because the warning is not yet implemented
-      // The DB function should warn when embeddings are configured but provider
-      // doesn't support semantic search. This would be a follow-up enhancement.
-      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    it('warns when embeddings config provided but provider lacks support', async () => {
+      const warnMock = vi.fn()
+      // Set up a custom logger to capture warnings
+      setLogger({
+        debug: () => {},
+        info: () => {},
+        warn: warnMock,
+        error: () => {},
+      })
 
       const schema = {
         Product: {
@@ -540,17 +545,21 @@ describe('ai-database without semantic search', () => {
         },
       })
 
+      // Wait for the async warning to be logged
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
       // Should warn that embeddings won't work
-      expect(consoleSpy).toHaveBeenCalled()
+      expect(warnMock).toHaveBeenCalled()
       expect(
-        consoleSpy.mock.calls.some(
+        warnMock.mock.calls.some(
           (call) =>
             call[0]?.toString().toLowerCase().includes('embedding') ||
             call[0]?.toString().toLowerCase().includes('semantic')
         )
       ).toBe(true)
 
-      consoleSpy.mockRestore()
+      // Reset logger
+      setLogger(null)
     })
   })
 

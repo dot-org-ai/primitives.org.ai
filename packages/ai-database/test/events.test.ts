@@ -345,6 +345,183 @@ describe('Events API', () => {
       const postEvents = await events.list({ event: 'Post.created' })
       expect(postEvents.length).toBeGreaterThanOrEqual(2)
     })
+
+    it('filters events by object', async () => {
+      const { db, events } = DB(schema)
+
+      await db.Post.create('post-1', { title: 'Post 1', content: 'Content 1' })
+      await db.Post.update('post-1', { title: 'Updated Post 1' })
+      await db.Post.create('post-2', { title: 'Post 2', content: 'Content 2' })
+
+      const post1Events = await events.list({ object: 'Post/post-1' })
+      expect(post1Events.length).toBeGreaterThanOrEqual(2) // created + updated
+      post1Events.forEach((event) => {
+        expect(event.object).toBe('Post/post-1')
+      })
+    })
+
+    it('filters events by time range (since)', async () => {
+      const { db, events } = DB(schema)
+
+      await db.Post.create('post-old', { title: 'Old Post', content: 'Content' })
+
+      const afterFirstCreate = new Date()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      await db.Post.create('post-new', { title: 'New Post', content: 'Content' })
+
+      const recentEvents = await events.list({ since: afterFirstCreate })
+      // Should only include the newer post
+      const hasNewPost = recentEvents.some(
+        (e) => e.objectData?.$id === 'post-new' || e.object === 'Post/post-new'
+      )
+      expect(hasNewPost).toBe(true)
+    })
+
+    it('filters events by time range (until)', async () => {
+      const { db, events } = DB(schema)
+
+      await db.Post.create('post-early', { title: 'Early Post', content: 'Content' })
+
+      const cutoff = new Date()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      await db.Post.create('post-late', { title: 'Late Post', content: 'Content' })
+
+      const earlyEvents = await events.list({ until: cutoff })
+      // Should not include the late post
+      const hasLatePost = earlyEvents.some(
+        (e) => e.objectData?.$id === 'post-late' || e.object === 'Post/post-late'
+      )
+      expect(hasLatePost).toBe(false)
+    })
+
+    it('respects limit parameter', async () => {
+      const { db, events } = DB(schema)
+
+      for (let i = 0; i < 5; i++) {
+        await db.Post.create(`post-${i}`, { title: `Post ${i}`, content: 'Content' })
+      }
+
+      const limitedEvents = await events.list({ limit: 3 })
+      expect(limitedEvents.length).toBe(3)
+    })
+  })
+
+  describe('events.replay() - Event replay', () => {
+    it('replays events through a handler', async () => {
+      const { db, events } = DB(schema)
+      const replayedEvents: DBEvent[] = []
+
+      await db.Post.create('post-1', { title: 'Post 1', content: 'Content 1' })
+      await db.Post.create('post-2', { title: 'Post 2', content: 'Content 2' })
+
+      await events.replay({
+        event: 'Post.created',
+        handler: (event) => {
+          replayedEvents.push(event)
+        },
+      })
+
+      expect(replayedEvents.length).toBeGreaterThanOrEqual(2)
+      replayedEvents.forEach((event) => {
+        expect(event.event).toBe('Post.created')
+      })
+    })
+
+    it('replays events since a specific time', async () => {
+      const { db, events } = DB(schema)
+      const replayedEvents: DBEvent[] = []
+
+      await db.Post.create('post-old', { title: 'Old Post', content: 'Content' })
+
+      // Wait a bit longer to ensure time separation
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      const afterFirstCreate = new Date()
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      await db.Post.create('post-new', { title: 'New Post', content: 'Content' })
+
+      await events.replay({
+        since: afterFirstCreate,
+        handler: (event) => {
+          replayedEvents.push(event)
+        },
+      })
+
+      // Should include events for the new post
+      const hasNewPost = replayedEvents.some(
+        (e) => e.objectData?.$id === 'post-new' || e.object === 'Post/post-new'
+      )
+      expect(hasNewPost).toBe(true)
+
+      // Should not include events for the old post (created before the cutoff)
+      const hasOldPost = replayedEvents.some(
+        (e) => e.objectData?.$id === 'post-old' || e.object === 'Post/post-old'
+      )
+      expect(hasOldPost).toBe(false)
+    })
+
+    it('replays all events when no filters provided', async () => {
+      const { db, events } = DB(schema)
+      const replayedEvents: DBEvent[] = []
+
+      await db.Post.create('post-1', { title: 'Post', content: 'Content' })
+      await db.Comment.create('comment-1', { text: 'Comment' })
+
+      await events.replay({
+        handler: (event) => {
+          replayedEvents.push(event)
+        },
+      })
+
+      // Should include both Post and Comment events
+      const types = replayedEvents.map((e) => e.objectData?.$type)
+      expect(types).toContain('Post')
+      expect(types).toContain('Comment')
+    })
+
+    it('supports async handlers', async () => {
+      const { db, events } = DB(schema)
+      const processed: string[] = []
+
+      await db.Post.create('post-1', { title: 'Post 1', content: 'Content' })
+      await db.Post.create('post-2', { title: 'Post 2', content: 'Content' })
+
+      await events.replay({
+        event: 'Post.created',
+        handler: async (event) => {
+          await new Promise((resolve) => setTimeout(resolve, 5))
+          processed.push(event.objectData?.$id as string)
+        },
+      })
+
+      expect(processed.length).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  describe('events.on() - Wildcard all events', () => {
+    it('receives all events with * pattern', async () => {
+      const { db, events } = DB(schema)
+      const receivedEvents: DBEvent[] = []
+
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      events.on('*', (event) => {
+        receivedEvents.push(event)
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      await db.Post.create('post-1', { title: 'Post', content: 'Content' })
+      await db.Post.update('post-1', { title: 'Updated' })
+      await db.Comment.create('comment-1', { text: 'Comment' })
+
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      // Should receive all events (created, updated for different types)
+      expect(receivedEvents.length).toBeGreaterThanOrEqual(3)
+    })
   })
 
   describe('Unsubscribe', () => {
@@ -378,6 +555,250 @@ describe('Events API', () => {
       // Should not receive the second event
       expect(receivedEvents.length).toBe(countBefore)
     })
+  })
+})
+
+describe('Events API - Additional list filters', () => {
+  beforeEach(() => {
+    setProvider(createMemoryProvider())
+  })
+
+  const schema = {
+    Post: {
+      title: 'string',
+      content: 'string',
+    },
+  } as const
+
+  it('filters events by actor', async () => {
+    const { events } = DB(schema)
+
+    // Emit events with different actors
+    await events.emit({
+      actor: 'user:alice',
+      event: 'custom:action',
+      object: 'Post/post-1',
+    })
+
+    await events.emit({
+      actor: 'user:bob',
+      event: 'custom:action',
+      object: 'Post/post-2',
+    })
+
+    const aliceEvents = await events.list({ actor: 'user:alice' })
+    expect(aliceEvents.length).toBeGreaterThanOrEqual(1)
+    aliceEvents.forEach((event) => {
+      expect(event.actor).toBe('user:alice')
+    })
+  })
+
+  it('combines multiple filters', async () => {
+    const { db, events } = DB(schema)
+
+    await db.Post.create('post-1', { title: 'Post 1', content: 'Content' })
+    await db.Post.update('post-1', { title: 'Updated' })
+
+    const filteredEvents = await events.list({
+      event: 'Post.created',
+      object: 'Post/post-1',
+      limit: 10,
+    })
+
+    expect(filteredEvents.length).toBe(1)
+    expect(filteredEvents[0].event).toBe('Post.created')
+    expect(filteredEvents[0].object).toBe('Post/post-1')
+  })
+})
+
+describe('Events API - Event data structure', () => {
+  beforeEach(() => {
+    setProvider(createMemoryProvider())
+  })
+
+  const schema = {
+    Post: {
+      title: 'string',
+      content: 'string',
+    },
+  } as const
+
+  it('includes all required event fields', async () => {
+    const { db, events } = DB(schema)
+    const receivedEvents: DBEvent[] = []
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    events.on('Post.created', (event) => {
+      receivedEvents.push(event)
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    await db.Post.create('post-1', { title: 'Test', content: 'Content' })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(receivedEvents.length).toBe(1)
+    const event = receivedEvents[0]
+
+    // Required fields
+    expect(event.id).toBeDefined()
+    expect(typeof event.id).toBe('string')
+    expect(event.event).toBe('Post.created')
+    expect(event.timestamp).toBeDefined()
+    expect(event.timestamp instanceof Date).toBe(true)
+  })
+
+  it('includes objectData with entity fields', async () => {
+    const { db, events } = DB(schema)
+    const receivedEvents: DBEvent[] = []
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    events.on('Post.created', (event) => {
+      receivedEvents.push(event)
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    await db.Post.create('post-1', {
+      title: 'My Title',
+      content: 'My Content',
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const event = receivedEvents[0]
+    expect(event.objectData).toBeDefined()
+    expect(event.objectData?.$type).toBe('Post')
+    expect(event.objectData?.$id).toBe('post-1')
+    expect(event.objectData?.title).toBe('My Title')
+    expect(event.objectData?.content).toBe('My Content')
+  })
+
+  it('emitted custom events include all provided fields', async () => {
+    const { events } = DB(schema)
+
+    const emitted = await events.emit({
+      actor: 'user:john',
+      event: 'custom:publish',
+      object: 'Post/post-1',
+      objectData: { title: 'Published Post' },
+      result: 'Publication/pub-1',
+      resultData: { url: 'https://example.com/post' },
+      meta: { channel: 'blog', priority: 'high' },
+    })
+
+    expect(emitted.actor).toBe('user:john')
+    expect(emitted.event).toBe('custom:publish')
+    expect(emitted.object).toBe('Post/post-1')
+    expect(emitted.objectData).toEqual({ title: 'Published Post' })
+    expect(emitted.result).toBe('Publication/pub-1')
+    expect(emitted.resultData).toEqual({ url: 'https://example.com/post' })
+    expect(emitted.meta).toEqual({ channel: 'blog', priority: 'high' })
+  })
+})
+
+describe('Events API - Multiple subscriptions', () => {
+  beforeEach(() => {
+    setProvider(createMemoryProvider())
+  })
+
+  const schema = {
+    Post: { title: 'string' },
+    Comment: { text: 'string' },
+  } as const
+
+  it('supports multiple handlers for same pattern', async () => {
+    const { db, events } = DB(schema)
+    const handler1Events: DBEvent[] = []
+    const handler2Events: DBEvent[] = []
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    events.on('Post.created', (event) => {
+      handler1Events.push(event)
+    })
+
+    events.on('Post.created', (event) => {
+      handler2Events.push(event)
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    await db.Post.create({ title: 'Test' })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Both handlers should receive the event
+    expect(handler1Events.length).toBe(1)
+    expect(handler2Events.length).toBe(1)
+  })
+
+  it('unsubscribe only affects the specific handler', async () => {
+    const { db, events } = DB(schema)
+    const handler1Events: DBEvent[] = []
+    const handler2Events: DBEvent[] = []
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    const unsub1 = events.on('Post.created', (event) => {
+      handler1Events.push(event)
+    })
+
+    events.on('Post.created', (event) => {
+      handler2Events.push(event)
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    await db.Post.create({ title: 'First' })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Unsubscribe handler1
+    unsub1()
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    await db.Post.create({ title: 'Second' })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Handler1 should only have 1 event, Handler2 should have 2
+    expect(handler1Events.length).toBe(1)
+    expect(handler2Events.length).toBe(2)
+  })
+
+  it('supports overlapping patterns', async () => {
+    const { db, events } = DB(schema)
+    const specificEvents: DBEvent[] = []
+    const wildcardEvents: DBEvent[] = []
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    events.on('Post.created', (event) => {
+      specificEvents.push(event)
+    })
+
+    events.on('Post.*', (event) => {
+      wildcardEvents.push(event)
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    await db.Post.create('post-1', { title: 'Test' })
+    await db.Post.update('post-1', { title: 'Updated' })
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    // Specific pattern gets 1 event (created only)
+    expect(specificEvents.length).toBe(1)
+    expect(specificEvents[0].event).toBe('Post.created')
+
+    // Wildcard pattern gets 2 events (created + updated)
+    expect(wildcardEvents.length).toBe(2)
   })
 })
 

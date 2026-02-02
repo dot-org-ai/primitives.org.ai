@@ -7,20 +7,20 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./worker": {
-      "import": "./dist/worker.js",
-      "types": "./dist/worker.d.ts"
+      "types": "./dist/worker/index.d.ts",
+      "import": "./dist/worker/index.js"
     },
     "./client": {
-      "import": "./dist/client.js",
-      "types": "./dist/client.d.ts"
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
     },
     "./tests": {
-      "import": "./dist/tests.js",
-      "types": "./dist/tests.d.ts"
+      "types": "./dist/tests.d.ts",
+      "import": "./dist/tests.js"
     }
   },
   "files": [

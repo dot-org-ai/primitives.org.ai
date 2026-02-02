@@ -646,21 +646,25 @@ describe('Semantic Search - batch embeddings', () => {
   })
 
   it('should skip entities with existing embeddings in batch', async () => {
-    // Create entity and wait for embedding
+    // Create entity
     await insertData(stub, {
       id: 'existing-1',
       type: 'Article',
       data: { title: 'Existing', content: 'Already has embedding.' },
     })
 
-    // Create another entity
+    // Force embedding generation by querying it (embeddings are lazy-generated)
+    const embRes = await doRequest(stub, '/embeddings/Article/existing-1')
+    expect(embRes.status).toBe(200)
+
+    // Create another entity (without generating embedding)
     await insertData(stub, {
       id: 'new-1',
       type: 'Article',
       data: { title: 'New', content: 'Needs embedding.' },
     })
 
-    // Batch generate - should skip existing
+    // Batch generate - should skip existing-1 (has embedding) and process new-1
     const res = await doJSON(stub, '/embeddings/batch', {
       type: 'Article',
       ids: ['existing-1', 'new-1'],

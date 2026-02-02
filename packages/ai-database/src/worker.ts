@@ -3917,6 +3917,25 @@ export class DatabaseService extends WorkerEntrypoint<Env> {
   connect(namespace?: string, options?: MemoryProviderOptions): DatabaseServiceCore {
     return new DatabaseServiceCore(namespace ?? 'default', options)
   }
+
+  /**
+   * Handle fetch requests - required by vitest-pool-workers for service binding tests
+   * Returns a simple JSON response for health checks or routes to the appropriate service
+   */
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    // Health check endpoint
+    if (url.pathname === '/health' || url.pathname === '/') {
+      return Response.json({ status: 'ok', service: 'ai-database' })
+    }
+
+    // For other requests, return 404 - RPC should be used instead
+    return Response.json(
+      { error: 'Not found. Use RPC via service binding instead.' },
+      { status: 404 }
+    )
+  }
 }
 
 // WorkerEntrypoint IS the default export

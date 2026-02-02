@@ -39,6 +39,7 @@ import {
   type ForEachOptions,
   type ForEachResult,
 } from '../ai-promise-db.js'
+import { logError } from '../logger.js'
 
 // Re-export types from types.ts
 export type {
@@ -1063,7 +1064,7 @@ export function DB<TSchema extends DatabaseSchema>(
         try {
           handler(data)
         } catch (e) {
-          console.error(`Error in event handler for ${eventType}:`, e)
+          logError(`Error in event handler for ${eventType}:`, e)
         }
       }
     }

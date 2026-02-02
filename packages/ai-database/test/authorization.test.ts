@@ -402,7 +402,7 @@ describe('nounPermissions', () => {
     // Should NOT create duplicate permissions for CRUD verbs
     const verbPerms = perms.filter((p) => p.name.includes('.'))
     expect(verbPerms).toHaveLength(1)
-    expect(verbPerms[0].name).toBe('item.custom')
+    expect(verbPerms[0]!.name).toBe('item.custom')
   })
 
   it('handles noun with action objects', () => {
@@ -432,16 +432,16 @@ describe('createStandardRoles', () => {
   it('creates all standard role levels', () => {
     const roles = createStandardRoles('workspace')
 
-    expect(roles.owner).toBeDefined()
-    expect(roles.admin).toBeDefined()
-    expect(roles.editor).toBeDefined()
-    expect(roles.viewer).toBeDefined()
-    expect(roles.guest).toBeDefined()
+    expect(roles['owner']).toBeDefined()
+    expect(roles['admin']).toBeDefined()
+    expect(roles['editor']).toBeDefined()
+    expect(roles['viewer']).toBeDefined()
+    expect(roles['guest']).toBeDefined()
   })
 
   it('creates owner role with full control', () => {
     const roles = createStandardRoles('workspace')
-    const owner = roles.owner
+    const owner = roles['owner']!
 
     expect(owner.id).toBe('workspace:owner')
     expect(owner.name).toBe('Owner')
@@ -454,7 +454,7 @@ describe('createStandardRoles', () => {
 
   it('creates admin role with all CRUD + act permissions', () => {
     const roles = createStandardRoles('workspace')
-    const admin = roles.admin
+    const admin = roles['admin']!
 
     expect(admin.id).toBe('workspace:admin')
     expect(admin.permissions.find((p) => p.name === 'create')).toBeDefined()
@@ -466,7 +466,7 @@ describe('createStandardRoles', () => {
 
   it('creates editor role with read, edit, and act permissions', () => {
     const roles = createStandardRoles('workspace')
-    const editor = roles.editor
+    const editor = roles['editor']!
 
     expect(editor.id).toBe('workspace:editor')
     expect(editor.permissions.find((p) => p.name === 'read')).toBeDefined()
@@ -478,22 +478,22 @@ describe('createStandardRoles', () => {
 
   it('creates viewer role with read-only access', () => {
     const roles = createStandardRoles('workspace')
-    const viewer = roles.viewer
+    const viewer = roles['viewer']!
 
     expect(viewer.id).toBe('workspace:viewer')
     expect(viewer.permissions).toHaveLength(1)
-    expect(viewer.permissions[0].name).toBe('read')
+    expect(viewer.permissions[0]!.name).toBe('read')
   })
 
   it('creates guest role with limited access', () => {
     const roles = createStandardRoles('workspace')
-    const guest = roles.guest
+    const guest = roles['guest']!
 
     expect(guest.id).toBe('workspace:guest')
     expect(guest.permissions).toHaveLength(1)
-    expect(guest.permissions[0].name).toBe('view')
-    expect(guest.permissions[0].actions).toEqual(['get'])
-    expect(guest.permissions[0].inheritable).toBe(false)
+    expect(guest.permissions[0]!.name).toBe('view')
+    expect(guest.permissions[0]!.actions).toEqual(['get'])
+    expect(guest.permissions[0]!.inheritable).toBe(false)
   })
 })
 
@@ -532,13 +532,13 @@ describe('authorizeNoun', () => {
 
     expect(authNoun.singular).toBe('document')
     expect(authNoun.plural).toBe('documents')
-    expect(authNoun.properties?.id).toBeDefined()
+    expect(authNoun.properties?.['id']).toBeDefined()
   })
 
   it('handles roles and permissions in config', () => {
     const roles = createStandardRoles('document')
     const authNoun = authorizeNoun(baseNoun, {
-      roles: [roles.viewer, roles.editor],
+      roles: [roles['viewer']!, roles['editor']!],
       permissions: [verbPermission('document', 'publish')],
     })
 
@@ -649,15 +649,15 @@ describe('AuthorizationNouns', () => {
     it('defines Role as a noun', () => {
       expect(RoleNoun.singular).toBe('role')
       expect(RoleNoun.plural).toBe('roles')
-      expect(RoleNoun.properties?.id).toBeDefined()
-      expect(RoleNoun.properties?.name).toBeDefined()
-      expect(RoleNoun.properties?.resourceType).toBeDefined()
+      expect(RoleNoun.properties?.['id']).toBeDefined()
+      expect(RoleNoun.properties?.['name']).toBeDefined()
+      expect(RoleNoun.properties?.['resourceType']).toBeDefined()
     })
 
     it('has relationship to permissions and assignments', () => {
-      expect(RoleNoun.relationships?.permissions).toBeDefined()
-      expect(RoleNoun.relationships?.inherits).toBeDefined()
-      expect(RoleNoun.relationships?.assignments).toBeDefined()
+      expect(RoleNoun.relationships?.['permissions']).toBeDefined()
+      expect(RoleNoun.relationships?.['inherits']).toBeDefined()
+      expect(RoleNoun.relationships?.['assignments']).toBeDefined()
     })
 
     it('defines role actions and events', () => {
@@ -672,15 +672,15 @@ describe('AuthorizationNouns', () => {
     it('defines Assignment as a noun', () => {
       expect(AssignmentNoun.singular).toBe('assignment')
       expect(AssignmentNoun.plural).toBe('assignments')
-      expect(AssignmentNoun.properties?.subjectType).toBeDefined()
-      expect(AssignmentNoun.properties?.subjectId).toBeDefined()
-      expect(AssignmentNoun.properties?.roleId).toBeDefined()
-      expect(AssignmentNoun.properties?.resourceType).toBeDefined()
-      expect(AssignmentNoun.properties?.resourceId).toBeDefined()
+      expect(AssignmentNoun.properties?.['subjectType']).toBeDefined()
+      expect(AssignmentNoun.properties?.['subjectId']).toBeDefined()
+      expect(AssignmentNoun.properties?.['roleId']).toBeDefined()
+      expect(AssignmentNoun.properties?.['resourceType']).toBeDefined()
+      expect(AssignmentNoun.properties?.['resourceId']).toBeDefined()
     })
 
     it('has expiration property', () => {
-      expect(AssignmentNoun.properties?.expiresAt).toBeDefined()
+      expect(AssignmentNoun.properties?.['expiresAt']).toBeDefined()
     })
   })
 
@@ -688,8 +688,8 @@ describe('AuthorizationNouns', () => {
     it('defines Permission as a noun', () => {
       expect(PermissionNoun.singular).toBe('permission')
       expect(PermissionNoun.plural).toBe('permissions')
-      expect(PermissionNoun.properties?.name).toBeDefined()
-      expect(PermissionNoun.properties?.actions).toBeDefined()
+      expect(PermissionNoun.properties?.['name']).toBeDefined()
+      expect(PermissionNoun.properties?.['actions']).toBeDefined()
     })
   })
 
@@ -717,18 +717,18 @@ describe('InMemoryAuthorizationEngine', () => {
     engine = new InMemoryAuthorizationEngine({
       hierarchy: StandardHierarchies.saas,
       roles: [
-        workspaceRoles.owner,
-        workspaceRoles.admin,
-        workspaceRoles.editor,
-        workspaceRoles.viewer,
-        projectRoles.owner,
-        projectRoles.admin,
-        projectRoles.editor,
-        projectRoles.viewer,
-        documentRoles.owner,
-        documentRoles.admin,
-        documentRoles.editor,
-        documentRoles.viewer,
+        workspaceRoles['owner']!,
+        workspaceRoles['admin']!,
+        workspaceRoles['editor']!,
+        workspaceRoles['viewer']!,
+        projectRoles['owner']!,
+        projectRoles['admin']!,
+        projectRoles['editor']!,
+        projectRoles['viewer']!,
+        documentRoles['owner']!,
+        documentRoles['admin']!,
+        documentRoles['editor']!,
+        documentRoles['viewer']!,
       ],
     })
   })
@@ -836,8 +836,8 @@ describe('InMemoryAuthorizationEngine', () => {
         metadata: { grantedBy: 'system', reason: 'initial setup' },
       })
 
-      expect(assignment.metadata?.grantedBy).toBe('system')
-      expect(assignment.metadata?.reason).toBe('initial setup')
+      expect(assignment.metadata?.['grantedBy']).toBe('system')
+      expect(assignment.metadata?.['reason']).toBe('initial setup')
     })
 
     it('retrieves an assignment by ID', async () => {
@@ -936,7 +936,7 @@ describe('InMemoryAuthorizationEngine', () => {
       })
 
       expect(ws123Assignments).toHaveLength(1)
-      expect(ws123Assignments[0].subject.id).toBe('alice')
+      expect(ws123Assignments[0]!.subject.id).toBe('alice')
     })
 
     it('lists assignments with multiple filters', async () => {
@@ -957,7 +957,7 @@ describe('InMemoryAuthorizationEngine', () => {
       })
 
       expect(filtered).toHaveLength(1)
-      expect(filtered[0].role).toBe('workspace:admin')
+      expect(filtered[0]!.role).toBe('workspace:admin')
     })
   })
 
@@ -1106,10 +1106,10 @@ describe('InMemoryAuthorizationEngine', () => {
       })
 
       expect(result.results).toHaveLength(4)
-      expect(result.results[0].allowed).toBe(true) // Alice can read ws-1
-      expect(result.results[1].allowed).toBe(true) // Alice can delete ws-1 (admin has delete)
-      expect(result.results[2].allowed).toBe(false) // Alice cannot read ws-2 (no assignment)
-      expect(result.results[3].allowed).toBe(false) // Bob cannot read ws-1 (no assignment)
+      expect(result.results[0]!.allowed).toBe(true) // Alice can read ws-1
+      expect(result.results[1]!.allowed).toBe(true) // Alice can delete ws-1 (admin has delete)
+      expect(result.results[2]!.allowed).toBe(false) // Alice cannot read ws-2 (no assignment)
+      expect(result.results[3]!.allowed).toBe(false) // Bob cannot read ws-1 (no assignment)
       expect(result.latencyMs).toBeGreaterThanOrEqual(0)
     })
 
@@ -1220,7 +1220,7 @@ describe('InMemoryAuthorizationEngine', () => {
 
       // Only admin role has delete
       expect(resources).toHaveLength(1)
-      expect(resources[0].id).toBe('ws-1')
+      expect(resources[0]!.id).toBe('ws-1')
     })
   })
 
@@ -1248,7 +1248,7 @@ describe('InMemoryAuthorizationEngine', () => {
   describe('Role Inheritance', () => {
     beforeEach(async () => {
       // Create a role hierarchy: super-admin inherits from admin
-      const adminRole = createStandardRoles('workspace').admin
+      const adminRole = createStandardRoles('workspace')['admin']!
       const superAdminRole: Role = {
         id: 'workspace:super-admin',
         name: 'Super Admin',
@@ -1306,7 +1306,7 @@ describe('Edge Cases and Error Conditions', () => {
 
   beforeEach(() => {
     engine = new InMemoryAuthorizationEngine({
-      roles: [createStandardRoles('workspace').viewer],
+      roles: [createStandardRoles('workspace')['viewer']!],
     })
   })
 
@@ -1357,7 +1357,7 @@ describe('Edge Cases and Error Conditions', () => {
       })
 
       const resource = await engine.getResource({ type: 'workspace', id: 'ws-1' })
-      expect(resource?.metadata?.version).toBe(2)
+      expect(resource?.metadata?.['version']).toBe(2)
     })
   })
 

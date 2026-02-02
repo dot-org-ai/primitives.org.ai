@@ -19,6 +19,7 @@ import type {
   EmbeddingsConfig,
 } from './types.js'
 import { setProviderResolver } from '../ai-promise-db.js'
+import { logWarn } from '../logger.js'
 
 // =============================================================================
 // Transaction Types
@@ -434,7 +435,7 @@ export async function resolveProvider(): Promise<DBProvider> {
           // Check file count and warn if approaching threshold
           checkFileCountThreshold(parsed.root)
         } catch (err) {
-          console.warn('@mdxdb/fs not available, falling back to memory provider')
+          logWarn('@mdxdb/fs not available, falling back to memory provider')
           const { createMemoryProvider } = await import('../memory-provider.js')
           globalProvider = createMemoryProvider()
         }
@@ -456,7 +457,7 @@ export async function resolveProvider(): Promise<DBProvider> {
             globalProvider = await createSqliteProvider({ url: `file:${dbPath}` })
           }
         } catch (err) {
-          console.warn('@mdxdb/sqlite not available, falling back to memory provider')
+          logWarn('@mdxdb/sqlite not available, falling back to memory provider')
           const { createMemoryProvider } = await import('../memory-provider.js')
           globalProvider = createMemoryProvider()
         }
@@ -484,7 +485,7 @@ export async function resolveProvider(): Promise<DBProvider> {
             })
           }
         } catch (err) {
-          console.warn('@mdxdb/clickhouse not available, falling back to memory provider')
+          logWarn('@mdxdb/clickhouse not available, falling back to memory provider')
           const { createMemoryProvider } = await import('../memory-provider.js')
           globalProvider = createMemoryProvider()
         }
@@ -536,10 +537,10 @@ async function checkFileCountThreshold(root: string): Promise<void> {
 
     const count = await countFiles(root)
     if (count > FILE_COUNT_THRESHOLD) {
-      console.warn(
-        `\n  You have ${count.toLocaleString()} MDX files. ` +
-          `Consider upgrading to ClickHouse for better performance:\n` +
-          `   DATABASE_URL=chdb://./data/clickhouse\n`
+      logWarn(
+        `You have ${count.toLocaleString()} MDX files. ` +
+          `Consider upgrading to ClickHouse for better performance: ` +
+          `DATABASE_URL=chdb://./data/clickhouse`
       )
     }
   } catch {

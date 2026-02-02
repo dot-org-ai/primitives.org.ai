@@ -20,6 +20,7 @@ import type {
 import type { OperatorParseResult } from './types.js'
 
 import { parseOperator as graphdlParseOperator } from '@graphdl/core'
+import { logWarn } from '../logger.js'
 
 // =============================================================================
 // Schema Validation Error
@@ -636,50 +637,49 @@ export function validateOperatorSyntax(definition: string, fieldName: string): v
  * ```
  */
 export function parseOperator(definition: string): OperatorParseResult | null {
-  // Use graphdl's parseOperator implementation
   const graphdlResult = graphdlParseOperator(definition)
   if (!graphdlResult) return null
 
-  // ai-database's parseField and validateOperatorTarget expect targetType to contain
-  // the raw suffix after the operator, including modifiers (?, [], .backref).
-  // Extract this directly from the definition rather than reconstructing from
-  // graphdl's parsed components. This preserves the original string for validation
-  // (e.g., 'User|' with trailing pipe for empty union member detection).
-  const operators = ['~>', '<~', '->', '<-'] as const
-  let rawTargetType = ''
-  for (const op of operators) {
-    const opIndex = definition.indexOf(op)
-    if (opIndex !== -1) {
-      rawTargetType = definition.slice(opIndex + op.length).trim()
-      break
-    }
-  }
+  // Extract raw target type after operator for validation (preserves trailing pipe, etc.)
+  const rawTargetType = extractRawTargetType(definition, graphdlResult.threshold)
 
-  // Handle threshold extraction - graphdl already does this, so strip threshold from rawTargetType
-  // to maintain consistency with the original implementation
-  if (graphdlResult.threshold !== undefined) {
-    // Remove threshold from rawTargetType (e.g., 'Type(0.8)' -> 'Type')
-    rawTargetType = rawTargetType.replace(/\([0-9.]+\)/, '')
-  } else {
-    // Handle malformed threshold syntax (missing closing paren)
-    // graphdl strips these internally - we need to do the same for rawTargetType
-    // e.g., 'Category(0.8' -> 'Category'
-    const malformedThresholdMatch = rawTargetType.match(/^([A-Za-z][A-Za-z0-9_]*)\([^)]*$/)
-    if (malformedThresholdMatch) {
-      rawTargetType = malformedThresholdMatch[1]!
-    }
-  }
-
-  const result: OperatorParseResult = {
+  return {
     operator: graphdlResult.operator,
     direction: graphdlResult.direction,
     matchMode: graphdlResult.matchMode,
     targetType: rawTargetType,
+    ...(graphdlResult.prompt !== undefined && { prompt: graphdlResult.prompt }),
+    ...(graphdlResult.unionTypes !== undefined && { unionTypes: graphdlResult.unionTypes }),
+    ...(graphdlResult.threshold !== undefined && { threshold: graphdlResult.threshold }),
   }
-  if (graphdlResult.prompt !== undefined) result.prompt = graphdlResult.prompt
-  if (graphdlResult.unionTypes !== undefined) result.unionTypes = graphdlResult.unionTypes
-  if (graphdlResult.threshold !== undefined) result.threshold = graphdlResult.threshold
-  return result
+}
+
+/**
+ * Extract the raw target type string after the operator
+ *
+ * This preserves the original string for validation purposes
+ * (e.g., detecting 'User|' with trailing pipe for empty union member errors).
+ */
+function extractRawTargetType(definition: string, threshold: number | undefined): string {
+  // Find operator position and extract everything after it
+  const operatorPattern = /(?:~>|<~|->|<-)/
+  const match = definition.match(operatorPattern)
+  if (!match || match.index === undefined) return ''
+
+  let targetType = definition.slice(match.index + match[0].length).trim()
+
+  // Strip threshold syntax if present
+  if (threshold !== undefined) {
+    targetType = targetType.replace(/\([0-9.]+\)/, '')
+  } else {
+    // Handle malformed threshold (missing closing paren): 'Category(0.8' -> 'Category'
+    const malformedMatch = targetType.match(/^([A-Za-z][A-Za-z0-9_]*)\([^)]*$/)
+    if (malformedMatch) {
+      targetType = malformedMatch[1]!
+    }
+  }
+
+  return targetType
 }
 
 // =============================================================================
@@ -1010,8 +1010,8 @@ export function parseSchema(schema: DatabaseSchema): ParsedSchema {
             // None of the union types exist - this is likely a schema error
             // Warn in development, or throw if strict validation is needed
             const missingTypes = field.unionTypes.join('|')
-            console.warn(
-              `Warning: ${entityName}.${fieldName} union type '${missingTypes}' - ` +
+            logWarn(
+              `${entityName}.${fieldName} union type '${missingTypes}' - ` +
                 `none of the specified types exist in the schema. ` +
                 `Ensure all union types are defined.`
             )

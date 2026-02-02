@@ -15,7 +15,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { DB, setProvider, createMemoryProvider } from '../src/index.js'
 
-// TODO: Advanced feature tests - needs investigation
 describe('Backward Fuzzy (<~) Resolution', () => {
   beforeEach(() => {
     setProvider(createMemoryProvider())

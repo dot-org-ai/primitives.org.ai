@@ -8,6 +8,7 @@
  */
 
 import type { DBProvider } from './schema.js'
+import { logWarn } from './logger.js'
 
 // =============================================================================
 // Provider Capabilities Interface
@@ -235,7 +236,7 @@ export function warnIfUnavailable(
   featureName: string
 ): void {
   if (!capabilities[capability] && !shownWarnings.has(featureName)) {
-    console.warn(`Warning: ${featureName} is not available with this provider`)
+    logWarn(`${featureName} is not available with this provider`)
     shownWarnings.add(featureName)
   }
 }

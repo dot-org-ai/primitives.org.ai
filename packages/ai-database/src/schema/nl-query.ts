@@ -106,6 +106,32 @@ export function buildNLQueryContext(schema: ParsedSchema, targetType?: string): 
 // NL Query Execution
 // =============================================================================
 
+/** Regex pattern to detect "list all" style queries */
+const LIST_ALL_PATTERN = /^(show|list|get|find|display)\s+(all|every|the)?\s*/i
+
+/**
+ * Check if a query is requesting to list all items
+ */
+function isListAllQuery(question: string): boolean {
+  const normalized = question.toLowerCase().trim()
+  return LIST_ALL_PATTERN.test(normalized) || normalized === '' || /\ball\b/i.test(normalized)
+}
+
+/**
+ * Fetch results from provider for a single type
+ */
+async function fetchTypeResults<T>(
+  provider: Awaited<ReturnType<typeof resolveProvider>>,
+  typeName: string,
+  question: string,
+  listAll: boolean
+): Promise<T[]> {
+  if (listAll) {
+    return (await provider.list(typeName)) as T[]
+  }
+  return (await provider.search(typeName, question)) as T[]
+}
+
 /**
  * Execute a natural language query against the database
  *
@@ -123,39 +149,19 @@ export async function executeNLQuery<T>(
   schema: ParsedSchema,
   targetType?: string
 ): Promise<NLQueryResult<T>> {
-  // Import applyFilters for MongoDB-style filter support
   const { applyFilters } = await import('./nl-query-generator.js')
 
+  // Fallback mode when no AI generator is configured
   if (!nlQueryGenerator) {
     const provider = await resolveProvider()
+    const listAll = isListAllQuery(question)
     const results: T[] = []
 
-    // Simple heuristic for common "list all" patterns in fallback mode
-    const lowerQuestion = question.toLowerCase().trim()
-    const isListAllQuery =
-      /^(show|list|get|find|display)\s+(all|every|the)?\s*/i.test(lowerQuestion) ||
-      lowerQuestion === '' ||
-      /\ball\b/i.test(lowerQuestion)
+    const typesToQuery = targetType ? [targetType] : [...schema.entities.keys()]
 
-    if (targetType) {
-      if (isListAllQuery) {
-        // For "show all X" queries, just list everything
-        const listResults = await provider.list(targetType)
-        results.push(...(listResults as T[]))
-      } else {
-        const searchResults = await provider.search(targetType, question)
-        results.push(...(searchResults as T[]))
-      }
-    } else {
-      for (const [typeName] of schema.entities) {
-        if (isListAllQuery) {
-          const listResults = await provider.list(typeName)
-          results.push(...(listResults as T[]))
-        } else {
-          const searchResults = await provider.search(typeName, question)
-          results.push(...(searchResults as T[]))
-        }
-      }
+    for (const typeName of typesToQuery) {
+      const typeResults = await fetchTypeResults<T>(provider, typeName, question, listAll)
+      results.push(...typeResults)
     }
 
     return {
@@ -166,25 +172,20 @@ export async function executeNLQuery<T>(
     }
   }
 
+  // AI-powered query execution
   const context = buildNLQueryContext(schema, targetType)
   const plan = await nlQueryGenerator(question, context)
 
   const provider = await resolveProvider()
-  let results: T[] = []
+  const results: T[] = []
+  const hasFilters = plan.filters && Object.keys(plan.filters).length > 0
 
   for (const typeName of plan.types) {
-    let typeResults: Record<string, unknown>[]
+    let typeResults = plan.search
+      ? await provider.search(typeName, plan.search)
+      : await provider.list(typeName)
 
-    if (plan.search) {
-      // Use provider's search, then apply filters in memory for MongoDB-style operators
-      typeResults = await provider.search(typeName, plan.search)
-    } else {
-      // List all and filter in memory
-      typeResults = await provider.list(typeName)
-    }
-
-    // Apply MongoDB-style filters in memory
-    if (plan.filters && Object.keys(plan.filters).length > 0) {
+    if (hasFilters) {
       typeResults = applyFilters(typeResults, plan.filters)
     }
 

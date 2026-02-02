@@ -14,6 +14,7 @@ import {
   type ExecutionPriority,
   type BatchScheduler,
 } from './durable-promise.js'
+import { logError, logInfo } from './logger.js'
 
 // =============================================================================
 // Types
@@ -418,7 +419,7 @@ export class ExecutionQueue implements BatchScheduler {
     try {
       return await provider.submitBatch(requests)
     } catch (error) {
-      console.error(`Batch submission failed for ${provider.name}:`, error)
+      logError(`Batch submission failed for ${provider.name}:`, error)
       await this.executeFallback(items)
       return null
     }
@@ -435,7 +436,7 @@ export class ExecutionQueue implements BatchScheduler {
   private async pollBatchCompletion(submission: BatchSubmission): Promise<void> {
     // This would be implemented by the specific provider
     // For now, just log
-    console.log(`Batch ${submission.batchId} submitted with ${submission.count} requests`)
+    logInfo(`Batch ${submission.batchId} submitted with ${submission.count} requests`)
 
     // In production, this would poll getBatchStatus and stream results
   }
@@ -544,9 +545,7 @@ export class ExecutionQueue implements BatchScheduler {
       },
       batch: {
         size: this.queues.batch.length,
-        nextFlush: this.batchTimer
-          ? new Date(Date.now() + this.options.batchWindow)
-          : null,
+        nextFlush: this.batchTimer ? new Date(Date.now() + this.options.batchWindow) : null,
       },
     }
   }

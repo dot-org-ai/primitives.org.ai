@@ -305,9 +305,8 @@ export function generateContextAwareValue(
     })
   }
 
-  // For other generators, we need to handle async generation
-  // For now, fall back to placeholder for backward compatibility
-  // TODO: Refactor callers to support async generation
+  // For non-PlaceholderValueGenerator instances, fall back to placeholder
+  // for backward compatibility (async generators require different call pattern)
   return placeholderGenerator.generateSync({
     fieldName,
     type,
@@ -320,6 +319,99 @@ export function generateContextAwareValue(
 // =============================================================================
 // AI Field Generation
 // =============================================================================
+
+/**
+ * Build a combined entity object with pre-fetched context data merged in.
+ * This replaces UUID references with actual entity objects for template resolution.
+ */
+function buildCombinedEntityWithContext(
+  entityData: Record<string, unknown>,
+  contextData: Map<string, Record<string, unknown>>
+): Record<string, unknown> {
+  const combined: Record<string, unknown> = { ...entityData }
+
+  // Sort context keys by length so we process parent paths before nested paths
+  // This ensures 'project' is set before 'project.lead'
+  const sortedKeys = [...contextData.keys()].sort((a, b) => a.length - b.length)
+
+  for (const key of sortedKeys) {
+    const value = contextData.get(key)!
+    const pathParts = key.split('.')
+
+    if (pathParts.length === 1) {
+      // Simple path like 'project' - set at top level if currently a UUID
+      const currentValue = combined[key]
+      const isCurrentUUID = typeof currentValue === 'string' && currentValue.includes('-')
+      if (!combined[key] || isCurrentUUID) {
+        combined[key] = { ...value }
+      }
+    } else {
+      // Nested path like 'project.lead' - traverse and set nested value
+      let current = combined
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const part = pathParts[i]!
+        if (current[part] && typeof current[part] === 'object') {
+          current = current[part] as Record<string, unknown>
+        } else {
+          break
+        }
+      }
+      const lastPart = pathParts[pathParts.length - 1]!
+      if (current && typeof current === 'object') {
+        current[lastPart] = value
+      }
+    }
+
+    // Add leaf entity at top level for direct access (e.g., {lead.name})
+    if (pathParts.length > 1 && typeof value === 'object' && value !== null) {
+      const leafKey = pathParts[pathParts.length - 1]!
+      if (!combined[leafKey]) {
+        combined[leafKey] = value
+      }
+    }
+  }
+
+  return combined
+}
+
+/**
+ * Build a context string from entity data and pre-fetched context.
+ * Extracts string fields (excluding internal fields) and formats them for AI context.
+ */
+function buildContextString(
+  resolvedInstructions: string | undefined,
+  entityData: Record<string, unknown>,
+  contextData: Map<string, Record<string, unknown>>
+): string {
+  const parts: string[] = []
+
+  if (resolvedInstructions) {
+    parts.push(resolvedInstructions)
+  }
+
+  // Add entity data fields
+  for (const [key, value] of Object.entries(entityData)) {
+    if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
+      parts.push(`${key}: ${value}`)
+    }
+  }
+
+  // Add context from pre-fetched entities
+  for (const [key, ctxEntity] of contextData) {
+    for (const [fieldName, fieldValue] of Object.entries(ctxEntity)) {
+      if (
+        !fieldName.startsWith('$') &&
+        !fieldName.startsWith('_') &&
+        typeof fieldValue === 'string' &&
+        fieldValue
+      ) {
+        parts.push(`${key}.${fieldName}: ${fieldValue}`)
+      }
+    }
+  }
+
+  return parts.join(' | ')
+}
 
 /**
  * Generate AI fields based on $instructions and field prompts
@@ -343,7 +435,6 @@ export async function generateAIFields(
   provider: DBProvider,
   injectedConfig?: AIGenerationConfig
 ): Promise<Record<string, unknown>> {
-  // Use injected config if provided, otherwise fall back to module-level config
   const config = injectedConfig ?? aiConfig
   const result = { ...data }
   const entitySchema = entityDef.schema || {}
@@ -359,56 +450,7 @@ export async function generateAIFields(
   // Resolve instructions template variables
   let resolvedInstructions = instructions
   if (instructions) {
-    // Build a combined entity with context data for template resolution
-    // Start with entity data (which may have UUIDs for relation fields)
-    const combinedEntity: Record<string, unknown> = { ...result }
-
-    // Sort context keys by length so we process parent paths before nested paths
-    // This ensures 'project' is set before 'project.lead'
-    const sortedKeys = [...contextData.keys()].sort((a, b) => a.length - b.length)
-
-    // First pass: set top-level context objects (replacing UUIDs with full objects)
-    for (const key of sortedKeys) {
-      const value = contextData.get(key)!
-      const pathParts = key.split('.')
-
-      if (pathParts.length === 1) {
-        // Simple path like 'project' - set at top level if currently a UUID
-        const currentValue = combinedEntity[key]
-        const isCurrentUUID = typeof currentValue === 'string' && currentValue.includes('-')
-        if (!combinedEntity[key] || isCurrentUUID) {
-          // Deep copy to allow mutation for nested paths
-          combinedEntity[key] = { ...value }
-        }
-      } else {
-        // Nested path like 'project.lead' - traverse and set nested value
-        // This replaces UUID references with actual entity objects
-        let current = combinedEntity
-        for (let i = 0; i < pathParts.length - 1; i++) {
-          const part = pathParts[i]!
-          if (current[part] && typeof current[part] === 'object') {
-            current = current[part] as Record<string, unknown>
-          } else {
-            // Path doesn't exist or isn't an object, can't set nested value
-            break
-          }
-        }
-        const lastPart = pathParts[pathParts.length - 1]!
-        // Replace UUID with actual entity object
-        if (current && typeof current === 'object') {
-          current[lastPart] = value
-        }
-      }
-
-      // Also add leaf entity at top level for direct access (e.g., {lead.name} instead of {project.lead.name})
-      if (pathParts.length > 1 && typeof value === 'object' && value !== null) {
-        const leafKey = pathParts[pathParts.length - 1]!
-        if (!combinedEntity[leafKey]) {
-          combinedEntity[leafKey] = value
-        }
-      }
-    }
-
+    const combinedEntity = buildCombinedEntityWithContext(result, contextData)
     resolvedInstructions = await resolveInstructions(
       instructions,
       combinedEntity,
@@ -418,32 +460,7 @@ export async function generateAIFields(
     )
   }
 
-  // Build context string from resolved instructions and entity data
-  const contextParts: string[] = []
-  if (resolvedInstructions) contextParts.push(resolvedInstructions)
-
-  // Add relevant entity data as context
-  for (const [key, value] of Object.entries(result)) {
-    if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
-      contextParts.push(`${key}: ${value}`)
-    }
-  }
-
-  // Add context from pre-fetched entities
-  for (const [key, ctxEntity] of contextData) {
-    for (const [fieldName, fieldValue] of Object.entries(ctxEntity)) {
-      if (
-        !fieldName.startsWith('$') &&
-        !fieldName.startsWith('_') &&
-        typeof fieldValue === 'string' &&
-        fieldValue
-      ) {
-        contextParts.push(`${key}.${fieldName}: ${fieldValue}`)
-      }
-    }
-  }
-
-  const fullContext = contextParts.join(' | ')
+  const fullContext = buildContextString(resolvedInstructions, result, contextData)
 
   // Collect fields that need generation
   const fieldsToGenerate: Array<{ fieldName: string; prompt: string | undefined }> = []
@@ -559,6 +576,66 @@ export async function generateAIFields(
 // =============================================================================
 
 /**
+ * Check if a field is a backward relation to a specific parent type
+ */
+function isBackwardRelationToParent(
+  field: { operator?: string; direction?: string; relatedType?: string },
+  parentType: string
+): boolean {
+  return (
+    field.operator === '<-' && field.direction === 'backward' && field.relatedType === parentType
+  )
+}
+
+/**
+ * Check if a field is a required forward single relation (not array, not optional)
+ */
+function isRequiredForwardSingleRelation(field: {
+  operator?: string
+  direction?: string
+  isArray: boolean
+  isOptional: boolean
+}): boolean {
+  return (
+    field.operator === '->' && field.direction === 'forward' && !field.isArray && !field.isOptional
+  )
+}
+
+/**
+ * Process relation fields and populate data with backward refs and pending forward relations
+ *
+ * This shared helper handles relations consistently whether AI generation succeeded
+ * or fell back to placeholder generation.
+ */
+async function processRelationFields(
+  data: Record<string, unknown>,
+  entity: ParsedEntity,
+  type: string,
+  context: { parent: string; parentData: Record<string, unknown>; parentId?: string },
+  schema: ParsedSchema,
+  _depth: number,
+  injectedConfig?: AIGenerationConfig
+): Promise<void> {
+  for (const [fieldName, field] of entity.fields) {
+    if (!field.isRelation) continue
+
+    if (isBackwardRelationToParent(field, context.parent) && context.parentId) {
+      data[fieldName] = context.parentId
+    } else if (isRequiredForwardSingleRelation(field)) {
+      const nestedGenerated = await generateEntity(
+        field.relatedType!,
+        field.prompt,
+        { parent: type, parentData: data },
+        schema,
+        _depth + 1,
+        injectedConfig
+      )
+      data[`_pending_${fieldName}`] = { type: field.relatedType!, data: nestedGenerated }
+    }
+  }
+}
+
+/**
  * Generate an entity based on its type and context
  *
  * Uses AI generation via generateObject from ai-functions when available,
@@ -619,38 +696,11 @@ export async function generateEntity(
   // If AI generation succeeded, use that data but still handle relations
   if (aiGeneratedData) {
     const data: Record<string, unknown> = { ...aiGeneratedData }
-
-    // Handle relations (AI doesn't generate these)
-    for (const [fieldName, field] of entity.fields) {
-      if (field.isRelation) {
-        if (field.operator === '<-' && field.direction === 'backward') {
-          // Backward relation to parent
-          if (field.relatedType === context.parent && context.parentId) {
-            data[fieldName] = context.parentId
-          }
-        } else if (field.operator === '->' && field.direction === 'forward' && !field.isArray) {
-          // Recursively generate nested forward exact single relations (not arrays).
-          // Array forward relations are handled by cascadeGenerate with proper depth control.
-          if (!field.isOptional) {
-            const nestedGenerated = await generateEntity(
-              field.relatedType!,
-              field.prompt,
-              { parent: type, parentData: data },
-              schema,
-              _depth + 1,
-              injectedConfig
-            )
-            data[`_pending_${fieldName}`] = { type: field.relatedType!, data: nestedGenerated }
-          }
-        }
-      }
-    }
-
+    await processRelationFields(data, entity, type, context, schema, _depth, injectedConfig)
     return data
   }
 
   // Fallback to placeholder generation if AI is not available or failed
-  // Extract relevant parent data for context (excluding metadata fields)
   const parentContextFields: string[] = []
   for (const [key, value] of Object.entries(context.parentData)) {
     if (!key.startsWith('$') && !key.startsWith('_') && typeof value === 'string' && value) {
@@ -673,7 +723,6 @@ export async function generateEntity(
       const isPrompt = isPromptField(field)
 
       if (field.type === 'string' || isPrompt) {
-        // Generate context-aware content - use field type as hint for prompt fields
         const fieldHint = isPrompt ? field.type : prompt
         data[fieldName] = generateContextAwareValue(
           fieldName,
@@ -683,38 +732,16 @@ export async function generateEntity(
           context.parentData
         )
       } else if (field.isArray && (field.type === 'string' || isPrompt)) {
-        // Generate array of strings
         const fieldHint = isPrompt ? field.type : prompt
         data[fieldName] = [
           generateContextAwareValue(fieldName, type, fullContext, fieldHint, context.parentData),
         ]
       }
-    } else if (field.operator === '<-' && field.direction === 'backward') {
-      // Backward relation to parent - set the parent's ID if this entity's
-      // related type matches the parent type
-      if (field.relatedType === context.parent && context.parentId) {
-        // Store the parent ID directly - this is a reference back to the parent
-        data[fieldName] = context.parentId
-      }
-    } else if (field.operator === '->' && field.direction === 'forward' && !field.isArray) {
-      // Recursively generate nested forward exact single relations (not arrays).
-      // Array forward relations are handled by cascadeGenerate with proper depth control.
-      if (!field.isOptional) {
-        const nestedGenerated = await generateEntity(
-          field.relatedType!,
-          field.prompt,
-          { parent: type, parentData: data },
-          schema,
-          _depth + 1,
-          injectedConfig
-        )
-        // We need to create the nested entity too, but we can't do that here
-        // because we don't have access to the provider yet.
-        // This will be handled by resolveForwardExact when it calls us
-        data[`_pending_${fieldName}`] = { type: field.relatedType!, data: nestedGenerated }
-      }
     }
   }
+
+  // Process relation fields using shared helper
+  await processRelationFields(data, entity, type, context, schema, _depth, injectedConfig)
   return data
 }
 

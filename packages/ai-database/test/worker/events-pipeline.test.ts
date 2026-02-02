@@ -1,5 +1,5 @@
 /**
- * Events and Pipeline Tests for ai-database (RED phase)
+ * Events and Pipeline Tests for ai-database
  *
  * Tests event sourcing capabilities via the _events table and Pipeline integration
  * for streaming events to R2 storage. This enables:
@@ -9,10 +9,6 @@
  * - Event replay for rebuilding state
  *
  * Uses @cloudflare/vitest-pool-workers for real Cloudflare Workers execution.
- * NO MOCKS - tests use real Durable Objects with SQLite storage.
- *
- * These tests should FAIL initially because the events/pipeline features don't exist yet.
- * This is the RED phase of TDD.
  *
  * Bead: aip-1tcx
  *
@@ -20,77 +16,12 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { env } from 'cloudflare:test'
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-/**
- * Get a DurableObject stub for DatabaseDO.
- * Each test gets a unique DO instance for isolation.
- */
-function getStub(name?: string): DurableObjectStub {
-  const id = env.DATABASE.idFromName(name ?? crypto.randomUUID())
-  return env.DATABASE.get(id)
-}
-
-/**
- * Send a fetch request to a DO stub and return the Response.
- */
-async function doRequest(
-  stub: DurableObjectStub,
-  path: string,
-  options?: RequestInit
-): Promise<Response> {
-  return stub.fetch(`https://do.test${path}`, options)
-}
-
-/**
- * Send a JSON body request to a DO stub.
- */
-async function doJSON(
-  stub: DurableObjectStub,
-  path: string,
-  body: unknown,
-  method = 'POST'
-): Promise<Response> {
-  return stub.fetch(`https://do.test${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-}
-
-/**
- * Shorthand to POST to /data and parse the JSON result.
- */
-async function insertData(
-  stub: DurableObjectStub,
-  record: { id?: string; type: string; data: Record<string, unknown> }
-): Promise<Record<string, unknown>> {
-  const res = await doJSON(stub, '/data', record)
-  expect(res.status).toBe(200)
-  return res.json() as Promise<Record<string, unknown>>
-}
-
-/**
- * Shorthand to POST to /rels and parse the JSON result.
- */
-async function insertRel(
-  stub: DurableObjectStub,
-  rel: { from_id: string; relation: string; to_id: string; metadata?: Record<string, unknown> }
-): Promise<Record<string, unknown>> {
-  const res = await doJSON(stub, '/rels', rel)
-  expect(res.status).toBe(200)
-  return res.json() as Promise<Record<string, unknown>>
-}
+import { getStub, doRequest, doJSON, insertData, insertRel } from './test-helpers.js'
 
 // =============================================================================
 // Events - _events Table Initialization
 // =============================================================================
 
-// TODO: Advanced feature tests - needs investigation
 describe('Events - _events Table', () => {
   let stub: DurableObjectStub
 

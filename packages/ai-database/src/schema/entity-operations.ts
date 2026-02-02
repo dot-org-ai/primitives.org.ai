@@ -48,6 +48,55 @@ import {
 } from '../errors.js'
 
 // =============================================================================
+// Helper Functions
+// =============================================================================
+
+/** Metadata field suffixes that should be stripped from entity data */
+const METADATA_SUFFIXES = ['$matchedType', '$score', '$fallbackUsed', '$searchedTypes']
+
+/**
+ * Check if a key is a metadata field that should be excluded from entity data
+ */
+function isMetadataField(key: string): boolean {
+  if (key.startsWith('$')) return true
+  return METADATA_SUFFIXES.some((suffix) => key.endsWith(suffix))
+}
+
+/**
+ * Remove metadata fields from entity data
+ */
+function cleanEntityData(data: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (!isMetadataField(key)) {
+      cleaned[key] = value
+    }
+  }
+  return cleaned
+}
+
+/**
+ * Apply where filters to a list of records
+ */
+function applyWhereFilter<T extends Record<string, unknown>>(
+  records: T[],
+  where: Record<string, unknown>
+): T[] {
+  return records.filter((record) =>
+    Object.entries(where).every(([key, value]) => record[key] === value)
+  )
+}
+
+/**
+ * Apply pagination (offset/limit) to a list of records
+ */
+function applyPagination<T>(records: T[], offset?: number, limit?: number): T[] {
+  if (!limit) return records
+  const start = offset ?? 0
+  return records.slice(start, start + limit)
+}
+
+// =============================================================================
 // Entity Operations Configuration Type
 // =============================================================================
 
@@ -208,20 +257,7 @@ export function createEntityOperations<T>(
           // Check if data has already been through draft/resolve (called from schema.ts wrapper)
           if (options?._preResolved) {
             // Data is already resolved - skip draft/resolve phases
-            // Clean up any metadata fields that might have leaked through
-            const cleanedData: Record<string, unknown> = {}
-            for (const [key, value] of Object.entries(data)) {
-              if (
-                key.startsWith('$') ||
-                key.endsWith('$matchedType') ||
-                key.endsWith('$score') ||
-                key.endsWith('$fallbackUsed') ||
-                key.endsWith('$searchedTypes')
-              ) {
-                continue
-              }
-              cleanedData[key] = value
-            }
+            const cleanedData = cleanEntityData(data)
 
             // Still need to resolve backward fuzzy references and generate AI fields
             const backwardResolvedData = await resolveBackwardFuzzy(
@@ -365,20 +401,7 @@ export function createEntityOperations<T>(
             }
 
             // Clean up resolution metadata from the data before further processing
-            const cleanedData: Record<string, unknown> = {}
-            for (const [key, value] of Object.entries(resolvedData)) {
-              // Skip internal fields and resolution metadata
-              if (
-                key.startsWith('$') ||
-                key.endsWith('$matchedType') ||
-                key.endsWith('$score') ||
-                key.endsWith('$fallbackUsed') ||
-                key.endsWith('$searchedTypes')
-              ) {
-                continue
-              }
-              cleanedData[key] = value
-            }
+            const cleanedData = cleanEntityData(resolvedData)
 
             // Phase 3: Resolve backward fuzzy references (<~)
             const backwardResolvedData = await resolveBackwardFuzzy(
@@ -831,39 +854,28 @@ export function createEntityOperations<T>(
 export function createNounEntityOperations(
   nounRecords: Array<Record<string, unknown>>
 ): EntityOperations<Record<string, unknown>> {
+  const addNounMetadata = (n: Record<string, unknown>) => ({
+    ...n,
+    $id: n['$id'] || n['name'],
+    $type: 'Noun',
+  })
+
   return {
     async get(id: string) {
-      // Find by name (type name)
       return nounRecords.find((n) => n['name'] === id || n['$id'] === id) ?? null
     },
 
     async list(options?: ListOptions) {
       let results = [...nounRecords]
       if (options?.where) {
-        for (const [key, value] of Object.entries(options.where)) {
-          results = results.filter((n) => n[key] === value)
-        }
+        results = applyWhereFilter(results, options.where)
       }
-      if (options?.limit) {
-        results = results.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit)
-      }
-      return results.map((n) => ({
-        ...n,
-        $id: n['$id'] || n['name'],
-        $type: 'Noun',
-      }))
+      results = applyPagination(results, options?.offset, options?.limit)
+      return results.map(addNounMetadata)
     },
 
     async find(where: Record<string, unknown>) {
-      let results = [...nounRecords]
-      for (const [key, value] of Object.entries(where)) {
-        results = results.filter((n) => n[key] === value)
-      }
-      return results.map((n) => ({
-        ...n,
-        $id: n['$id'] || n['name'],
-        $type: 'Noun',
-      }))
+      return applyWhereFilter([...nounRecords], where).map(addNounMetadata)
     },
 
     async search(query: string) {
@@ -878,11 +890,7 @@ export function createNounEntityOperations(
               .toLowerCase()
               .includes(queryLower)
         )
-        .map((n) => ({
-          ...n,
-          $id: n['$id'] || n['name'],
-          $type: 'Noun',
-        }))
+        .map(addNounMetadata)
     },
 
     async create() {
@@ -907,8 +915,7 @@ export function createNounEntityOperations(
     ) {
       const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
       const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!
-      const items = await this.list(options)
-      for (const item of items) {
+      for (const item of await this.list(options)) {
         await callback(item)
       }
     },
@@ -935,39 +942,28 @@ export function createNounEntityOperations(
 export function createVerbEntityOperations(
   verbRecords: Array<Record<string, unknown>>
 ): EntityOperations<Record<string, unknown>> {
+  const addVerbMetadata = (v: Record<string, unknown>) => ({
+    ...v,
+    $id: v['$id'] || v['action'],
+    $type: 'Verb',
+  })
+
   return {
     async get(id: string) {
-      // Find by action name
       return verbRecords.find((v) => v['action'] === id || v['$id'] === id) ?? null
     },
 
     async list(options?: ListOptions) {
       let results = [...verbRecords]
       if (options?.where) {
-        for (const [key, value] of Object.entries(options.where)) {
-          results = results.filter((v) => v[key] === value)
-        }
+        results = applyWhereFilter(results, options.where)
       }
-      if (options?.limit) {
-        results = results.slice(options.offset ?? 0, (options.offset ?? 0) + options.limit)
-      }
-      return results.map((v) => ({
-        ...v,
-        $id: v['$id'] || v['action'],
-        $type: 'Verb',
-      }))
+      results = applyPagination(results, options?.offset, options?.limit)
+      return results.map(addVerbMetadata)
     },
 
     async find(where: Record<string, unknown>) {
-      let results = [...verbRecords]
-      for (const [key, value] of Object.entries(where)) {
-        results = results.filter((v) => v[key] === value)
-      }
-      return results.map((v) => ({
-        ...v,
-        $id: v['$id'] || v['action'],
-        $type: 'Verb',
-      }))
+      return applyWhereFilter([...verbRecords], where).map(addVerbMetadata)
     },
 
     async search(query: string) {
@@ -986,11 +982,7 @@ export function createVerbEntityOperations(
               .toLowerCase()
               .includes(queryLower)
         )
-        .map((v) => ({
-          ...v,
-          $id: v['$id'] || v['action'],
-          $type: 'Verb',
-        }))
+        .map(addVerbMetadata)
     },
 
     async create() {
@@ -1015,8 +1007,7 @@ export function createVerbEntityOperations(
     ) {
       const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
       const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!
-      const items = await this.list(options)
-      for (const item of items) {
+      for (const item of await this.list(options)) {
         await callback(item)
       }
     },
@@ -1035,47 +1026,42 @@ export function createEdgeEntityOperations(
   schemaEdgeRecords: Array<Record<string, unknown>>,
   getProvider: () => Promise<DBProvider>
 ): EntityOperations<Record<string, unknown>> {
+  const addEdgeMetadata = (e: Record<string, unknown>) => ({
+    ...e,
+    $id: e['$id'] || `${e['from']}:${e['name']}`,
+    $type: 'Edge',
+  })
+
   /**
    * Get runtime edges from the provider.
-   *
-   * @param options - Options for error handling
-   * @returns Runtime edges, or empty array for not-found errors
-   * @throws DatabaseError for unexpected provider failures
+   * Returns empty array for not-found errors (Edge table may not exist yet).
    */
-  async function getRuntimeEdges(options?: {
+  async function getRuntimeEdges(
     suppressErrors?: boolean
-  }): Promise<Array<Record<string, unknown>>> {
+  ): Promise<Array<Record<string, unknown>>> {
     try {
       const provider = await getProvider()
-      const runtimeEdges = await provider.list('Edge')
-      return runtimeEdges
+      return await provider.list('Edge')
     } catch (error) {
-      // "Not found" errors are expected - Edge table may not exist yet
-      if (isNotFoundError(error)) {
+      if (isNotFoundError(error) || suppressErrors) {
         return []
       }
-      // If suppressErrors is set, return empty array for any error
-      if (options?.suppressErrors) {
-        return []
-      }
-      // Wrap and rethrow unexpected errors with context
       throw wrapDatabaseError(error, 'list', 'Edge')
     }
   }
 
-  async function getAllEdges(options?: {
-    suppressErrors?: boolean
-  }): Promise<Array<Record<string, unknown>>> {
-    const runtimeEdges = await getRuntimeEdges(options)
+  /**
+   * Merge schema edges with runtime edges, preferring runtime versions.
+   */
+  async function getAllEdges(suppressErrors?: boolean): Promise<Array<Record<string, unknown>>> {
+    const runtimeEdges = await getRuntimeEdges(suppressErrors)
     const runtimeEdgeKeys = new Set(runtimeEdges.map((e) => `${e['from']}:${e['name']}`))
 
     const filteredSchemaEdges = schemaEdgeRecords.filter((e) => {
       const key = `${e['from']}:${e['name']}`
       const hasRuntimeVersion = runtimeEdgeKeys.has(key)
-      if (hasRuntimeVersion && e['matchMode'] === 'fuzzy') {
-        return false
-      }
-      return !hasRuntimeVersion
+      // Exclude schema edges that have runtime versions (unless it's a fuzzy match override)
+      return !hasRuntimeVersion || (hasRuntimeVersion && e['matchMode'] !== 'fuzzy')
     })
 
     return [...filteredSchemaEdges, ...runtimeEdges]
@@ -1093,21 +1079,12 @@ export function createEdgeEntityOperations(
 
     async list(options?: ListOptions) {
       try {
-        let results = await getAllEdges({
-          ...(options?.suppressErrors !== undefined && { suppressErrors: options.suppressErrors }),
-        })
+        let results = await getAllEdges(options?.suppressErrors)
         if (options?.where) {
-          for (const [key, value] of Object.entries(options.where)) {
-            results = results.filter((e) => e[key] === value)
-          }
+          results = applyWhereFilter(results, options.where)
         }
-        return results.map((e) => ({
-          ...e,
-          $id: e['$id'] || `${e['from']}:${e['name']}`,
-          $type: 'Edge',
-        }))
+        return results.map(addEdgeMetadata)
       } catch (error) {
-        // Handle error with callback if provided
         if (options?.onError) {
           const fallback = options.onError(
             error instanceof Error ? error : new Error(String(error))
@@ -1119,32 +1096,19 @@ export function createEdgeEntityOperations(
     },
 
     async find(where: Record<string, unknown>) {
-      let results = await getAllEdges()
-      for (const [key, value] of Object.entries(where)) {
-        results = results.filter((e) => e[key] === value)
-      }
-      return results.map((e) => ({
-        ...e,
-        $id: e['$id'] || `${e['from']}:${e['name']}`,
-        $type: 'Edge',
-      }))
+      return applyWhereFilter(await getAllEdges(), where).map(addEdgeMetadata)
     },
 
     async search(query: string) {
-      const allEdges = await getAllEdges()
       const queryLower = query.toLowerCase()
-      return allEdges
+      return (await getAllEdges())
         .filter(
           (e) =>
             String(e['from']).toLowerCase().includes(queryLower) ||
             String(e['name']).toLowerCase().includes(queryLower) ||
             String(e['to']).toLowerCase().includes(queryLower)
         )
-        .map((e) => ({
-          ...e,
-          $id: e['$id'] || `${e['from']}:${e['name']}`,
-          $type: 'Edge',
-        }))
+        .map(addEdgeMetadata)
     },
 
     async create() {
@@ -1169,8 +1133,7 @@ export function createEdgeEntityOperations(
     ) {
       const options = typeof optionsOrCallback === 'function' ? undefined : optionsOrCallback
       const callback = typeof optionsOrCallback === 'function' ? optionsOrCallback : maybeCallback!
-      const items = await this.list(options)
-      for (const item of items) {
+      for (const item of await this.list(options)) {
         await callback(item)
       }
     },

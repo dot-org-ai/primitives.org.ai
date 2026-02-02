@@ -5,16 +5,18 @@
  * Ensures graceful degradation when features are unavailable.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
   ProviderCapabilities,
   detectCapabilities,
   CapabilityNotSupportedError,
   requireCapability,
   isCapabilityNotSupportedError,
+  clearWarningHistory,
 } from '../src/provider-capabilities.js'
 import { MemoryProvider, createMemoryProvider } from '../src/memory-provider.js'
 import type { DBProvider } from '../src/schema.js'
+import { setLogger, type Logger } from '../src/logger.js'
 
 describe('ProviderCapabilities', () => {
   describe('interface structure', () => {
@@ -220,42 +222,48 @@ describe('ProviderCapabilities', () => {
   })
 
   describe('runtime warnings', () => {
-    it('logs warning when feature is unavailable', async () => {
-      const warnings: string[] = []
-      const originalWarn = console.warn
-      console.warn = (msg: string) => warnings.push(msg)
+    let warnings: string[] = []
+    let originalLogger: Logger | null = null
 
-      try {
-        const capabilities = await detectCapabilities(createBasicProvider())
-
-        // Import the warnIfUnavailable helper
-        const { warnIfUnavailable } = await import('../src/provider-capabilities.js')
-
-        warnIfUnavailable(capabilities, 'hasSemanticSearch', 'semanticSearch')
-
-        expect(warnings.length).toBe(1)
-        expect(warnings[0]).toContain('semanticSearch')
-      } finally {
-        console.warn = originalWarn
+    beforeEach(() => {
+      warnings = []
+      // Set up a test logger that captures warnings
+      const testLogger: Logger = {
+        debug: () => {},
+        info: () => {},
+        warn: (msg: string) => warnings.push(msg),
+        error: () => {},
       }
+      setLogger(testLogger)
+      // Clear warning history before each test
+      clearWarningHistory()
+    })
+
+    afterEach(() => {
+      // Reset logger to default (noop)
+      setLogger(null)
+    })
+
+    it('logs warning when feature is unavailable', async () => {
+      const capabilities = await detectCapabilities(createBasicProvider())
+
+      // Import the warnIfUnavailable helper
+      const { warnIfUnavailable } = await import('../src/provider-capabilities.js')
+
+      warnIfUnavailable(capabilities, 'hasSemanticSearch', 'semanticSearch')
+
+      expect(warnings.length).toBe(1)
+      expect(warnings[0]).toContain('semanticSearch')
     })
 
     it('does not log warning when feature is available', async () => {
-      const warnings: string[] = []
-      const originalWarn = console.warn
-      console.warn = (msg: string) => warnings.push(msg)
+      const capabilities = await detectCapabilities(createMemoryProvider())
 
-      try {
-        const capabilities = await detectCapabilities(createMemoryProvider())
+      const { warnIfUnavailable } = await import('../src/provider-capabilities.js')
 
-        const { warnIfUnavailable } = await import('../src/provider-capabilities.js')
+      warnIfUnavailable(capabilities, 'hasSemanticSearch', 'semanticSearch')
 
-        warnIfUnavailable(capabilities, 'hasSemanticSearch', 'semanticSearch')
-
-        expect(warnings.length).toBe(0)
-      } finally {
-        console.warn = originalWarn
-      }
+      expect(warnings.length).toBe(0)
     })
   })
 })

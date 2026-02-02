@@ -77,6 +77,7 @@ export type {
   ArtifactsAPI,
   NounsAPI,
   VerbsAPI,
+  EventBridgeAPI,
   // Event types
   DBEvent,
   ActorData,
@@ -229,6 +230,23 @@ export type { Event, Action, Artifact } from './schema.js'
 export { StandardEventTypes, entityEvent, typePattern, actionPattern } from './events.js'
 
 export type { StandardEventType } from './events.js'
+
+// =============================================================================
+// EventBridge - Cloudflare Queues integration
+// =============================================================================
+
+export { createEventBridge, createEventBridgeAPI } from './eventbridge.js'
+
+export type {
+  QueueMessage,
+  QueueBinding,
+  EventBridgeConfig,
+  PublishEvent,
+  PublishedEvent,
+  ProcessResult,
+  EventBridgeStats,
+  SubscriptionHandler,
+} from './eventbridge.js'
 
 // =============================================================================
 // Actions API - Durable execution for long-running operations
