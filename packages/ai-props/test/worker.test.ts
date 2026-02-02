@@ -91,7 +91,7 @@ describe('PropsServiceCore (RpcTarget)', () => {
         })
 
         expect(result.metadata).toBeDefined()
-        expect(result.metadata?.model).toBe('sonnet')
+        expect(result.metadata?.model).toBe('anthropic/claude-sonnet-4.5')
       })
 
       it('uses custom model when specified', async () => {
@@ -214,7 +214,7 @@ describe('PropsServiceCore (RpcTarget)', () => {
       it('returns default config', () => {
         const config = service.getConfig()
 
-        expect(config.model).toBe('sonnet')
+        expect(config.model).toBe('anthropic/claude-sonnet-4.5')
         expect(config.cache).toBe(true)
         expect(config.cacheTTL).toBe(5 * 60 * 1000)
       })
@@ -226,7 +226,7 @@ describe('PropsServiceCore (RpcTarget)', () => {
         service.resetConfig()
 
         const config = service.getConfig()
-        expect(config.model).toBe('sonnet')
+        expect(config.model).toBe('anthropic/claude-sonnet-4.5')
         expect(config.cache).toBe(true)
       })
     })

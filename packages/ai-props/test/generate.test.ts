@@ -83,7 +83,7 @@ describe('getConfig', () => {
   it('returns default config', () => {
     const config = getConfig()
 
-    expect(config.model).toBe('sonnet')
+    expect(config.model).toBe('anthropic/claude-sonnet-4.5')
     expect(config.cache).toBe(true)
     expect(config.cacheTTL).toBe(5 * 60 * 1000)
   })
@@ -103,7 +103,7 @@ describe('resetConfig', () => {
     resetConfig()
 
     const config = getConfig()
-    expect(config.model).toBe('sonnet')
+    expect(config.model).toBe('anthropic/claude-sonnet-4.5')
     expect(config.cache).toBe(true)
   })
 })
@@ -142,7 +142,7 @@ describe('generateProps', () => {
     })
 
     expect(result.metadata).toBeDefined()
-    expect(result.metadata.model).toBe('sonnet')
+    expect(result.metadata.model).toBe('anthropic/claude-sonnet-4.5')
   })
 
   it('uses custom model', async () => {
@@ -289,10 +289,7 @@ describe('prefetchProps', () => {
   })
 
   it('prefetches multiple schemas', async () => {
-    await prefetchProps([
-      { schema: { name: 'User name' } },
-      { schema: { title: 'Page title' } },
-    ])
+    await prefetchProps([{ schema: { name: 'User name' } }, { schema: { title: 'Page title' } }])
 
     // Both should be cached now
     const name = getPropsSync({ name: 'User name' })
@@ -373,10 +370,7 @@ describe('mergeWithGenerated', () => {
   })
 
   it('generates all props when none provided', async () => {
-    const result = await mergeWithGenerated(
-      { name: 'User name', email: 'Email address' },
-      {}
-    )
+    const result = await mergeWithGenerated({ name: 'User name', email: 'Email address' }, {})
 
     expect(result.name).toBe('generated-name')
     expect(result.email).toBe('generated-email')
@@ -395,11 +389,7 @@ describe('mergeWithGenerated', () => {
   })
 
   it('accepts additional options', async () => {
-    const result = await mergeWithGenerated(
-      { name: 'User name' },
-      {},
-      { model: 'gpt-4' }
-    )
+    const result = await mergeWithGenerated({ name: 'User name' }, {}, { model: 'gpt-4' })
 
     expect(result.name).toBe('generated-name')
   })

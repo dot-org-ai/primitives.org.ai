@@ -2,7 +2,15 @@
  * Worker Export - WorkerEntrypoint for RPC access to AI Props
  *
  * Exposes AI props generation methods via Cloudflare RPC.
- * Provides schema-based prop generation, caching, and validation.
+ * Provides schema-based prop generation, caching, validation,
+ * and cascade execution patterns.
+ *
+ * ## Features
+ *
+ * - **RPC Service**: WorkerEntrypoint for service binding access
+ * - **Cascade Execution**: Code -> Generative -> Agentic -> Human escalation
+ * - **Durable Cascades**: Cloudflare Workflows integration for durability
+ * - **AI Gateway**: Configuration helpers for Cloudflare AI Gateway
  *
  * @example
  * ```typescript
@@ -24,6 +32,36 @@
  *     return Response.json(result.props)
  *   }
  * }
+ * ```
+ *
+ * ## Cascade Pattern
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   DurableCascadeExecutor,
+ *   createDurableCascadeStep,
+ *   createAIGatewayConfig
+ * } from 'ai-props/worker'
+ *
+ * // Create a durable cascade for content generation
+ * const contentCascade = createDurableCascadeStep({
+ *   name: 'generate-content',
+ *   code: async (input) => {
+ *     if (input.template) return { content: input.template }
+ *     throw new Error('No template available')
+ *   },
+ *   generative: async (input, ctx) => {
+ *     const result = await ctx.ai.run('@cf/meta/llama-3-8b-instruct', {
+ *       messages: [{ role: 'user', content: `Generate content about: ${input.topic}` }]
+ *     })
+ *     return { content: result.response }
+ *   }
+ * })
+ *
+ * // In a Cloudflare Workflow
+ * const result = await contentCascade.run(step, { topic: 'AI' })
+ * console.log(result.tier) // 'code' or 'generative'
  * ```
  *
  * @packageDocumentation
@@ -408,3 +446,102 @@ export default PropsService
  * Export aliases
  */
 export { PropsService as PropsWorker }
+
+// =============================================================================
+// Cascade Execution - Code -> Generative -> Agentic -> Human pattern
+// =============================================================================
+
+export {
+  // Base cascade (non-durable)
+  CascadeExecutor,
+  createCascadeStep,
+  // Types
+  type CascadeConfig,
+  type CascadeResult,
+  type CascadeContext,
+  type TierContext,
+  type TierHandler,
+  type TierResult,
+  type CapabilityTier,
+  type FiveWHEvent,
+  type TierRetryConfig,
+  type SkipCondition,
+  type CascadeMetrics,
+  type CascadeStep,
+  // Constants
+  TIER_ORDER,
+  DEFAULT_TIER_TIMEOUTS,
+  // Errors
+  CascadeTimeoutError,
+  TierSkippedError,
+  AllTiersFailedError,
+  // Helpers
+  createCascadeContext,
+  recordStep,
+} from './cascade.js'
+
+// =============================================================================
+// Durable Cascade - Cloudflare Workflows integration
+// =============================================================================
+
+export {
+  // Durable cascade executor
+  DurableCascadeExecutor,
+  createDurableCascadeStep,
+  // AI Gateway configuration
+  createAIGatewayConfig,
+  // Types
+  type DurableCascadeConfig,
+  type DurableCascadeTierContext,
+  type DurableStepConfig,
+  type DurableRetryConfig,
+  type WorkflowStep,
+  type AiBinding,
+  type HumanReviewRequest,
+  type AIGatewayConfig,
+  type CodeTierHandler,
+  type AiTierHandler,
+  type HumanTierHandler,
+} from './durable-cascade.js'
+
+// =============================================================================
+// Event System - Queue-based event handling
+// =============================================================================
+
+/**
+ * Event System exports for Queue-based event handling
+ *
+ * @example
+ * ```typescript
+ * import { EventBridge, createQueueHandler } from 'ai-props/worker'
+ *
+ * const bridge = new EventBridge(env.MY_QUEUE)
+ * bridge.on('user.created', async (data) => {
+ *   console.log('User created:', data.id)
+ * })
+ *
+ * export default {
+ *   async fetch(request, env) {
+ *     await bridge.emit('user.created', { id: '123' })
+ *     return new Response('OK')
+ *   },
+ *   async queue(batch, env) {
+ *     const handler = createQueueHandler(bridge)
+ *     await handler.queue(batch, env)
+ *   }
+ * }
+ * ```
+ */
+export {
+  EventBridge,
+  createQueueHandler,
+  createEventBridge,
+  type QueuedEvent,
+  type EventBridgeConfig,
+  type EventHandler,
+  type EmitOptions,
+  type Queue,
+  type QueueMessage,
+  type MessageBatch,
+  type TypedEventBridge,
+} from './event-bridge.js'

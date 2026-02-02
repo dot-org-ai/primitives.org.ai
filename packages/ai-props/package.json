@@ -25,6 +25,10 @@
     "./rpc": {
       "import": "./dist/rpc.js",
       "types": "./dist/rpc.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
     }
   },
   "scripts": {
