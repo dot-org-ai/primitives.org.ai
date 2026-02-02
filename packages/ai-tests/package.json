@@ -1,6 +1,6 @@
 {
   "name": "ai-tests",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "Test utilities worker - expect, should, assert, describe, it via RPC",
   "type": "module",
   "main": "dist/index.js",

@@ -147,7 +147,7 @@ export async function generate<T = string>(
         type: 'structured',
         metadata: {
           model,
-          tokens: result.usage?.totalTokens,
+          tokens: (result.usage as { totalTokens?: number } | undefined)?.totalTokens,
           duration: Date.now() - startTime,
         },
       }
@@ -180,7 +180,7 @@ export async function generate<T = string>(
         type: 'code',
         metadata: {
           model,
-          tokens: result.usage?.totalTokens,
+          tokens: (result.usage as { totalTokens?: number } | undefined)?.totalTokens,
           duration: Date.now() - startTime,
           language: codeResult.language,
           explanation: codeResult.explanation,

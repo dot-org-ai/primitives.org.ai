@@ -154,3 +154,17 @@ export {
   createKeyResult,
   updateKeyResultStatus,
 } from './metrics.js'
+
+// Standalone action primitives
+// These can be used independently or through an Agent instance
+export {
+  doAction as do,
+  doAction,
+  ask,
+  decide,
+  approve,
+  executeApproval,
+  generate,
+  is,
+  notify,
+} from './actions.js'
