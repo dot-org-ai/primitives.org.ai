@@ -56,7 +56,9 @@ import {
   getSchemaMetadata,
 } from './type-guards.js'
 
-import { parseOperator as graphdlParseOperator } from '@graphdl/core'
+import { createEventBridge, type EventBridgeAPI } from './eventbridge.js'
+export type { EventBridgeAPI } from './eventbridge.js'
+
 import { loadEntity } from './dataloader.js'
 
 // =============================================================================
@@ -152,6 +154,11 @@ export {
   runMigrations,
   getPendingMigrations,
   rollbackLastMigration,
+  // Parse functions - delegated to schema/parse.ts
+  parseOperator,
+  parseField,
+  parseSchema,
+  isPrimitiveType,
 } from './schema/index.js'
 
 // Import generateAIFields and generateEntity directly from cascade.js to avoid potential circular dependency
@@ -197,6 +204,16 @@ export type {
   MigrationOperation,
   Migration,
   MigrationResult,
+  // Parse types - delegated to schema/types.ts
+  OperatorParseResult,
+  // Provider types - delegated to schema/provider.ts
+  DBProvider,
+  // NL query types - delegated to schema/types.ts
+  NLQueryGenerator,
+  NLQueryContext,
+  NLQueryPlan,
+  NLQueryResult,
+  NLQueryFn,
 } from './schema/index.js'
 
 // Import type guards for internal use
@@ -213,6 +230,9 @@ import {
 // Import extended provider types for type assertions
 import type { DBProviderExtended, SemanticSearchResult } from './schema/index.js'
 
+// Import parse functions for internal use (DB() factory needs parseSchema)
+import { parseSchema, parseOperator, parseField, isPrimitiveType } from './schema/parse.js'
+
 // Import extracted DB() helper modules
 import { addSystemEntities, SYSTEM_ENTITY_NAMES } from './schema/system-entities.js'
 import { buildDefinitionCaches } from './schema/definition-caches.js'
@@ -225,8 +245,17 @@ import {
 } from './schema/sub-apis.js'
 
 // Import module-level state setters for bridging state between schema.ts and schema/ modules
-import { setProvider as setModuleProvider } from './schema/provider.js'
+import { setProvider as setModuleProvider, type DBProvider } from './schema/provider.js'
 import { setNLQueryGenerator as setModuleNLQueryGenerator } from './schema/nl-query.js'
+
+// Import NL query types for internal use (re-exported via ./schema/index.js for public API)
+import type {
+  NLQueryGenerator,
+  NLQueryContext,
+  NLQueryPlan,
+  NLQueryResult,
+  NLQueryFn,
+} from './schema/types.js'
 
 // Import error handling utilities
 import {
@@ -799,384 +828,12 @@ export interface CreateEntityOptions extends CascadeOptions {
   draftOnly?: boolean
 }
 
-/**
- * Result of parsing a relationship operator from a field definition
- */
-export interface OperatorParseResult {
-  /** Natural language prompt before operator (for AI generation) */
-  prompt?: string
-  /** The relationship operator: ->, ~>, <-, <~ */
-  operator?: '->' | '~>' | '<-' | '<~'
-  /** Direction of the relationship */
-  direction?: 'forward' | 'backward'
-  /** Match mode for resolving the relationship */
-  matchMode?: 'exact' | 'fuzzy'
-  /** The primary target type */
-  targetType: string
-  /** Union types for polymorphic references (e.g., ->A|B|C parses to ['A', 'B', 'C']) */
-  unionTypes?: string[]
-  /** Similarity threshold for fuzzy matching (0-1), parsed from ~>Type(0.9) syntax */
-  threshold?: number
-}
-
-/**
- * Parse relationship operator from field definition
- *
- * Extracts operator semantics from a field definition string. Supports
- * four relationship operators with different semantics:
- *
- * ## Operators
- *
- * | Operator | Direction | Match Mode | Description |
- * |----------|-----------|------------|-------------|
- * | `->`     | forward   | exact      | Strict foreign key reference |
- * | `~>`     | forward   | fuzzy      | AI-matched semantic reference |
- * | `<-`     | backward  | exact      | Strict backlink reference |
- * | `<~`     | backward  | fuzzy      | AI-matched backlink reference |
- *
- * ## Supported Formats
- *
- * - `'->Type'`           - Forward exact reference to Type
- * - `'~>Type'`           - Forward fuzzy (semantic search) to Type
- * - `'<-Type'`           - Backward exact reference from Type
- * - `'<~Type'`           - Backward fuzzy reference from Type
- * - `'Prompt text ->Type'` - With generation prompt (text before operator)
- * - `'->TypeA|TypeB'`    - Union types (polymorphic reference)
- * - `'->Type.backref'`   - With explicit backref field name
- * - `'->Type?'`          - Optional reference
- * - `'->Type[]'`         - Array of references
- *
- * @param definition - The field definition string to parse
- * @returns Parsed operator result, or null if no operator found
- *
- * @example Basic usage
- * ```ts
- * parseOperator('->Author')
- * // => { operator: '->', direction: 'forward', matchMode: 'exact', targetType: 'Author' }
- *
- * parseOperator('~>Category')
- * // => { operator: '~>', direction: 'forward', matchMode: 'fuzzy', targetType: 'Category' }
- *
- * parseOperator('<-Post')
- * // => { operator: '<-', direction: 'backward', matchMode: 'exact', targetType: 'Post' }
- * ```
- *
- * @example With prompt
- * ```ts
- * parseOperator('What is the main category? ~>Category')
- * // => {
- * //   prompt: 'What is the main category?',
- * //   operator: '~>',
- * //   direction: 'forward',
- * //   matchMode: 'fuzzy',
- * //   targetType: 'Category'
- * // }
- * ```
- *
- * @example Union types
- * ```ts
- * parseOperator('->Person|Company|Organization')
- * // => {
- * //   operator: '->',
- * //   direction: 'forward',
- * //   matchMode: 'exact',
- * //   targetType: 'Person',
- * //   unionTypes: ['Person', 'Company', 'Organization']
- * // }
- * ```
- */
-export function parseOperator(definition: string): OperatorParseResult | null {
-  // Use graphdl's parseOperator implementation
-  const graphdlResult = graphdlParseOperator(definition)
-  if (!graphdlResult) return null
-
-  // ai-database's parseField expects targetType to contain the raw suffix after the operator,
-  // including modifiers (?, [], .backref). Extract this directly from the definition
-  // rather than reconstructing from graphdl's parsed components.
-  const operators = ['~>', '<~', '->', '<-'] as const
-  let rawTargetType = ''
-  for (const op of operators) {
-    const opIndex = definition.indexOf(op)
-    if (opIndex !== -1) {
-      rawTargetType = definition.slice(opIndex + op.length).trim()
-      break
-    }
-  }
-
-  // Handle threshold extraction - graphdl already does this, so strip threshold from rawTargetType
-  if (graphdlResult.threshold !== undefined) {
-    // Remove threshold from rawTargetType (e.g., 'Type(0.8)' -> 'Type')
-    rawTargetType = rawTargetType.replace(/\([0-9.]+\)/, '')
-  } else {
-    // Handle malformed threshold syntax (missing closing paren)
-    // graphdl strips these internally - we need to do the same for rawTargetType
-    const malformedThresholdMatch = rawTargetType.match(/^([A-Za-z][A-Za-z0-9_]*)\([^)]*$/)
-    if (malformedThresholdMatch) {
-      rawTargetType = malformedThresholdMatch[1]!
-    }
-  }
-
-  const result: OperatorParseResult = {
-    operator: graphdlResult.operator,
-    direction: graphdlResult.direction,
-    matchMode: graphdlResult.matchMode,
-    targetType: rawTargetType,
-  }
-  if (graphdlResult.prompt !== undefined) result.prompt = graphdlResult.prompt
-  if (graphdlResult.unionTypes !== undefined) result.unionTypes = graphdlResult.unionTypes
-  if (graphdlResult.threshold !== undefined) result.threshold = graphdlResult.threshold
-  return result
-}
-
-/**
- * Parse a single field definition
- *
- * Converts a field definition string into a structured ParsedField object,
- * handling primitives, relations, arrays, optionals, and operator syntax.
- *
- * @param name - The field name
- * @param definition - The field definition (string or array)
- * @returns Parsed field information
- */
-function parseField(name: string, definition: FieldDefinition): ParsedField {
-  // Handle array literal syntax: ['Author.posts']
-  if (Array.isArray(definition)) {
-    const inner = parseField(name, definition[0])
-    return { ...inner, isArray: true }
-  }
-
-  let type = definition
-
-  // Handle seed column mapping syntax: '$.columnName'
-  // This maps a source column from seed data to this field
-  if (type.startsWith('$.')) {
-    const seedColumn = type.slice(2) // Remove '$.' prefix
-    return {
-      name,
-      type: 'string', // Seed fields are stored as strings
-      isArray: false,
-      isOptional: false,
-      isRelation: false,
-      seedMapping: seedColumn,
-    }
-  }
-
-  let isArray = false
-  let isOptional = false
-  let isRelation = false
-  let relatedType: string | undefined
-  let backref: string | undefined
-  let operator: '->' | '~>' | '<-' | '<~' | undefined
-  let direction: 'forward' | 'backward' | undefined
-  let matchMode: 'exact' | 'fuzzy' | undefined
-  let prompt: string | undefined
-  let unionTypes: string[] | undefined
-
-  // Use the dedicated operator parser
-  const operatorResult = parseOperator(type)
-  if (operatorResult) {
-    operator = operatorResult.operator
-    direction = operatorResult.direction
-    matchMode = operatorResult.matchMode
-    prompt = operatorResult.prompt
-    type = operatorResult.targetType
-    // Propagate union types if present
-    if (operatorResult.unionTypes && operatorResult.unionTypes.length > 1) {
-      unionTypes = operatorResult.unionTypes
-    }
-  }
-
-  // Check for optional modifier
-  if (type.endsWith('?')) {
-    isOptional = true
-    type = type.slice(0, -1)
-  }
-
-  // Check for array modifier (string syntax)
-  if (type.endsWith('[]')) {
-    isArray = true
-    type = type.slice(0, -2)
-  }
-
-  // Handle union types in type string (for relatedType extraction)
-  // If we have union types, use the first one as the primary type
-  if (unionTypes && unionTypes.length > 0) {
-    type = unionTypes[0]!
-    isRelation = true
-    relatedType = unionTypes[0]!
-  } else if (type.includes('.')) {
-    // Check for relation (contains a dot for backref)
-    isRelation = true
-    const [entityName, backrefName] = type.split('.')
-    relatedType = entityName
-    backref = backrefName
-    type = entityName!
-  } else if (
-    type[0] === type[0]?.toUpperCase() &&
-    !isPrimitiveType(type) &&
-    !type.includes(' ') && // Type names don't have spaces - strings with spaces are prompts/descriptions
-    !type.includes('|') // Skip if it looks like a union type (will be handled above)
-  ) {
-    // PascalCase non-primitive = relation without explicit backref
-    isRelation = true
-    relatedType = type
-  }
-
-  // Build result object
-  const result: ParsedField = {
-    name,
-    type,
-    isArray,
-    isOptional,
-    isRelation,
-    ...(relatedType !== undefined && { relatedType }),
-    ...(backref !== undefined && { backref }),
-  }
-
-  // Only add operator properties if an operator was found
-  if (operator) {
-    result.operator = operator
-    if (direction !== undefined) {
-      result.direction = direction
-    }
-    if (matchMode !== undefined) {
-      result.matchMode = matchMode
-    }
-    if (prompt) {
-      result.prompt = prompt
-    }
-    if (operatorResult?.threshold !== undefined) {
-      result.threshold = operatorResult.threshold
-    }
-    // Add union types if present
-    if (unionTypes) {
-      result.unionTypes = unionTypes
-    }
-  }
-
-  return result
-}
-
-/**
- * Check if a type is a primitive
- */
-function isPrimitiveType(type: string): boolean {
-  const primitives: PrimitiveType[] = [
-    'string',
-    'number',
-    'boolean',
-    'date',
-    'datetime',
-    'json',
-    'markdown',
-    'url',
-  ]
-  return primitives.includes(type as PrimitiveType)
-}
-
-/**
- * Parse a database schema and resolve bi-directional relationships
- */
-export function parseSchema(schema: DatabaseSchema): ParsedSchema {
-  const entities = new Map<string, ParsedEntity>()
-
-  // First pass: parse all entities and their fields
-  for (const [entityName, entitySchema] of Object.entries(schema)) {
-    const fields = new Map<string, ParsedField>()
-
-    for (const [fieldName, fieldDef] of Object.entries(entitySchema)) {
-      // Skip metadata fields (prefixed with $) like $fuzzyThreshold, $instructions
-      if (fieldName.startsWith('$')) {
-        continue
-      }
-      // Skip non-string/array definitions (invalid field types)
-      if (typeof fieldDef !== 'string' && !Array.isArray(fieldDef)) {
-        continue
-      }
-      fields.set(fieldName, parseField(fieldName, fieldDef))
-    }
-
-    // Extract seed configuration if $seed is defined
-    let seedConfig: SeedConfig | undefined
-    const seedUrl = entitySchema['$seed'] as string | undefined
-    const seedIdField = entitySchema['$id'] as string | undefined
-
-    if (seedUrl) {
-      // Extract the id column from $id field (e.g., '$.oNETSOCCode' -> 'oNETSOCCode')
-      const idColumn = seedIdField?.startsWith('$.') ? seedIdField.slice(2) : undefined
-      if (idColumn) {
-        // Build field mappings from fields with seedMapping
-        const fieldMappings = new Map<string, string>()
-        for (const [fieldName, field] of fields) {
-          if (field.seedMapping) {
-            fieldMappings.set(fieldName, field.seedMapping)
-          }
-        }
-
-        seedConfig = {
-          url: seedUrl,
-          idColumn,
-          fieldMappings,
-        }
-      }
-    }
-
-    // Store raw schema for accessing metadata like $fuzzyThreshold
-    const entityData: ParsedEntity = { name: entityName, fields, schema: entitySchema }
-    if (seedConfig !== undefined) entityData.seedConfig = seedConfig
-    entities.set(entityName, entityData)
-  }
-
-  // Validation pass: check that all operator-based references (->, ~>, <-, <~) point to existing types
-  // For implicit backrefs (Author.posts), we silently skip if the type doesn't exist
-  // Note: Union types are NOT validated here - they are validated in DB() to allow parseSchema()
-  // to be used for pure parsing tests without requiring all union types to be defined
-  for (const [entityName, entity] of entities) {
-    for (const [fieldName, field] of entity.fields) {
-      if (field.isRelation && field.relatedType && field.operator) {
-        // Only validate fields with explicit operators
-        // Skip self-references (valid)
-        if (field.relatedType === entityName) continue
-
-        // Skip union types - they are validated in DB() instead
-        if (field.unionTypes && field.unionTypes.length > 0) {
-          continue
-        }
-
-        // Check if referenced type exists (non-union case)
-        if (!entities.has(field.relatedType)) {
-          throw new Error(
-            `Invalid schema: ${entityName}.${fieldName} references non-existent type '${field.relatedType}'`
-          )
-        }
-      }
-    }
-  }
-
-  // Second pass: create bi-directional relationships
-  for (const [entityName, entity] of entities) {
-    for (const [fieldName, field] of entity.fields) {
-      if (field.isRelation && field.relatedType && field.backref) {
-        const relatedEntity = entities.get(field.relatedType)
-        if (relatedEntity && !relatedEntity.fields.has(field.backref)) {
-          // Auto-create the inverse relation
-          // If Post.author -> Author.posts, then Author.posts -> Post[]
-          relatedEntity.fields.set(field.backref, {
-            name: field.backref,
-            type: entityName,
-            isArray: true, // Backref is always an array
-            isOptional: false,
-            isRelation: true,
-            relatedType: entityName,
-            backref: fieldName, // Points back to the original field
-          })
-        }
-      }
-    }
-  }
-
-  return { entities }
-}
+// =============================================================================
+// Parse Functions - Delegated to schema/parse.ts
+// =============================================================================
+// NOTE: OperatorParseResult interface is imported from ./schema/types.js via the re-exports
+// NOTE: parseOperator, parseField, isPrimitiveType, parseSchema are imported from ./schema/parse.js
+// These are re-exported via ./schema/index.js for the public API
 
 // =============================================================================
 // Type Generation (for TypeScript inference)
@@ -1582,43 +1239,8 @@ export interface DBOptions {
 // =============================================================================
 // Database Client Type
 // =============================================================================
-
-/**
- * Natural language query result
- */
-export interface NLQueryResult<T = unknown> {
-  /** The interpreted query */
-  interpretation: string
-  /** Confidence in the interpretation (0-1) */
-  confidence: number
-  /** The results */
-  results: T[]
-  /** SQL/filter equivalent (for debugging) */
-  query?: string
-  /** Explanation of what was found */
-  explanation?: string
-}
-
-/**
- * Tagged template for natural language queries
- *
- * @example
- * ```ts
- * // Query across all types
- * const results = await db`what is happening with joe in ca?`
- *
- * // Query specific type
- * const orders = await db.Orders`what pending orders are delayed?`
- *
- * // With interpolation
- * const name = 'joe'
- * const results = await db`find all orders for ${name}`
- * ```
- */
-export type NLQueryFn<T = unknown> = (
-  strings: TemplateStringsArray,
-  ...values: unknown[]
-) => Promise<NLQueryResult<T>>
+// NOTE: NLQueryResult and NLQueryFn types are imported from ./schema/types.js
+// and re-exported via ./schema/index.js for the public API
 
 /**
  * Typed database client based on schema
@@ -2148,55 +1770,17 @@ export type DBResult<TSchema extends DatabaseSchema> = TypedDB<TSchema> & {
 
   /** Action introspection */
   verbs: VerbsAPI
+
+  /** EventBridge for Cloudflare Queues integration */
+  eventBridge: EventBridgeAPI
 }
 
 // =============================================================================
 // Natural Language Query Implementation
 // =============================================================================
-
-/**
- * AI generator function type for NL queries
- * This is injected by the user or resolved from environment
- */
-export type NLQueryGenerator = (prompt: string, context: NLQueryContext) => Promise<NLQueryPlan>
-
-/**
- * Context provided to the AI for query generation
- */
-export interface NLQueryContext {
-  /** Available types with their schemas */
-  types: Array<{
-    name: string
-    singular: string
-    plural: string
-    fields: string[]
-    relationships: Array<{ name: string; to: string; cardinality: string }>
-  }>
-  /** The specific type being queried (if any) */
-  targetType?: string
-  /** Recent events for context */
-  recentEvents?: Array<{ type: string; timestamp: Date }>
-}
-
-/**
- * Query plan generated by AI
- */
-export interface NLQueryPlan {
-  /** Types to query */
-  types: string[]
-  /** Filters to apply */
-  filters?: Record<string, unknown>
-  /** Search terms */
-  search?: string
-  /** Time range */
-  timeRange?: { since?: Date; until?: Date }
-  /** Relationships to follow */
-  include?: string[]
-  /** How to interpret results */
-  interpretation: string
-  /** Confidence score */
-  confidence: number
-}
+// NOTE: NLQueryGenerator, NLQueryContext, NLQueryPlan types are imported from ./schema/types.js
+// and re-exported via ./schema/index.js for the public API
+// The functions below maintain local state and bridge to the module state in schema/nl-query.ts
 
 let nlQueryGenerator: NLQueryGenerator | null = null
 
@@ -2364,57 +1948,10 @@ export function createNLQueryFn<T>(schema: ParsedSchema, typeName?: string): NLQ
 }
 
 // =============================================================================
-// Provider Interface
+// Provider Interface - Delegated to schema/provider.ts
 // =============================================================================
-
-/**
- * Database provider interface that adapters must implement
- */
-export interface DBProvider {
-  /** Get an entity */
-  get(type: string, id: string): Promise<Record<string, unknown> | null>
-
-  /** List entities */
-  list(type: string, options?: ListOptions): Promise<Record<string, unknown>[]>
-
-  /** Search entities */
-  search(type: string, query: string, options?: SearchOptions): Promise<Record<string, unknown>[]>
-
-  /** Create an entity */
-  create(
-    type: string,
-    id: string | undefined,
-    data: Record<string, unknown>
-  ): Promise<Record<string, unknown>>
-
-  /** Update an entity */
-  update(type: string, id: string, data: Record<string, unknown>): Promise<Record<string, unknown>>
-
-  /** Delete an entity */
-  delete(type: string, id: string): Promise<boolean>
-
-  /** Get related entities */
-  related(type: string, id: string, relation: string): Promise<Record<string, unknown>[]>
-
-  /** Create a relationship */
-  relate(
-    fromType: string,
-    fromId: string,
-    relation: string,
-    toType: string,
-    toId: string,
-    metadata?: { matchMode?: 'exact' | 'fuzzy'; similarity?: number }
-  ): Promise<void>
-
-  /** Remove a relationship */
-  unrelate(
-    fromType: string,
-    fromId: string,
-    relation: string,
-    toType: string,
-    toId: string
-  ): Promise<void>
-}
+// NOTE: DBProvider interface is imported from ./schema/provider.js for internal use
+// and re-exported via ./schema/index.js for the public API
 
 // =============================================================================
 // Provider Resolution
@@ -3220,6 +2757,7 @@ export function DB<TSchema extends DatabaseSchema>(
   const artifacts = createArtifactsAPI(getProvider)
   const nouns = createNounsAPI(nounDefinitions)
   const verbs = createVerbsAPI(verbDefinitions)
+  const eventBridge = createEventBridge()
 
   // Return combined object that supports both direct usage and destructuring
   // db.User.create() works, db.events.on() works
@@ -3231,6 +2769,7 @@ export function DB<TSchema extends DatabaseSchema>(
     artifacts,
     nouns,
     verbs,
+    eventBridge,
   }) as DBResult<TSchema>
 }
 
