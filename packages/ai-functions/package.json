@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest",
+    "test": "vitest run",
     "test:unit": "vitest run --exclude 'test/evals/**' --exclude 'test/e2e-*'",
     "test:evals": "vitest run test/evals/",
     "test:evals:primitives": "vitest run test/evals/primitives.eval.test.ts",

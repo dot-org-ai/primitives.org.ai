@@ -34,7 +34,7 @@
     "build": "tsc -p tsconfig.json && npm run build:static",
     "build:static": "npx tsx scripts/build-static.ts",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "clean": "rm -rf dist public"

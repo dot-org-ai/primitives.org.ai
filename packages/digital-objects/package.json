@@ -57,7 +57,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "deploy": "wrangler deploy"
   },

@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest",
+    "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:workers": "vitest --config vitest.workers.config.ts",
     "test:workers:coverage": "vitest run --config vitest.workers.config.ts --coverage",
