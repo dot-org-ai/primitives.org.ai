@@ -16,7 +16,7 @@
 
 // Types
 export type {
-  Noun,
+  Noun as NounType,
   NounDefinition,
   Verb,
   VerbDefinition,
@@ -116,3 +116,21 @@ export type {
   ScheduleHandler,
   MigrateHandler,
 } from './do.js'
+
+// Noun() Factory - High-level entity definition API
+export { Noun } from './noun.js'
+export type {
+  PropertyValue,
+  NounDefinitionInput,
+  NounSchema,
+  NounInstance,
+  VerbConjugation,
+  NounProvider,
+  BeforeHookHandler,
+  AfterHookHandler,
+} from './noun-types.js'
+
+// Noun runtime
+export { setProvider, getProvider, MemoryNounProvider } from './noun-proxy.js'
+export { registerNoun, getNounSchema, getAllNouns, clearRegistry } from './noun-registry.js'
+export { parseProperty, parseNounDefinition, isVerbDeclaration } from './noun-parse.js'
