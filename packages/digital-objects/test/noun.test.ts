@@ -143,7 +143,7 @@ describe('parseNounDefinition', () => {
       update: null,
     })
 
-    expect(result.fields.size).toBe(2) // name, email
+    expect(result.fields.size).toBe(3) // name, email, stage (enum goes to fields)
     expect(result.fields.has('stage')).toBe(true) // enum goes to fields
     expect(result.relationships.size).toBe(2) // company, deals
     expect(result.verbDeclarations.size).toBe(1) // qualify

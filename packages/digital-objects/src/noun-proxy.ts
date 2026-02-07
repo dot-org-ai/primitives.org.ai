@@ -17,6 +17,7 @@ import type {
   AfterHookHandler,
   VerbConjugation,
 } from './noun-types.js'
+import { deriveVerb } from './linguistic.js'
 
 // =============================================================================
 // ID Generation
@@ -343,9 +344,9 @@ export function createNounProxy(schema: NounSchema): Record<string, unknown> {
       // BEFORE hook registration (creating, qualifying, closing, ...)
       const activityVerb = activityMap.get(prop)
       if (activityVerb) {
-        return (handler: BeforeHookHandler) => {
+        return (hookHandler: BeforeHookHandler) => {
           const existing = beforeHooks.get(prop) ?? []
-          existing.push(handler)
+          existing.push(hookHandler)
           beforeHooks.set(prop, existing)
         }
       }
@@ -353,17 +354,17 @@ export function createNounProxy(schema: NounSchema): Record<string, unknown> {
       // AFTER hook registration (created, qualified, closed, ...)
       const eventVerb = eventMap.get(prop)
       if (eventVerb) {
-        return (handler: AfterHookHandler) => {
+        return (hookHandler: AfterHookHandler) => {
           const existing = afterHooks.get(prop) ?? []
-          existing.push(handler)
+          existing.push(hookHandler)
           afterHooks.set(prop, existing)
         }
       }
 
       // Check if it's a disabled verb's activity or event form
       for (const disabledVerb of schema.disabledVerbs) {
-        const conj = schema.verbs.get(disabledVerb)
-        if (conj && (prop === conj.activity || prop === conj.event)) {
+        const derived = deriveVerb(disabledVerb)
+        if (prop === derived.activity || prop === derived.event) {
           return null
         }
       }
