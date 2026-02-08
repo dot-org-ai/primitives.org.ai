@@ -127,11 +127,19 @@ export type {
   NounEntity,
   VerbConjugation,
   NounProvider,
+  PipelineableNounProvider,
+  RpcPromise,
+  NounOptions,
   BeforeHookHandler,
   AfterHookHandler,
 } from './noun-types.js'
 
 // Noun runtime
-export { setProvider, getProvider, MemoryNounProvider } from './noun-proxy.js'
+export { setProvider, getProvider, setProviderFactory, clearProviderFactory, createScopedProvider, MemoryNounProvider } from './noun-proxy.js'
 export { registerNoun, getNounSchema, getAllNouns, clearRegistry } from './noun-registry.js'
 export { parseProperty, parseNounDefinition, isVerbDeclaration } from './noun-parse.js'
+
+// RPC Promise pipelining
+export { createRpcPromise, isRpcPromise, wrapRpcPromise, BatchCollector } from './rpc-promise.js'
+export type { BatchOperation } from './rpc-promise.js'
+export type { BatchContext } from './noun-types.js'

@@ -14,6 +14,8 @@ import type {
   NounInstance,
   NounEntity,
   NounProvider,
+  PipelineableNounProvider,
+  RpcPromise,
   BeforeHookHandler,
   AfterHookHandler,
   VerbConjugation,
@@ -54,6 +56,9 @@ function getTenantContext(): string {
 
 let globalProvider: NounProvider | undefined
 
+// Scoped provider support for multi-tenant
+let providerFactory: ((context?: string) => NounProvider) | undefined
+
 /**
  * Set the global NounProvider used by all Noun proxies
  */
@@ -62,13 +67,38 @@ export function setProvider(provider: NounProvider): void {
 }
 
 /**
+ * Set a provider factory for scoped/multi-tenant usage.
+ * When set, getProvider() calls the factory with the current context.
+ */
+export function setProviderFactory(factory: (context?: string) => NounProvider): void {
+  providerFactory = factory
+}
+
+/**
+ * Clear the provider factory
+ */
+export function clearProviderFactory(): void {
+  providerFactory = undefined
+}
+
+/**
  * Get the current global NounProvider (creates default if none set)
  */
 export function getProvider(): NounProvider {
+  if (providerFactory) {
+    return providerFactory()
+  }
   if (!globalProvider) {
     globalProvider = new MemoryNounProvider()
   }
   return globalProvider
+}
+
+/**
+ * Check if the current provider supports promise pipelining
+ */
+function isPipelineable(provider: NounProvider): provider is PipelineableNounProvider {
+  return 'pipelineable' in provider && (provider as PipelineableNounProvider).pipelineable === true
 }
 
 // =============================================================================
@@ -246,6 +276,21 @@ function resolveVerbTransition(schema: NounSchema, verb: string, entity?: NounIn
 }
 
 /**
+ * Check whether any hooks are registered for a given verb form.
+ * When no hooks exist and the provider is pipelineable, we can skip
+ * the async wrapper entirely and return the pipelineable result directly.
+ */
+function hasHooks(
+  beforeHooks: Map<string, BeforeHookHandler[]>,
+  afterHooks: Map<string, AfterHookHandler[]>,
+  verb: VerbConjugation,
+): boolean {
+  const bHooks = beforeHooks.get(verb.activity)
+  const aHooks = afterHooks.get(verb.event)
+  return (bHooks !== undefined && bHooks.length > 0) || (aHooks !== undefined && aHooks.length > 0)
+}
+
+/**
  * Create the Noun entity proxy
  *
  * The proxy intercepts property access to provide:
@@ -255,11 +300,26 @@ function resolveVerbTransition(schema: NounSchema, verb: string, entity?: NounIn
  * - Disabled verbs: null
  * - Read methods: get(), find()
  * - Schema access: $schema, $name
+ *
+ * When a PipelineableNounProvider is active and no hooks are registered,
+ * methods return the RpcPromise directly — enabling promise pipelining
+ * (single round-trip for dependent operation chains).
+ *
+ * @param schema - The parsed NounSchema
+ * @param scopedProvider - Optional provider override for multi-tenant scoped usage
  */
-export function createNounProxy(schema: NounSchema): NounEntity {
+export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvider): NounEntity {
   const { actionMap, activityMap, eventMap } = buildVerbLookups(schema)
   const beforeHooks = new Map<string, BeforeHookHandler[]>()
   const afterHooks = new Map<string, AfterHookHandler[]>()
+
+  /**
+   * Resolve the provider for this Noun proxy.
+   * Priority: scoped provider (per-Noun) > global provider
+   */
+  function resolveProvider(): NounProvider {
+    return scopedProvider ?? getProvider()
+  }
 
   const handler: ProxyHandler<Record<string, unknown>> = {
     get(_target, prop) {
@@ -272,61 +332,167 @@ export function createNounProxy(schema: NounSchema): NounEntity {
       // Check for disabled verbs
       if (schema.disabledVerbs.has(prop)) return null
 
-      // Read verbs (always available)
+      // Read verbs (always available) — always passthrough pipelineable results
       if (prop === 'get') {
-        return async (id: string) => getProvider().get(schema.name, id)
+        return (id: string) => {
+          return resolveProvider().get(schema.name, id)
+        }
       }
       if (prop === 'find') {
-        return async (where?: Record<string, unknown>) => getProvider().find(schema.name, where)
+        return (where?: Record<string, unknown>) => {
+          return resolveProvider().find(schema.name, where)
+        }
       }
 
       // Verb action (create, update, delete, qualify, close, ...)
       const actionVerb = actionMap.get(prop)
       if (actionVerb) {
         if (prop === 'create') {
-          return async (data: Record<string, unknown>) => {
-            let processedData = { ...data }
+          return (data: Record<string, unknown>) => {
+            const provider = resolveProvider()
 
-            // Run BEFORE hooks
-            const hooks = beforeHooks.get(actionVerb.activity)
-            if (hooks) {
-              for (const hook of hooks) {
-                const result = await hook(processedData)
-                if (result && typeof result === 'object') {
-                  processedData = result as Record<string, unknown>
+            // Fast path: no hooks + pipelineable → return RpcPromise directly
+            if (isPipelineable(provider) && !hasHooks(beforeHooks, afterHooks, actionVerb)) {
+              return provider.create(schema.name, data)
+            }
+
+            // Standard path: run hooks sequentially
+            return (async () => {
+              let processedData = { ...data }
+
+              // Run BEFORE hooks
+              const hooks = beforeHooks.get(actionVerb.activity)
+              if (hooks) {
+                for (const hook of hooks) {
+                  const result = await hook(processedData)
+                  if (result && typeof result === 'object') {
+                    processedData = result as Record<string, unknown>
+                  }
                 }
               }
-            }
 
-            const instance = await getProvider().create(schema.name, processedData)
+              const instance = await provider.create(schema.name, processedData)
 
-            // Run AFTER hooks
-            const aHooks = afterHooks.get(actionVerb.event)
-            if (aHooks) {
-              for (const hook of aHooks) {
-                await hook(instance)
+              // Run AFTER hooks
+              const aHooks = afterHooks.get(actionVerb.event)
+              if (aHooks) {
+                for (const hook of aHooks) {
+                  await hook(instance)
+                }
               }
-            }
 
-            return instance
+              return instance
+            })()
           }
         }
 
         if (prop === 'update') {
-          return async (id: string, data: Record<string, unknown>) => {
-            let processedData = { ...data }
+          return (id: string, data: Record<string, unknown>) => {
+            const provider = resolveProvider()
 
+            // Fast path: no hooks + pipelineable → return RpcPromise directly
+            if (isPipelineable(provider) && !hasHooks(beforeHooks, afterHooks, actionVerb)) {
+              return provider.update(schema.name, id, data)
+            }
+
+            return (async () => {
+              let processedData = { ...data }
+
+              const hooks = beforeHooks.get(actionVerb.activity)
+              if (hooks) {
+                for (const hook of hooks) {
+                  const result = await hook(processedData)
+                  if (result && typeof result === 'object') {
+                    processedData = result as Record<string, unknown>
+                  }
+                }
+              }
+
+              const instance = await provider.update(schema.name, id, processedData)
+
+              const aHooks = afterHooks.get(actionVerb.event)
+              if (aHooks) {
+                for (const hook of aHooks) {
+                  await hook(instance)
+                }
+              }
+
+              return instance
+            })()
+          }
+        }
+
+        if (prop === 'delete') {
+          return (id: string) => {
+            const provider = resolveProvider()
+
+            // Fast path: no hooks + pipelineable → return RpcPromise directly
+            if (isPipelineable(provider) && !hasHooks(beforeHooks, afterHooks, actionVerb)) {
+              return provider.delete(schema.name, id)
+            }
+
+            return (async () => {
+              const hooks = beforeHooks.get(actionVerb.activity)
+              if (hooks) {
+                for (const hook of hooks) {
+                  await hook({ $id: id })
+                }
+              }
+
+              const result = await provider.delete(schema.name, id)
+
+              const aHooks = afterHooks.get(actionVerb.event)
+              if (aHooks) {
+                for (const hook of aHooks) {
+                  await hook({ $id: id, $type: schema.name, $context: '', $version: 0, $createdAt: '', $updatedAt: '' })
+                }
+              }
+
+              return result
+            })()
+          }
+        }
+
+        // Custom verb (qualify, close, pause, cancel, reactivate, ...)
+        return (idOrData?: string | Record<string, unknown>, maybeData?: Record<string, unknown>) => {
+          // Support both: Contact.qualify(id) and Contact.qualify(id, data)
+          const id = typeof idOrData === 'string' ? idOrData : undefined
+          const data = typeof idOrData === 'object' ? idOrData : maybeData
+          const provider = resolveProvider()
+
+          // Fast path: pipelineable, no hooks, has an ID → pass-through perform
+          if (id && isPipelineable(provider) && !hasHooks(beforeHooks, afterHooks, actionVerb)) {
+            const transition = resolveVerbTransition(schema, prop)
+            const mergedData = { ...transition, ...data }
+            return provider.perform(schema.name, prop, id, Object.keys(mergedData).length > 0 ? mergedData : undefined)
+          }
+
+          return (async () => {
             const hooks = beforeHooks.get(actionVerb.activity)
             if (hooks) {
               for (const hook of hooks) {
-                const result = await hook(processedData)
-                if (result && typeof result === 'object') {
-                  processedData = result as Record<string, unknown>
-                }
+                await hook(data ?? {})
               }
             }
 
-            const instance = await getProvider().update(schema.name, id, processedData)
+            // Get current entity state for data-aware verb resolution
+            let currentEntity: NounInstance | undefined
+            if (id) {
+              const existing = await provider.get(schema.name, id)
+              if (existing) currentEntity = existing
+            }
+
+            // Resolve state transition from verb declaration (e.g., qualify -> { stage: 'Qualified' })
+            const transition = resolveVerbTransition(schema, prop, currentEntity)
+            const mergedData = { ...transition, ...data }
+
+            let instance: NounInstance
+            if (id) {
+              instance = await provider.perform(schema.name, prop, id, Object.keys(mergedData).length > 0 ? mergedData : undefined)
+            } else {
+              // If no ID, treat data as the operation payload
+              instance = await provider.create(schema.name, mergedData)
+            }
 
             const aHooks = afterHooks.get(actionVerb.event)
             if (aHooks) {
@@ -336,71 +502,7 @@ export function createNounProxy(schema: NounSchema): NounEntity {
             }
 
             return instance
-          }
-        }
-
-        if (prop === 'delete') {
-          return async (id: string) => {
-            const hooks = beforeHooks.get(actionVerb.activity)
-            if (hooks) {
-              for (const hook of hooks) {
-                await hook({ $id: id })
-              }
-            }
-
-            const result = await getProvider().delete(schema.name, id)
-
-            const aHooks = afterHooks.get(actionVerb.event)
-            if (aHooks) {
-              for (const hook of aHooks) {
-                await hook({ $id: id, $type: schema.name, $context: '', $version: 0, $createdAt: '', $updatedAt: '' })
-              }
-            }
-
-            return result
-          }
-        }
-
-        // Custom verb (qualify, close, pause, cancel, reactivate, ...)
-        return async (idOrData?: string | Record<string, unknown>, maybeData?: Record<string, unknown>) => {
-          // Support both: Contact.qualify(id) and Contact.qualify(id, data)
-          const id = typeof idOrData === 'string' ? idOrData : undefined
-          const data = typeof idOrData === 'object' ? idOrData : maybeData
-
-          const hooks = beforeHooks.get(actionVerb.activity)
-          if (hooks) {
-            for (const hook of hooks) {
-              await hook(data ?? {})
-            }
-          }
-
-          // Get current entity state for data-aware verb resolution
-          let currentEntity: NounInstance | undefined
-          if (id) {
-            const existing = await getProvider().get(schema.name, id)
-            if (existing) currentEntity = existing
-          }
-
-          // Resolve state transition from verb declaration (e.g., qualify -> { stage: 'Qualified' })
-          const transition = resolveVerbTransition(schema, prop, currentEntity)
-          const mergedData = { ...transition, ...data }
-
-          let instance: NounInstance
-          if (id) {
-            instance = await getProvider().perform(schema.name, prop, id, Object.keys(mergedData).length > 0 ? mergedData : undefined)
-          } else {
-            // If no ID, treat data as the operation payload
-            instance = await getProvider().create(schema.name, mergedData)
-          }
-
-          const aHooks = afterHooks.get(actionVerb.event)
-          if (aHooks) {
-            for (const hook of aHooks) {
-              await hook(instance)
-            }
-          }
-
-          return instance
+          })()
         }
       }
 
@@ -453,4 +555,29 @@ export function createNounProxy(schema: NounSchema): NounEntity {
   }
 
   return new Proxy({} as NounEntity, handler)
+}
+
+/**
+ * Create a scoped NounProvider for multi-tenant usage.
+ *
+ * Returns a provider factory that creates NounProviders bound to a specific
+ * tenant context URL. Use with the `provider` option in Noun() or call
+ * setProviderFactory() for global scoping.
+ *
+ * @param createProvider - Factory that creates a NounProvider for a given context URL
+ * @returns A provider factory suitable for setProviderFactory()
+ */
+export function createScopedProvider(
+  createProvider: (contextUrl: string) => NounProvider,
+): (context?: string) => NounProvider {
+  const cache = new Map<string, NounProvider>()
+  return (context?: string) => {
+    const url = context ?? getTenantContext()
+    let provider = cache.get(url)
+    if (!provider) {
+      provider = createProvider(url)
+      cache.set(url, provider)
+    }
+    return provider
+  }
 }

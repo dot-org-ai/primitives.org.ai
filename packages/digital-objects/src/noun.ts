@@ -17,7 +17,7 @@
  * Contact.qualified(contact => { ... })
  */
 
-import type { NounDefinitionInput, NounEntity, NounSchema } from './noun-types.js'
+import type { NounDefinitionInput, NounEntity, NounSchema, NounOptions } from './noun-types.js'
 import { deriveNoun } from './linguistic.js'
 import { parseNounDefinition } from './noun-parse.js'
 import { buildVerbMap } from './noun-verbs.js'
@@ -29,11 +29,23 @@ import { createNounProxy } from './noun-proxy.js'
  *
  * @param name - PascalCase entity name (e.g., 'Contact', 'Deal', 'Subscription')
  * @param definition - Property definitions using string patterns
+ * @param options - Optional configuration (e.g., scoped provider for multi-tenant)
  * @returns A Proxy with CRUD methods, custom verbs, and event hooks
+ *
+ * @example
+ * ```typescript
+ * // Default (uses global provider):
+ * const Contact = Noun('Contact', { name: 'string!', stage: 'Lead | Qualified' })
+ *
+ * // With scoped provider (multi-tenant):
+ * const provider = new DONounProvider({ endpoint: 'https://db.headless.ly/~acme' })
+ * const Contact = Noun('Contact', { name: 'string!' }, { provider })
+ * ```
  */
 export function Noun<T extends NounDefinitionInput>(
   name: string,
   definition: T,
+  options?: NounOptions,
 ): NounEntity {
   // Derive linguistic forms
   const derived = deriveNoun(name)
@@ -60,6 +72,6 @@ export function Noun<T extends NounDefinitionInput>(
   // Register in global registry
   registerNoun(schema)
 
-  // Create and return the proxy
-  return createNounProxy(schema)
+  // Create and return the proxy, with optional scoped provider
+  return createNounProxy(schema, options?.provider)
 }

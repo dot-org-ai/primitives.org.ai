@@ -153,3 +153,89 @@ export interface NounProvider {
   delete(type: string, id: string): Promise<boolean>
   perform(type: string, verb: string, id: string, data?: Record<string, unknown>): Promise<NounInstance>
 }
+
+/**
+ * A promise that supports pipelining — property access and chaining
+ * before resolution, inspired by Cap'n Proto / capnweb.
+ *
+ * Extends PromiseLike<T> so it works anywhere a Promise does (await, .then),
+ * but also supports .pipe() for explicit pipelined transforms that preserve
+ * the RpcPromise wrapper and avoid forcing resolution.
+ */
+export interface RpcPromise<T> extends PromiseLike<T> {
+  /**
+   * Chain a transform without forcing resolution.
+   * The transform runs when the promise settles, but the return type
+   * remains an RpcPromise so further pipelining is possible.
+   */
+  pipe<U>(fn: (value: T) => U | PromiseLike<U>): RpcPromise<U>
+
+  /**
+   * Standard Promise interop — allows await and .then() chains
+   */
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2>
+}
+
+/**
+ * A NounProvider that supports promise pipelining
+ *
+ * Methods return RpcPromise<T> instead of Promise<T>, allowing the Noun
+ * proxy to pass through pipelineable results without forcing resolution.
+ * This enables single-round-trip chains via capnweb / rpc.do.
+ *
+ * The Noun proxy detects this interface via the `pipelineable` discriminator
+ * and preserves chaining instead of forcing immediate await.
+ */
+export interface PipelineableNounProvider extends NounProvider {
+  /** Whether this provider supports promise pipelining */
+  readonly pipelineable: true
+
+  /**
+   * Get the raw RPC proxy for direct pipelined access.
+   * Returns the underlying transport proxy (e.g., rpc.do RPCProxy)
+   * that supports property chaining on unresolved promises.
+   */
+  getRpcProxy(): unknown
+
+  /** Pipelined create — returns RpcPromise instead of bare Promise */
+  create(type: string, data: Record<string, unknown>): RpcPromise<NounInstance>
+  /** Pipelined get — returns RpcPromise instead of bare Promise */
+  get(type: string, id: string): RpcPromise<NounInstance | null>
+  /** Pipelined find — returns RpcPromise instead of bare Promise */
+  find(type: string, where?: Record<string, unknown>): RpcPromise<NounInstance[]>
+  /** Pipelined update — returns RpcPromise instead of bare Promise */
+  update(type: string, id: string, data: Record<string, unknown>): RpcPromise<NounInstance>
+  /** Pipelined delete — returns RpcPromise instead of bare Promise */
+  delete(type: string, id: string): RpcPromise<boolean>
+  /** Pipelined perform — returns RpcPromise instead of bare Promise */
+  perform(type: string, verb: string, id: string, data?: Record<string, unknown>): RpcPromise<NounInstance>
+}
+
+/**
+ * A batch context that collects operations for a single round-trip.
+ *
+ * Providers that support batching return this from their batch() method.
+ * Operations performed within the batch callback are queued and flushed
+ * together when the callback completes.
+ */
+export interface BatchContext {
+  /** Flush all pending operations and return results */
+  flush(): Promise<void>
+  /** Number of operations currently queued */
+  readonly pending: number
+}
+
+/**
+ * Options for Noun() factory — allows scoped provider injection
+ */
+export interface NounOptions {
+  /**
+   * Override the global provider for this specific Noun.
+   * Useful for multi-tenant setups where different tenants
+   * use different providers/endpoints.
+   */
+  provider?: NounProvider | PipelineableNounProvider
+}
