@@ -195,6 +195,57 @@ function buildVerbLookups(schema: NounSchema): {
 }
 
 /**
+ * Resolve the state transition data for a custom verb.
+ *
+ * Verb declarations like `qualify: 'Qualified'` define a target state value.
+ * This function determines which entity field to set that value on.
+ *
+ * Resolution order:
+ * 1. Exact enum match — find an enum field that contains the target value
+ * 2. Entity awareness — if entity has `stage`/`status`/`state` fields, use the first match
+ * 3. Schema convention — fall back to `stage` or `status` fields defined in the schema
+ *
+ * Returns { fieldName: targetValue } or empty object if not resolvable.
+ */
+function resolveVerbTransition(schema: NounSchema, verb: string, entity?: NounInstance): Record<string, unknown> {
+  const rawValue = schema.raw[verb]
+  if (typeof rawValue !== 'string') return {}
+
+  // rawValue is the PascalCase target (e.g., 'Qualified', 'Closed', 'Paused')
+  const target = rawValue
+
+  // Strategy 1: Find an enum field that explicitly contains this target value
+  for (const [fieldName, fieldDef] of schema.fields) {
+    if (fieldDef.kind === 'enum' && fieldDef.enumValues) {
+      if (fieldDef.enumValues.includes(target)) {
+        return { [fieldName]: target }
+      }
+    }
+  }
+
+  // Strategy 2: Entity awareness — check the actual entity data for convention fields
+  // This handles the case where entities are created with fields not in the schema
+  if (entity) {
+    const conventionFields = ['stage', 'status', 'state']
+    for (const field of conventionFields) {
+      if (field in entity && entity[field] !== undefined) {
+        return { [field]: target }
+      }
+    }
+  }
+
+  // Strategy 3: Schema convention — fall back to schema-defined convention fields
+  const conventionFields = ['stage', 'status', 'state']
+  for (const field of conventionFields) {
+    if (schema.fields.has(field)) {
+      return { [field]: target }
+    }
+  }
+
+  return {}
+}
+
+/**
  * Create the Noun entity proxy
  *
  * The proxy intercepts property access to provide:
@@ -323,12 +374,23 @@ export function createNounProxy(schema: NounSchema): NounEntity {
             }
           }
 
+          // Get current entity state for data-aware verb resolution
+          let currentEntity: NounInstance | undefined
+          if (id) {
+            const existing = await getProvider().get(schema.name, id)
+            if (existing) currentEntity = existing
+          }
+
+          // Resolve state transition from verb declaration (e.g., qualify -> { stage: 'Qualified' })
+          const transition = resolveVerbTransition(schema, prop, currentEntity)
+          const mergedData = { ...transition, ...data }
+
           let instance: NounInstance
           if (id) {
-            instance = await getProvider().perform(schema.name, prop, id, data)
+            instance = await getProvider().perform(schema.name, prop, id, Object.keys(mergedData).length > 0 ? mergedData : undefined)
           } else {
             // If no ID, treat data as the operation payload
-            instance = await getProvider().create(schema.name, data ?? {})
+            instance = await getProvider().create(schema.name, mergedData)
           }
 
           const aHooks = afterHooks.get(actionVerb.event)
@@ -349,6 +411,14 @@ export function createNounProxy(schema: NounSchema): NounEntity {
           const existing = beforeHooks.get(prop) ?? []
           existing.push(hookHandler)
           beforeHooks.set(prop, existing)
+          // Return unsubscribe function
+          return () => {
+            const hooks = beforeHooks.get(prop)
+            if (hooks) {
+              const idx = hooks.indexOf(hookHandler)
+              if (idx !== -1) hooks.splice(idx, 1)
+            }
+          }
         }
       }
 
@@ -359,6 +429,14 @@ export function createNounProxy(schema: NounSchema): NounEntity {
           const existing = afterHooks.get(prop) ?? []
           existing.push(hookHandler)
           afterHooks.set(prop, existing)
+          // Return unsubscribe function
+          return () => {
+            const hooks = afterHooks.get(prop)
+            if (hooks) {
+              const idx = hooks.indexOf(hookHandler)
+              if (idx !== -1) hooks.splice(idx, 1)
+            }
+          }
         }
       }
 
