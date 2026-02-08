@@ -124,6 +124,7 @@ export type {
   NounDefinitionInput,
   NounSchema,
   NounInstance,
+  NounEntity,
   VerbConjugation,
   NounProvider,
   BeforeHookHandler,

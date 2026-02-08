@@ -17,7 +17,7 @@
  * Contact.qualified(contact => { ... })
  */
 
-import type { NounDefinitionInput, NounSchema } from './noun-types.js'
+import type { NounDefinitionInput, NounEntity, NounSchema } from './noun-types.js'
 import { deriveNoun } from './linguistic.js'
 import { parseNounDefinition } from './noun-parse.js'
 import { buildVerbMap } from './noun-verbs.js'
@@ -34,7 +34,7 @@ import { createNounProxy } from './noun-proxy.js'
 export function Noun<T extends NounDefinitionInput>(
   name: string,
   definition: T,
-): Record<string, unknown> {
+): NounEntity {
   // Derive linguistic forms
   const derived = deriveNoun(name)
 

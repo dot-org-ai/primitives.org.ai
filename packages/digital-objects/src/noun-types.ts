@@ -115,6 +115,31 @@ export type AfterHookHandler = (
 ) => void | Promise<void>
 
 /**
+ * The typed interface returned by Noun()
+ *
+ * Provides typed CRUD methods, hook registration, schema access,
+ * and custom verb dispatch via index signature.
+ */
+export interface NounEntity {
+  /** Create a new entity instance */
+  create(data: Record<string, unknown>): Promise<NounInstance>
+  /** Get an entity by ID */
+  get(id: string): Promise<NounInstance | null>
+  /** Find entities matching a filter */
+  find(where?: Record<string, unknown>): Promise<NounInstance[]>
+  /** Update an entity by ID */
+  update(id: string, data: Record<string, unknown>): Promise<NounInstance>
+  /** Delete an entity by ID */
+  delete(id: string): Promise<boolean>
+  /** Access the noun schema */
+  $schema: NounSchema
+  /** Access the noun name */
+  $name: string
+  /** Custom verbs, hook registration, and dynamic access */
+  [key: string]: unknown
+}
+
+/**
  * Provider interface for Noun runtime storage
  *
  * The Noun proxy dispatches all operations to a NounProvider.

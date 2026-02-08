@@ -12,6 +12,7 @@
 import type {
   NounSchema,
   NounInstance,
+  NounEntity,
   NounProvider,
   BeforeHookHandler,
   AfterHookHandler,
@@ -204,7 +205,7 @@ function buildVerbLookups(schema: NounSchema): {
  * - Read methods: get(), find()
  * - Schema access: $schema, $name
  */
-export function createNounProxy(schema: NounSchema): Record<string, unknown> {
+export function createNounProxy(schema: NounSchema): NounEntity {
   const { actionMap, activityMap, eventMap } = buildVerbLookups(schema)
   const beforeHooks = new Map<string, BeforeHookHandler[]>()
   const afterHooks = new Map<string, AfterHookHandler[]>()
@@ -373,5 +374,5 @@ export function createNounProxy(schema: NounSchema): Record<string, unknown> {
     },
   }
 
-  return new Proxy({}, handler)
+  return new Proxy({} as NounEntity, handler)
 }
