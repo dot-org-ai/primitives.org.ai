@@ -56,6 +56,29 @@ function getTenantContext(): string {
 
 let globalProvider: NounProvider | undefined
 
+// =============================================================================
+// Entity Registry (for $ context in after hooks)
+// =============================================================================
+
+let entityRegistry: Record<string, unknown> | undefined
+
+/**
+ * Set the global entity registry used as $ context in after hooks.
+ * Called by the SDK to inject the allEntities map so that
+ * after hooks like `Deal.closed((deal, $) => { $.Subscription.create(...) })`
+ * receive the full entity graph as the second argument.
+ */
+export function setEntityRegistry(registry: Record<string, unknown>): void {
+  entityRegistry = registry
+}
+
+/**
+ * Get the current entity registry
+ */
+export function getEntityRegistry(): Record<string, unknown> | undefined {
+  return entityRegistry
+}
+
 // Scoped provider support for multi-tenant
 let providerFactory: ((context?: string) => NounProvider) | undefined
 
@@ -102,6 +125,75 @@ function isPipelineable(provider: NounProvider): provider is PipelineableNounPro
 }
 
 // =============================================================================
+// MongoDB-style filter matching
+// =============================================================================
+
+/**
+ * Check if an operator object contains MongoDB-style query operators.
+ * Operator keys start with '$' (e.g. $gt, $gte, $lt, $lte, $in, $nin, $exists, $regex).
+ */
+function isOperatorObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.keys(value).some((k) => k.startsWith('$'))
+  )
+}
+
+/**
+ * Match a single field value against a filter value.
+ * Supports both exact equality and MongoDB-style operators:
+ * $gt, $gte, $lt, $lte, $in, $nin, $exists, $regex, $eq, $ne
+ */
+function matchFilterValue(fieldValue: unknown, filterValue: unknown): boolean {
+  if (isOperatorObject(filterValue)) {
+    for (const [op, opVal] of Object.entries(filterValue)) {
+      switch (op) {
+        case '$eq':
+          if (fieldValue !== opVal) return false
+          break
+        case '$ne':
+          if (fieldValue === opVal) return false
+          break
+        case '$gt':
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue <= opVal) return false
+          break
+        case '$gte':
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue < opVal) return false
+          break
+        case '$lt':
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue >= opVal) return false
+          break
+        case '$lte':
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue > opVal) return false
+          break
+        case '$in':
+          if (!Array.isArray(opVal) || !opVal.includes(fieldValue)) return false
+          break
+        case '$nin':
+          if (!Array.isArray(opVal) || opVal.includes(fieldValue)) return false
+          break
+        case '$exists':
+          if (opVal && fieldValue === undefined) return false
+          if (!opVal && fieldValue !== undefined) return false
+          break
+        case '$regex': {
+          const re = opVal instanceof RegExp ? opVal : new RegExp(opVal as string)
+          if (typeof fieldValue !== 'string' || !re.test(fieldValue)) return false
+          break
+        }
+        default:
+          // Unknown operator — treat as non-match
+          return false
+      }
+    }
+    return true
+  }
+  return fieldValue === filterValue
+}
+
+// =============================================================================
 // MemoryNounProvider — default in-process provider
 // =============================================================================
 
@@ -138,7 +230,7 @@ export class MemoryNounProvider implements NounProvider {
       if (where) {
         let match = true
         for (const [key, value] of Object.entries(where)) {
-          if (instance[key] !== value) {
+          if (!matchFilterValue(instance[key], value)) {
             match = false
             break
           }
@@ -377,7 +469,7 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
               const aHooks = afterHooks.get(actionVerb.event)
               if (aHooks) {
                 for (const hook of aHooks) {
-                  await hook(instance)
+                  await hook(instance, entityRegistry)
                 }
               }
 
@@ -413,7 +505,7 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
               const aHooks = afterHooks.get(actionVerb.event)
               if (aHooks) {
                 for (const hook of aHooks) {
-                  await hook(instance)
+                  await hook(instance, entityRegistry)
                 }
               }
 
@@ -444,7 +536,7 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
               const aHooks = afterHooks.get(actionVerb.event)
               if (aHooks) {
                 for (const hook of aHooks) {
-                  await hook({ $id: id, $type: schema.name, $context: '', $version: 0, $createdAt: '', $updatedAt: '' })
+                  await hook({ $id: id, $type: schema.name, $context: '', $version: 0, $createdAt: '', $updatedAt: '' }, entityRegistry)
                 }
               }
 
@@ -497,7 +589,7 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
             const aHooks = afterHooks.get(actionVerb.event)
             if (aHooks) {
               for (const hook of aHooks) {
-                await hook(instance)
+                await hook(instance, entityRegistry)
               }
             }
 
