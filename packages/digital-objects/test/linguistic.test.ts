@@ -1048,6 +1048,51 @@ describe('Linguistic Utilities', () => {
         expect(result.activity).toBe('hitting')
         expect(result.event).toBe('hit')
       })
+
+      it('should derive verb conjugations from "lose"', () => {
+        const result = deriveVerb('lose')
+        expect(result.action).toBe('lose')
+        expect(result.act).toBe('loses')
+        expect(result.activity).toBe('losing')
+        expect(result.event).toBe('lost')
+        expect(result.reverseBy).toBe('lostBy')
+      })
+
+      it('should derive verb conjugations from "win"', () => {
+        const result = deriveVerb('win')
+        expect(result.action).toBe('win')
+        expect(result.act).toBe('wins')
+        expect(result.activity).toBe('winning')
+        expect(result.event).toBe('won')
+        expect(result.reverseBy).toBe('wonBy')
+      })
+
+      it('should derive verb conjugations from "pay"', () => {
+        const result = deriveVerb('pay')
+        expect(result.action).toBe('pay')
+        expect(result.act).toBe('pays')
+        expect(result.activity).toBe('paying')
+        expect(result.event).toBe('paid')
+        expect(result.reverseBy).toBe('paidBy')
+      })
+
+      it('should derive verb conjugations from "reopen"', () => {
+        const result = deriveVerb('reopen')
+        expect(result.action).toBe('reopen')
+        expect(result.act).toBe('reopens')
+        expect(result.activity).toBe('reopening')
+        expect(result.event).toBe('reopened')
+        expect(result.reverseBy).toBe('reopenedBy')
+      })
+
+      it('should derive verb conjugations from "rollout"', () => {
+        const result = deriveVerb('rollout')
+        expect(result.action).toBe('rollout')
+        expect(result.act).toBe('rollouts')
+        expect(result.activity).toBe('rollingOut')
+        expect(result.event).toBe('rolledOut')
+        expect(result.reverseBy).toBe('rolledOutBy')
+      })
     })
 
     describe('reverseBy and reverseAt derivation', () => {
