@@ -38,7 +38,23 @@ export { validateDirection, MAX_BATCH_SIZE, ActionStatus } from './types.js'
 export { MemoryProvider, createMemoryProvider } from './memory-provider.js'
 
 // Linguistic utilities
-export { deriveNoun, deriveVerb, pluralize, singularize } from './linguistic.js'
+export {
+  deriveNoun,
+  deriveVerb,
+  pluralize,
+  singularize,
+  capitalize,
+  preserveCase,
+  isVowel,
+  splitCamelCase,
+  toKebabCase,
+  shouldDoubleConsonant,
+  toPastParticiple,
+  toActor,
+  toPresent,
+  toGerund,
+  toResult,
+} from './linguistic.js'
 
 // NS Client (for HTTP access to NS Durable Object)
 export { NSClient, createNSClient } from './ns-client.js'

@@ -5,7 +5,23 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { pluralize, singularize, deriveNoun, deriveVerb } from '../src/linguistic'
+import {
+  pluralize,
+  singularize,
+  deriveNoun,
+  deriveVerb,
+  capitalize,
+  preserveCase,
+  isVowel,
+  splitCamelCase,
+  toKebabCase,
+  shouldDoubleConsonant,
+  toPastParticiple,
+  toActor,
+  toPresent,
+  toGerund,
+  toResult,
+} from '../src/linguistic'
 
 describe('Linguistic Utilities', () => {
   describe('pluralize()', () => {
@@ -455,19 +471,16 @@ describe('Linguistic Utilities', () => {
         expect(singularize('shelves')).toBe('shelf')
       })
 
-      it('should singularize "knives" to "knife" (defaults to f)', () => {
-        // Note: Implementation defaults to 'f', not 'fe'
-        expect(singularize('knives')).toBe('knif')
+      it('should singularize "knives" to "knife"', () => {
+        expect(singularize('knives')).toBe('knife')
       })
 
-      it('should singularize "wives" to "wife" (defaults to f)', () => {
-        // Note: Implementation defaults to 'f', not 'fe'
-        expect(singularize('wives')).toBe('wif')
+      it('should singularize "wives" to "wife"', () => {
+        expect(singularize('wives')).toBe('wife')
       })
 
-      it('should singularize "lives" to "life" (defaults to f)', () => {
-        // Note: Implementation defaults to 'f', not 'fe'
-        expect(singularize('lives')).toBe('lif')
+      it('should singularize "lives" to "life"', () => {
+        expect(singularize('lives')).toBe('life')
       })
     })
 
@@ -726,14 +739,12 @@ describe('Linguistic Utilities', () => {
         expect(result.event).toBe('returned')
       })
 
-      it('should derive verb conjugations from "open" (CVC pattern matches)', () => {
-        // Note: "open" matches CVC pattern (o-p-e-n with final consonant), so implementation doubles 'n'
-        // English standard would be "opening" without doubling since "open" has stress on first syllable
+      it('should derive verb conjugations from "open"', () => {
         const result = deriveVerb('open')
         expect(result.action).toBe('open')
         expect(result.act).toBe('opens')
-        expect(result.activity).toBe('openning')
-        expect(result.event).toBe('openned')
+        expect(result.activity).toBe('opening')
+        expect(result.event).toBe('opened')
       })
     })
 
@@ -1101,6 +1112,230 @@ describe('Linguistic Utilities', () => {
         const result = deriveVerb('CrEaTe')
         expect(result.action).toBe('create')
         expect(result.act).toBe('creates')
+      })
+    })
+  })
+
+  describe('Utility Helpers', () => {
+    describe('capitalize()', () => {
+      it('should capitalize first letter', () => {
+        expect(capitalize('hello')).toBe('Hello')
+      })
+
+      it('should handle already capitalized', () => {
+        expect(capitalize('Hello')).toBe('Hello')
+      })
+
+      it('should handle single char', () => {
+        expect(capitalize('a')).toBe('A')
+      })
+    })
+
+    describe('preserveCase()', () => {
+      it('should capitalize replacement if original is capitalized', () => {
+        expect(preserveCase('Person', 'people')).toBe('People')
+      })
+
+      it('should keep lowercase if original is lowercase', () => {
+        expect(preserveCase('person', 'people')).toBe('people')
+      })
+    })
+
+    describe('isVowel()', () => {
+      it('should return true for vowels', () => {
+        expect(isVowel('a')).toBe(true)
+        expect(isVowel('e')).toBe(true)
+        expect(isVowel('i')).toBe(true)
+        expect(isVowel('o')).toBe(true)
+        expect(isVowel('u')).toBe(true)
+      })
+
+      it('should return true for uppercase vowels', () => {
+        expect(isVowel('A')).toBe(true)
+        expect(isVowel('E')).toBe(true)
+      })
+
+      it('should return false for consonants', () => {
+        expect(isVowel('b')).toBe(false)
+        expect(isVowel('c')).toBe(false)
+        expect(isVowel('z')).toBe(false)
+      })
+
+      it('should return false for undefined', () => {
+        expect(isVowel(undefined)).toBe(false)
+      })
+    })
+
+    describe('splitCamelCase()', () => {
+      it('should split PascalCase', () => {
+        expect(splitCamelCase('BlogPost')).toEqual(['Blog', 'Post'])
+      })
+
+      it('should split camelCase', () => {
+        expect(splitCamelCase('userProfile')).toEqual(['user', 'Profile'])
+      })
+
+      it('should handle single word', () => {
+        expect(splitCamelCase('Post')).toEqual(['Post'])
+      })
+
+      it('should handle three words', () => {
+        expect(splitCamelCase('ProductReviewComment')).toEqual(['Product', 'Review', 'Comment'])
+      })
+    })
+
+    describe('toKebabCase()', () => {
+      it('should convert PascalCase to kebab-case', () => {
+        expect(toKebabCase('BlogPost')).toBe('blog-post')
+      })
+
+      it('should convert space-separated to kebab-case', () => {
+        expect(toKebabCase('Blog Post')).toBe('blog-post')
+      })
+
+      it('should handle single word', () => {
+        expect(toKebabCase('Post')).toBe('post')
+      })
+    })
+
+    describe('shouldDoubleConsonant()', () => {
+      it('should return true for short CVC words', () => {
+        expect(shouldDoubleConsonant('run')).toBe(true)
+        expect(shouldDoubleConsonant('sit')).toBe(true)
+        expect(shouldDoubleConsonant('hop')).toBe(true)
+      })
+
+      it('should return true for known doubling verbs', () => {
+        expect(shouldDoubleConsonant('submit')).toBe(true)
+        expect(shouldDoubleConsonant('commit')).toBe(true)
+        expect(shouldDoubleConsonant('refer')).toBe(true)
+        expect(shouldDoubleConsonant('stop')).toBe(true)
+        expect(shouldDoubleConsonant('plan')).toBe(true)
+        expect(shouldDoubleConsonant('grab')).toBe(true)
+      })
+
+      it('should return false for non-doubling verbs', () => {
+        expect(shouldDoubleConsonant('open')).toBe(false)
+        expect(shouldDoubleConsonant('listen')).toBe(false)
+        expect(shouldDoubleConsonant('happen')).toBe(false)
+        expect(shouldDoubleConsonant('develop')).toBe(false)
+      })
+
+      it('should not double w, x, y endings', () => {
+        expect(shouldDoubleConsonant('play')).toBe(false)
+        expect(shouldDoubleConsonant('fix')).toBe(false)
+        expect(shouldDoubleConsonant('show')).toBe(false)
+      })
+    })
+  })
+
+  describe('Composable Verb Helpers', () => {
+    describe('toPastParticiple()', () => {
+      it('should handle -e ending', () => {
+        expect(toPastParticiple('create')).toBe('created')
+        expect(toPastParticiple('like')).toBe('liked')
+      })
+
+      it('should handle consonant+y ending', () => {
+        expect(toPastParticiple('carry')).toBe('carried')
+        expect(toPastParticiple('try')).toBe('tried')
+      })
+
+      it('should handle consonant doubling', () => {
+        expect(toPastParticiple('stop')).toBe('stopped')
+        expect(toPastParticiple('submit')).toBe('submitted')
+      })
+
+      it('should handle regular verbs', () => {
+        expect(toPastParticiple('work')).toBe('worked')
+        expect(toPastParticiple('open')).toBe('opened')
+      })
+    })
+
+    describe('toActor()', () => {
+      it('should handle -ate ending', () => {
+        expect(toActor('create')).toBe('creator')
+      })
+
+      it('should handle -e ending', () => {
+        expect(toActor('manage')).toBe('manager')
+      })
+
+      it('should handle consonant+y ending', () => {
+        expect(toActor('carry')).toBe('carrier')
+      })
+
+      it('should handle consonant doubling', () => {
+        expect(toActor('submit')).toBe('submitter')
+      })
+
+      it('should handle regular verbs', () => {
+        expect(toActor('work')).toBe('worker')
+        expect(toActor('publish')).toBe('publisher')
+      })
+    })
+
+    describe('toPresent()', () => {
+      it('should handle consonant+y ending', () => {
+        expect(toPresent('carry')).toBe('carries')
+      })
+
+      it('should handle sibilant endings', () => {
+        expect(toPresent('push')).toBe('pushes')
+        expect(toPresent('watch')).toBe('watches')
+        expect(toPresent('fix')).toBe('fixes')
+      })
+
+      it('should handle regular verbs', () => {
+        expect(toPresent('create')).toBe('creates')
+        expect(toPresent('work')).toBe('works')
+      })
+    })
+
+    describe('toGerund()', () => {
+      it('should handle -ie ending', () => {
+        expect(toGerund('die')).toBe('dying')
+        expect(toGerund('lie')).toBe('lying')
+      })
+
+      it('should handle -e ending', () => {
+        expect(toGerund('create')).toBe('creating')
+        expect(toGerund('like')).toBe('liking')
+      })
+
+      it('should handle consonant doubling', () => {
+        expect(toGerund('run')).toBe('running')
+        expect(toGerund('stop')).toBe('stopping')
+        expect(toGerund('submit')).toBe('submitting')
+      })
+
+      it('should handle regular verbs', () => {
+        expect(toGerund('work')).toBe('working')
+        expect(toGerund('open')).toBe('opening')
+      })
+    })
+
+    describe('toResult()', () => {
+      it('should handle -ate ending', () => {
+        expect(toResult('create')).toBe('creation')
+        expect(toResult('generate')).toBe('generation')
+      })
+
+      it('should handle -ify ending', () => {
+        expect(toResult('notify')).toBe('notification')
+        expect(toResult('classify')).toBe('classification')
+      })
+
+      it('should handle -ize ending', () => {
+        expect(toResult('organize')).toBe('organization')
+      })
+
+      it('should handle -e ending', () => {
+        expect(toResult('define')).toBe('definion')
+      })
+
+      it('should handle default', () => {
+        expect(toResult('publish')).toBe('publishion')
       })
     })
   })
