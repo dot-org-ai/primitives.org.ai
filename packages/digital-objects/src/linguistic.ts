@@ -182,6 +182,11 @@ export function deriveVerb(name: string): {
     put: { act: 'puts', activity: 'putting', event: 'put' },
     cut: { act: 'cuts', activity: 'cutting', event: 'cut' },
     hit: { act: 'hits', activity: 'hitting', event: 'hit' },
+    lose: { act: 'loses', activity: 'losing', event: 'lost' },
+    win: { act: 'wins', activity: 'winning', event: 'won' },
+    pay: { act: 'pays', activity: 'paying', event: 'paid' },
+    reopen: { act: 'reopens', activity: 'reopening', event: 'reopened' },
+    rollout: { act: 'rollsout', activity: 'rollingout', event: 'rolledout' },
   }
 
   if (irregulars[base]) {
