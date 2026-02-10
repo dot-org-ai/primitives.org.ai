@@ -19,6 +19,7 @@ import type {
   BeforeHookHandler,
   AfterHookHandler,
   VerbConjugation,
+  EntityEvent,
 } from './noun-types.js'
 import { deriveVerb } from './linguistic.js'
 
@@ -77,6 +78,34 @@ export function setEntityRegistry(registry: Record<string, unknown>): void {
  */
 export function getEntityRegistry(): Record<string, unknown> | undefined {
   return entityRegistry
+}
+
+// =============================================================================
+// Global Event Bus
+// =============================================================================
+
+type EventCallback = (event: EntityEvent) => void
+const eventBusCallbacks: EventCallback[] = []
+
+/**
+ * Emit an entity event to all global subscribers
+ */
+function emitEvent(event: EntityEvent): void {
+  for (const cb of eventBusCallbacks) {
+    cb(event)
+  }
+}
+
+/**
+ * Subscribe to ALL entity events globally.
+ * Returns an unsubscribe function.
+ */
+export function subscribeToEvents(callback: EventCallback): () => void {
+  eventBusCallbacks.push(callback)
+  return () => {
+    const idx = eventBusCallbacks.indexOf(callback)
+    if (idx !== -1) eventBusCallbacks.splice(idx, 1)
+  }
 }
 
 // Scoped provider support for multi-tenant
@@ -199,6 +228,7 @@ function matchFilterValue(fieldValue: unknown, filterValue: unknown): boolean {
 
 export class MemoryNounProvider implements NounProvider {
   private store = new Map<string, NounInstance>()
+  private eventLog: EntityEvent[] = []
 
   async create(type: string, data: Record<string, unknown>): Promise<NounInstance> {
     const now = new Date().toISOString()
@@ -212,6 +242,17 @@ export class MemoryNounProvider implements NounProvider {
       ...data,
     }
     this.store.set(instance.$id, instance)
+    const event: EntityEvent = {
+      type,
+      action: 'created',
+      entityId: instance.$id,
+      data: { ...instance },
+      previousData: null,
+      timestamp: now,
+      version: 1,
+    }
+    this.eventLog.push(event)
+    emitEvent(event)
     return instance
   }
 
@@ -252,6 +293,7 @@ export class MemoryNounProvider implements NounProvider {
     if (!existing || existing.$type !== type) {
       throw new Error(`${type} not found: ${id}`)
     }
+    const previousData = { ...existing }
     const updated: NounInstance = {
       ...existing,
       ...data,
@@ -263,18 +305,44 @@ export class MemoryNounProvider implements NounProvider {
       $updatedAt: new Date().toISOString(),
     }
     this.store.set(id, updated)
+    const event: EntityEvent = {
+      type,
+      action: 'updated',
+      entityId: id,
+      data: { ...updated },
+      previousData,
+      timestamp: updated.$updatedAt,
+      version: updated.$version,
+    }
+    this.eventLog.push(event)
+    emitEvent(event)
     return updated
   }
 
   async delete(type: string, id: string): Promise<boolean> {
     const existing = this.store.get(id)
     if (!existing || existing.$type !== type) return false
-    return this.store.delete(id)
+    const previousData = { ...existing }
+    const result = this.store.delete(id)
+    if (result) {
+      const event: EntityEvent = {
+        type,
+        action: 'deleted',
+        entityId: id,
+        data: null,
+        previousData,
+        timestamp: new Date().toISOString(),
+        version: existing.$version,
+      }
+      this.eventLog.push(event)
+      emitEvent(event)
+    }
+    return result
   }
 
   async perform(
     type: string,
-    _verb: string,
+    verb: string,
     id: string,
     data?: Record<string, unknown>,
   ): Promise<NounInstance> {
@@ -283,9 +351,82 @@ export class MemoryNounProvider implements NounProvider {
       throw new Error(`${type} not found: ${id}`)
     }
     if (data) {
-      return this.update(type, id, data)
+      const previousData = { ...existing }
+      const updated: NounInstance = {
+        ...existing,
+        ...data,
+        $id: existing.$id,
+        $type: existing.$type,
+        $context: existing.$context,
+        $version: existing.$version + 1,
+        $createdAt: existing.$createdAt,
+        $updatedAt: new Date().toISOString(),
+      }
+      this.store.set(id, updated)
+      const event: EntityEvent = {
+        type,
+        action: 'performed',
+        verb,
+        entityId: id,
+        data: { ...updated },
+        previousData,
+        timestamp: updated.$updatedAt,
+        version: updated.$version,
+      }
+      this.eventLog.push(event)
+      emitEvent(event)
+      return updated
     }
     return existing
+  }
+
+  async rollback(type: string, id: string, toVersion: number): Promise<NounInstance> {
+    const existing = this.store.get(id)
+    if (!existing || existing.$type !== type) {
+      throw new Error(`${type} not found: ${id}`)
+    }
+    // Find the event at the target version
+    const targetEvent = this.eventLog.find(
+      (e) => e.entityId === id && e.version === toVersion && e.data !== null,
+    )
+    if (!targetEvent || !targetEvent.data) {
+      throw new Error(`Version ${toVersion} not found for ${type}: ${id}`)
+    }
+    // Create a new version with the old state (not rewriting history)
+    const previousData = { ...existing }
+    const snapshot = targetEvent.data
+    const restored: NounInstance = {
+      ...snapshot,
+      $id: existing.$id,
+      $type: existing.$type,
+      $context: existing.$context,
+      $version: existing.$version + 1,
+      $createdAt: existing.$createdAt,
+      $updatedAt: new Date().toISOString(),
+    }
+    this.store.set(id, restored)
+    const event: EntityEvent = {
+      type,
+      action: 'updated',
+      entityId: id,
+      data: { ...restored },
+      previousData,
+      timestamp: restored.$updatedAt,
+      version: restored.$version,
+    }
+    this.eventLog.push(event)
+    emitEvent(event)
+    return restored
+  }
+
+  /**
+   * Get all events for an entity (for debugging/testing)
+   */
+  getEvents(entityId?: string): EntityEvent[] {
+    if (entityId) {
+      return this.eventLog.filter((e) => e.entityId === entityId)
+    }
+    return [...this.eventLog]
   }
 
   /**
@@ -293,6 +434,7 @@ export class MemoryNounProvider implements NounProvider {
    */
   clear(): void {
     this.store.clear()
+    this.eventLog = []
   }
 }
 
@@ -443,6 +585,25 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
       if (prop === 'findOne') {
         return (where?: Record<string, unknown>) => {
           return resolveProvider().findOne(schema.name, where)
+        }
+      }
+
+      // Rollback to a previous version
+      if (prop === 'rollback') {
+        return (id: string, toVersion: number) => {
+          return resolveProvider().rollback(schema.name, id, toVersion)
+        }
+      }
+
+      // Watch an entity for changes
+      if (prop === 'watch') {
+        return (id: string, callback: (instance: NounInstance) => void): (() => void) => {
+          const handler = (event: EntityEvent) => {
+            if (event.entityId === id && event.data) {
+              callback(event.data)
+            }
+          }
+          return subscribeToEvents(handler)
         }
       }
 

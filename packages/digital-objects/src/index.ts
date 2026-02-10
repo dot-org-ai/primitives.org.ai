@@ -148,10 +148,11 @@ export type {
   NounOptions,
   BeforeHookHandler,
   AfterHookHandler,
+  EntityEvent,
 } from './noun-types.js'
 
 // Noun runtime
-export { setProvider, getProvider, setProviderFactory, clearProviderFactory, createScopedProvider, MemoryNounProvider, setEntityRegistry, getEntityRegistry } from './noun-proxy.js'
+export { setProvider, getProvider, setProviderFactory, clearProviderFactory, createScopedProvider, MemoryNounProvider, setEntityRegistry, getEntityRegistry, subscribeToEvents } from './noun-proxy.js'
 export { registerNoun, getNounSchema, getAllNouns, clearRegistry } from './noun-registry.js'
 export { parseProperty, parseNounDefinition, isVerbDeclaration } from './noun-parse.js'
 

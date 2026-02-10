@@ -133,6 +133,10 @@ export interface NounEntity {
   update(id: string, data: Record<string, unknown>): Promise<NounInstance>
   /** Delete an entity by ID */
   delete(id: string): Promise<boolean>
+  /** Rollback an entity to a previous version (creates a new version with the old state) */
+  rollback(id: string, toVersion: number): Promise<NounInstance>
+  /** Watch an entity for changes, returns unsubscribe function */
+  watch(id: string, callback: (instance: NounInstance) => void): () => void
   /** Access the noun schema */
   $schema: NounSchema
   /** Access the noun name */
@@ -155,6 +159,21 @@ export interface NounProvider {
   update(type: string, id: string, data: Record<string, unknown>): Promise<NounInstance>
   delete(type: string, id: string): Promise<boolean>
   perform(type: string, verb: string, id: string, data?: Record<string, unknown>): Promise<NounInstance>
+  rollback(type: string, id: string, toVersion: number): Promise<NounInstance>
+}
+
+/**
+ * Entity event recorded for every mutation
+ */
+export interface EntityEvent {
+  type: string
+  action: 'created' | 'updated' | 'deleted' | 'performed'
+  verb?: string
+  entityId: string
+  data: NounInstance | null
+  previousData: NounInstance | null
+  timestamp: string
+  version: number
 }
 
 /**
@@ -217,6 +236,8 @@ export interface PipelineableNounProvider extends NounProvider {
   delete(type: string, id: string): RpcPromise<boolean>
   /** Pipelined perform — returns RpcPromise instead of bare Promise */
   perform(type: string, verb: string, id: string, data?: Record<string, unknown>): RpcPromise<NounInstance>
+  /** Pipelined rollback — returns RpcPromise instead of bare Promise */
+  rollback(type: string, id: string, toVersion: number): RpcPromise<NounInstance>
 }
 
 /**
