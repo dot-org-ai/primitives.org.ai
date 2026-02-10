@@ -127,6 +127,8 @@ export interface NounEntity {
   get(id: string): Promise<NounInstance | null>
   /** Find entities matching a filter */
   find(where?: Record<string, unknown>): Promise<NounInstance[]>
+  /** Find the first entity matching a filter, or null */
+  findOne(where?: Record<string, unknown>): Promise<NounInstance | null>
   /** Update an entity by ID */
   update(id: string, data: Record<string, unknown>): Promise<NounInstance>
   /** Delete an entity by ID */
@@ -149,6 +151,7 @@ export interface NounProvider {
   create(type: string, data: Record<string, unknown>): Promise<NounInstance>
   get(type: string, id: string): Promise<NounInstance | null>
   find(type: string, where?: Record<string, unknown>): Promise<NounInstance[]>
+  findOne(type: string, where?: Record<string, unknown>): Promise<NounInstance | null>
   update(type: string, id: string, data: Record<string, unknown>): Promise<NounInstance>
   delete(type: string, id: string): Promise<boolean>
   perform(type: string, verb: string, id: string, data?: Record<string, unknown>): Promise<NounInstance>
@@ -206,6 +209,8 @@ export interface PipelineableNounProvider extends NounProvider {
   get(type: string, id: string): RpcPromise<NounInstance | null>
   /** Pipelined find — returns RpcPromise instead of bare Promise */
   find(type: string, where?: Record<string, unknown>): RpcPromise<NounInstance[]>
+  /** Pipelined findOne — returns RpcPromise instead of bare Promise */
+  findOne(type: string, where?: Record<string, unknown>): RpcPromise<NounInstance | null>
   /** Pipelined update — returns RpcPromise instead of bare Promise */
   update(type: string, id: string, data: Record<string, unknown>): RpcPromise<NounInstance>
   /** Pipelined delete — returns RpcPromise instead of bare Promise */
