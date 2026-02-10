@@ -517,6 +517,7 @@ export function deriveVerb(name: string): {
     pay: { act: 'pays', activity: 'paying', event: 'paid' },
     reopen: { act: 'reopens', activity: 'reopening', event: 'reopened' },
     rollout: { act: 'rollouts', activity: 'rollingOut', event: 'rolledOut' },
+    cancel: { act: 'cancels', activity: 'cancelling', event: 'cancelled' },
   }
 
   if (irregulars[base]) {

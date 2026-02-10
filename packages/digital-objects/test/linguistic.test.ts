@@ -1093,6 +1093,15 @@ describe('Linguistic Utilities', () => {
         expect(result.event).toBe('rolledOut')
         expect(result.reverseBy).toBe('rolledOutBy')
       })
+
+      it('should derive verb conjugations from "cancel" (British English doubling)', () => {
+        const result = deriveVerb('cancel')
+        expect(result.action).toBe('cancel')
+        expect(result.act).toBe('cancels')
+        expect(result.activity).toBe('cancelling')
+        expect(result.event).toBe('cancelled')
+        expect(result.reverseBy).toBe('cancelledBy')
+      })
     })
 
     describe('reverseBy and reverseAt derivation', () => {
