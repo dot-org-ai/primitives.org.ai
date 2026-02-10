@@ -23,6 +23,11 @@ import type {
 } from './noun-types.js'
 import { deriveVerb } from './linguistic.js'
 
+function deepClone<T>(obj: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(obj)
+  return JSON.parse(JSON.stringify(obj))
+}
+
 // =============================================================================
 // ID Generation
 // =============================================================================
@@ -92,7 +97,11 @@ const eventBusCallbacks: EventCallback[] = []
  */
 function emitEvent(event: EntityEvent): void {
   for (const cb of eventBusCallbacks) {
-    cb(event)
+    try {
+      cb(event)
+    } catch {
+      // Subscriber errors must not crash the emitter
+    }
   }
 }
 
@@ -106,6 +115,13 @@ export function subscribeToEvents(callback: EventCallback): () => void {
     const idx = eventBusCallbacks.indexOf(callback)
     if (idx !== -1) eventBusCallbacks.splice(idx, 1)
   }
+}
+
+/**
+ * Clear all global event bus subscribers (for testing)
+ */
+export function clearEventBus(): void {
+  eventBusCallbacks.length = 0
 }
 
 // Scoped provider support for multi-tenant
@@ -228,7 +244,22 @@ function matchFilterValue(fieldValue: unknown, filterValue: unknown): boolean {
 
 export class MemoryNounProvider implements NounProvider {
   private store = new Map<string, NounInstance>()
-  private eventLog: EntityEvent[] = []
+  private eventLogByEntity = new Map<string, EntityEvent[]>()
+  private static readonly MAX_EVENTS_PER_ENTITY = 1000
+
+  private recordEvent(event: EntityEvent): void {
+    let entityEvents = this.eventLogByEntity.get(event.entityId)
+    if (!entityEvents) {
+      entityEvents = []
+      this.eventLogByEntity.set(event.entityId, entityEvents)
+    }
+    entityEvents.push(event)
+    // Cap per-entity log
+    if (entityEvents.length > MemoryNounProvider.MAX_EVENTS_PER_ENTITY) {
+      entityEvents.shift()
+    }
+    emitEvent(event)
+  }
 
   async create(type: string, data: Record<string, unknown>): Promise<NounInstance> {
     const now = new Date().toISOString()
@@ -246,13 +277,12 @@ export class MemoryNounProvider implements NounProvider {
       type,
       action: 'created',
       entityId: instance.$id,
-      data: { ...instance },
+      data: deepClone(instance),
       previousData: null,
       timestamp: now,
       version: 1,
     }
-    this.eventLog.push(event)
-    emitEvent(event)
+    this.recordEvent(event)
     return instance
   }
 
@@ -293,7 +323,7 @@ export class MemoryNounProvider implements NounProvider {
     if (!existing || existing.$type !== type) {
       throw new Error(`${type} not found: ${id}`)
     }
-    const previousData = { ...existing }
+    const previousData = deepClone(existing)
     const updated: NounInstance = {
       ...existing,
       ...data,
@@ -309,20 +339,19 @@ export class MemoryNounProvider implements NounProvider {
       type,
       action: 'updated',
       entityId: id,
-      data: { ...updated },
+      data: deepClone(updated),
       previousData,
       timestamp: updated.$updatedAt,
       version: updated.$version,
     }
-    this.eventLog.push(event)
-    emitEvent(event)
+    this.recordEvent(event)
     return updated
   }
 
   async delete(type: string, id: string): Promise<boolean> {
     const existing = this.store.get(id)
     if (!existing || existing.$type !== type) return false
-    const previousData = { ...existing }
+    const previousData = deepClone(existing)
     const result = this.store.delete(id)
     if (result) {
       const event: EntityEvent = {
@@ -334,8 +363,7 @@ export class MemoryNounProvider implements NounProvider {
         timestamp: new Date().toISOString(),
         version: existing.$version,
       }
-      this.eventLog.push(event)
-      emitEvent(event)
+      this.recordEvent(event)
     }
     return result
   }
@@ -351,7 +379,7 @@ export class MemoryNounProvider implements NounProvider {
       throw new Error(`${type} not found: ${id}`)
     }
     if (data) {
-      const previousData = { ...existing }
+      const previousData = deepClone(existing)
       const updated: NounInstance = {
         ...existing,
         ...data,
@@ -368,13 +396,12 @@ export class MemoryNounProvider implements NounProvider {
         action: 'performed',
         verb,
         entityId: id,
-        data: { ...updated },
+        data: deepClone(updated),
         previousData,
         timestamp: updated.$updatedAt,
         version: updated.$version,
       }
-      this.eventLog.push(event)
-      emitEvent(event)
+      this.recordEvent(event)
       return updated
     }
     return existing
@@ -385,15 +412,16 @@ export class MemoryNounProvider implements NounProvider {
     if (!existing || existing.$type !== type) {
       throw new Error(`${type} not found: ${id}`)
     }
-    // Find the event at the target version
-    const targetEvent = this.eventLog.find(
-      (e) => e.entityId === id && e.version === toVersion && e.data !== null,
+    // Find the event at the target version (per-entity lookup)
+    const entityEvents = this.eventLogByEntity.get(id) ?? []
+    const targetEvent = entityEvents.find(
+      (e) => e.version === toVersion && e.data !== null,
     )
     if (!targetEvent || !targetEvent.data) {
       throw new Error(`Version ${toVersion} not found for ${type}: ${id}`)
     }
     // Create a new version with the old state (not rewriting history)
-    const previousData = { ...existing }
+    const previousData = deepClone(existing)
     const snapshot = targetEvent.data
     const restored: NounInstance = {
       ...snapshot,
@@ -407,15 +435,14 @@ export class MemoryNounProvider implements NounProvider {
     this.store.set(id, restored)
     const event: EntityEvent = {
       type,
-      action: 'updated',
+      action: 'rolled_back',
       entityId: id,
-      data: { ...restored },
+      data: deepClone(restored),
       previousData,
       timestamp: restored.$updatedAt,
       version: restored.$version,
     }
-    this.eventLog.push(event)
-    emitEvent(event)
+    this.recordEvent(event)
     return restored
   }
 
@@ -424,9 +451,13 @@ export class MemoryNounProvider implements NounProvider {
    */
   getEvents(entityId?: string): EntityEvent[] {
     if (entityId) {
-      return this.eventLog.filter((e) => e.entityId === entityId)
+      return [...(this.eventLogByEntity.get(entityId) ?? [])]
     }
-    return [...this.eventLog]
+    const all: EntityEvent[] = []
+    for (const events of this.eventLogByEntity.values()) {
+      all.push(...events)
+    }
+    return all
   }
 
   /**
@@ -434,7 +465,7 @@ export class MemoryNounProvider implements NounProvider {
    */
   clear(): void {
     this.store.clear()
-    this.eventLog = []
+    this.eventLogByEntity.clear()
   }
 }
 

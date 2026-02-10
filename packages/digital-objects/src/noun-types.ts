@@ -167,7 +167,7 @@ export interface NounProvider {
  */
 export interface EntityEvent {
   type: string
-  action: 'created' | 'updated' | 'deleted' | 'performed'
+  action: 'created' | 'updated' | 'deleted' | 'performed' | 'rolled_back'
   verb?: string
   entityId: string
   data: NounInstance | null
