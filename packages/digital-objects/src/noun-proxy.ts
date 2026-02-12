@@ -43,7 +43,9 @@ function generateSqid(): string {
 }
 
 function generateEntityId(type: string): string {
-  return `${type.toLowerCase()}_${generateSqid()}`
+  // Use camelCase prefix: Contact → contact_, FeatureFlag → featureFlag_
+  const prefix = type.charAt(0).toLowerCase() + type.slice(1)
+  return `${prefix}_${generateSqid()}`
 }
 
 // =============================================================================
