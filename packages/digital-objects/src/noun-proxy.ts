@@ -152,14 +152,15 @@ export function clearProviderFactory(): void {
 }
 
 /**
- * Get the current global NounProvider (creates default if none set)
+ * Get the current global NounProvider.
+ * Throws if no provider has been configured via setProvider().
  */
 export function getProvider(): NounProvider {
   if (providerFactory) {
     return providerFactory()
   }
   if (!globalProvider) {
-    globalProvider = new MemoryNounProvider()
+    throw new Error('No NounProvider configured. Call setProvider() before using entities.')
   }
   return globalProvider
 }
