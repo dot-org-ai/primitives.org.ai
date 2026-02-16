@@ -241,6 +241,26 @@ function matchFilterValue(fieldValue: unknown, filterValue: unknown): boolean {
   return fieldValue === filterValue
 }
 
+/**
+ * Match an instance against a where clause, supporting $and/$or top-level operators.
+ */
+function matchWhere(instance: NounInstance, where: Record<string, unknown>): boolean {
+  for (const [key, value] of Object.entries(where)) {
+    if (key === '$and') {
+      const conditions = value as Record<string, unknown>[]
+      if (!conditions.every((cond) => matchWhere(instance, cond))) return false
+      continue
+    }
+    if (key === '$or') {
+      const conditions = value as Record<string, unknown>[]
+      if (!conditions.some((cond) => matchWhere(instance, cond))) return false
+      continue
+    }
+    if (!matchFilterValue(instance[key], value)) return false
+  }
+  return true
+}
+
 // =============================================================================
 // MemoryNounProvider — default in-process provider
 // =============================================================================
@@ -301,16 +321,7 @@ export class MemoryNounProvider implements NounProvider {
     for (const instance of this.store.values()) {
       if (instance.$type !== type) continue
       if (instance.$context !== context) continue
-      if (where) {
-        let match = true
-        for (const [key, value] of Object.entries(where)) {
-          if (!matchFilterValue(instance[key], value)) {
-            match = false
-            break
-          }
-        }
-        if (!match) continue
-      }
+      if (where && !matchWhere(instance, where)) continue
       results.push(instance)
     }
     return results
