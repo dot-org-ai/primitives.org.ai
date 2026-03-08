@@ -332,6 +332,11 @@ export class MemoryNounProvider implements NounProvider {
     return results[0] ?? null
   }
 
+  async count(type: string, where?: Record<string, unknown>): Promise<number> {
+    const results = await this.find(type, where)
+    return results.length
+  }
+
   async update(type: string, id: string, data: Record<string, unknown>): Promise<NounInstance> {
     const existing = this.store.get(id)
     if (!existing || existing.$type !== type) {
@@ -630,6 +635,17 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
       if (prop === 'findOne') {
         return (where?: Record<string, unknown>) => {
           return resolveProvider().findOne(schema.name, where)
+        }
+      }
+      if (prop === 'count') {
+        return async (where?: Record<string, unknown>): Promise<number> => {
+          const provider = resolveProvider()
+          if (provider.count) {
+            return provider.count(schema.name, where)
+          }
+          // Fallback: use find and count results
+          const results = await provider.find(schema.name, where)
+          return results.length
         }
       }
 

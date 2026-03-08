@@ -131,6 +131,8 @@ export interface NounEntity {
   findOne(where?: Record<string, unknown>): Promise<NounInstance | null>
   /** Update an entity by ID */
   update(id: string, data: Record<string, unknown>): Promise<NounInstance>
+  /** Count entities matching a filter */
+  count(where?: Record<string, unknown>): Promise<number>
   /** Delete an entity by ID */
   delete(id: string): Promise<boolean>
   /** Rollback an entity to a previous version (creates a new version with the old state) */
@@ -158,6 +160,7 @@ export interface NounProvider {
   findOne(type: string, where?: Record<string, unknown>): Promise<NounInstance | null>
   update(type: string, id: string, data: Record<string, unknown>): Promise<NounInstance>
   delete(type: string, id: string): Promise<boolean>
+  count?(type: string, where?: Record<string, unknown>): Promise<number>
   perform(type: string, verb: string, id: string, data?: Record<string, unknown>): Promise<NounInstance>
   rollback(type: string, id: string, toVersion: number): Promise<NounInstance>
 }
