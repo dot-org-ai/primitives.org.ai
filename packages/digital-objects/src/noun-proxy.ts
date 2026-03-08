@@ -623,8 +623,14 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
 
       // Read verbs (always available) — always passthrough pipelineable results
       if (prop === 'get') {
-        return (id: string) => {
-          return resolveProvider().get(schema.name, id)
+        return (id: string, options?: { include?: string[]; populate?: string[] }) => {
+          const normalizedOptions = options
+            ? {
+                ...options,
+                include: options.include || options.populate,
+              }
+            : undefined
+          return resolveProvider().get(schema.name, id, normalizedOptions)
         }
       }
       if (prop === 'find') {
