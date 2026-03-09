@@ -1,6 +1,6 @@
 {
   "name": "digital-objects",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Unified storage primitive for AI primitives - nouns, verbs, things, actions",
   "type": "module",
   "main": "dist/index.js",
