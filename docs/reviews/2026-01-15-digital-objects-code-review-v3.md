@@ -39,7 +39,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **Clear Type Definitions** - Types are well-organized in `types.ts` with comprehensive JSDoc documentation:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/types.ts:105-114
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/types.ts#L105-L114
    export interface Action<T = Record<string, unknown>> {
      id: string
      verb: string // References verb.name
@@ -63,7 +63,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **P1: Code Duplication** - The `NS` and `MemoryProvider` classes share significant duplicate logic. Consider extracting a shared base class or utility functions.
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:813-847` and `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/memory-provider.ts:282-316`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L813-L847` and `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/memory-provider.ts#L282-L316`
 
    Both implementations have nearly identical `related()` methods:
    ```typescript
@@ -82,7 +82,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **P2: Magic Strings** - Status values like `'completed'` appear as string literals in multiple places.
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:720`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L720`
    ```typescript
    'completed', // Should use ActionStatus.COMPLETED or similar constant
    ```
@@ -97,7 +97,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **Custom Error Hierarchy** - Well-designed error classes with HTTP status codes:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/errors.ts:11-16
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/errors.ts#L11-L16
    export class DigitalObjectsError extends Error {
      constructor(message: string, public code: string, public statusCode: number = 500) {
        super(message)
@@ -110,7 +110,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 3. **Zod Error Conversion** - Proper conversion of Zod validation errors to domain-specific errors:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:44-50
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L44-L50
    function zodErrorToValidationError(error: ZodError): ValidationError {
      const fieldErrors = error.errors.map((issue) => ({
        field: issue.path.join('.') || 'root',
@@ -124,7 +124,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **P1: Inconsistent Error Types** - Schema validation throws generic `Error` instead of `ValidationError`:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/schema-validation.ts:319-323`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/schema-validation.ts#L319-L323`
    ```typescript
    if (errors.length > 0) {
      const errorCount = errors.length === 1 ? '1 error' : `${errors.length} errors`
@@ -138,7 +138,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **P2: Silent Failure in NSClient** - The `getNoun`, `getVerb`, and `get` methods catch all errors and return `null`:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns-client.ts:105-111`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns-client.ts#L105-L111`
    ```typescript
    async getNoun(name: string): Promise<Noun | null> {
      try {
@@ -153,7 +153,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 3. **P3: Missing Error for Update on Non-existent Noun** - The `NSClient.update` method does not verify the thing type matches:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns-client.ts:183-188`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns-client.ts#L183-L188`
    ```typescript
    async update<T>(id: string, data: Partial<T>): Promise<Thing<T>> {
      return this.request(`/things/${encodeURIComponent(id)}`, {
@@ -173,7 +173,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **SQL Injection Prevention** - Excellent whitelist approach for orderBy fields:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:59-70
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L59-L70
    const ALLOWED_ORDER_FIELDS = [
      'createdAt', 'updatedAt', 'id', 'noun', 'verb', 'status', 'name', 'title',
    ]
@@ -186,13 +186,13 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **Parameterized Queries** - All SQL queries use parameterized values:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:572
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L572
    this.sql.exec('SELECT * FROM things WHERE id = ?', id)
    ```
 
 3. **Error Message Sanitization** - Internal errors are not exposed to clients:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/errors.ts:63-70
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/errors.ts#L63-L70
    return {
      body: {
        error: 'INTERNAL_ERROR',
@@ -204,7 +204,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 4. **Input Validation with Zod** - All HTTP endpoints validate input:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/http-schemas.ts:22-26
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/http-schemas.ts#L22-L26
    export const CreateThingSchema = z.object({
      noun: z.string().min(1),
      data: z.record(z.any()),
@@ -216,7 +216,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **P0: Potential JSON Injection in Where Clause** - The where filter concatenates field names directly:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:592-601`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L592-L601`
    ```typescript
    if (options?.where) {
      for (const [key, value] of Object.entries(options.where)) {
@@ -236,7 +236,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **P1: Missing Rate Limiting** - No rate limiting on batch operations which could enable DoS:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:900-935`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L900-L935`
    ```typescript
    async createMany<T>(noun: string, items: T[]): Promise<Thing<T>[]> {
      // No limit on items array size - could be exploited
@@ -250,7 +250,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 3. **P2: Search Query Not Sanitized** - The search method uses LIKE with user input:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:679-691`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L679-L691`
    ```typescript
    async search<T>(query: string, options?: ListOptions): Promise<Thing<T>[]> {
      const q = `%${query.toLowerCase()}%`
@@ -265,7 +265,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 4. **P2: Namespace ID from Query String** - The namespace is taken directly from URL params:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:1044-1052`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L1044-L1052`
    ```typescript
    export default {
      async fetch(request: Request, env: Env): Promise<Response> {
@@ -293,7 +293,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **Provider Interface Pattern** - The `DigitalObjectsProvider` interface enables clean abstraction:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/types.ts:186-236
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/types.ts#L186-L236
    export interface DigitalObjectsProvider {
      // Nouns
      defineNoun(def: NounDefinition): Promise<Noun>
@@ -305,7 +305,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 4. **Subpath Exports** - The `ns-exports.ts` provides clean separation for Cloudflare-specific code:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns-exports.ts
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns-exports.ts
    export { NS } from './ns.js'
    export type { Env } from './ns.js'
    ```
@@ -314,7 +314,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **P2: HTTP Handler in Domain Class** - The `NS` class mixes storage logic with HTTP routing:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:161-350`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L161-L350`
 
    The `fetch()` method is 190 lines of HTTP routing mixed with the data provider class.
 
@@ -322,7 +322,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **P2: Missing Adapter Tests** - The `ai-database-adapter.ts` lacks dedicated test coverage:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ai-database-adapter.ts`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ai-database-adapter.ts`
 
    **Recommendation:** Add comprehensive tests for the adapter layer.
 
@@ -363,7 +363,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **P3: Abbreviated Names** - Some names could be clearer:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:100`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L100`
    ```typescript
    constructor(ctx: DurableObjectState, _env: Env) {
      // ctx could be durableObjectState
@@ -381,7 +381,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **P2: Unused Type Exports in http-schemas.ts**:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/http-schemas.ts:70-78`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/http-schemas.ts#L70-L78`
    ```typescript
    export type NounDefinitionInput = z.infer<typeof NounDefinitionSchema>
    export type VerbDefinitionInput = z.infer<typeof VerbDefinitionSchema>
@@ -390,7 +390,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **P3: Unused SimpleFieldType Combinations**:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/types.ts:128-133`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/types.ts#L128-L133`
    ```typescript
    export type SimpleFieldType =
      | PrimitiveType
@@ -403,7 +403,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 3. **P3: Deprecated Function Still Exported**:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns-client.ts:303-310`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns-client.ts#L303-L310`
    ```typescript
    /**
     * @deprecated Use `new NSClient(options)` instead
@@ -423,14 +423,14 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **Query Limits** - Enforced limits prevent memory exhaustion:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/types.ts:15-16
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/types.ts#L15-L16
    export const DEFAULT_LIMIT = 100
    export const MAX_LIMIT = 1000
    ```
 
 2. **Caching** - Noun and verb definitions are cached:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:96-98
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L96-L98
    private nounCache = new Map<string, Noun>()
    private verbCache = new Map<string, Verb>()
    ```
@@ -445,7 +445,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 4. **Batch Operations with Transactions** - Atomic batch operations:
    ```typescript
-   // /Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:906-932
+   // https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L906-L932
    this.sql.exec('BEGIN TRANSACTION')
    try {
      // ... operations
@@ -460,7 +460,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 1. **P1: N+1 Query in `related()` Method**:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:836-839`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L836-L839`
    ```typescript
    for (const relatedId of relatedIds) {
      const thing = await this.get<T>(relatedId)
@@ -473,7 +473,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 2. **P1: Full Table Scan in Search**:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:683`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L683`
    ```typescript
    let sql = `SELECT * FROM things WHERE LOWER(data) LIKE ?`
    // This scans all JSON data for every search - no index can help
@@ -483,7 +483,7 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 3. **P2: Cache Not Invalidated** - Noun/verb caches are never cleared:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns.ts:383`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns.ts#L383`
    ```typescript
    // defineNoun updates cache but there's no way to invalidate
    // if nouns are updated through external means
@@ -492,13 +492,13 @@ The `digital-objects` package is a well-architected, thoughtfully designed stora
 
 4. **P2: No Connection Pooling in NSClient** - Each request creates a new fetch:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns-client.ts:75-94`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns-client.ts#L75-L94`
 
    For high-throughput scenarios, consider connection reuse strategies.
 
 5. **P3: Inefficient List Filtering in NSClient**:
 
-   **Location:** `/Users/nathanclevenger/projects/primitives.org.ai/packages/digital-objects/src/ns-client.ts:164-174`
+   **Location:** `https://github.com/dot-org-ai/primitives.org.ai/blob/main/packages/digital-objects/src/ns-client.ts#L164-L174`
    ```typescript
    // Apply where filter client-side (NS server doesn't support where in URL)
    if (options?.where) {
