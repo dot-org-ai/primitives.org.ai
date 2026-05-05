@@ -655,6 +655,35 @@ export type {
 } from './cascade-write-strategy.js'
 
 // =============================================================================
+// Cascade Orchestrator — the moat work (aip-8yal)
+// =============================================================================
+// Real LLM-driven cascade generation built on the canonical SVO foundation:
+// AIPromise-style generate() from ai-functions, ModelPolicy from
+// language-models for retry/fallback, BatchProvider-shaped sibling-parallel
+// fan-out, CascadeWriteStrategy for sharded writes, embed-on-write, and
+// rubric-style $validate with four verdict policies. Replaces the
+// PlaceholderValueGenerator path for the SVO surface.
+
+export {
+  generateCascade,
+  buildEmbedText,
+  CascadeValidationEscalation,
+} from './cascade-orchestrator.js'
+
+export type {
+  GenerateCascadeOptions,
+  CascadeSpec,
+  ChildSpec,
+  ValidationRubric,
+  CascadeGenerator,
+  CascadeValidator,
+  CascadeResult,
+  GeneratedEntity,
+  GeneratedAction,
+  RejectedEntity,
+} from './cascade-orchestrator.js'
+
+// =============================================================================
 // DBProvider Port — SVO-shaped contract with declared capability tiers
 // =============================================================================
 // Per ADR-0003: Tier 1+2 are universal (shape unchanged from `schema/provider`);
