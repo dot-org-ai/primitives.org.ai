@@ -115,6 +115,18 @@ export { defineTool, defineAndRegister, createToolExecutor, toolBuilder } from '
 // declaratively without callers manually wiring brokers.
 export { wrapTool } from './wrap.js'
 
+// Export Verb auto-registration helpers (aip-47tm) — explicit, idempotent
+// bridge from `defineTool({ verb, frame })` to `digital-objects`'
+// provider-mediated `defineVerb()`. Callers wire this at startup
+// (`registerToolVerbs`) or lazily per dispatch (`registerToolVerb`).
+export {
+  registerToolVerb,
+  registerToolVerbs,
+  bootstrapTools,
+  VerbRegistrationConflictError,
+} from './verb-registration.js'
+export type { VerbRegistrationProvider } from './verb-registration.js'
+
 // Export pre-built tools
 export {
   // Web tools
