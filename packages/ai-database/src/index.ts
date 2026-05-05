@@ -562,6 +562,23 @@ export type { RelationOperatorType } from './constants.js'
 export { RDBProviderAdapter, createRDBAdapter } from './rdb-provider-adapter.js'
 
 // =============================================================================
+// DO SQLite Adapter — Stack B transactional DBProvider
+// =============================================================================
+// Per ADR-0003: per-cascade DO isolation gives parallel write paths each at
+// full single-DO throughput, the enabling pattern for cascade-heavy workloads.
+
+export { DOSqliteAdapter, createDOSqliteAdapter, ShardingStrategies } from './do-sqlite-adapter.js'
+
+export type {
+  DOSqliteAdapterOptions,
+  ShardContext,
+  ShardingStrategy,
+  DurableObjectNamespaceLike,
+  DurableObjectIdLike,
+  DurableObjectStubLike,
+} from './do-sqlite-adapter.js'
+
+// =============================================================================
 // DBProvider Port — SVO-shaped contract with declared capability tiers
 // =============================================================================
 // Per ADR-0003: Tier 1+2 are universal (shape unchanged from `schema/provider`);
