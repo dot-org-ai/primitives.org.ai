@@ -69,13 +69,25 @@ interface VerbRow {
   version: number
 }
 
+interface EmbeddingChRow {
+  ns: string
+  thing_id: string
+  type: string
+  embedding: number[]
+  version: number
+}
+
 class FakeChStore {
   things = new Map<string, ThingRow>() // key = ns:type:id (matching ORDER BY)
   actions = new Map<string, ActionRow>()
   verbs = new Map<string, VerbRow>()
+  embeddings = new Map<string, EmbeddingChRow>() // key = ns:type:thing_id
   log: Array<{ sql: string; body?: string }> = []
 
   thingKey(ns: string, type: string, id: string): string {
+    return `${ns}:${type}:${id}`
+  }
+  embKey(ns: string, type: string, id: string): string {
     return `${ns}:${type}:${id}`
   }
 
@@ -83,6 +95,7 @@ class FakeChStore {
     this.things.clear()
     this.actions.clear()
     this.verbs.clear()
+    this.embeddings.clear()
     this.log = []
   }
 }
@@ -160,10 +173,31 @@ function makeFakeFetcher(store: FakeChStore): ClickHouseHttpFetcher {
         }
         return ''
       }
+      if (/INTO\s+\w+\.embeddings/i.test(trimmed)) {
+        for (const line of lines) {
+          const r = JSON.parse(line) as EmbeddingChRow
+          const key = store.embKey(r.ns, r.type, r.thing_id)
+          const existing = store.embeddings.get(key)
+          if (!existing || existing.version <= r.version) {
+            store.embeddings.set(key, {
+              ns: r.ns,
+              thing_id: r.thing_id,
+              type: r.type,
+              embedding: r.embedding,
+              version: r.version,
+            })
+          }
+        }
+        return ''
+      }
     }
 
     // SELECT statements ending in FORMAT JSON
     if (head === 'SELECT') {
+      // embeddings JOIN things — vectorSearch
+      if (/FROM\s+\w+\.embeddings\s+FINAL\s+e/i.test(trimmed)) {
+        return jsonResp(vectorSearchFromChStore(store, trimmed))
+      }
       // verbs reads
       if (/FROM\s+\w+\.verbs/i.test(trimmed)) {
         if (/WHERE\s+name\s*=\s*'([^']+)'/i.test(trimmed)) {
@@ -371,6 +405,75 @@ function queryActionsFromStore(store: FakeChStore, sql: string): Array<Record<st
   }))
 }
 
+function vectorSearchFromChStore(store: FakeChStore, sql: string): Array<Record<string, unknown>> {
+  // Extract: namespace via e.ns = '...'  Wait — the adapter uses
+  // `e.ns = 'ns_value'` (no qualifier on column lookup) and
+  // `t.type = 'type_value'`. Use bare-column extraction with the alias.
+  const nsM = sql.match(/e\.ns\s*=\s*'([^']*)'/)
+  // t.type is captured by matchEq if we pass 't.type'? Actually adapter writes
+  // `t.type = '...'` but matchEq escapes only `.`. Let's just regex it.
+  const typeM = sql.match(/t\.type\s*=\s*'([^']*)'/)
+  const ns = nsM?.[1] ?? ''
+  const type = typeM?.[1] ?? ''
+
+  // Extract query vector + metric from SQL
+  const vecM = sql.match(/\[([\-0-9eE,.\s]+)\]/)
+  const queryVec = vecM
+    ? vecM[1]!
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isFinite(n))
+    : []
+
+  let metric: 'cosine' | 'l2' | 'dot' = 'cosine'
+  if (/L2Distance/.test(sql)) metric = 'l2'
+  else if (/dotProduct/.test(sql)) metric = 'dot'
+
+  type Row = { id: string; type: string; data: string; score: number }
+  const hits: Row[] = []
+  for (const e of store.embeddings.values()) {
+    if (e.ns !== ns) continue
+    if (e.type !== type) continue
+    const t = store.things.get(store.thingKey(ns, type, e.thing_id))
+    if (!t) continue
+    const score = computeChScore(e.embedding, queryVec, metric)
+    hits.push({ id: t.id, type: t.type, data: JSON.stringify(t.data), score })
+  }
+  hits.sort((a, b) => b.score - a.score)
+
+  const limitMatch = sql.match(/LIMIT\s+(\d+)/i)
+  const limit = limitMatch ? Number(limitMatch[1]) : 10
+  return hits.slice(0, limit)
+}
+
+function computeChScore(a: number[], b: number[], metric: 'cosine' | 'l2' | 'dot'): number {
+  const len = Math.min(a.length, b.length)
+  if (metric === 'dot') {
+    let s = 0
+    for (let i = 0; i < len; i++) s += a[i]! * b[i]!
+    return s
+  }
+  if (metric === 'l2') {
+    let s = 0
+    for (let i = 0; i < len; i++) {
+      const d = a[i]! - b[i]!
+      s += d * d
+    }
+    return -Math.sqrt(s)
+  }
+  let dot = 0
+  let na = 0
+  let nb = 0
+  for (let i = 0; i < len; i++) {
+    dot += a[i]! * b[i]!
+    na += a[i]! * a[i]!
+    nb += b[i]! * b[i]!
+  }
+  if (na === 0 || nb === 0) return 0
+  const cosine = dot / (Math.sqrt(na) * Math.sqrt(nb))
+  return cosine
+}
+
 // =============================================================================
 // Tests — capabilities
 // =============================================================================
@@ -435,11 +538,8 @@ describe('ClickHouseProvider — capability declaration', () => {
     expect(hasAnalytics(adapter)).toBe(true)
   })
 
-  it('does NOT yet pass hasVectorSearch (vectorSearch method lands in aip-kh9l)', () => {
-    // CH declares the capability but the runtime method is deferred to a
-    // later bead. The type guard requires both — so it returns false until
-    // aip-kh9l ships.
-    expect(hasVectorSearch(adapter)).toBe(false)
+  it('passes hasVectorSearch type guard (Tier 4 implemented in aip-kh9l)', () => {
+    expect(hasVectorSearch(adapter)).toBe(true)
   })
 })
 
@@ -918,5 +1018,136 @@ describe('ClickHouseProvider — fetcher factory', () => {
       fetcher: makeFakeFetcher(new FakeChStore()),
     })
     expect(provider).toBeInstanceOf(ClickHouseProvider)
+  })
+})
+
+// =============================================================================
+// Tests — Tier 4 vector search (native CH distance functions)
+// =============================================================================
+
+describe('ClickHouseProvider — Tier 4 vector search', () => {
+  let store: FakeChStore
+  let adapter: ClickHouseProvider
+
+  beforeEach(() => {
+    store = new FakeChStore()
+    adapter = new ClickHouseProvider({
+      fetcher: makeFakeFetcher(store),
+      namespace: 'tenant-1',
+    })
+  })
+
+  it('upsertEmbedding sends INSERT INTO embeddings via JSONEachRow', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha' })
+    await adapter.upsertEmbedding('Document', 'd1', [0.1, 0.2, 0.3])
+    const insert = store.log.find(
+      (l) =>
+        l.sql.includes('INTO') &&
+        l.sql.includes('embeddings') &&
+        l.sql.includes('FORMAT JSONEachRow')
+    )
+    expect(insert).toBeDefined()
+    expect(insert?.body).toBeDefined()
+    const row = JSON.parse(insert!.body!.trim())
+    expect(row.ns).toBe('tenant-1')
+    expect(row.thing_id).toBe('d1')
+    expect(row.type).toBe('Document')
+    expect(row.embedding).toEqual([0.1, 0.2, 0.3])
+    expect(typeof row.version).toBe('number')
+    expect(store.embeddings.size).toBe(1)
+  })
+
+  it('upsertEmbedding rejects empty embeddings', async () => {
+    await expect(adapter.upsertEmbedding('Document', 'd1', [])).rejects.toThrow(/non-empty/)
+  })
+
+  it('upsertEmbedding rejects oversize embeddings', async () => {
+    const bigAdapter = new ClickHouseProvider({
+      fetcher: makeFakeFetcher(store),
+      vectorDimensions: 4,
+    })
+    await expect(bigAdapter.upsertEmbedding('Document', 'd1', [1, 2, 3, 4, 5])).rejects.toThrow(
+      /exceeds/
+    )
+  })
+
+  it('vectorSearch with cosine metric uses cosineDistance and returns ranked hits', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha' })
+    await adapter.create('Document', 'd2', { title: 'Beta' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0, 0])
+    await adapter.upsertEmbedding('Document', 'd2', [0, 1, 0])
+    store.log = []
+
+    const hits = await adapter.vectorSearch('Document', [1, 0, 0])
+    const select = store.log[store.log.length - 1]
+    expect(select?.sql).toContain('cosineDistance')
+    expect(select?.sql).toContain('1 - cosineDistance')
+    expect(select?.sql).toContain('FORMAT JSON')
+    expect(hits).toHaveLength(2)
+    expect(hits[0]?.entity['$id']).toBe('d1')
+    expect(hits[0]?.score).toBeGreaterThan(hits[1]?.score ?? -Infinity)
+  })
+
+  it('vectorSearch with l2 metric uses L2Distance', async () => {
+    await adapter.create('Document', 'd1', { title: 'A' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    store.log = []
+    await adapter.vectorSearch('Document', [1, 0], { metric: 'l2' })
+    const select = store.log[store.log.length - 1]
+    expect(select?.sql).toContain('L2Distance')
+    expect(select?.sql).not.toContain('cosineDistance')
+  })
+
+  it('vectorSearch with dot metric uses dotProduct and ORDER BY DESC', async () => {
+    await adapter.create('Document', 'd1', { title: 'A' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    store.log = []
+    await adapter.vectorSearch('Document', [1, 0], { metric: 'dot' })
+    const select = store.log[store.log.length - 1]
+    expect(select?.sql).toContain('dotProduct')
+    expect(select?.sql).toMatch(/dotProduct\([^)]*\)\s+DESC/)
+  })
+
+  it('vectorSearch defaults limit to 10 and respects custom limit', async () => {
+    await adapter.create('Document', 'd1', { title: 'A' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    store.log = []
+    await adapter.vectorSearch('Document', [1, 0], { limit: 5 })
+    const select = store.log[store.log.length - 1]
+    expect(select?.sql).toContain('LIMIT 5')
+  })
+
+  it('vectorSearch filters by minScore', async () => {
+    await adapter.create('Document', 'd1', { title: 'A' })
+    await adapter.create('Document', 'd2', { title: 'B' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    await adapter.upsertEmbedding('Document', 'd2', [0, 1])
+    const hits = await adapter.vectorSearch('Document', [1, 0], { minScore: 0.5 })
+    expect(hits).toHaveLength(1)
+    expect(hits[0]?.entity['$id']).toBe('d1')
+  })
+
+  it('vectorSearch rejects empty embeddings', async () => {
+    await expect(adapter.vectorSearch('Document', [])).rejects.toThrow(/non-empty/)
+  })
+
+  it('vectorSearch rejects hamming metric', async () => {
+    await expect(adapter.vectorSearch('Document', [1, 0], { metric: 'hamming' })).rejects.toThrow(
+      /hamming/
+    )
+  })
+
+  it('vectorSearch rejects NaN/Infinity values', async () => {
+    await expect(adapter.vectorSearch('Document', [1, NaN])).rejects.toThrow(/finite/)
+  })
+
+  it('hits carry $id, $type, and entity data', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha', words: 3 })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    const hits = await adapter.vectorSearch('Document', [1, 0])
+    expect(hits[0]?.entity['$id']).toBe('d1')
+    expect(hits[0]?.entity['$type']).toBe('Document')
+    expect(hits[0]?.entity['title']).toBe('Alpha')
+    expect(hits[0]?.entity['words']).toBe(3)
   })
 })

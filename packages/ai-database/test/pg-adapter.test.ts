@@ -67,10 +67,18 @@ interface VerbRow {
   created_at: Date
 }
 
+interface EmbeddingRow {
+  ns: string
+  thing_id: string
+  type: string
+  embedding: number[]
+}
+
 class FakeStore {
   things = new Map<string, ThingRow>() // key = `${ns}:${id}`
   actions = new Map<string, ActionRow>()
   verbs = new Map<string, VerbRow>()
+  embeddings = new Map<string, EmbeddingRow>() // key = `${ns}:${thing_id}`
   /** SQL statements seen by the executor for assertions. */
   log: Array<{ sql: string; params: ReadonlyArray<unknown> }> = []
 
@@ -82,6 +90,7 @@ class FakeStore {
     this.things.clear()
     this.actions.clear()
     this.verbs.clear()
+    this.embeddings.clear()
     this.log = []
   }
 }
@@ -103,6 +112,10 @@ function makeFakeExecutor(store: FakeStore): PgExecutor {
       if (/SELECT\s+\(SELECT COUNT/i.test(trimmed) || /things_inserted/.test(trimmed)) {
         // commit-batch summary path; counts will be answered by the WITH parser.
         return [{ things_inserted: 0, actions_inserted: 0 }]
+      }
+      // embeddings JOIN things — vectorSearch
+      if (/FROM\s+\w+\.embeddings\s+e/i.test(trimmed) && /JOIN\s+\w+\.things/i.test(trimmed)) {
+        return vectorSearchFromStore(store, sql, params)
       }
       // verbs table reads
       if (/FROM\s+\w+\.verbs/i.test(trimmed)) {
@@ -209,6 +222,22 @@ function makeFakeExecutor(store: FakeStore): PgExecutor {
             created_at: new Date(),
           })
         }
+        return []
+      }
+      if (/INTO\s+\w+\.embeddings/i.test(trimmed)) {
+        const [ns, thingId, type, vectorLiteral] = params as [string, string, string, string]
+        // Parse `[v1,v2,...]` literal
+        const stripped = vectorLiteral.replace(/^\[|\]$/g, '')
+        const embedding = stripped
+          .split(',')
+          .filter((s) => s.length > 0)
+          .map((s) => Number(s))
+        store.embeddings.set(store.thingKey(ns, thingId), {
+          ns,
+          thing_id: thingId,
+          type,
+          embedding,
+        })
         return []
       }
     }
@@ -380,6 +409,69 @@ function queryActionsFromStore(
   }))
 }
 
+function vectorSearchFromStore(
+  store: FakeStore,
+  sql: string,
+  params: ReadonlyArray<unknown>
+): Array<Record<string, unknown>> {
+  // params: [namespace, vectorLiteral, type, limit]
+  const ns = String(params[0])
+  const vectorLiteral = String(params[1])
+  const type = String(params[2])
+  const limit = Number(params[3] ?? 10)
+  const stripped = vectorLiteral.replace(/^\[|\]$/g, '')
+  const query = stripped
+    .split(',')
+    .filter((s) => s.length > 0)
+    .map((s) => Number(s))
+
+  // Determine metric from operator in SQL
+  let metric: 'cosine' | 'l2' | 'dot' = 'cosine'
+  if (/<->/.test(sql) && !/<=>/.test(sql)) metric = 'l2'
+  else if (/<#>/.test(sql) && !/<=>/.test(sql)) metric = 'dot'
+
+  type Row = { id: string; type: string; data: Record<string, unknown>; score: number }
+  const hits: Row[] = []
+  for (const e of store.embeddings.values()) {
+    if (e.ns !== ns) continue
+    const t = store.things.get(store.thingKey(ns, e.thing_id))
+    if (!t || t.type !== type) continue
+    const score = computeScore(e.embedding, query, metric)
+    hits.push({ id: t.id, type: t.type, data: t.data, score })
+  }
+  hits.sort((a, b) => b.score - a.score)
+  return hits.slice(0, limit)
+}
+
+function computeScore(a: number[], b: number[], metric: 'cosine' | 'l2' | 'dot'): number {
+  const len = Math.min(a.length, b.length)
+  if (metric === 'dot') {
+    let s = 0
+    for (let i = 0; i < len; i++) s += a[i]! * b[i]!
+    return s
+  }
+  if (metric === 'l2') {
+    let s = 0
+    for (let i = 0; i < len; i++) {
+      const d = a[i]! - b[i]!
+      s += d * d
+    }
+    return -Math.sqrt(s)
+  }
+  // cosine
+  let dot = 0
+  let na = 0
+  let nb = 0
+  for (let i = 0; i < len; i++) {
+    dot += a[i]! * b[i]!
+    na += a[i]! * a[i]!
+    nb += b[i]! * b[i]!
+  }
+  if (na === 0 || nb === 0) return 0
+  const cosine = dot / (Math.sqrt(na) * Math.sqrt(nb))
+  return cosine // 1 - (1 - cosine) = cosine
+}
+
 function commitBatchFromStore(
   store: FakeStore,
   sql: string,
@@ -520,11 +612,8 @@ describe('PostgresProvider — capability declaration', () => {
     expect(hasAnalytics(adapter)).toBe(true)
   })
 
-  it('does NOT yet pass hasVectorSearch (vectorSearch method lands in aip-kh9l)', () => {
-    // The capability is declared, but the runtime method is deferred to a
-    // later bead. The type guard requires both — so it returns false until
-    // aip-kh9l ships.
-    expect(hasVectorSearch(adapter)).toBe(false)
+  it('passes hasVectorSearch type guard (Tier 4 implemented in aip-kh9l)', () => {
+    expect(hasVectorSearch(adapter)).toBe(true)
   })
 })
 
@@ -1005,5 +1094,148 @@ describe('PostgresProvider — executor factories', () => {
       executor: makeFakeExecutor(new FakeStore()),
     })
     expect(provider).toBeInstanceOf(PostgresProvider)
+  })
+})
+
+// =============================================================================
+// Tests — Tier 4 vector search (pgvector)
+// =============================================================================
+
+describe('PostgresProvider — Tier 4 vector search', () => {
+  let store: FakeStore
+  let adapter: PostgresProvider
+
+  beforeEach(() => {
+    store = new FakeStore()
+    adapter = new PostgresProvider({
+      executor: makeFakeExecutor(store),
+      namespace: 'tenant-1',
+    })
+  })
+
+  it('upsertEmbedding writes the vector literal as $4::vector', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha' })
+    await adapter.upsertEmbedding('Document', 'd1', [0.1, 0.2, 0.3])
+
+    const insert = store.log.find((l) => l.sql.includes('INTO') && l.sql.includes('embeddings'))
+    expect(insert).toBeDefined()
+    expect(insert?.sql).toContain('::vector')
+    expect(insert?.params[0]).toBe('tenant-1')
+    expect(insert?.params[1]).toBe('d1')
+    expect(insert?.params[2]).toBe('Document')
+    expect(insert?.params[3]).toBe('[0.1,0.2,0.3]')
+    expect(store.embeddings.size).toBe(1)
+  })
+
+  it('upsertEmbedding rejects empty embeddings', async () => {
+    await expect(adapter.upsertEmbedding('Document', 'd1', [])).rejects.toThrow(/non-empty/)
+  })
+
+  it('upsertEmbedding rejects oversize embeddings', async () => {
+    const bigAdapter = new PostgresProvider({
+      executor: makeFakeExecutor(store),
+      vectorDimensions: 4,
+    })
+    await expect(bigAdapter.upsertEmbedding('Document', 'd1', [1, 2, 3, 4, 5])).rejects.toThrow(
+      /exceeds/
+    )
+  })
+
+  it('upsertEmbedding rejects NaN/Infinity values', async () => {
+    await expect(adapter.upsertEmbedding('Document', 'd1', [0.1, NaN, 0.3])).rejects.toThrow(
+      /finite/
+    )
+  })
+
+  it('vectorSearch with default cosine metric uses <=> operator and returns ranked hits', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha' })
+    await adapter.create('Document', 'd2', { title: 'Beta' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0, 0])
+    await adapter.upsertEmbedding('Document', 'd2', [0, 1, 0])
+    store.log = [] // reset to inspect query
+
+    const hits = await adapter.vectorSearch('Document', [1, 0, 0])
+    const select = store.log[store.log.length - 1]
+    expect(select?.sql).toContain('<=>')
+    expect(select?.sql).toContain('1 - (e.embedding <=>')
+    expect(hits).toHaveLength(2)
+    expect(hits[0]?.entity['$id']).toBe('d1')
+    expect(hits[0]?.score).toBeGreaterThan(hits[1]?.score ?? -Infinity)
+  })
+
+  it('vectorSearch with l2 metric uses <-> operator', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0, 0])
+    store.log = []
+    await adapter.vectorSearch('Document', [1, 0, 0], { metric: 'l2' })
+    const select = store.log[store.log.length - 1]
+    expect(select?.sql).toContain('<->')
+    expect(select?.sql).not.toContain('<=>')
+  })
+
+  it('vectorSearch with dot metric uses <#> operator', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0, 0])
+    store.log = []
+    await adapter.vectorSearch('Document', [1, 0, 0], { metric: 'dot' })
+    const select = store.log[store.log.length - 1]
+    expect(select?.sql).toContain('<#>')
+  })
+
+  it('vectorSearch passes positional params: [namespace, vector, type, limit]', async () => {
+    await adapter.create('Document', 'd1', { title: 'A' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    store.log = []
+    await adapter.vectorSearch('Document', [1, 0], { limit: 5 })
+    const select = store.log[store.log.length - 1]
+    expect(select?.params).toEqual(['tenant-1', '[1,0]', 'Document', 5])
+  })
+
+  it('vectorSearch defaults limit to 10', async () => {
+    store.log = []
+    await adapter.vectorSearch('Document', [1, 0])
+    const select = store.log[store.log.length - 1]
+    expect(select?.params[3]).toBe(10)
+  })
+
+  it('vectorSearch filters by minScore', async () => {
+    await adapter.create('Document', 'd1', { title: 'A' })
+    await adapter.create('Document', 'd2', { title: 'B' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    // d2 is orthogonal: cosine score will be 0
+    await adapter.upsertEmbedding('Document', 'd2', [0, 1])
+    const hits = await adapter.vectorSearch('Document', [1, 0], { minScore: 0.5 })
+    expect(hits).toHaveLength(1)
+    expect(hits[0]?.entity['$id']).toBe('d1')
+  })
+
+  it('vectorSearch rejects empty embeddings', async () => {
+    await expect(adapter.vectorSearch('Document', [])).rejects.toThrow(/non-empty/)
+  })
+
+  it('vectorSearch rejects hamming metric', async () => {
+    await expect(adapter.vectorSearch('Document', [1, 0], { metric: 'hamming' })).rejects.toThrow(
+      /hamming/
+    )
+  })
+
+  it('vectorSearch only returns rows of the requested type', async () => {
+    await adapter.create('Document', 'd1', { title: 'A' })
+    await adapter.create('Article', 'a1', { headline: 'X' })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    await adapter.upsertEmbedding('Article', 'a1', [1, 0])
+    const hits = await adapter.vectorSearch('Document', [1, 0])
+    expect(hits).toHaveLength(1)
+    expect(hits[0]?.entity['$type']).toBe('Document')
+  })
+
+  it('hits carry $id, $type, and entity data', async () => {
+    await adapter.create('Document', 'd1', { title: 'Alpha', words: 3 })
+    await adapter.upsertEmbedding('Document', 'd1', [1, 0])
+    const hits = await adapter.vectorSearch('Document', [1, 0])
+    expect(hits[0]?.entity['$id']).toBe('d1')
+    expect(hits[0]?.entity['$type']).toBe('Document')
+    expect(hits[0]?.entity['title']).toBe('Alpha')
+    expect(hits[0]?.entity['words']).toBe(3)
   })
 })

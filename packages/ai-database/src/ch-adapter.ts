@@ -13,10 +13,13 @@
  *   substrate for cross-cascade aggregations, time-series rollups, and
  *   large-scan analytical queries (cf. ADR-0003 "Tier 3 first-class on
  *   ClickHouse"). `analyticsQuery` is exposed for ad-hoc SQL.
- * - **Tier 4 (vector search)** declared via ClickHouse's native vector
- *   functions (`L2Distance`, `cosineDistance`, `dotProduct`) up to ~64,000
- *   dimensions. The actual `vectorSearch` method lands in `aip-kh9l`; this
- *   adapter only declares capability today.
+ * - **Tier 4 (vector search)** native via ClickHouse's vector distance
+ *   functions (`cosineDistance`, `L2Distance`, `dotProduct`) up to
+ *   ~64,000 dimensions. Embeddings live in a companion `embeddings`
+ *   table (`ns, thing_id, type, embedding Array(Float32)`) joined to
+ *   `things`. Callers seed it via {@link ClickHouseProvider.upsertEmbedding}
+ *   and query via {@link ClickHouseProvider.vectorSearch}. Frame-aware
+ *   role filtering is deferred to a follow-up refinement bead.
  * - **SVO Action recording** + **Verb registry** declared via
  *   `hasActionRecording: true` and `hasVerbRegistry: true`.
  * - **Sharding**: `unsharded` by default (ClickHouse's strength is wide
@@ -98,6 +101,9 @@ import type {
   VerbDefinitionInput,
   VerbRecord,
   DBProviderSVO,
+  VectorSearchPort,
+  VectorSearchHit,
+  VectorSimilarityMetric,
 } from './db-provider-port.js'
 import {
   validateTypeName,
@@ -367,7 +373,7 @@ function parseJsonResponse<T = Record<string, unknown>>(text: string): T[] {
  * ClickHouse adapter implementing {@link DBProviderPort} and
  * {@link DBProviderSVO}.
  */
-export class ClickHouseProvider implements DBProviderPort, DBProviderSVO {
+export class ClickHouseProvider implements DBProviderPort, DBProviderSVO, VectorSearchPort {
   private readonly fetcher: ClickHouseHttpFetcher
   private readonly namespace: string
   private readonly database: string
@@ -976,6 +982,142 @@ export class ClickHouseProvider implements DBProviderPort, DBProviderSVO {
     return parseJsonResponse<Record<string, unknown>>(text)
   }
 
+  // ===========================================================================
+  // Tier 4 — vector search via native distance functions
+  // ===========================================================================
+
+  /**
+   * Upsert an embedding for a Thing into the `embeddings` table. Backed by
+   * `ReplacingMergeTree(version)` so callers may overwrite an embedding
+   * by re-inserting; the higher version wins at merge time.
+   *
+   * @example
+   * ```ts
+   * await provider.upsertEmbedding('Document', 'doc-1', new Array(1536).fill(0))
+   * ```
+   */
+  async upsertEmbedding(type: string, id: string, embedding: ReadonlyArray<number>): Promise<void> {
+    validateTypeName(type)
+    validateEntityId(id)
+    if (!Array.isArray(embedding) || embedding.length === 0) {
+      throw new Error('upsertEmbedding: embedding must be a non-empty array of numbers')
+    }
+    if (embedding.length > this.vectorDimensions) {
+      throw new Error(
+        `upsertEmbedding: embedding length ${embedding.length} exceeds adapter vectorDimensions ${this.vectorDimensions}`
+      )
+    }
+    for (const v of embedding) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) {
+        throw new Error('upsertEmbedding: embedding values must be finite numbers')
+      }
+    }
+
+    const now = new Date()
+    const row = {
+      ns: this.namespace,
+      thing_id: id,
+      type,
+      embedding: Array.from(embedding),
+      version: now.getTime(),
+    }
+    await this.fetcher(
+      `INSERT INTO ${this.database}.embeddings (ns, thing_id, type, embedding, version) FORMAT JSONEachRow`,
+      JSON.stringify(row) + '\n'
+    )
+  }
+
+  /**
+   * Tier 4 — vector search via ClickHouse native distance functions.
+   *
+   * Function selection by metric:
+   * - `'cosine'` (default): `cosineDistance(embedding, query)` — score is
+   *   `1 - distance`.
+   * - `'l2'`: `L2Distance(embedding, query)` — score is `-distance`.
+   * - `'dot'`: `dotProduct(embedding, query)` — score is the inner product
+   *   directly.
+   *
+   * Frame-aware role filtering is deferred (see PG adapter doc).
+   */
+  async vectorSearch<T extends Record<string, unknown> = Record<string, unknown>>(
+    type: string,
+    queryEmbedding: number[],
+    options?: {
+      metric?: VectorSimilarityMetric
+      limit?: number
+      minScore?: number
+    }
+  ): Promise<VectorSearchHit<T>[]> {
+    validateTypeName(type)
+    if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0) {
+      throw new Error('vectorSearch: queryEmbedding must be a non-empty array of numbers')
+    }
+    if (queryEmbedding.length > this.vectorDimensions) {
+      throw new Error(
+        `vectorSearch: query length ${queryEmbedding.length} exceeds adapter vectorDimensions ${this.vectorDimensions}`
+      )
+    }
+    for (const v of queryEmbedding) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) {
+        throw new Error('vectorSearch: queryEmbedding values must be finite numbers')
+      }
+    }
+
+    const metric: VectorSimilarityMetric = options?.metric ?? 'cosine'
+    const limit = Math.max(1, options?.limit ?? 10)
+
+    let scoreExpr: string
+    let orderExpr: string
+    switch (metric) {
+      case 'cosine':
+        scoreExpr = `1 - cosineDistance(e.embedding, [${queryEmbedding.join(',')}])`
+        orderExpr = `cosineDistance(e.embedding, [${queryEmbedding.join(',')}]) ASC`
+        break
+      case 'l2':
+        scoreExpr = `-L2Distance(e.embedding, [${queryEmbedding.join(',')}])`
+        orderExpr = `L2Distance(e.embedding, [${queryEmbedding.join(',')}]) ASC`
+        break
+      case 'dot':
+        scoreExpr = `dotProduct(e.embedding, [${queryEmbedding.join(',')}])`
+        orderExpr = `dotProduct(e.embedding, [${queryEmbedding.join(',')}]) DESC`
+        break
+      case 'hamming':
+        throw new Error('vectorSearch: ClickHouse adapter does not support hamming metric')
+      default:
+        throw new Error(`vectorSearch: unsupported metric "${String(metric)}"`)
+    }
+
+    const sql = `SELECT t.id AS id, t.type AS type, t.data AS data, ${scoreExpr} AS score
+       FROM ${this.database}.embeddings FINAL e
+       INNER JOIN ${this.database}.things FINAL t
+         ON t.ns = e.ns AND t.id = e.thing_id
+       WHERE e.ns = ${quote(this.namespace)} AND t.type = ${quote(type)}
+       ORDER BY ${orderExpr}
+       LIMIT ${Number(limit)}
+       FORMAT JSON`
+    const text = await this.fetcher(sql)
+    const rows = parseJsonResponse<{ id: string; type: string; data: string; score: number }>(text)
+
+    let hits: VectorSearchHit<T>[] = rows.map((row) => {
+      const data = asJsonb(row['data'])
+      const rawScore = row['score']
+      const score = typeof rawScore === 'number' ? rawScore : Number(rawScore ?? 0)
+      return {
+        entity: { ...data, $id: String(row['id']), $type: String(row['type']) } as T & {
+          $id: string
+          $type: string
+        },
+        score,
+      }
+    })
+
+    if (options?.minScore !== undefined) {
+      const min = options.minScore
+      hits = hits.filter((h) => h.score >= min)
+    }
+    return hits
+  }
+
   /**
    * Driver / connection metadata for diagnostics.
    */
@@ -1004,7 +1146,9 @@ export async function bootstrapClickHouseSchema(
   options: { database?: string; vectorDimensions?: number } = {}
 ): Promise<void> {
   const database = options.database ?? DEFAULT_DATABASE
-  // vectorDimensions reserved for future embeddings table bootstrap (aip-kh9l).
+  // vectorDimensions is informational — Array(Float32) is dynamically
+  // sized in CH; we capture it for future-proofing (e.g. switching to
+  // fixed Tuple types) but no DDL pin needed today.
   void options.vectorDimensions
 
   await fetcher(`CREATE DATABASE IF NOT EXISTS ${database}`)
@@ -1047,6 +1191,21 @@ export async function bootstrapClickHouseSchema(
       version    UInt64        DEFAULT toUnixTimestamp64Milli(now64(3))
     ) ENGINE = ReplacingMergeTree(version)
     ORDER BY name`
+  )
+
+  // Tier 4 — embeddings table. Array(Float32) accepts variable-length
+  // vectors, which keeps the schema portable across embedding models. The
+  // adapter validates dimension against `vectorDimensions` at the API
+  // surface; CH itself does not pin the dimension.
+  await fetcher(
+    `CREATE TABLE IF NOT EXISTS ${database}.embeddings (
+      ns         String,
+      thing_id   String,
+      type       String,
+      embedding  Array(Float32),
+      version    UInt64 DEFAULT toUnixTimestamp64Milli(now64(3))
+    ) ENGINE = ReplacingMergeTree(version)
+    ORDER BY (ns, type, thing_id)`
   )
 
   // Hint to keep DBProvider import warm.

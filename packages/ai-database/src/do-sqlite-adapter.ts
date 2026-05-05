@@ -30,9 +30,12 @@
  * - **Per-DO 10GB SQLite limit** — declared via
  *   {@link DOSqliteAdapter.maxStorageBytes}. Cascade write strategy
  *   (`aip-g1i9`) consults this when fanning out.
- * - **No native vector support** — Tier 4 capability is `undefined`.
- *   Callers needing vectors wire a Vectorize sidecar; that wiring is
- *   `aip-kh9l`'s concern, not this adapter's.
+ * - **No native vector support** — Tier 4 is sidecared via Cloudflare
+ *   Vectorize. Pass a `vectorize: VectorizeIndexLike` binding to the
+ *   constructor and the adapter declares the capability with
+ *   `implementation: 'sidecar'`. Without it, the capability is
+ *   `undefined` and `vectorSearch()` throws
+ *   {@link VectorSearchUnavailableError}.
  * - **Hard to query across DOs** — Tier 3 analytics declared as `false`
  *   for all sub-fields. Cross-cascade analytics is the dual-write path
  *   (DO → Pipelines → Iceberg → ClickHouse), which is `aip-0ypt`'s concern.
@@ -60,7 +63,11 @@ import type {
   VerbDefinitionInput,
   VerbRecord,
   FrameRole,
+  VectorSearchPort,
+  VectorSearchHit,
+  VectorSimilarityMetric,
 } from './db-provider-port.js'
+import { VectorSearchUnavailableError } from './errors.js'
 
 // =============================================================================
 // Cloudflare Workers shape (declared structurally so this module compiles in
@@ -100,6 +107,59 @@ export interface DurableObjectNamespaceLike {
   idFromString?(name: string): DurableObjectIdLike
   newUniqueId?(): DurableObjectIdLike
   get(id: DurableObjectIdLike): DurableObjectStubLike
+}
+
+// =============================================================================
+// Vectorize sidecar binding (Tier 4)
+// =============================================================================
+//
+// DO SQLite has no native vector index — Tier 4 is sidecared via a
+// Cloudflare Vectorize binding. We declare the binding shape structurally
+// so this module compiles in plain Node without a hard dependency on
+// `@cloudflare/workers-types`. Real bindings produced by `wrangler.toml`
+// satisfy this shape at runtime.
+
+/**
+ * Shape of a single Vectorize match returned by
+ * {@link VectorizeIndexLike.query}. Matches the Cloudflare runtime shape:
+ * `id` is the vector id (we map this to a Thing id), `score` is the
+ * similarity in the metric the index was created with, and `metadata`
+ * carries arbitrary fields the caller stored at insert time.
+ */
+export interface VectorizeMatchLike {
+  id: string
+  score: number
+  metadata?: Record<string, unknown>
+  values?: number[]
+}
+
+/**
+ * Result envelope for a Vectorize `query()` call. Cloudflare wraps
+ * matches in `{ matches: [...] }` — kept here for fidelity.
+ */
+export interface VectorizeQueryResultLike {
+  matches: VectorizeMatchLike[]
+  count?: number
+}
+
+/**
+ * Minimal `VectorizeIndex` shape — the subset {@link DOSqliteAdapter}
+ * uses. Real Cloudflare bindings have more methods (insert, upsert,
+ * deleteByIds, getByIds, describe); the adapter only needs `query()`
+ * for vector search. Callers seed the index out-of-band (typically via
+ * an `insert()` call at write time, wired upstream of this adapter).
+ */
+export interface VectorizeIndexLike {
+  query(
+    vector: number[],
+    options?: {
+      topK?: number
+      returnMetadata?: boolean | 'all' | 'indexed'
+      returnValues?: boolean
+      filter?: Record<string, unknown>
+      namespace?: string
+    }
+  ): Promise<VectorizeQueryResultLike>
 }
 
 // =============================================================================
@@ -235,6 +295,44 @@ export interface DOSqliteAdapterOptions {
    * stable `tenantId` while letting `cascadeId` rotate.
    */
   defaultContext?: ShardContext
+
+  /**
+   * Optional Cloudflare Vectorize binding for Tier 4 (vector search)
+   * sidecar.
+   *
+   * - **Present** — the adapter declares Tier 4 with
+   *   `implementation: 'sidecar'` and routes `vectorSearch()` to the
+   *   binding's `query()`. Vector ids returned by the index are looked
+   *   up as Thing ids inside the resolved DO shard.
+   * - **Absent** — Tier 4 is `undefined` in capabilities, and calling
+   *   `vectorSearch()` throws {@link VectorSearchUnavailableError}.
+   *
+   * Per ADR-0003, Vectorize is a per-deployment binding (cost concern;
+   * declared in `wrangler.toml`); this adapter remains structurally
+   * portable to non-Cloudflare runtimes simply by leaving the binding
+   * unconfigured.
+   */
+  vectorize?: VectorizeIndexLike
+
+  /**
+   * Vector dimensions advertised on the capability declaration when a
+   * Vectorize binding is wired. Vectorize indexes are created with a
+   * fixed dimension at provisioning time; this value is informational for
+   * the capability surface (the binding itself enforces dimension at
+   * `query()` time). Common values: 1536 (OpenAI ada-002), 768
+   * (sentence-transformers), 384 (small models).
+   *
+   * @default 1536
+   */
+  vectorizeDimensions?: number
+
+  /**
+   * Optional Vectorize namespace, prepended on every `query()` call when
+   * present. Use to scope a single index across multiple tenants/cascades
+   * by including a stable identifier (`tenantId`, `cascadeId`, ...).
+   * Mirrors the Cloudflare Vectorize `namespace` option.
+   */
+  vectorizeNamespace?: string
 }
 
 // =============================================================================
@@ -308,11 +406,14 @@ const VERB_TYPE = '__svo_verb'
  * })
  * ```
  */
-export class DOSqliteAdapter implements DBProvider, DBProviderSVO {
+export class DOSqliteAdapter implements DBProvider, DBProviderSVO, VectorSearchPort {
   private readonly namespace: DurableObjectNamespaceLike
   private readonly strategy: ShardingStrategy
   private readonly shardingModel: ShardingModel
   private readonly baseContext: ShardContext
+  private readonly vectorize: VectorizeIndexLike | undefined
+  private readonly vectorizeDimensions: number
+  private readonly vectorizeNamespace: string | undefined
 
   /**
    * The per-DO SQLite hard cap from Cloudflare. Declared as `getter` so
@@ -364,6 +465,10 @@ export class DOSqliteAdapter implements DBProvider, DBProviderSVO {
     if (options.defaultTenantId !== undefined) {
       this.baseContext.tenantId = options.defaultTenantId
     }
+
+    this.vectorize = options.vectorize
+    this.vectorizeDimensions = options.vectorizeDimensions ?? 1536
+    this.vectorizeNamespace = options.vectorizeNamespace
   }
 
   // ===========================================================================
@@ -387,7 +492,7 @@ export class DOSqliteAdapter implements DBProvider, DBProviderSVO {
    *   the same DO as the entities they reference).
    */
   get capabilities(): ProviderTierCapabilities {
-    return {
+    const caps: ProviderTierCapabilities = {
       adapter: 'do-sqlite',
       shardingModel: this.shardingModel,
       analytics: {
@@ -395,10 +500,20 @@ export class DOSqliteAdapter implements DBProvider, DBProviderSVO {
         hasTimeSeries: false,
         hasLargeScans: false,
       },
-      // No vectorSearch declared — Vectorize sidecar is a separate adapter (aip-kh9l)
       hasActionRecording: true,
       hasVerbRegistry: true,
     }
+    // Tier 4 is opt-in via a Vectorize sidecar binding. When present we
+    // declare the capability with `implementation: 'sidecar'` so callers
+    // can distinguish from native (PG/CH).
+    if (this.vectorize) {
+      caps.vectorSearch = {
+        maxDimensions: this.vectorizeDimensions,
+        metrics: ['cosine'],
+        implementation: 'sidecar',
+      }
+    }
+    return caps
   }
 
   // ===========================================================================
@@ -441,6 +556,9 @@ export class DOSqliteAdapter implements DBProvider, DBProviderSVO {
       shardingModel: this.shardingModel,
       baseContext: { ...this.baseContext, ...extra },
       maxStorageBytes: this.maxStorageBytes,
+      vectorize: this.vectorize,
+      vectorizeDimensions: this.vectorizeDimensions,
+      vectorizeNamespace: this.vectorizeNamespace,
     })
     return clone
   }
@@ -873,6 +991,105 @@ export class DOSqliteAdapter implements DBProvider, DBProviderSVO {
       DOSqliteAdapter.jsonInit('POST', { type: VERB_TYPE })
     )
     return rows.map(DOSqliteAdapter.toVerbRecord)
+  }
+
+  // ===========================================================================
+  // Tier 4 — vector search (Vectorize sidecar)
+  // ===========================================================================
+
+  /**
+   * Vector search via the Cloudflare Vectorize sidecar binding.
+   *
+   * - When the adapter was constructed **without** a `vectorize` binding,
+   *   this throws {@link VectorSearchUnavailableError}.
+   * - When **with** a binding, the binding's `query()` is invoked with
+   *   `topK = options.limit ?? 10` and `returnMetadata: true` so each hit
+   *   carries enough context to reconstruct an entity. The vector id
+   *   returned by Vectorize is treated as the Thing id; if the index
+   *   stores the Thing's `data` in `metadata`, the result entity is
+   *   composed from that — otherwise a fallback `get()` against the
+   *   resolved DO shard fills in the data. Dimensions and metrics are
+   *   determined by how the index was provisioned upstream; we pass the
+   *   caller's `metric` through unchanged for documentation purposes
+   *   (Vectorize doesn't accept a per-query metric).
+   *
+   * Frame-aware role filtering is **deferred** to a refinement bead;
+   * Vectorize's `filter` parameter could carry role-shaped metadata
+   * filters, but the wire shape needs design with how callers seed the
+   * index, which is out of scope here.
+   */
+  async vectorSearch<T extends Record<string, unknown> = Record<string, unknown>>(
+    type: string,
+    queryEmbedding: number[],
+    options?: {
+      metric?: VectorSimilarityMetric
+      limit?: number
+      minScore?: number
+    }
+  ): Promise<VectorSearchHit<T>[]> {
+    if (!this.vectorize) {
+      throw new VectorSearchUnavailableError(
+        'do-sqlite',
+        'no Vectorize binding configured (pass `vectorize` to DOSqliteAdapter constructor)'
+      )
+    }
+    if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0) {
+      throw new Error('vectorSearch: queryEmbedding must be a non-empty array of numbers')
+    }
+    for (const v of queryEmbedding) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) {
+        throw new Error('vectorSearch: queryEmbedding values must be finite numbers')
+      }
+    }
+
+    // The metric option is a hint only — Vectorize indexes pin a metric at
+    // creation time. We accept it for API parity with PG/CH but don't
+    // forward it to the binding.
+    void options?.metric
+
+    const limit = Math.max(1, options?.limit ?? 10)
+    const queryOptions: {
+      topK: number
+      returnMetadata: boolean
+      namespace?: string
+    } = { topK: limit, returnMetadata: true }
+    if (this.vectorizeNamespace !== undefined) {
+      queryOptions.namespace = this.vectorizeNamespace
+    }
+
+    const result = await this.vectorize.query(queryEmbedding, queryOptions)
+    const matches = result?.matches ?? []
+
+    let hits: VectorSearchHit<T>[] = []
+    for (const m of matches) {
+      const meta = (m.metadata ?? {}) as Record<string, unknown>
+      // Prefer entity payload from index metadata when callers stored it;
+      // otherwise fall back to fetching the row from the resolved shard.
+      let entity: (T & { $id: string; $type: string }) | null = null
+      const metaType = typeof meta['type'] === 'string' ? (meta['type'] as string) : undefined
+      const metaData =
+        typeof meta['data'] === 'object' && meta['data'] !== null
+          ? (meta['data'] as Record<string, unknown>)
+          : undefined
+      if (metaType === type && metaData) {
+        entity = { ...metaData, $id: m.id, $type: type } as T & { $id: string; $type: string }
+      } else if (metaType === undefined && metaData === undefined) {
+        // Index didn't store metadata — read-back from the DO shard.
+        const fetched = (await this.get(type, m.id)) as Record<string, unknown> | null
+        if (fetched) {
+          entity = fetched as T & { $id: string; $type: string }
+        }
+      }
+      // Skip matches that aren't of the requested type.
+      if (!entity) continue
+      hits.push({ entity, score: m.score })
+    }
+
+    if (options?.minScore !== undefined) {
+      const min = options.minScore
+      hits = hits.filter((h) => h.score >= min)
+    }
+    return hits
   }
 
   private static toVerbRecord(row: DOEntityRow): VerbRecord {

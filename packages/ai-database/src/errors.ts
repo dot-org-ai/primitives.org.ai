@@ -205,6 +205,35 @@ export class SemanticSearchError extends DatabaseError {
   }
 }
 
+/**
+ * Error thrown when an adapter cannot perform a Tier 4 (vector search)
+ * query because the backing index is not configured.
+ *
+ * Distinct from {@link CapabilityNotSupportedError}: that error means the
+ * adapter never claims vector search; this error means the adapter would
+ * support vector search if its sidecar / extension / index were present
+ * but at runtime it isn't (e.g., DO SQLite without a Vectorize binding).
+ *
+ * @example
+ * ```ts
+ * throw new VectorSearchUnavailableError('do-sqlite', 'no Vectorize binding configured')
+ * ```
+ */
+export class VectorSearchUnavailableError extends DatabaseError {
+  public readonly code = 'VECTOR_SEARCH_UNAVAILABLE'
+
+  constructor(public readonly adapter: string, reason: string, cause?: Error) {
+    super(
+      `Vector search unavailable on ${adapter}: ${reason}`,
+      'vectorSearch',
+      'unknown',
+      undefined,
+      cause
+    )
+    this.name = 'VectorSearchUnavailableError'
+  }
+}
+
 // Re-export CapabilityNotSupportedError for convenience
 export {
   CapabilityNotSupportedError,

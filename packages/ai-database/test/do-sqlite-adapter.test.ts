@@ -28,6 +28,8 @@ import {
   type DurableObjectNamespaceLike,
   type DurableObjectIdLike,
   type DurableObjectStubLike,
+  type VectorizeIndexLike,
+  type VectorizeQueryResultLike,
 } from '../src/do-sqlite-adapter.js'
 import {
   getProviderCapabilities,
@@ -36,6 +38,7 @@ import {
   hasVectorSearch,
   hasAnalytics,
 } from '../src/db-provider-port.js'
+import { VectorSearchUnavailableError } from '../src/errors.js'
 
 // =============================================================================
 // In-memory mock of the DatabaseDO fetch protocol
@@ -782,5 +785,204 @@ describe('DOSqliteAdapter — factory', () => {
           sharding: 'unknown' as never,
         })
     ).toThrow(/unknown sharding strategy/)
+  })
+})
+
+// =============================================================================
+// Tests — Tier 4 vector search via Vectorize sidecar
+// =============================================================================
+
+interface VectorizeCall {
+  vector: number[]
+  options?: {
+    topK?: number
+    returnMetadata?: boolean | 'all' | 'indexed'
+    namespace?: string
+    filter?: Record<string, unknown>
+  }
+}
+
+class FakeVectorize implements VectorizeIndexLike {
+  readonly calls: VectorizeCall[] = []
+  result: VectorizeQueryResultLike = { matches: [] }
+
+  async query(
+    vector: number[],
+    options?: {
+      topK?: number
+      returnMetadata?: boolean | 'all' | 'indexed'
+      namespace?: string
+      filter?: Record<string, unknown>
+    }
+  ): Promise<VectorizeQueryResultLike> {
+    this.calls.push({ vector, ...(options !== undefined && { options }) })
+    return this.result
+  }
+}
+
+describe('DOSqliteAdapter — Tier 4 vector search (Vectorize sidecar)', () => {
+  describe('without binding', () => {
+    it('does not declare vectorSearch capability', () => {
+      const adapter = new DOSqliteAdapter({
+        namespace: new MockNamespace(),
+        defaultCascadeId: 'c1',
+      })
+      expect(adapter.capabilities.vectorSearch).toBeUndefined()
+    })
+
+    it('does not pass hasVectorSearch type guard', () => {
+      const adapter = new DOSqliteAdapter({
+        namespace: new MockNamespace(),
+        defaultCascadeId: 'c1',
+      })
+      expect(hasVectorSearch(adapter)).toBe(false)
+    })
+
+    it('throws VectorSearchUnavailableError when calling vectorSearch', async () => {
+      const adapter = new DOSqliteAdapter({
+        namespace: new MockNamespace(),
+        defaultCascadeId: 'c1',
+      })
+      await expect(adapter.vectorSearch('Document', [1, 0])).rejects.toThrow(
+        VectorSearchUnavailableError
+      )
+      await expect(adapter.vectorSearch('Document', [1, 0])).rejects.toThrow(/Vectorize binding/)
+    })
+  })
+
+  describe('with binding', () => {
+    let ns: MockNamespace
+    let vectorize: FakeVectorize
+    let adapter: DOSqliteAdapter
+
+    beforeEach(() => {
+      ns = new MockNamespace()
+      vectorize = new FakeVectorize()
+      adapter = new DOSqliteAdapter({
+        namespace: ns,
+        defaultCascadeId: 'c1',
+        vectorize,
+      })
+    })
+
+    it('declares vectorSearch capability with sidecar implementation', () => {
+      const caps = adapter.capabilities
+      expect(caps.vectorSearch).toBeDefined()
+      expect(caps.vectorSearch?.implementation).toBe('sidecar')
+      expect(caps.vectorSearch?.metrics).toContain('cosine')
+      expect(caps.vectorSearch?.maxDimensions).toBe(1536)
+    })
+
+    it('respects custom vectorizeDimensions', () => {
+      const a = new DOSqliteAdapter({
+        namespace: new MockNamespace(),
+        defaultCascadeId: 'c1',
+        vectorize: new FakeVectorize(),
+        vectorizeDimensions: 768,
+      })
+      expect(a.capabilities.vectorSearch?.maxDimensions).toBe(768)
+    })
+
+    it('passes hasVectorSearch type guard', () => {
+      expect(hasVectorSearch(adapter)).toBe(true)
+    })
+
+    it('delegates vectorSearch to the binding query() with topK and metadata flag', async () => {
+      vectorize.result = {
+        matches: [
+          {
+            id: 'd1',
+            score: 0.95,
+            metadata: { type: 'Document', data: { title: 'Alpha' } },
+          },
+        ],
+      }
+      const hits = await adapter.vectorSearch('Document', [1, 0, 0], { limit: 5 })
+      expect(vectorize.calls).toHaveLength(1)
+      expect(vectorize.calls[0]?.vector).toEqual([1, 0, 0])
+      expect(vectorize.calls[0]?.options?.topK).toBe(5)
+      expect(vectorize.calls[0]?.options?.returnMetadata).toBe(true)
+      expect(hits).toHaveLength(1)
+      expect(hits[0]?.entity['$id']).toBe('d1')
+      expect(hits[0]?.entity['$type']).toBe('Document')
+      expect(hits[0]?.entity['title']).toBe('Alpha')
+      expect(hits[0]?.score).toBe(0.95)
+    })
+
+    it('forwards vectorizeNamespace through to the binding', async () => {
+      const a = new DOSqliteAdapter({
+        namespace: new MockNamespace(),
+        defaultCascadeId: 'c1',
+        vectorize,
+        vectorizeNamespace: 'tenant-9',
+      })
+      vectorize.result = { matches: [] }
+      await a.vectorSearch('Document', [1, 0])
+      expect(vectorize.calls[0]?.options?.namespace).toBe('tenant-9')
+    })
+
+    it('skips matches whose metadata type does not match the requested type', async () => {
+      vectorize.result = {
+        matches: [
+          {
+            id: 'a1',
+            score: 0.9,
+            metadata: { type: 'Article', data: { headline: 'Other' } },
+          },
+          {
+            id: 'd1',
+            score: 0.85,
+            metadata: { type: 'Document', data: { title: 'Hit' } },
+          },
+        ],
+      }
+      const hits = await adapter.vectorSearch('Document', [1, 0])
+      expect(hits).toHaveLength(1)
+      expect(hits[0]?.entity['$id']).toBe('d1')
+    })
+
+    it('falls back to DO get() when match metadata is missing', async () => {
+      // Seed a Document in the resolved DO shard.
+      await adapter.create('Document', 'd1', { title: 'Seeded' })
+      vectorize.result = {
+        matches: [{ id: 'd1', score: 0.7 }], // no metadata
+      }
+      const hits = await adapter.vectorSearch('Document', [1, 0])
+      expect(hits).toHaveLength(1)
+      expect(hits[0]?.entity['$id']).toBe('d1')
+      expect(hits[0]?.entity['title']).toBe('Seeded')
+      expect(hits[0]?.score).toBe(0.7)
+    })
+
+    it('filters by minScore', async () => {
+      vectorize.result = {
+        matches: [
+          { id: 'd1', score: 0.9, metadata: { type: 'Document', data: { title: 'A' } } },
+          { id: 'd2', score: 0.4, metadata: { type: 'Document', data: { title: 'B' } } },
+        ],
+      }
+      const hits = await adapter.vectorSearch('Document', [1, 0], { minScore: 0.5 })
+      expect(hits).toHaveLength(1)
+      expect(hits[0]?.entity['$id']).toBe('d1')
+    })
+
+    it('rejects empty embeddings', async () => {
+      await expect(adapter.vectorSearch('Document', [])).rejects.toThrow(/non-empty/)
+    })
+
+    it('rejects NaN/Infinity values', async () => {
+      await expect(adapter.vectorSearch('Document', [1, NaN])).rejects.toThrow(/finite/)
+    })
+
+    it('default topK is 10 when limit is omitted', async () => {
+      vectorize.result = { matches: [] }
+      await adapter.vectorSearch('Document', [1, 0])
+      expect(vectorize.calls[0]?.options?.topK).toBe(10)
+    })
+
+    it('preserves vectorize binding across withCascade()', () => {
+      const bound = adapter.withCascade('c2')
+      expect(bound.capabilities.vectorSearch).toBeDefined()
+    })
   })
 })

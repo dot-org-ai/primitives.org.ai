@@ -510,6 +510,7 @@ export {
   ValidationError,
   AIGenerationError,
   SemanticSearchError,
+  VectorSearchUnavailableError,
   // Capability errors (re-exported from provider-capabilities)
   CapabilityNotSupportedError,
   isCapabilityNotSupportedError,
@@ -576,6 +577,9 @@ export type {
   DurableObjectNamespaceLike,
   DurableObjectIdLike,
   DurableObjectStubLike,
+  VectorizeIndexLike,
+  VectorizeMatchLike,
+  VectorizeQueryResultLike,
 } from './do-sqlite-adapter.js'
 
 // =============================================================================

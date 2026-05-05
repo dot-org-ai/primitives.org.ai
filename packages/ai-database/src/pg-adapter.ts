@@ -12,9 +12,13 @@
  * - **Tier 3 (analytics)** declared with caveats: aggregations + time-series
  *   work, but adapters running large scans contend with transactional load.
  *   `analyticsQuery` is exposed for ad-hoc SQL.
- * - **Tier 4 (vector search)** declared via `pgvector` (max 16,000 dims,
- *   cosine/L2/dot, native). The actual `vectorSearch` method lands in a
- *   later bead (`aip-kh9l`). This adapter only declares capability today.
+ * - **Tier 4 (vector search)** native via `pgvector` (max 16,000 dims;
+ *   `cosine`/`l2`/`dot` metrics implemented). Embeddings live in a
+ *   companion `embeddings` table joined to `things`; callers seed it via
+ *   {@link PostgresProvider.upsertEmbedding} and query via
+ *   {@link PostgresProvider.vectorSearch}. Frame-aware role filtering
+ *   (e.g. "only Things appearing as `subject` of a Verb") is deferred to
+ *   a follow-up refinement bead.
  * - **SVO Action recording** + **Verb registry** declared via
  *   `hasActionRecording: true` and `hasVerbRegistry: true`.
  * - **Sharding**: `partitioned-by-tenant` by default; the `ns` namespace
@@ -109,6 +113,9 @@ import type {
   VerbDefinitionInput,
   VerbRecord,
   DBProviderSVO,
+  VectorSearchPort,
+  VectorSearchHit,
+  VectorSimilarityMetric,
 } from './db-provider-port.js'
 import {
   validateTypeName,
@@ -341,6 +348,25 @@ function asString(value: unknown): string | undefined {
   return String(value)
 }
 
+/**
+ * Format a numeric array as a pgvector literal: `'[0.1,0.2,0.3]'`. Cast
+ * to `vector` at the SQL site (`$N::vector`).
+ */
+function embeddingLiteral(embedding: ReadonlyArray<number>): string {
+  // pgvector parses `[v1,v2,...]` syntax. We avoid scientific notation
+  // edge cases by relying on JS Number.toString — acceptable for cascade
+  // workloads (embeddings are 4-byte floats; JS numbers carry more
+  // precision than needed). NaN/Infinity are explicitly rejected.
+  const parts: string[] = []
+  for (const v of embedding) {
+    if (typeof v !== 'number' || !Number.isFinite(v)) {
+      throw new Error('embeddingLiteral: embedding values must be finite numbers')
+    }
+    parts.push(String(v))
+  }
+  return `[${parts.join(',')}]`
+}
+
 // =============================================================================
 // PostgresProvider
 // =============================================================================
@@ -349,7 +375,7 @@ function asString(value: unknown): string | undefined {
  * Postgres + pgvector adapter implementing {@link DBProviderPort} and
  * {@link DBProviderSVO}.
  */
-export class PostgresProvider implements DBProviderPort, DBProviderSVO {
+export class PostgresProvider implements DBProviderPort, DBProviderSVO, VectorSearchPort {
   private readonly executor: PgExecutor
   private readonly namespace: string
   private readonly schema: string
@@ -957,6 +983,145 @@ export class PostgresProvider implements DBProviderPort, DBProviderSVO {
     return this.executor(query, positional)
   }
 
+  // ===========================================================================
+  // Tier 4 — vector search via pgvector
+  // ===========================================================================
+
+  /**
+   * Upsert an embedding vector for a Thing into the `embeddings` table.
+   *
+   * The embedding is stored separately from the `things` row so that
+   * Tier 1 callers don't pay the vector serialization cost when they
+   * don't need it. Callers generate the embedding upstream (out of scope
+   * for this adapter) and pass it here.
+   *
+   * @example
+   * ```ts
+   * await provider.upsertEmbedding('Document', 'doc-1', new Array(1536).fill(0))
+   * ```
+   */
+  async upsertEmbedding(type: string, id: string, embedding: ReadonlyArray<number>): Promise<void> {
+    validateTypeName(type)
+    validateEntityId(id)
+    if (!Array.isArray(embedding) || embedding.length === 0) {
+      throw new Error('upsertEmbedding: embedding must be a non-empty array of numbers')
+    }
+    if (embedding.length > this.vectorDimensions) {
+      throw new Error(
+        `upsertEmbedding: embedding length ${embedding.length} exceeds adapter vectorDimensions ${this.vectorDimensions}`
+      )
+    }
+
+    const literal = embeddingLiteral(embedding)
+    await this.executor(
+      `INSERT INTO ${this.schema}.embeddings (ns, thing_id, type, embedding)
+       VALUES ($1, $2, $3, $4::vector)
+       ON CONFLICT (ns, thing_id) DO UPDATE SET embedding = EXCLUDED.embedding, type = EXCLUDED.type`,
+      [this.namespace, id, type, literal]
+    )
+  }
+
+  /**
+   * Tier 4 — vector search via pgvector operators.
+   *
+   * Operator selection by metric:
+   * - `'cosine'` (default): `embedding <=> $vector` — cosine distance.
+   *   Score returned is `1 - distance` so higher is more similar.
+   * - `'l2'`: `embedding <-> $vector` — Euclidean distance. Score is
+   *   `-distance` (closer => higher score; never positive).
+   * - `'dot'`: `embedding <#> $vector` — negative inner product (pgvector
+   *   convention so smaller-is-better). Score returned is `-result`
+   *   (i.e. the inner product itself; higher is more similar).
+   *
+   * Frame-aware role filtering (e.g. only search Things that appear as
+   * `subject` of a particular Action) is **deferred** to a follow-up
+   * bead — refinement, not blocking for Phase 1. The current method
+   * filters by `type` only.
+   *
+   * @example
+   * ```ts
+   * const hits = await provider.vectorSearch('Document', queryVec, {
+   *   metric: 'cosine',
+   *   limit: 10,
+   * })
+   * ```
+   */
+  async vectorSearch<T extends Record<string, unknown> = Record<string, unknown>>(
+    type: string,
+    queryEmbedding: number[],
+    options?: {
+      metric?: VectorSimilarityMetric
+      limit?: number
+      minScore?: number
+    }
+  ): Promise<VectorSearchHit<T>[]> {
+    validateTypeName(type)
+    if (!Array.isArray(queryEmbedding) || queryEmbedding.length === 0) {
+      throw new Error('vectorSearch: queryEmbedding must be a non-empty array of numbers')
+    }
+    if (queryEmbedding.length > this.vectorDimensions) {
+      throw new Error(
+        `vectorSearch: query length ${queryEmbedding.length} exceeds adapter vectorDimensions ${this.vectorDimensions}`
+      )
+    }
+
+    const metric: VectorSimilarityMetric = options?.metric ?? 'cosine'
+    const limit = Math.max(1, options?.limit ?? 10)
+
+    // Operator + score expression per metric. pgvector convention: all
+    // operators return "distance" where smaller is more similar; we wrap
+    // so the returned `score` is monotonically higher-is-more-similar.
+    let operator: string
+    let scoreExpr: string
+    switch (metric) {
+      case 'cosine':
+        operator = '<=>'
+        scoreExpr = `1 - (e.embedding <=> $2::vector)`
+        break
+      case 'l2':
+        operator = '<->'
+        scoreExpr = `-(e.embedding <-> $2::vector)`
+        break
+      case 'dot':
+        // pgvector returns negative inner product; flip back so positive
+        // dot product => positive score.
+        operator = '<#>'
+        scoreExpr = `-(e.embedding <#> $2::vector)`
+        break
+      case 'hamming':
+        throw new Error('vectorSearch: pgvector adapter does not support hamming metric')
+      default:
+        throw new Error(`vectorSearch: unsupported metric "${String(metric)}"`)
+    }
+
+    const literal = embeddingLiteral(queryEmbedding)
+    const sql = `SELECT t.id AS id, t.type AS type, t.data AS data, ${scoreExpr} AS score
+       FROM ${this.schema}.embeddings e
+       JOIN ${this.schema}.things t ON t.ns = e.ns AND t.id = e.thing_id
+       WHERE e.ns = $1 AND t.type = $3
+       ORDER BY e.embedding ${operator} $2::vector
+       LIMIT $4`
+    const rows = await this.executor(sql, [this.namespace, literal, type, limit])
+
+    let hits: VectorSearchHit<T>[] = rows.map((row) => {
+      const data = asJsonb(row['data'])
+      const score = typeof row['score'] === 'number' ? row['score'] : Number(row['score'] ?? 0)
+      return {
+        entity: { ...data, $id: String(row['id']), $type: String(row['type']) } as T & {
+          $id: string
+          $type: string
+        },
+        score,
+      }
+    })
+
+    if (options?.minScore !== undefined) {
+      const min = options.minScore
+      hits = hits.filter((h) => h.score >= min)
+    }
+    return hits
+  }
+
   /**
    * Driver / connection metadata for diagnostics.
    */
@@ -1052,10 +1217,31 @@ export async function bootstrapSchema(
         `CREATE TABLE IF NOT EXISTS ${schema}.embeddings (
           ns text NOT NULL,
           thing_id text NOT NULL,
+          type text NOT NULL DEFAULT '',
           embedding vector(${dims}),
           PRIMARY KEY (ns, thing_id)
         )`
       )
+      // Best-effort: add `type` column to existing embeddings tables that
+      // were created before vector search shipped. Idempotent via
+      // IF NOT EXISTS (Postgres 9.6+).
+      await executor(
+        `ALTER TABLE ${schema}.embeddings ADD COLUMN IF NOT EXISTS type text NOT NULL DEFAULT ''`
+      )
+      await executor(
+        `CREATE INDEX IF NOT EXISTS embeddings_ns_type_idx ON ${schema}.embeddings (ns, type)`
+      )
+      // ANN index — ivfflat is the broadly-available default; HNSW is
+      // pgvector 0.5+. We try HNSW first (better recall/latency) and
+      // fall back to ivfflat. Both are best-effort.
+      try {
+        await executor(
+          `CREATE INDEX IF NOT EXISTS embeddings_hnsw_cosine_idx
+           ON ${schema}.embeddings USING hnsw (embedding vector_cosine_ops)`
+        )
+      } catch {
+        // pgvector < 0.5 doesn't have HNSW; skip silently.
+      }
     } catch {
       // Vector extension not present; the embeddings table is optional.
     }
