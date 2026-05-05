@@ -21,6 +21,8 @@ graph TD
         language-models["language-models<br/><i>Model listing & resolution</i>"]
         types["@org.ai/types<br/><i>Shared type definitions</i>"]
         config["@org.ai/config<br/><i>Build tooling config</i>"]
+        digital-objects["digital-objects<br/><i>SVO storage ontology</i>"]
+        graphdl["@graphdl/core<br/><i>Entity-graph DSL (interim)</i>"]
     end
 
     subgraph "Provider Layer"
@@ -59,8 +61,8 @@ graph TD
     end
 
     subgraph "Meta Packages"
-        ai4["ai4<br/><i>Agents + HITL bundle</i>"]
-        org-ai["org.ai<br/><i>All primitives bundle</i>"]
+        ai-primitives["ai-primitives<br/><i>Primary umbrella (this repo)</i>"]
+        org-ai["org.ai<br/><i>Cross-repo umbrella w/ subpath exports</i>"]
     end
 
     %% Foundation dependencies
@@ -105,8 +107,17 @@ graph TD
     ai-props --> ai-functions
 
     %% Meta packages
-    ai4 --> autonomous-agents
-    ai4 --> human-in-the-loop
+    ai-primitives --> ai-functions
+    ai-primitives --> ai-database
+    ai-primitives --> ai-workflows
+    ai-primitives --> digital-workers
+    ai-primitives --> digital-tools
+    ai-primitives --> digital-tasks
+    ai-primitives --> autonomous-agents
+    ai-primitives --> human-in-the-loop
+    ai-primitives --> business-as-code
+    ai-primitives --> services-as-software
+    ai-primitives --> digital-products
     org-ai --> ai-functions
     org-ai --> ai-database
     org-ai --> ai-workflows
@@ -129,6 +140,8 @@ graph TD
 | `language-models` | Model listing and resolution for LLM providers (OpenRouter data) |
 | `@org.ai/types` | Shared TypeScript type definitions |
 | `@org.ai/config` | ESLint and TypeScript configuration presets |
+| `digital-objects` | SVO storage ontology — Nouns, Verbs (with Frames), Things, Actions. The substrate the runtime triangle (`digital-workers` / `digital-tools` / `digital-tasks`) realigns onto per the SVO co-design plan. |
+| `@graphdl/core` (`graphdl`) | Pure TypeScript DSL for defining entity graphs with noun/verb semantics and relationship operators. **Interim** in this repo — slated for its own repo when stable. |
 
 ### Provider Layer
 
@@ -179,10 +192,12 @@ graph TD
 
 ### Meta Packages
 
+Two umbrellas remain canonical: `ai-primitives` (this repo's primary umbrella) and `org.ai` (cross-repo umbrella with subpath exports). All other historical bundles have been retired.
+
 | Package | Description |
 |---------|-------------|
-| `ai4` | Bundle of autonomous-agents + human-in-the-loop. |
-| `org.ai` | All primitives bundled with subpath exports. |
+| `ai-primitives` | Primary umbrella for this repo — bundles all primitives. |
+| `org.ai` | Cross-repo umbrella; all primitives bundled with subpath exports. |
 
 ## Key Concepts
 
@@ -355,6 +370,8 @@ These packages have zero dependencies on other workspace packages. They form the
 | `language-models` | None | None | Model listing and resolution |
 | `ai-workflows` | None | None | Event-driven workflow primitives |
 | `ai-tests` | None | chai | Test assertion utilities |
+| `digital-objects` | None | rpc.do, zod | SVO storage ontology — Nouns, Verbs (with Frames), Things, Actions. Substrate for the runtime triangle (`digital-workers` / `digital-tools` / `digital-tasks`); see `docs/plans/2026-05-05-svo-co-design.md`. |
+| `@graphdl/core` (`graphdl`) | None | None | Pure TypeScript DSL for entity graphs with noun/verb semantics and relationship operators. **Interim** — co-located here for now, extracts to its own repo when stable. |
 
 **Layer Rule**: Layer 0 packages MUST NOT import from any other workspace packages.
 
@@ -427,12 +444,12 @@ These packages exist parallel to the main stack for testing/evaluation.
 
 ### Meta Packages (Top Level)
 
-Bundle packages for convenience.
+Bundle packages for convenience. The two canonical umbrellas are `ai-primitives` (primary, this repo) and `org.ai` (cross-repo with subpath exports).
 
 | Package | Internal Deps | Purpose |
 |---------|--------------|---------|
-| `ai4` | autonomous-agents, human-in-the-loop | Agent + HITL bundle |
-| `org.ai` | All packages | Complete primitives bundle |
+| `ai-primitives` | All packages | Primary umbrella for this repo |
+| `org.ai` | All packages | Cross-repo umbrella with subpath exports |
 
 ## Dependency Analysis
 
@@ -446,6 +463,8 @@ Analysis based on actual package.json dependencies:
 - `language-models`: No workspace deps (Layer 0)
 - `ai-workflows`: No workspace deps (Layer 0)
 - `ai-tests`: No workspace deps (Layer 0)
+- `digital-objects`: No workspace deps (Layer 0)
+- `@graphdl/core` (`graphdl`): No workspace deps (Layer 0, interim)
 - `ai-providers`: Only depends on `language-models` (Layer 1)
 - `ai-core`: Depends on `ai-providers`, `language-models` (Layer 2)
 - `ai-functions`: Depends on `ai-core`, `ai-providers`, `language-models` (Layer 3)

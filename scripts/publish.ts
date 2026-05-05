@@ -16,9 +16,7 @@ const rootDir = join(__dirname, '..')
 const packagesDir = join(rootDir, 'packages')
 
 // Packages to exclude from publishing (npm restrictions, etc.)
-const EXCLUDED_PACKAGES = new Set([
-  'ai4', // Name too similar to 'ai' package on npm
-])
+const EXCLUDED_PACKAGES = new Set<string>([])
 
 interface PackageJson {
   name: string
@@ -32,7 +30,7 @@ interface PackageJson {
 function getPackageDirs(): string[] {
   const dirs = [
     ...readdirSync(packagesDir)
-      .filter(name => {
+      .filter((name) => {
         const pkgPath = join(packagesDir, name)
         const pkgJsonPath = join(pkgPath, 'package.json')
         try {
@@ -41,8 +39,8 @@ function getPackageDirs(): string[] {
           return false
         }
       })
-      .map(name => join(packagesDir, name)),
-    join(rootDir, 'examples')
+      .map((name) => join(packagesDir, name)),
+    join(rootDir, 'examples'),
   ]
   return dirs
 }
@@ -143,7 +141,7 @@ async function main() {
     console.log(`\n📤 Publishing ${name}@${version}...`)
     const result = spawnSync('npm', ['publish', '--access', 'public'], {
       cwd: dir,
-      stdio: 'inherit'
+      stdio: 'inherit',
     })
 
     if (result.status !== 0) {
