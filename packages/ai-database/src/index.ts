@@ -579,6 +579,46 @@ export type {
 } from './do-sqlite-adapter.js'
 
 // =============================================================================
+// Postgres + pgvector Adapter — Stack A transactional DBProvider
+// =============================================================================
+// Per ADR-0003: Stack A's transactional layer. Bulk-VALUES CTE write path
+// (91ms p50 for 500 docs+499 rels via Neon HTTP per substrate-write-probes).
+
+export {
+  PostgresProvider,
+  createPostgresProvider,
+  createNeonHttpExecutor,
+  createPgClientExecutor,
+  bootstrapSchema as bootstrapPostgresSchema,
+} from './pg-adapter.js'
+
+export type {
+  PostgresProviderOptions,
+  PgExecutor,
+  ThingRow as PostgresThingRow,
+  ActionRow as PostgresActionRow,
+} from './pg-adapter.js'
+
+// =============================================================================
+// ClickHouse Adapter — Stack A analytics DBProvider
+// =============================================================================
+// Per ADR-0003: Tier 3 first-class on ClickHouse. Native vector functions for
+// Tier 4 (up to 64,000 dims; cosine/L2/dot). Bulk JSONEachRow write path.
+
+export {
+  ClickHouseProvider,
+  createClickHouseProvider,
+  createClickHouseHttpFetcher,
+  bootstrapClickHouseSchema,
+} from './ch-adapter.js'
+
+export type {
+  ClickHouseProviderOptions,
+  ClickHouseHttpFetcher,
+  ClickHouseHttpFetcherOptions,
+} from './ch-adapter.js'
+
+// =============================================================================
 // DBProvider Port — SVO-shaped contract with declared capability tiers
 // =============================================================================
 // Per ADR-0003: Tier 1+2 are universal (shape unchanged from `schema/provider`);
