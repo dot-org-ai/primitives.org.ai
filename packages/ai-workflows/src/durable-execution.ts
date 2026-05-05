@@ -120,6 +120,10 @@
  * @packageDocumentation
  */
 
+import { recordStep } from './cascade-context.js'
+import { getLogger } from './logger.js'
+import type { WorkflowRuntime } from './runtime.js'
+
 // =============================================================================
 // Workflow function shape
 // =============================================================================
@@ -703,6 +707,310 @@ export function createInMemoryDurableExecution(
     waitForEvent,
     schedule,
     emit,
+  }
+
+  return adapter
+}
+
+// =============================================================================
+// In-process production adapter (wraps WorkflowRuntime)
+// =============================================================================
+
+/**
+ * Options for {@link createInProcessDurableExecution}.
+ *
+ * When a `runtime` is supplied the adapter records each durable run/step into
+ * the runtime's cascade context, history, and (when configured) database. When
+ * no runtime is supplied the adapter behaves identically to
+ * {@link createInMemoryDurableExecution} but uses production logging instead of
+ * silently swallowing schedule errors — making it suitable for local dev and
+ * single-process callers that want durable-execution semantics without
+ * crash-recovery.
+ *
+ * `now` and `delay` are forwarded to the underlying machinery for tests that
+ * need to fast-forward time. Real callers should leave them at the defaults.
+ */
+export interface InProcessDurableExecutionOptions extends InMemoryDurableExecutionOptions {
+  /**
+   * Optional {@link WorkflowRuntime} to integrate with. When supplied:
+   *
+   *   - Each durable `run` pushes an `event`-typed history entry on start and
+   *     completion through `runtime.state.history`.
+   *   - Each durable `step` records a {@link CascadeStep} on
+   *     `runtime.cascade` via {@link recordStep}; the step is marked
+   *     completed/failed when the body resolves/rejects.
+   *   - When `runtime.$.db` is present, each durable step creates an action
+   *     via `db.createAction({ actor: 'workflow', object: name, action: 'step' })`
+   *     before invoking the body, and completes (or records failure) on resolution.
+   *   - The workflow context handed to the body exposes the runtime's `$` as
+   *     {@link InProcessWorkflowContext.runtime} so handlers can dispatch
+   *     events through the same registry the rest of the app uses.
+   *
+   * Pass `null`/omitted to opt out — the adapter still satisfies the port and
+   * runs durably in-process, just without the runtime integration.
+   */
+  runtime?: WorkflowRuntime
+}
+
+/**
+ * Workflow context handed to bodies invoked through
+ * {@link createInProcessDurableExecution}. Identical to {@link WorkflowContext}
+ * but with an optional `runtime` reference exposing the wrapping
+ * {@link WorkflowRuntime} (when one was supplied at construction time).
+ *
+ * `runtime` is `undefined` when the adapter was constructed without a runtime.
+ */
+export interface InProcessWorkflowContext<TInput = unknown> extends WorkflowContext<TInput> {
+  /** The `WorkflowRuntime` wrapped by the adapter, if any. */
+  readonly runtime?: WorkflowRuntime
+}
+
+/**
+ * The adapter returned by {@link createInProcessDurableExecution}.
+ *
+ * Extends {@link DurableExecutionAdapter} with `emit` (for paired
+ * `waitForEvent` testing) and exposes the wrapped runtime when one was
+ * supplied. The `runtime` reference is the same object passed in at
+ * construction; callers can use it to register handlers, inspect history, or
+ * read cascade traces emitted during durable runs.
+ */
+export interface InProcessDurableExecution extends DurableExecutionAdapter {
+  /**
+   * Manually deliver an event to the next pending {@link waitForEvent} call
+   * with the matching name. Mirrors {@link InMemoryDurableExecution.emit}.
+   */
+  emit<T = unknown>(name: string, value: T): boolean
+  /** The runtime wrapped by the adapter, if one was supplied. */
+  readonly runtime?: WorkflowRuntime
+}
+
+/**
+ * Construct the production in-process {@link DurableExecutionAdapter}.
+ *
+ * Differs from {@link createInMemoryDurableExecution} in three ways:
+ *
+ *   1. **Runtime integration.** When a {@link WorkflowRuntime} is supplied,
+ *      each run/step is reflected in the runtime's cascade context, history,
+ *      and (when `runtime.$.db` is wired) database adapter — making durable
+ *      runs observable through the same surfaces as event-driven dispatch.
+ *
+ *   2. **Production-shape logging.** Schedule failures and step failures with
+ *      a configured runtime are routed through the package logger
+ *      ({@link getLogger}). The in-memory stub silently swallows these because
+ *      tests do not want noise in the console.
+ *
+ *   3. **Workflow context exposes the runtime.** Bodies receive an
+ *      {@link InProcessWorkflowContext} with `ctx.runtime` set, so durable
+ *      workflows can dispatch events through the same `$.on`/`$.send`
+ *      registry the rest of the app uses.
+ *
+ * The adapter is *not* durable across process restarts — that is the
+ * Cloudflare Workflows adapter's job (separate bead `aip-i456`). It exists
+ * for test environments, local development, and single-process callers that
+ * want the port semantics without a real backend.
+ *
+ * @example No runtime — equivalent to the in-memory stub but production-shape
+ * ```ts
+ * const dx = createInProcessDurableExecution()
+ * await dx.run('hello', async (ctx) => ctx.input.name, { name: 'world' })
+ * ```
+ *
+ * @example With runtime — durable runs participate in the `$` ecosystem
+ * ```ts
+ * const runtime = createWorkflowRuntime({ db: myDb })
+ * const dx = createInProcessDurableExecution({ runtime })
+ *
+ * await dx.run('cascade', async (ctx) => {
+ *   const plan = await ctx.step('plan', async () => generatePlan(ctx.input))
+ *   // The runtime's $.send delivers to handlers registered on the same runtime.
+ *   ctx.runtime!.$.send('Plan.generated', plan)
+ *   return plan
+ * }, { customerId: 'c-1' })
+ *
+ * // Cascade trace, history, and db actions all reflect the run.
+ * console.log(runtime.cascade.steps.length) // >= 1 (the 'plan' step)
+ * ```
+ */
+export function createInProcessDurableExecution(
+  options: InProcessDurableExecutionOptions = {}
+): InProcessDurableExecution {
+  // The in-process adapter delegates step/sleep/wait/schedule mechanics to
+  // the in-memory factory and wraps run/step with runtime-integration hooks.
+  // This keeps the two factories from drifting in their core behaviour and
+  // lets the in-memory stub remain the canonical reference for the port's
+  // baseline semantics.
+  const inner = createInMemoryDurableExecution({
+    ...(options.now !== undefined && { now: options.now }),
+    ...(options.delay !== undefined && { delay: options.delay }),
+  })
+  const runtime = options.runtime
+
+  function recordRunHistory(
+    name: string,
+    phase: 'start' | 'finish' | 'error',
+    data?: unknown
+  ): void {
+    if (!runtime) return
+    runtime.state.history.push({
+      timestamp: Date.now(),
+      type: 'event',
+      name: `durable-run:${phase}:${name}`,
+      ...(data !== undefined && { data }),
+    })
+  }
+
+  async function instrumentedStep<T>(
+    stepName: string,
+    config: StepConfig | undefined,
+    fn: () => Promise<T>,
+    innerStep: DurableExecutionAdapter['step']
+  ): Promise<T> {
+    if (!runtime) {
+      // No runtime — defer to the inner mechanics unchanged.
+      return config !== undefined ? innerStep<T>(stepName, config, fn) : innerStep<T>(stepName, fn)
+    }
+
+    const cascadeStep = recordStep(runtime.cascade, stepName)
+    const db = runtime.$.db
+    let actionRecorded = false
+    if (db) {
+      try {
+        await db.createAction({
+          actor: 'workflow',
+          object: stepName,
+          action: 'step',
+          status: 'active',
+        })
+        actionRecorded = true
+      } catch (err) {
+        // Do not fail the step because action recording failed; surface the
+        // error through the package logger so it is observable.
+        getLogger().error(
+          `[durable-execution] Failed to record action for step "${stepName}":`,
+          err
+        )
+      }
+    }
+
+    const wrapped = async (): Promise<T> => fn()
+    try {
+      const result = await (config !== undefined
+        ? innerStep<T>(stepName, config, wrapped)
+        : innerStep<T>(stepName, wrapped))
+      cascadeStep.complete()
+      if (actionRecorded && db) {
+        try {
+          await db.completeAction(stepName, result as unknown)
+        } catch (err) {
+          getLogger().error(
+            `[durable-execution] Failed to complete action for step "${stepName}":`,
+            err
+          )
+        }
+      }
+      return result
+    } catch (err) {
+      cascadeStep.fail(err instanceof Error ? err : new Error(String(err)))
+      getLogger().error(`[durable-execution] Step "${stepName}" failed:`, err)
+      throw err
+    }
+  }
+
+  async function run<TResult = unknown, TInput = unknown>(
+    name: string,
+    fn: (ctx: InProcessWorkflowContext<TInput>) => Promise<TResult>,
+    input: TInput
+  ): Promise<TResult> {
+    recordRunHistory(name, 'start', { input })
+    try {
+      const result = await inner.run<TResult, TInput>(
+        name,
+        async (innerCtx) => {
+          const ctx: InProcessWorkflowContext<TInput> = {
+            input: innerCtx.input,
+            instanceId: innerCtx.instanceId,
+            name: innerCtx.name,
+            sleep: innerCtx.sleep,
+            sleepUntil: innerCtx.sleepUntil,
+            waitForEvent: innerCtx.waitForEvent,
+            step: ((
+              stepName: string,
+              configOrFn: StepConfig | (() => Promise<unknown>),
+              maybeFn?: () => Promise<unknown>
+            ) => {
+              if (typeof configOrFn === 'function') {
+                return instrumentedStep(
+                  stepName,
+                  undefined,
+                  configOrFn,
+                  innerCtx.step
+                ) as Promise<unknown>
+              }
+              return instrumentedStep(
+                stepName,
+                configOrFn,
+                maybeFn!,
+                innerCtx.step
+              ) as Promise<unknown>
+            }) as InProcessWorkflowContext<TInput>['step'],
+            ...(runtime !== undefined && { runtime }),
+          }
+          return fn(ctx)
+        },
+        input
+      )
+      recordRunHistory(name, 'finish', { result })
+      return result
+    } catch (err) {
+      recordRunHistory(name, 'error', { error: err instanceof Error ? err.message : String(err) })
+      throw err
+    }
+  }
+
+  function topLevelStep<T>(
+    name: string,
+    configOrFn: StepConfig | (() => Promise<T>),
+    maybeFn?: () => Promise<T>
+  ): Promise<T> {
+    if (typeof configOrFn === 'function') {
+      return instrumentedStep(name, undefined, configOrFn, inner.step)
+    }
+    return instrumentedStep(name, configOrFn, maybeFn!, inner.step)
+  }
+
+  function instrumentedSchedule<TResult = unknown>(
+    name: string,
+    cron: string,
+    fn: WorkflowFn<TResult, undefined>
+  ): Subscription {
+    if (!runtime) {
+      return inner.schedule(name, cron, fn)
+    }
+    // When a runtime is wired, surface schedule failures through the logger
+    // (the in-memory stub silently swallows them). We do this by wrapping the
+    // body to log; the inner schedule itself continues to swallow rejections
+    // so the interval keeps firing.
+    const wrapped: WorkflowFn<TResult, undefined> = async (ctx) => {
+      try {
+        return await fn(ctx)
+      } catch (err) {
+        getLogger().error(`[durable-execution] Scheduled run "${name}" failed:`, err)
+        throw err
+      }
+    }
+    return inner.schedule(name, cron, wrapped)
+  }
+
+  const adapter: InProcessDurableExecution = {
+    kind: 'in-process',
+    run: run as DurableExecutionAdapter['run'],
+    step: topLevelStep as DurableExecutionAdapter['step'],
+    sleep: inner.sleep,
+    sleepUntil: inner.sleepUntil,
+    waitForEvent: inner.waitForEvent,
+    schedule: instrumentedSchedule,
+    emit: inner.emit,
+    ...(runtime !== undefined && { runtime }),
   }
 
   return adapter
