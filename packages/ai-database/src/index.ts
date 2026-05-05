@@ -655,6 +655,29 @@ export type {
 } from './cascade-write-strategy.js'
 
 // =============================================================================
+// Pipelines → Iceberg analytical fan-out emitter (aip-0ypt)
+// =============================================================================
+// Per ADR-0003: Stack B's dual-write pattern. DO SQLite is the transactional
+// source of truth; Cloudflare Pipelines fans out into R2 Iceberg as the
+// analytical SOR. The emitter is fire-and-forget on the cascade hot path —
+// failures are logged and swallowed so analytical fan-out can never break
+// cascade correctness.
+
+export {
+  createPipelinesIcebergEmitter,
+  createHttpPipelinesIcebergEmitter,
+} from './pipelines-iceberg-emitter.js'
+
+export type {
+  PipelinesStreamBindingLike,
+  PipelinesIcebergEmitterOptions,
+  HttpPipelinesEmitterOptions,
+  PipelinesEmitterLoggerLike,
+  IcebergThingRow,
+  IcebergActionRow,
+} from './pipelines-iceberg-emitter.js'
+
+// =============================================================================
 // Cascade Orchestrator — the moat work (aip-8yal)
 // =============================================================================
 // Real LLM-driven cascade generation built on the canonical SVO foundation:
