@@ -5,12 +5,13 @@
 
 ## Context
 
-`ai-database` needs a storage strategy with first-class adapters. Four candidates and a key insight:
+`ai-database` needs a storage strategy with first-class adapters. Five candidates and a key insight:
 
-- **DO SQLite** — Cloudflare Durable Objects with SQLite. Native to Workers. Excellent for **transactional** workloads with **per-tenant** isolation; scales by database count, not by size (per-DO limit ~10GB). Hard to query *across* databases — which is exactly the analytics gap.
-- **R2 SQL** — Cloudflare R2 with SQL. Native to Workers. Earlier versions were hard-stops for our analytics needs; current generation is significantly improved but unproven for our workloads.
-- **Postgres via Hyperdrive** — Cloudflare's pg connection pooler binding (Workers); standard pg client (Node). Transactional. Runtime-portable.
+- **DO SQLite** — Cloudflare Durable Objects with SQLite. Native to Workers. Excellent for **transactional** workloads with **per-tenant** isolation; scales by database count, not by size (per-DO limit ~10GB). Hard to query *across* databases. No native vector support (requires Vectorize sidecar).
+- **R2 SQL** — Cloudflare R2 with SQL. Native to Workers. Earlier versions were hard-stops; current generation improved but unproven for our workloads.
+- **Postgres via Hyperdrive** — Cloudflare's pg connection pooler binding (Workers); standard pg client (Node). Transactional. Runtime-portable. Native vectors via pgvector.
 - **ClickHouse** — column-store for analytics, events, experiments, large generation logs. HTTP fetch. Runtime-portable.
+- **libSQL / Turso** — SQLite-derivative with **native vector embeddings**. Embeddable (no network round-trips). Runtime-portable (Workers, Node, anywhere). Turso managed mode adds edge replication. Per-cascade insert throughput should match DO SQLite (both SQLite-derived); sharding pattern is different (one libSQL DB per cascade in-process, not per-actor).
 
 History: DO SQLite was built first as the canonical Workers-native storage. Hit limits on **analytical** workloads (row-store + per-DO scale + cross-database query difficulty). Pivoted to ClickHouse for events/analytics/experiments. R2 SQL was evaluated and found insufficient at the time.
 
@@ -32,6 +33,8 @@ The `DBProvider` port serves all four adapters with declared capabilities:
 **Stack B (cascade-heavy default — Cloudflare-native):** DO SQLite (transactional, per-cascade isolation, scales horizontally by database count) + ClickHouse (analytical) + **Vectorize sidecar** when vector search is needed. Bridge: Pipelines → R2 → S3 Queue → CH ingest. **This is the default for the moat workload — cascading AI generations.** A single cascade can produce thousands of writes (entity + rels + sub-entities + sub-rels). Per-cascade DO isolation gives parallel write paths each at full single-DO throughput. PG's centralized-write model hits its ceiling (few-thousand inserts/sec) within one active cascade. Vectorize binding is the operational cost.
 
 **Stack A (moderate-scale or non-cascade default — portable):** Postgres (transactional + native pgvector) + ClickHouse (analytical + native vector functions). Both run on Workers (PG via Hyperdrive, CH via HTTP) or on Node. Bridge: Debezium-style replication or app-layer fan-out. **Vector search clean, no sidecar.** Right choice for general-purpose AI primitive use, smaller cascades, broader adoption, simpler ops, or callers who specifically don't want Cloudflare lock-in. Hits the write ceiling on cascade-heavy workloads.
+
+**Stack C (SQLite-shape + native vectors — portable):** libSQL/Turso (transactional + native vector embeddings + embeddable, no network round-trips) + ClickHouse (analytical). Sweet spot between Stack A and Stack B: SQLite-shape simplicity, native vectors without a sidecar, runtime-portable (Workers / Node / anywhere). Cascade throughput needs validation against DO SQLite (one libSQL DB per cascade in-process vs one DO per cascade); sharding pattern is process-level rather than per-actor. Good fit when callers want SQLite shape + vectors without Cloudflare lock-in or the operational weight of PG.
 
 **Storage choice = workload characteristics, not preference.** Callers running heavy cascade generation pick Stack B; callers running general AI primitives at moderate scale pick Stack A. The same `DBProvider` port serves both.
 
