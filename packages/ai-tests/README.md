@@ -2,7 +2,17 @@
 
 ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
 
-Test utilities via RPC. Run tests anywhere—Workers, sandboxes, or locally.
+Dev-time test assertions for AI behavior. Chai-style `expect` / `should` / `assert` plus a lightweight runner, exposed via RPC so you can run the same tests locally, in Workers, or inside `ai-evaluate` sandboxes.
+
+## Lifecycle
+
+**Dev time.** `ai-tests` is for asserting AI outputs while you author and CI a system — alongside vitest, in test files, before the code ships. Reach for it when you want Chai-compatible assertions that work uniformly across local Node, Cloudflare Workers, and sandboxed code execution.
+
+## Not for
+
+- **Production-time runtime checks.** Once your code is serving traffic, use a guardrail or eval pattern (e.g., schema validation, output classifiers, `ai-experiments` for A/B comparisons) instead of test assertions. Failed `expect()` calls throw — that's right for tests, wrong for production.
+- **Sandboxing untrusted code.** That's [`ai-evaluate`](../ai-evaluate)'s job.
+- **Production traffic splitting or outcome measurement.** That's [`ai-experiments`](../ai-experiments).
 
 ```typescript
 import { expect, createRunner } from 'ai-tests'

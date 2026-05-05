@@ -1,7 +1,7 @@
 {
   "name": "ai-evaluate",
   "version": "2.2.0",
-  "description": "Secure code execution in sandboxed environments",
+  "description": "Runtime sandboxed execution of AI-generated code in V8 isolates",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
