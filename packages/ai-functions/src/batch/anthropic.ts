@@ -6,25 +6,32 @@
  * - 24-hour turnaround
  * - Up to 10,000 requests per batch
  *
+ * This file is a small adapter on top of the BatchProvider port (`./provider.js`).
+ * It owns only the Anthropic-specific request/response shapes and HTTP calls;
+ * shared concerns (polling, JSON-Schema conversion, JSON parsing) live in the port.
+ *
  * @see https://docs.anthropic.com/en/docs/build-with-claude/message-batches
  *
  * @packageDocumentation
  */
 
+import { schema as convertSchema } from '../schema.js'
 import {
+  pollUntilComplete,
   registerBatchAdapter,
+  tryParseJson,
+  zodToJsonSchema,
   type BatchAdapter,
   type BatchItem,
   type BatchJob,
   type BatchQueueOptions,
   type BatchResult,
-  type BatchSubmitResult,
   type BatchStatus,
-} from '../batch-queue.js'
-import { schema as convertSchema } from '../schema.js'
+  type BatchSubmitResult,
+} from './provider.js'
 
 // ============================================================================
-// Types
+// Provider-specific types
 // ============================================================================
 
 interface AnthropicBatchRequest {
@@ -87,7 +94,7 @@ interface AnthropicBatch {
 }
 
 // ============================================================================
-// Anthropic Client
+// Anthropic client
 // ============================================================================
 
 let anthropicApiKey: string | undefined
@@ -95,9 +102,7 @@ let anthropicBaseUrl = 'https://api.anthropic.com/v1'
 const ANTHROPIC_VERSION = '2023-06-01'
 const ANTHROPIC_BETA = 'message-batches-2024-09-24'
 
-/**
- * Configure the Anthropic client
- */
+/** Configure the Anthropic client. */
 export function configureAnthropic(options: { apiKey?: string; baseUrl?: string }): void {
   if (options.apiKey) anthropicApiKey = options.apiKey
   if (options.baseUrl) anthropicBaseUrl = options.baseUrl
@@ -113,20 +118,23 @@ function getApiKey(): string {
   return key
 }
 
+function anthropicHeaders(): Record<string, string> {
+  return {
+    'x-api-key': getApiKey(),
+    'anthropic-version': ANTHROPIC_VERSION,
+    'anthropic-beta': ANTHROPIC_BETA,
+    'Content-Type': 'application/json',
+  }
+}
+
 async function anthropicRequest<T>(
   method: 'GET' | 'POST',
   path: string,
   body?: unknown
 ): Promise<T> {
-  const url = `${anthropicBaseUrl}${path}`
-  const response = await fetch(url, {
+  const response = await fetch(`${anthropicBaseUrl}${path}`, {
     method,
-    headers: {
-      'x-api-key': getApiKey(),
-      'anthropic-version': ANTHROPIC_VERSION,
-      'anthropic-beta': ANTHROPIC_BETA,
-      'Content-Type': 'application/json',
-    },
+    headers: anthropicHeaders(),
     ...(body !== undefined && { body: JSON.stringify(body) }),
   })
 
@@ -138,10 +146,6 @@ async function anthropicRequest<T>(
   return response.json()
 }
 
-// ============================================================================
-// Status Mapping
-// ============================================================================
-
 function mapStatus(batch: AnthropicBatch): BatchStatus {
   if (batch.cancel_initiated_at) {
     return batch.processing_status === 'ended' ? 'cancelled' : 'cancelling'
@@ -152,8 +156,30 @@ function mapStatus(batch: AnthropicBatch): BatchStatus {
   return 'in_progress'
 }
 
+function toBatchJob(batch: AnthropicBatch, totalItemsHint?: number): BatchJob {
+  const totalFromCounts =
+    batch.request_counts.processing +
+    batch.request_counts.succeeded +
+    batch.request_counts.errored +
+    batch.request_counts.canceled +
+    batch.request_counts.expired
+
+  return {
+    id: batch.id,
+    provider: 'anthropic',
+    status: mapStatus(batch),
+    totalItems: totalItemsHint ?? totalFromCounts,
+    completedItems: batch.request_counts.succeeded,
+    failedItems:
+      batch.request_counts.errored + batch.request_counts.expired + batch.request_counts.canceled,
+    createdAt: new Date(batch.created_at),
+    ...(batch.ended_at && { completedAt: new Date(batch.ended_at) }),
+    expiresAt: new Date(batch.expires_at),
+  }
+}
+
 // ============================================================================
-// Anthropic Batch Adapter
+// Anthropic adapter (BatchProvider port)
 // ============================================================================
 
 const anthropicAdapter: BatchAdapter = {
@@ -161,7 +187,6 @@ const anthropicAdapter: BatchAdapter = {
     const model = options.model || 'claude-sonnet-4-20250514'
     const maxTokens = 4096
 
-    // Build batch requests
     const requests: AnthropicBatchRequest[] = items.map((item) => {
       const request: AnthropicBatchRequest = {
         custom_id: item.id,
@@ -170,20 +195,19 @@ const anthropicAdapter: BatchAdapter = {
           max_tokens: item.options?.maxTokens || maxTokens,
           messages: [{ role: 'user', content: item.prompt }],
           ...(item.options?.system !== undefined && { system: item.options.system }),
-          ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
+          ...(item.options?.temperature !== undefined && {
+            temperature: item.options.temperature,
+          }),
         },
       }
 
-      // Add JSON schema as a tool if provided
       if (item.schema) {
         const zodSchema = convertSchema(item.schema)
-        const jsonSchema = zodToJsonSchema(zodSchema)
-
         request.params.tools = [
           {
             name: 'structured_response',
             description: 'Generate a structured response matching the schema',
-            input_schema: jsonSchema,
+            input_schema: zodToJsonSchema(zodSchema),
           },
         ]
         request.params.tool_choice = { type: 'tool', name: 'structured_response' }
@@ -192,50 +216,22 @@ const anthropicAdapter: BatchAdapter = {
       return request
     })
 
-    // Create the batch
     const batch = await anthropicRequest<AnthropicBatch>('POST', '/messages/batches', {
       requests,
     })
 
-    const job: BatchJob = {
-      id: batch.id,
-      provider: 'anthropic',
-      status: mapStatus(batch),
-      totalItems: items.length,
-      completedItems: batch.request_counts.succeeded,
-      failedItems:
-        batch.request_counts.errored + batch.request_counts.expired + batch.request_counts.canceled,
-      createdAt: new Date(batch.created_at),
-      expiresAt: new Date(batch.expires_at),
-      ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
+    const job = toBatchJob(batch, items.length)
+    if (options.webhookUrl !== undefined) {
+      job.webhookUrl = options.webhookUrl
     }
 
-    // Create completion promise
     const completion = this.waitForCompletion(batch.id)
-
     return { job, completion }
   },
 
   async getStatus(batchId: string): Promise<BatchJob> {
     const batch = await anthropicRequest<AnthropicBatch>('GET', `/messages/batches/${batchId}`)
-
-    return {
-      id: batch.id,
-      provider: 'anthropic',
-      status: mapStatus(batch),
-      totalItems:
-        batch.request_counts.processing +
-        batch.request_counts.succeeded +
-        batch.request_counts.errored +
-        batch.request_counts.canceled +
-        batch.request_counts.expired,
-      completedItems: batch.request_counts.succeeded,
-      failedItems:
-        batch.request_counts.errored + batch.request_counts.expired + batch.request_counts.canceled,
-      createdAt: new Date(batch.created_at),
-      ...(batch.ended_at && { completedAt: new Date(batch.ended_at) }),
-      expiresAt: new Date(batch.expires_at),
-    }
+    return toBatchJob(batch)
   },
 
   async cancel(batchId: string): Promise<void> {
@@ -249,141 +245,64 @@ const anthropicAdapter: BatchAdapter = {
       throw new Error(`Batch not complete. Status: ${status.status}`)
     }
 
-    // Fetch results (Anthropic returns them directly via the API)
+    // Anthropic returns results via a signed URL on the batch object.
     const batch = await anthropicRequest<AnthropicBatch>('GET', `/messages/batches/${batchId}`)
-
     if (!batch.results_url) {
       throw new Error('No results URL available')
     }
 
-    // Download results from the URL
-    const response = await fetch(batch.results_url, {
-      headers: {
-        'x-api-key': getApiKey(),
-        'anthropic-version': ANTHROPIC_VERSION,
-        'anthropic-beta': ANTHROPIC_BETA,
-      },
-    })
-
+    const response = await fetch(batch.results_url, { headers: anthropicHeaders() })
     if (!response.ok) {
       throw new Error(`Failed to fetch results: ${response.status}`)
     }
 
-    const content = await response.text()
-    const lines = content.trim().split('\n')
-    const results: BatchResult[] = []
-
-    for (const line of lines) {
-      const result: AnthropicBatchResult = JSON.parse(line)
-
-      if (result.result.type === 'succeeded' && result.result.message) {
-        const message = result.result.message
-        let extractedResult: unknown
-
-        // Extract from tool use or text
-        const toolUse = message.content.find((c) => c.type === 'tool_use')
-        const textContent = message.content.find((c) => c.type === 'text')
-
-        if (toolUse?.input) {
-          extractedResult = toolUse.input
-        } else if (textContent?.text) {
-          // Try to parse as JSON
-          try {
-            extractedResult = JSON.parse(textContent.text)
-          } catch {
-            extractedResult = textContent.text
-          }
-        }
-
-        results.push({
-          id: result.custom_id,
-          customId: result.custom_id,
-          status: 'completed',
-          result: extractedResult,
-          usage: {
-            promptTokens: message.usage.input_tokens,
-            completionTokens: message.usage.output_tokens,
-            totalTokens: message.usage.input_tokens + message.usage.output_tokens,
-          },
-        })
-      } else {
-        results.push({
-          id: result.custom_id,
-          customId: result.custom_id,
-          status: 'failed',
-          error: result.result.error?.message || `Request ${result.result.type}`,
-        })
-      }
-    }
-
-    return results
+    const lines = (await response.text()).trim().split('\n')
+    return lines.map(parseAnthropicResult)
   },
 
   async waitForCompletion(batchId: string, pollInterval = 5000): Promise<BatchResult[]> {
-    while (true) {
-      const status = await this.getStatus(batchId)
-
-      if (status.status === 'completed' || status.status === 'cancelled') {
-        return this.getResults(batchId)
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, pollInterval))
-    }
+    return pollUntilComplete(this, batchId, { pollInterval })
   },
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
+function parseAnthropicResult(line: string): BatchResult {
+  const result: AnthropicBatchResult = JSON.parse(line)
 
-/** Zod schema definition structure for type introspection */
-interface ZodDef {
-  typeName?: string
-  type?: unknown
-  shape?: () => Record<string, unknown>
-}
+  if (result.result.type === 'succeeded' && result.result.message) {
+    const message = result.result.message
+    const toolUse = message.content.find((c) => c.type === 'tool_use')
+    const textContent = message.content.find((c) => c.type === 'text')
 
-/** Zod schema with _def property for introspection */
-interface ZodSchemaLike {
-  _def?: ZodDef
-}
-
-/**
- * Simple Zod to JSON Schema converter
- */
-function zodToJsonSchema(zodSchema: unknown): Record<string, unknown> {
-  const schema = zodSchema as ZodSchemaLike
-
-  if (!schema._def) {
-    return { type: 'object' }
-  }
-
-  const typeName = schema._def.typeName
-
-  switch (typeName) {
-    case 'ZodString':
-      return { type: 'string' }
-    case 'ZodNumber':
-      return { type: 'number' }
-    case 'ZodBoolean':
-      return { type: 'boolean' }
-    case 'ZodArray':
-      return { type: 'array', items: zodToJsonSchema(schema._def.type) }
-    case 'ZodObject': {
-      const shape = schema._def.shape?.() ?? {}
-      const properties: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(shape)) {
-        properties[key] = zodToJsonSchema(value)
-      }
-      return { type: 'object', properties, required: Object.keys(properties) }
+    let extractedResult: unknown
+    if (toolUse?.input) {
+      extractedResult = toolUse.input
+    } else if (textContent?.text) {
+      extractedResult = tryParseJson(textContent.text)
     }
-    default:
-      return { type: 'object' }
+
+    return {
+      id: result.custom_id,
+      customId: result.custom_id,
+      status: 'completed',
+      result: extractedResult,
+      usage: {
+        promptTokens: message.usage.input_tokens,
+        completionTokens: message.usage.output_tokens,
+        totalTokens: message.usage.input_tokens + message.usage.output_tokens,
+      },
+    }
+  }
+
+  return {
+    id: result.custom_id,
+    customId: result.custom_id,
+    status: 'failed',
+    error: result.result.error?.message || `Request ${result.result.type}`,
   }
 }
 
 // ============================================================================
-// Register Adapter
+// Register adapter
 // ============================================================================
 
 registerBatchAdapter('anthropic', anthropicAdapter)

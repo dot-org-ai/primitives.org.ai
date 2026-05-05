@@ -1,31 +1,34 @@
 /**
  * AWS Bedrock Batch Inference Adapter
  *
- * Implements batch processing using AWS Bedrock's batch inference API.
- * Bedrock batch inference provides cost-effective processing for large workloads.
+ * Bedrock has a true batch inference API (S3-driven) and a runtime invoke API.
+ * The "batch" adapter here uses concurrent runtime invocations as a fallback
+ * (no S3 setup required); `createBedrockBatchJob` is exported separately for
+ * callers who want to drive the real S3-based batch flow directly.
  *
  * @see https://docs.aws.amazon.com/bedrock/latest/userguide/batch-inference.html
  *
  * @packageDocumentation
  */
 
+import { getLogger } from '../logger.js'
 import {
+  LocalJobStore,
+  processConcurrently,
   registerBatchAdapter,
   registerFlexAdapter,
+  tryParseJson,
   type BatchAdapter,
-  type FlexAdapter,
   type BatchItem,
   type BatchJob,
   type BatchQueueOptions,
   type BatchResult,
   type BatchSubmitResult,
-  type BatchStatus,
-} from '../batch-queue.js'
-import { schema as convertSchema } from '../schema.js'
-import { getLogger } from '../logger.js'
+  type FlexAdapter,
+} from './provider.js'
 
 // ============================================================================
-// Types
+// Provider-specific types
 // ============================================================================
 
 interface BedrockBatchRequest {
@@ -39,50 +42,8 @@ interface BedrockBatchRequest {
   }
 }
 
-interface BedrockBatchResponse {
-  recordId: string
-  modelOutput?: {
-    content: Array<{ type: string; text?: string }>
-    usage: {
-      input_tokens: number
-      output_tokens: number
-    }
-    stop_reason: string
-  }
-  error?: {
-    errorCode: string
-    errorMessage: string
-  }
-}
-
-interface BedrockBatchJobStatus {
-  jobArn: string
-  jobName: string
-  status: 'Submitted' | 'InProgress' | 'Completed' | 'Failed' | 'Stopping' | 'Stopped'
-  modelId: string
-  inputDataConfig: {
-    s3InputDataConfig: {
-      s3Uri: string
-    }
-  }
-  outputDataConfig: {
-    s3OutputDataConfig: {
-      s3Uri: string
-    }
-  }
-  creationTime: string
-  lastModifiedTime: string
-  endTime?: string
-  failureMessage?: string
-  statistics?: {
-    inputRecordCount: number
-    outputRecordCount: number
-    errorCount: number
-  }
-}
-
 // ============================================================================
-// AWS Configuration
+// AWS configuration
 // ============================================================================
 
 let awsRegion: string | undefined
@@ -92,13 +53,10 @@ let awsSessionToken: string | undefined
 let s3Bucket: string | undefined
 let roleArn: string | undefined
 
-// AI Gateway configuration (optional - for routing through Cloudflare AI Gateway)
 let gatewayUrl: string | undefined
 let gatewayToken: string | undefined
 
-/**
- * Configure AWS credentials and settings
- */
+/** Configure AWS credentials and settings. */
 export function configureAWSBedrock(options: {
   region?: string
   accessKeyId?: string
@@ -121,7 +79,18 @@ export function configureAWSBedrock(options: {
   if (options.gatewayToken) gatewayToken = options.gatewayToken
 }
 
-function getConfig() {
+interface BedrockConfig {
+  region: string
+  accessKeyId: string
+  secretAccessKey: string
+  sessionToken?: string | undefined
+  bucket: string
+  role: string | undefined
+  gatewayUrl: string | undefined
+  gatewayToken: string | undefined
+}
+
+function getConfig(): BedrockConfig {
   const region =
     awsRegion || process.env['AWS_REGION'] || process.env['AWS_DEFAULT_REGION'] || 'us-east-1'
   const accessKeyId = awsAccessKeyId || process.env['AWS_ACCESS_KEY_ID']
@@ -130,11 +99,9 @@ function getConfig() {
   const bucket = s3Bucket || process.env['BEDROCK_BATCH_S3_BUCKET']
   const role = roleArn || process.env['BEDROCK_BATCH_ROLE_ARN']
 
-  // Check for AI Gateway configuration
   const gwUrl = gatewayUrl || process.env['AI_GATEWAY_URL']
   const gwToken = gatewayToken || process.env['AI_GATEWAY_TOKEN']
 
-  // If using gateway, we don't need AWS credentials
   if (gwUrl && gwToken) {
     return {
       region,
@@ -171,19 +138,16 @@ function getConfig() {
 }
 
 // ============================================================================
-// AWS Signature V4 (Simplified)
+// AWS SigV4 (delegated to optional @smithy/signature-v4 if available)
 // ============================================================================
 
 async function signRequest(
   method: string,
   url: string,
   body: string,
-  config: ReturnType<typeof getConfig>,
+  config: BedrockConfig,
   service: string
 ): Promise<Headers> {
-  // In production, use @aws-sdk/signature-v4 or similar
-  // This is a simplified implementation for demonstration
-
   const headers = new Headers({
     'Content-Type': 'application/json',
     'X-Amz-Date': new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''),
@@ -193,21 +157,14 @@ async function signRequest(
     headers.set('X-Amz-Security-Token', config.sessionToken)
   }
 
-  // For actual implementation, compute proper AWS Signature V4
-  // This requires crypto operations that vary by environment
-
-  // Fallback: Use AWS SDK if available
   try {
-    // Dynamic import to avoid build-time dependency
+    // Optional dependency — present in production, absent in dev/test.
     // @ts-expect-error - Optional dependency
     const signatureV4Module = await import('@smithy/signature-v4')
     // @ts-expect-error - Optional dependency
     const sha256Module = await import('@aws-crypto/sha256-js')
 
-    const SignatureV4 = signatureV4Module.SignatureV4
-    const Sha256 = sha256Module.Sha256
-
-    const signer = new SignatureV4({
+    const signer = new signatureV4Module.SignatureV4({
       service,
       region: config.region,
       credentials: {
@@ -215,7 +172,7 @@ async function signRequest(
         secretAccessKey: config.secretAccessKey,
         sessionToken: config.sessionToken,
       },
-      sha256: Sha256,
+      sha256: sha256Module.Sha256,
     })
 
     const signedRequest = await signer.sign({
@@ -228,8 +185,6 @@ async function signRequest(
 
     return new Headers(signedRequest.headers as Record<string, string>)
   } catch {
-    // AWS SDK not available - return basic headers
-    // In production, the SDK should always be available
     getLogger().warn(
       'AWS SDK not available for request signing. Install @smithy/signature-v4 and @aws-crypto/sha256-js'
     )
@@ -238,75 +193,49 @@ async function signRequest(
 }
 
 // ============================================================================
-// In-memory job tracking
+// Local job tracking
 // ============================================================================
 
-const pendingJobs = new Map<
-  string,
-  {
-    items: BatchItem[]
-    options: BatchQueueOptions
-    jobArn?: string
-    results: BatchResult[]
-    status: BatchStatus
-    createdAt: Date
-    completedAt?: Date
-  }
->()
-
-let jobCounter = 0
+const jobs = new LocalJobStore('bedrock_batch')
 
 // ============================================================================
-// Bedrock Batch Adapter
+// Bedrock batch adapter (BatchProvider port)
 // ============================================================================
 
-/**
- * AWS Bedrock batch adapter
- *
- * Bedrock batch inference:
- * 1. Uploads input JSONL to S3
- * 2. Creates a batch inference job
- * 3. Results are written to S3
- * 4. Download and parse results
- *
- * Note: This requires S3 bucket access and proper IAM roles.
- */
 const bedrockAdapter: BatchAdapter = {
   async submit(items: BatchItem[], options: BatchQueueOptions): Promise<BatchSubmitResult> {
     const config = getConfig()
-    const jobId = `bedrock_batch_${++jobCounter}_${Date.now()}`
-
-    // Default to Claude on Bedrock
     const model = options.model || 'anthropic.claude-3-sonnet-20240229-v1:0'
+    const { id, state } = jobs.create(items, options)
 
-    // Store job state
-    pendingJobs.set(jobId, {
-      items,
-      options,
-      results: [],
-      status: 'pending',
-      createdAt: new Date(),
-    })
-
-    // For true Bedrock batch processing:
-    // 1. Create JSONL file with requests
-    // 2. Upload to S3
-    // 3. Create batch inference job via Bedrock API
-    // 4. Poll for completion
-    // 5. Download and parse results from S3
-
-    // For now, we implement a concurrent processing approach
-    // (similar to Cloudflare) that works without S3 setup
-    const completion = processBedrockRequestsConcurrently(jobId, items, config, model, options)
+    // Drive the job state machine in the background.
+    const completion = (async () => {
+      state.status = 'in_progress'
+      const results = await processConcurrently(
+        items,
+        (item) => processBedrockItem(item, config, model),
+        {
+          concurrency: 5, // Bedrock has stricter rate limits.
+          delayBetweenWaves: 1000,
+          onWaveComplete: (partial) => {
+            state.results = partial
+          },
+        }
+      )
+      state.results = results
+      state.status = results.every((r) => r.status === 'completed') ? 'completed' : 'failed'
+      state.completedAt = new Date()
+      return results
+    })()
 
     const job: BatchJob = {
-      id: jobId,
+      id,
       provider: 'bedrock',
       status: 'pending',
       totalItems: items.length,
       completedItems: 0,
       failedItems: 0,
-      createdAt: new Date(),
+      createdAt: state.createdAt,
       ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
     }
 
@@ -314,137 +243,49 @@ const bedrockAdapter: BatchAdapter = {
   },
 
   async getStatus(batchId: string): Promise<BatchJob> {
-    const job = pendingJobs.get(batchId)
-    if (!job) {
-      throw new Error(`Batch not found: ${batchId}`)
-    }
-
-    const completedItems = job.results.filter((r) => r.status === 'completed').length
-    const failedItems = job.results.filter((r) => r.status === 'failed').length
-
-    return {
-      id: batchId,
-      provider: 'bedrock',
-      status: job.status,
-      totalItems: job.items.length,
-      completedItems,
-      failedItems,
-      createdAt: job.createdAt,
-      ...(job.completedAt && { completedAt: job.completedAt }),
-    }
+    return jobs.snapshot(batchId, 'bedrock')
   },
 
   async cancel(batchId: string): Promise<void> {
-    const job = pendingJobs.get(batchId)
-    if (job) {
-      job.status = 'cancelled'
+    if (!jobs.has(batchId)) return
+    const state = jobs.get(batchId)
+    state.status = 'cancelled'
 
-      // If we have a Bedrock job ARN, cancel it
-      if (job.jobArn) {
-        const config = getConfig()
-        const url = `https://bedrock.${
-          config.region
-        }.amazonaws.com/model-invocation-job/${encodeURIComponent(job.jobArn)}/stop`
-
-        try {
-          await fetch(url, {
-            method: 'POST',
-            headers: await signRequest('POST', url, '', config, 'bedrock'),
-          })
-        } catch (error) {
-          getLogger().warn('Failed to cancel Bedrock job:', error)
-        }
+    const jobArn = state.meta?.['jobArn'] as string | undefined
+    if (jobArn) {
+      const config = getConfig()
+      const url = `https://bedrock.${
+        config.region
+      }.amazonaws.com/model-invocation-job/${encodeURIComponent(jobArn)}/stop`
+      try {
+        await fetch(url, {
+          method: 'POST',
+          headers: await signRequest('POST', url, '', config, 'bedrock'),
+        })
+      } catch (error) {
+        getLogger().warn('Failed to cancel Bedrock job:', error)
       }
     }
   },
 
   async getResults(batchId: string): Promise<BatchResult[]> {
-    const job = pendingJobs.get(batchId)
-    if (!job) {
-      throw new Error(`Batch not found: ${batchId}`)
-    }
-    return job.results
+    return jobs.get(batchId).results
   },
 
   async waitForCompletion(batchId: string, pollInterval = 5000): Promise<BatchResult[]> {
-    const job = pendingJobs.get(batchId)
-    if (!job) {
-      throw new Error(`Batch not found: ${batchId}`)
-    }
-
-    while (job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled') {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval))
-    }
-
-    return job.results
+    return jobs.waitForCompletion(batchId, pollInterval)
   },
 }
 
 // ============================================================================
-// Processing (Concurrent Mode)
+// Per-item processing
 // ============================================================================
-
-/**
- * Process Bedrock requests concurrently
- * This is a fallback when true batch inference isn't configured
- */
-async function processBedrockRequestsConcurrently(
-  jobId: string,
-  items: BatchItem[],
-  config: ReturnType<typeof getConfig>,
-  model: string,
-  options: BatchQueueOptions
-): Promise<BatchResult[]> {
-  const job = pendingJobs.get(jobId)
-  if (!job) {
-    throw new Error(`Job not found: ${jobId}`)
-  }
-
-  job.status = 'in_progress'
-
-  // Process with concurrency limit
-  const CONCURRENCY = 5 // Bedrock has stricter rate limits
-  const results: BatchResult[] = []
-
-  for (let i = 0; i < items.length; i += CONCURRENCY) {
-    const batch = items.slice(i, i + CONCURRENCY)
-
-    const batchResults = await Promise.all(
-      batch.map(async (item) => {
-        try {
-          return await processBedrockItem(item, config, model)
-        } catch (error) {
-          return {
-            id: item.id,
-            customId: item.id,
-            status: 'failed' as const,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          }
-        }
-      })
-    )
-
-    results.push(...batchResults)
-    job.results = results
-
-    // Respect rate limits
-    if (i + CONCURRENCY < items.length) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-    }
-  }
-
-  job.status = results.every((r) => r.status === 'completed') ? 'completed' : 'failed'
-  job.completedAt = new Date()
-
-  return results
-}
 
 async function processBedrockItem(
   item: BatchItem,
-  config: ReturnType<typeof getConfig>,
+  config: BedrockConfig,
   model: string
 ): Promise<BatchResult> {
-  // Check if using AI Gateway
   if (config.gatewayUrl && config.gatewayToken) {
     return processBedrockItemViaGateway(item, config, model)
   }
@@ -453,153 +294,35 @@ async function processBedrockItem(
     model
   )}/invoke`
 
-  // Build the request body based on the model type
-  let body: Record<string, unknown>
-
-  if (model.includes('anthropic')) {
-    // Anthropic models on Bedrock
-    body = {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: item.options?.maxTokens || 4096,
-      messages: [{ role: 'user', content: item.prompt }],
-      ...(item.options?.system !== undefined && { system: item.options.system }),
-      ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
-    }
-  } else if (model.includes('amazon')) {
-    // Amazon Titan models
-    body = {
-      inputText: item.prompt,
-      textGenerationConfig: {
-        maxTokenCount: item.options?.maxTokens || 4096,
-        temperature: item.options?.temperature || 0.7,
-      },
-    }
-  } else if (model.includes('meta')) {
-    // Meta Llama models
-    body = {
-      prompt: item.prompt,
-      max_gen_len: item.options?.maxTokens || 4096,
-      temperature: item.options?.temperature || 0.7,
-    }
-  } else if (model.includes('mistral')) {
-    // Mistral models
-    body = {
-      prompt: `<s>[INST] ${item.prompt} [/INST]`,
-      max_tokens: item.options?.maxTokens || 4096,
-      temperature: item.options?.temperature || 0.7,
-    }
-  } else {
-    // Generic format (Claude-style)
-    body = {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: item.options?.maxTokens || 4096,
-      messages: [{ role: 'user', content: item.prompt }],
-      ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
-    }
-  }
-
+  const body = buildBedrockRequestBody(item, model)
   const bodyStr = JSON.stringify(body)
   const headers = await signRequest('POST', url, bodyStr, config, 'bedrock')
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: bodyStr,
-  })
-
+  const response = await fetch(url, { method: 'POST', headers, body: bodyStr })
   if (!response.ok) {
     const error = await response.text()
     throw new Error(`Bedrock API error: ${response.status} ${error}`)
   }
 
-  const data = (await response.json()) as {
-    // Anthropic format
-    content?: Array<{ type: string; text?: string }>
-    usage?: { input_tokens: number; output_tokens: number }
-    // Titan format
-    results?: Array<{ outputText: string; tokenCount: number }>
-    // Llama/Mistral format
-    generation?: string
-    generation_token_count?: number
-    prompt_token_count?: number
-  }
-
-  // Extract content based on model response format
-  let content: string | undefined
-  let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
-
-  if (data.content) {
-    // Anthropic format
-    const textContent = data.content.find((c) => c.type === 'text')
-    content = textContent?.text
-    if (data.usage) {
-      usage = {
-        promptTokens: data.usage.input_tokens,
-        completionTokens: data.usage.output_tokens,
-        totalTokens: data.usage.input_tokens + data.usage.output_tokens,
-      }
-    }
-  } else if (data.results?.[0]) {
-    // Titan format
-    content = data.results[0].outputText
-    usage = {
-      promptTokens: 0, // Titan doesn't return this
-      completionTokens: data.results[0].tokenCount || 0,
-      totalTokens: data.results[0].tokenCount || 0,
-    }
-  } else if (data.generation) {
-    // Llama/Mistral format
-    content = data.generation
-    if (data.generation_token_count !== undefined) {
-      usage = {
-        promptTokens: data.prompt_token_count || 0,
-        completionTokens: data.generation_token_count,
-        totalTokens: (data.prompt_token_count || 0) + data.generation_token_count,
-      }
-    }
-  }
-
-  let result: unknown = content
-
-  // Try to parse JSON if schema was provided
-  if (item.schema && content) {
-    try {
-      result = JSON.parse(content)
-    } catch {
-      // Keep as string
-    }
-  }
-
-  return {
-    id: item.id,
-    customId: item.id,
-    status: 'completed',
-    result,
-    ...(usage && { usage }),
-  }
+  return parseBedrockResponse(item, await response.json())
 }
 
 /**
- * Process a Bedrock item via Cloudflare AI Gateway
+ * Process a Bedrock item via Cloudflare AI Gateway.
  *
- * NOTE: Unlike OpenAI and Google, Bedrock via AI Gateway still requires AWS Signature V4 signing.
- * The gateway routes the request but doesn't handle authentication.
+ * Note: AI Gateway routes the request but doesn't handle authentication —
+ * Bedrock still requires AWS SigV4 signing.
  * @see https://developers.cloudflare.com/ai-gateway/usage/providers/bedrock/
- *
- * Gateway URL format: {gateway_url}/aws-bedrock/bedrock-runtime/{region}/model/{model}/invoke
  */
 async function processBedrockItemViaGateway(
   item: BatchItem,
-  config: ReturnType<typeof getConfig>,
+  config: BedrockConfig,
   model: string
 ): Promise<BatchResult> {
-  // AI Gateway URL for Bedrock - requires full path including region
-  // Format: {gateway_url}/aws-bedrock/bedrock-runtime/{region}/model/{model}/invoke
   const url = `${config.gatewayUrl}/aws-bedrock/bedrock-runtime/${
     config.region
   }/model/${encodeURIComponent(model)}/invoke`
 
-  // Build the request body (Anthropic format for Claude models)
   const body: Record<string, unknown> = {
     anthropic_version: 'bedrock-2023-05-31',
     max_tokens: item.options?.maxTokens || 4096,
@@ -610,8 +333,6 @@ async function processBedrockItemViaGateway(
 
   const bodyStr = JSON.stringify(body)
 
-  // NOTE: Bedrock via Gateway still requires AWS SigV4 signing
-  // We need both the gateway token AND AWS credentials
   if (!config.accessKeyId || !config.secretAccessKey) {
     throw new Error(
       'Bedrock via AI Gateway still requires AWS credentials for SigV4 signing. ' +
@@ -622,43 +343,96 @@ async function processBedrockItemViaGateway(
   const headers = await signRequest('POST', url, bodyStr, config, 'bedrock')
   headers.set('cf-aig-authorization', `Bearer ${config.gatewayToken}`)
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: bodyStr,
-  })
-
+  const response = await fetch(url, { method: 'POST', headers, body: bodyStr })
   if (!response.ok) {
     const error = await response.text()
     throw new Error(`Bedrock via Gateway error: ${response.status} ${error}`)
   }
 
-  const data = (await response.json()) as {
-    content?: Array<{ type: string; text?: string }>
-    usage?: { input_tokens: number; output_tokens: number }
-  }
+  return parseBedrockResponse(item, await response.json())
+}
 
-  // Extract content (Anthropic format)
-  const textContent = data.content?.find((c) => c.type === 'text')
-  let content = textContent?.text
-  let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
-
-  if (data.usage) {
-    usage = {
-      promptTokens: data.usage.input_tokens,
-      completionTokens: data.usage.output_tokens,
-      totalTokens: data.usage.input_tokens + data.usage.output_tokens,
+/** Build the Bedrock invoke body for the model family. */
+function buildBedrockRequestBody(item: BatchItem, model: string): Record<string, unknown> {
+  if (model.includes('anthropic')) {
+    return {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: item.options?.maxTokens || 4096,
+      messages: [{ role: 'user', content: item.prompt }],
+      ...(item.options?.system !== undefined && { system: item.options.system }),
+      ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
     }
   }
+  if (model.includes('amazon')) {
+    return {
+      inputText: item.prompt,
+      textGenerationConfig: {
+        maxTokenCount: item.options?.maxTokens || 4096,
+        temperature: item.options?.temperature || 0.7,
+      },
+    }
+  }
+  if (model.includes('meta')) {
+    return {
+      prompt: item.prompt,
+      max_gen_len: item.options?.maxTokens || 4096,
+      temperature: item.options?.temperature || 0.7,
+    }
+  }
+  if (model.includes('mistral')) {
+    return {
+      prompt: `<s>[INST] ${item.prompt} [/INST]`,
+      max_tokens: item.options?.maxTokens || 4096,
+      temperature: item.options?.temperature || 0.7,
+    }
+  }
+  // Default: Claude-style.
+  return {
+    anthropic_version: 'bedrock-2023-05-31',
+    max_tokens: item.options?.maxTokens || 4096,
+    messages: [{ role: 'user', content: item.prompt }],
+    ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
+  }
+}
 
-  let result: unknown = content
+/** Parse a Bedrock invoke response across model families. */
+function parseBedrockResponse(item: BatchItem, raw: unknown): BatchResult {
+  const data = raw as {
+    content?: Array<{ type: string; text?: string }>
+    usage?: { input_tokens: number; output_tokens: number }
+    results?: Array<{ outputText: string; tokenCount: number }>
+    generation?: string
+    generation_token_count?: number
+    prompt_token_count?: number
+  }
 
-  // Try to parse JSON if schema was provided
-  if (item.schema && content) {
-    try {
-      result = JSON.parse(content)
-    } catch {
-      // Keep as string
+  let content: string | undefined
+  let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
+
+  if (data.content) {
+    content = data.content.find((c) => c.type === 'text')?.text
+    if (data.usage) {
+      usage = {
+        promptTokens: data.usage.input_tokens,
+        completionTokens: data.usage.output_tokens,
+        totalTokens: data.usage.input_tokens + data.usage.output_tokens,
+      }
+    }
+  } else if (data.results?.[0]) {
+    content = data.results[0].outputText
+    usage = {
+      promptTokens: 0,
+      completionTokens: data.results[0].tokenCount || 0,
+      totalTokens: data.results[0].tokenCount || 0,
+    }
+  } else if (data.generation) {
+    content = data.generation
+    if (data.generation_token_count !== undefined) {
+      usage = {
+        promptTokens: data.prompt_token_count || 0,
+        completionTokens: data.generation_token_count,
+        totalTokens: (data.prompt_token_count || 0) + data.generation_token_count,
+      }
     }
   }
 
@@ -666,18 +440,18 @@ async function processBedrockItemViaGateway(
     id: item.id,
     customId: item.id,
     status: 'completed',
-    result,
+    result: tryParseJson(content, !!item.schema),
     ...(usage && { usage }),
   }
 }
 
 // ============================================================================
-// True Batch Inference (S3-based)
+// True S3-based batch inference (separate from the BatchProvider adapter)
 // ============================================================================
 
 /**
- * Create and submit a true Bedrock batch inference job
- * This requires S3 bucket access and proper IAM setup
+ * Create and submit a true Bedrock batch inference job.
+ * Requires S3 bucket access and proper IAM setup.
  */
 export async function createBedrockBatchJob(
   items: BatchItem[],
@@ -691,7 +465,6 @@ export async function createBedrockBatchJob(
 ): Promise<{ jobArn: string }> {
   const config = getConfig()
 
-  // Build JSONL content
   const jsonlLines = items.map((item) => {
     const request: BedrockBatchRequest = {
       recordId: item.id,
@@ -700,7 +473,9 @@ export async function createBedrockBatchJob(
         max_tokens: item.options?.maxTokens || 4096,
         messages: [{ role: 'user', content: item.prompt }],
         ...(item.options?.system !== undefined && { system: item.options.system }),
-        ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
+        ...(item.options?.temperature !== undefined && {
+          temperature: item.options.temperature,
+        }),
       },
     }
     return JSON.stringify(request)
@@ -709,8 +484,6 @@ export async function createBedrockBatchJob(
   const inputKey = `${options.s3InputPrefix || 'bedrock-batch/input'}/${options.jobName}.jsonl`
   const outputPrefix = `${options.s3OutputPrefix || 'bedrock-batch/output'}/${options.jobName}/`
 
-  // Upload to S3
-  // In production, use @aws-sdk/client-s3
   const s3Url = `https://${config.bucket}.s3.${config.region}.amazonaws.com/${inputKey}`
   const content = jsonlLines.join('\n')
 
@@ -724,21 +497,16 @@ export async function createBedrockBatchJob(
     throw new Error(`Failed to upload to S3: ${s3Response.status}`)
   }
 
-  // Create batch inference job
   const jobUrl = `https://bedrock.${config.region}.amazonaws.com/model-invocation-job`
   const jobBody = JSON.stringify({
     jobName: options.jobName,
     modelId: model,
     roleArn: options.roleArn,
     inputDataConfig: {
-      s3InputDataConfig: {
-        s3Uri: `s3://${config.bucket}/${inputKey}`,
-      },
+      s3InputDataConfig: { s3Uri: `s3://${config.bucket}/${inputKey}` },
     },
     outputDataConfig: {
-      s3OutputDataConfig: {
-        s3Uri: `s3://${config.bucket}/${outputPrefix}`,
-      },
+      s3OutputDataConfig: { s3Uri: `s3://${config.bucket}/${outputPrefix}` },
     },
   })
 
@@ -758,65 +526,22 @@ export async function createBedrockBatchJob(
 }
 
 // ============================================================================
-// Register Adapter
+// Bedrock flex adapter (FlexAdapter port)
 // ============================================================================
 
-// ============================================================================
-// Bedrock Flex Adapter
-// ============================================================================
-
-/**
- * AWS Bedrock Flex Adapter
- *
- * Flex processing uses concurrent requests for medium-sized batches (5-500 items).
- * This provides a balance between:
- * - Immediate execution (fast but full price, <5 items)
- * - Full batch inference (50% discount but 24hr turnaround, 500+ items)
- *
- * Flex tier uses concurrent API calls with rate limiting, providing results
- * in minutes rather than hours while still benefiting from efficient processing.
- */
 const bedrockFlexAdapter: FlexAdapter = {
   async submitFlex(items: BatchItem[], options: { model?: string }): Promise<BatchResult[]> {
     const config = getConfig()
     const model = options.model || 'anthropic.claude-3-sonnet-20240229-v1:0'
-    const CONCURRENCY = 8 // Bedrock has stricter rate limits than OpenAI
-
-    const results: BatchResult[] = []
-
-    // Process items concurrently with rate limiting
-    for (let i = 0; i < items.length; i += CONCURRENCY) {
-      const batch = items.slice(i, i + CONCURRENCY)
-
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          try {
-            return await processBedrockItem(item, config, model)
-          } catch (error) {
-            return {
-              id: item.id,
-              customId: item.id,
-              status: 'failed' as const,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            }
-          }
-        })
-      )
-
-      results.push(...batchResults)
-
-      // Add delay between batches to respect rate limits
-      if (i + CONCURRENCY < items.length) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
-      }
-    }
-
-    return results
+    return processConcurrently(items, (item) => processBedrockItem(item, config, model), {
+      concurrency: 8,
+      delayBetweenWaves: 500,
+    })
   },
 }
 
 // ============================================================================
-// Register Adapters
+// Register adapters
 // ============================================================================
 
 registerBatchAdapter('bedrock', bedrockAdapter)

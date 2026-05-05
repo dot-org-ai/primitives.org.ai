@@ -15,7 +15,7 @@ import {
   type BatchQueueOptions,
   type BatchResult,
   type BatchSubmitResult,
-} from '../batch-queue.js'
+} from './provider.js'
 import { generateObject, generateText } from '../generate.js'
 
 // ============================================================================

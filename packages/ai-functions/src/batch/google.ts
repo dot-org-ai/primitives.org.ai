@@ -1,9 +1,11 @@
 /**
  * Google GenAI (Gemini) Adapter
  *
- * Implements processing using Google's Generative AI API (Gemini models).
  * Google doesn't have a native batch API like OpenAI/Anthropic, so this
- * implements concurrent processing for the flex tier.
+ * adapter fakes batch processing via concurrent direct calls and tracks the
+ * job state locally (see `LocalJobStore` in `./provider.js`).
+ *
+ * For true async batch processing, consider Google Cloud Batch with Vertex AI.
  *
  * @see https://ai.google.dev/gemini-api/docs
  *
@@ -11,20 +13,22 @@
  */
 
 import {
+  LocalJobStore,
+  processConcurrently,
   registerBatchAdapter,
   registerFlexAdapter,
+  tryParseJson,
   type BatchAdapter,
-  type FlexAdapter,
   type BatchItem,
   type BatchJob,
   type BatchQueueOptions,
   type BatchResult,
   type BatchSubmitResult,
-  type BatchStatus,
-} from '../batch-queue.js'
+  type FlexAdapter,
+} from './provider.js'
 
 // ============================================================================
-// Types
+// Provider-specific types
 // ============================================================================
 
 interface GeminiMessage {
@@ -39,10 +43,7 @@ interface GeminiResponse {
       role: string
     }
     finishReason: string
-    safetyRatings?: Array<{
-      category: string
-      probability: string
-    }>
+    safetyRatings?: Array<{ category: string; probability: string }>
   }>
   usageMetadata?: {
     promptTokenCount: number
@@ -52,7 +53,7 @@ interface GeminiResponse {
 }
 
 // ============================================================================
-// Google GenAI Client Configuration
+// Google GenAI client configuration
 // ============================================================================
 
 let googleApiKey: string | undefined
@@ -62,9 +63,7 @@ let googleBaseUrl = 'https://generativelanguage.googleapis.com/v1beta'
 let gatewayUrl: string | undefined
 let gatewayToken: string | undefined
 
-/**
- * Configure the Google GenAI client
- */
+/** Configure the Google GenAI client. */
 export function configureGoogleGenAI(options: {
   apiKey?: string
   baseUrl?: string
@@ -79,17 +78,17 @@ export function configureGoogleGenAI(options: {
   if (options.gatewayToken) gatewayToken = options.gatewayToken
 }
 
-function getConfig(): {
+interface GoogleConfig {
   apiKey: string
   baseUrl: string
   gatewayUrl?: string
   gatewayToken?: string
-} {
-  // Check for AI Gateway configuration
+}
+
+function getConfig(): GoogleConfig {
   const gwUrl = gatewayUrl || process.env['AI_GATEWAY_URL']
   const gwToken = gatewayToken || process.env['AI_GATEWAY_TOKEN']
 
-  // If using gateway, we don't need a direct API key
   if (gwUrl && gwToken) {
     return {
       apiKey: '',
@@ -109,60 +108,44 @@ function getConfig(): {
 }
 
 // ============================================================================
-// In-memory job tracking
+// Local job tracking
 // ============================================================================
 
-const pendingJobs = new Map<
-  string,
-  {
-    items: BatchItem[]
-    options: BatchQueueOptions
-    results: BatchResult[]
-    status: BatchStatus
-    createdAt: Date
-    completedAt?: Date
-  }
->()
-
-let jobCounter = 0
+const jobs = new LocalJobStore('google_batch')
 
 // ============================================================================
-// Google GenAI Batch Adapter
+// Google GenAI batch adapter (BatchProvider port)
 // ============================================================================
 
-/**
- * Google GenAI batch adapter
- *
- * Note: Google doesn't have a native batch API like OpenAI/Anthropic.
- * This adapter implements batch processing via concurrent requests.
- * For true async batch processing, consider using Google Cloud Batch
- * with Vertex AI.
- */
 const googleAdapter: BatchAdapter = {
   async submit(items: BatchItem[], options: BatchQueueOptions): Promise<BatchSubmitResult> {
-    const jobId = `google_batch_${++jobCounter}_${Date.now()}`
     const model = options.model || 'gemini-2.0-flash'
+    const { id, state } = jobs.create(items, options)
 
-    // Store job state
-    pendingJobs.set(jobId, {
-      items,
-      options,
-      results: [],
-      status: 'pending',
-      createdAt: new Date(),
-    })
-
-    // Process requests concurrently
-    const completion = processGoogleRequestsConcurrently(jobId, items, model, options)
+    // Drive the job state machine in the background; `waitForCompletion`
+    // will poll the in-memory state.
+    const completion = (async () => {
+      state.status = 'in_progress'
+      const results = await processConcurrently(items, (item) => processGoogleItem(item, model), {
+        concurrency: 10,
+        onWaveComplete: (partial) => {
+          state.results = partial
+        },
+      })
+      state.results = results
+      state.status = results.every((r) => r.status === 'completed') ? 'completed' : 'failed'
+      state.completedAt = new Date()
+      return results
+    })()
 
     const job: BatchJob = {
-      id: jobId,
+      id,
       provider: 'google',
       status: 'pending',
       totalItems: items.length,
       completedItems: 0,
       failedItems: 0,
-      createdAt: new Date(),
+      createdAt: state.createdAt,
       ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
     }
 
@@ -170,199 +153,54 @@ const googleAdapter: BatchAdapter = {
   },
 
   async getStatus(batchId: string): Promise<BatchJob> {
-    const job = pendingJobs.get(batchId)
-    if (!job) {
-      throw new Error(`Batch not found: ${batchId}`)
-    }
-
-    const completedItems = job.results.filter((r) => r.status === 'completed').length
-    const failedItems = job.results.filter((r) => r.status === 'failed').length
-
-    return {
-      id: batchId,
-      provider: 'google',
-      status: job.status,
-      totalItems: job.items.length,
-      completedItems,
-      failedItems,
-      createdAt: job.createdAt,
-      ...(job.completedAt && { completedAt: job.completedAt }),
-    }
+    return jobs.snapshot(batchId, 'google')
   },
 
   async cancel(batchId: string): Promise<void> {
-    const job = pendingJobs.get(batchId)
-    if (job) {
-      job.status = 'cancelled'
+    if (jobs.has(batchId)) {
+      jobs.get(batchId).status = 'cancelled'
     }
   },
 
   async getResults(batchId: string): Promise<BatchResult[]> {
-    const job = pendingJobs.get(batchId)
-    if (!job) {
-      throw new Error(`Batch not found: ${batchId}`)
-    }
-    return job.results
+    return jobs.get(batchId).results
   },
 
   async waitForCompletion(batchId: string, pollInterval = 1000): Promise<BatchResult[]> {
-    const job = pendingJobs.get(batchId)
-    if (!job) {
-      throw new Error(`Batch not found: ${batchId}`)
-    }
-
-    while (job.status !== 'completed' && job.status !== 'failed' && job.status !== 'cancelled') {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval))
-    }
-
-    return job.results
+    return jobs.waitForCompletion(batchId, pollInterval)
   },
 }
 
 // ============================================================================
-// Google GenAI Flex Adapter
+// Google GenAI flex adapter (FlexAdapter port)
 // ============================================================================
 
-/**
- * Google GenAI Flex Adapter
- *
- * Implements concurrent processing for medium-sized batches.
- * Uses the Gemini API for fast turnaround.
- */
 const googleFlexAdapter: FlexAdapter = {
   async submitFlex(items: BatchItem[], options: { model?: string }): Promise<BatchResult[]> {
     const model = options.model || 'gemini-2.0-flash'
-    const CONCURRENCY = 10
-
-    const results: BatchResult[] = []
-
-    // Process items concurrently
-    for (let i = 0; i < items.length; i += CONCURRENCY) {
-      const batch = items.slice(i, i + CONCURRENCY)
-
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          try {
-            return await processGoogleItem(item, model)
-          } catch (error) {
-            return {
-              id: item.id,
-              customId: item.id,
-              status: 'failed' as const,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            }
-          }
-        })
-      )
-
-      results.push(...batchResults)
-    }
-
-    return results
+    return processConcurrently(items, (item) => processGoogleItem(item, model), {
+      concurrency: 10,
+    })
   },
 }
 
 // ============================================================================
-// Processing
+// Per-item processing
 // ============================================================================
-
-async function processGoogleRequestsConcurrently(
-  jobId: string,
-  items: BatchItem[],
-  model: string,
-  options: BatchQueueOptions
-): Promise<BatchResult[]> {
-  const job = pendingJobs.get(jobId)
-  if (!job) {
-    throw new Error(`Job not found: ${jobId}`)
-  }
-
-  job.status = 'in_progress'
-
-  const CONCURRENCY = 10
-  const results: BatchResult[] = []
-
-  for (let i = 0; i < items.length; i += CONCURRENCY) {
-    const batch = items.slice(i, i + CONCURRENCY)
-
-    const batchResults = await Promise.all(
-      batch.map(async (item) => {
-        try {
-          return await processGoogleItem(item, model)
-        } catch (error) {
-          return {
-            id: item.id,
-            customId: item.id,
-            status: 'failed' as const,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          }
-        }
-      })
-    )
-
-    results.push(...batchResults)
-    job.results = results
-  }
-
-  job.status = results.every((r) => r.status === 'completed') ? 'completed' : 'failed'
-  job.completedAt = new Date()
-
-  return results
-}
 
 async function processGoogleItem(item: BatchItem, model: string): Promise<BatchResult> {
   const config = getConfig()
-
-  // Check if using AI Gateway
   if (config.gatewayUrl && config.gatewayToken) {
     return processGoogleItemViaGateway(item, config, model)
   }
 
-  // Build the model name (add models/ prefix if not present)
   const modelName = model.startsWith('models/') ? model : `models/${model}`
-
   const url = `${config.baseUrl}/${modelName}:generateContent?key=${config.apiKey}`
-
-  // Build messages
-  const contents: GeminiMessage[] = []
-
-  // Add system instruction as a user message if provided (Gemini handles this differently)
-  if (item.options?.system) {
-    contents.push({
-      role: 'user',
-      parts: [
-        { text: `System instruction: ${item.options.system}\n\nUser request: ${item.prompt}` },
-      ],
-    })
-  } else {
-    contents.push({
-      role: 'user',
-      parts: [{ text: item.prompt }],
-    })
-  }
-
-  const body: Record<string, unknown> = {
-    contents,
-    generationConfig: {
-      maxOutputTokens: item.options?.maxTokens || 8192,
-      ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
-    },
-  }
-
-  // Add JSON mode if schema is provided
-  if (item.schema) {
-    body['generationConfig'] = {
-      ...(body['generationConfig'] as object),
-      responseMimeType: 'application/json',
-    }
-  }
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildGeminiBody(item)),
   })
 
   if (!response.ok) {
@@ -370,85 +208,20 @@ async function processGoogleItem(item: BatchItem, model: string): Promise<BatchR
     throw new Error(`Google GenAI API error: ${response.status} ${error}`)
   }
 
-  const data = (await response.json()) as GeminiResponse
-
-  // Extract content
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
-
-  let result: unknown = content
-
-  // Try to parse JSON if schema was provided or content looks like JSON
-  if (
-    content &&
-    (item.schema || content.trim().startsWith('{') || content.trim().startsWith('['))
-  ) {
-    try {
-      result = JSON.parse(content)
-    } catch {
-      // Keep as string
-    }
-  }
-
-  return {
-    id: item.id,
-    customId: item.id,
-    status: 'completed',
-    result,
-    ...(data.usageMetadata && {
-      usage: {
-        promptTokens: data.usageMetadata.promptTokenCount,
-        completionTokens: data.usageMetadata.candidatesTokenCount,
-        totalTokens: data.usageMetadata.totalTokenCount,
-      },
-    }),
-  }
+  return parseGeminiResponse(item, (await response.json()) as GeminiResponse)
 }
 
 /**
- * Process a Google GenAI item via Cloudflare AI Gateway
+ * Process a Google GenAI item via Cloudflare AI Gateway.
  * Gateway URL format: {gateway_url}/google-ai-studio/v1beta/models/{model}:generateContent
  */
 async function processGoogleItemViaGateway(
   item: BatchItem,
-  config: ReturnType<typeof getConfig>,
+  config: GoogleConfig,
   model: string
 ): Promise<BatchResult> {
-  // AI Gateway URL for Google AI Studio
-  // Format: {gateway_url}/google-ai-studio/v1beta/models/{model}:generateContent
   const modelName = model.startsWith('models/') ? model.replace('models/', '') : model
   const url = `${config.gatewayUrl}/google-ai-studio/v1beta/models/${modelName}:generateContent`
-
-  // Build messages
-  const contents: GeminiMessage[] = []
-
-  if (item.options?.system) {
-    contents.push({
-      role: 'user',
-      parts: [
-        { text: `System instruction: ${item.options.system}\n\nUser request: ${item.prompt}` },
-      ],
-    })
-  } else {
-    contents.push({
-      role: 'user',
-      parts: [{ text: item.prompt }],
-    })
-  }
-
-  const body: Record<string, unknown> = {
-    contents,
-    generationConfig: {
-      maxOutputTokens: item.options?.maxTokens || 8192,
-      ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
-    },
-  }
-
-  if (item.schema) {
-    body['generationConfig'] = {
-      ...(body['generationConfig'] as object),
-      responseMimeType: 'application/json',
-    }
-  }
 
   const response = await fetch(url, {
     method: 'POST',
@@ -456,7 +229,7 @@ async function processGoogleItemViaGateway(
       'cf-aig-authorization': `Bearer ${config.gatewayToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(buildGeminiBody(item)),
   })
 
   if (!response.ok) {
@@ -464,28 +237,34 @@ async function processGoogleItemViaGateway(
     throw new Error(`Google GenAI via Gateway error: ${response.status} ${error}`)
   }
 
-  const data = (await response.json()) as GeminiResponse
+  return parseGeminiResponse(item, (await response.json()) as GeminiResponse)
+}
 
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+function buildGeminiBody(item: BatchItem): Record<string, unknown> {
+  // Gemini handles system instructions as part of the user message.
+  const userText = item.options?.system
+    ? `System instruction: ${item.options.system}\n\nUser request: ${item.prompt}`
+    : item.prompt
 
-  let result: unknown = content
+  const contents: GeminiMessage[] = [{ role: 'user', parts: [{ text: userText }] }]
 
-  if (
-    content &&
-    (item.schema || content.trim().startsWith('{') || content.trim().startsWith('['))
-  ) {
-    try {
-      result = JSON.parse(content)
-    } catch {
-      // Keep as string
-    }
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: item.options?.maxTokens || 8192,
+    ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
+    ...(item.schema && { responseMimeType: 'application/json' }),
   }
+
+  return { contents, generationConfig }
+}
+
+function parseGeminiResponse(item: BatchItem, data: GeminiResponse): BatchResult {
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
 
   return {
     id: item.id,
     customId: item.id,
     status: 'completed',
-    result,
+    result: tryParseJson(content, !!item.schema),
     ...(data.usageMetadata && {
       usage: {
         promptTokens: data.usageMetadata.promptTokenCount,
@@ -497,7 +276,7 @@ async function processGoogleItemViaGateway(
 }
 
 // ============================================================================
-// Register Adapters
+// Register adapters
 // ============================================================================
 
 registerBatchAdapter('google', googleAdapter)

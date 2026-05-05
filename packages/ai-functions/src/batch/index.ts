@@ -1,7 +1,9 @@
 /**
  * Batch Adapters Index
  *
- * Import specific adapters to register them:
+ * The `BatchProvider` port lives in `./provider.js`. Each adapter file is a
+ * small implementation of that port for one provider. Import a specific
+ * adapter to register it:
  *
  * @example
  * ```ts
@@ -24,6 +26,7 @@
  * @packageDocumentation
  */
 
+export * from './provider.js'
 export * from './openai.js'
 export * from './anthropic.js'
 export * from './cloudflare.js'

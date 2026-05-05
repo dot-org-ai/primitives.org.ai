@@ -6,27 +6,37 @@
  * - 24-hour turnaround
  * - Up to 50,000 requests per batch
  *
+ * Plus a flex adapter that processes items concurrently for faster turnaround
+ * at a similar discount.
+ *
+ * This file is a small adapter on top of the BatchProvider port (`./provider.js`).
+ *
  * @see https://platform.openai.com/docs/guides/batch
  *
  * @packageDocumentation
  */
 
+import { schema as convertSchema } from '../schema.js'
 import {
+  failedResult,
+  pollUntilComplete,
+  processConcurrently,
   registerBatchAdapter,
   registerFlexAdapter,
+  tryParseJson,
+  zodToJsonSchema,
   type BatchAdapter,
-  type FlexAdapter,
   type BatchItem,
   type BatchJob,
   type BatchQueueOptions,
   type BatchResult,
-  type BatchSubmitResult,
   type BatchStatus,
-} from '../batch-queue.js'
-import { schema as convertSchema, type SimpleSchema } from '../schema.js'
+  type BatchSubmitResult,
+  type FlexAdapter,
+} from './provider.js'
 
 // ============================================================================
-// Types
+// Provider-specific types
 // ============================================================================
 
 interface OpenAIBatchRequest {
@@ -49,11 +59,7 @@ interface OpenAIBatchResponse {
     status_code: number
     body: {
       id: string
-      choices: Array<{
-        message: {
-          content: string
-        }
-      }>
+      choices: Array<{ message: { content: string } }>
       usage: {
         prompt_tokens: number
         completion_tokens: number
@@ -95,15 +101,13 @@ interface OpenAIBatch {
 }
 
 // ============================================================================
-// OpenAI Client
+// OpenAI client
 // ============================================================================
 
 let openaiApiKey: string | undefined
 let openaiBaseUrl = 'https://api.openai.com/v1'
 
-/**
- * Configure the OpenAI client
- */
+/** Configure the OpenAI client. */
 export function configureOpenAI(options: { apiKey?: string; baseUrl?: string }): void {
   if (options.apiKey) openaiApiKey = options.apiKey
   if (options.baseUrl) openaiBaseUrl = options.baseUrl
@@ -118,8 +122,7 @@ function getApiKey(): string {
 }
 
 async function openaiRequest<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-  const url = `${openaiBaseUrl}${path}`
-  const response = await fetch(url, {
+  const response = await fetch(`${openaiBaseUrl}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${getApiKey()}`,
@@ -143,9 +146,7 @@ async function uploadFile(content: string, purpose: string): Promise<{ id: strin
 
   const response = await fetch(`${openaiBaseUrl}/files`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${getApiKey()}`,
-    },
+    headers: { Authorization: `Bearer ${getApiKey()}` },
     body: formData,
   })
 
@@ -159,9 +160,7 @@ async function uploadFile(content: string, purpose: string): Promise<{ id: strin
 
 async function downloadFile(fileId: string): Promise<string> {
   const response = await fetch(`${openaiBaseUrl}/files/${fileId}/content`, {
-    headers: {
-      Authorization: `Bearer ${getApiKey()}`,
-    },
+    headers: { Authorization: `Bearer ${getApiKey()}` },
   })
 
   if (!response.ok) {
@@ -171,10 +170,6 @@ async function downloadFile(fileId: string): Promise<string> {
 
   return response.text()
 }
-
-// ============================================================================
-// Status Mapping
-// ============================================================================
 
 function mapStatus(status: string): BatchStatus {
   const statusMap: Record<string, BatchStatus> = {
@@ -191,14 +186,16 @@ function mapStatus(status: string): BatchStatus {
 }
 
 // ============================================================================
-// OpenAI Batch Adapter
+// OpenAI batch adapter (BatchProvider port)
 // ============================================================================
+
+const TERMINAL_FOR_OPENAI: ReadonlySet<BatchStatus> = new Set(['completed', 'failed'])
+const THROW_FOR_OPENAI: ReadonlySet<BatchStatus> = new Set(['cancelled', 'expired'])
 
 const openaiAdapter: BatchAdapter = {
   async submit(items: BatchItem[], options: BatchQueueOptions): Promise<BatchSubmitResult> {
     const model = options.model || 'gpt-4o'
 
-    // Build JSONL content
     const requests: OpenAIBatchRequest[] = items.map((item) => {
       const request: OpenAIBatchRequest = {
         custom_id: item.id,
@@ -211,20 +208,17 @@ const openaiAdapter: BatchAdapter = {
             { role: 'user', content: item.prompt },
           ],
           ...(item.options?.maxTokens !== undefined && { max_tokens: item.options.maxTokens }),
-          ...(item.options?.temperature !== undefined && { temperature: item.options.temperature }),
+          ...(item.options?.temperature !== undefined && {
+            temperature: item.options.temperature,
+          }),
         },
       }
 
-      // Add JSON schema if provided
       if (item.schema) {
         const zodSchema = convertSchema(item.schema)
-        // Convert Zod to JSON Schema (simplified - you'd want a proper converter)
         request.body.response_format = {
           type: 'json_schema',
-          json_schema: {
-            name: 'response',
-            schema: zodToJsonSchema(zodSchema),
-          },
+          json_schema: { name: 'response', schema: zodToJsonSchema(zodSchema) },
         }
       }
 
@@ -232,11 +226,8 @@ const openaiAdapter: BatchAdapter = {
     })
 
     const jsonlContent = requests.map((r) => JSON.stringify(r)).join('\n')
-
-    // Upload the input file
     const inputFile = await uploadFile(jsonlContent, 'batch')
 
-    // Create the batch
     const batch = await openaiRequest<OpenAIBatch>('POST', '/batches', {
       input_file_id: inputFile.id,
       endpoint: '/v1/chat/completions',
@@ -257,15 +248,12 @@ const openaiAdapter: BatchAdapter = {
       inputFileId: batch.input_file_id,
     }
 
-    // Create completion promise
     const completion = this.waitForCompletion(batch.id)
-
     return { job, completion }
   },
 
   async getStatus(batchId: string): Promise<BatchJob> {
     const batch = await openaiRequest<OpenAIBatch>('GET', `/batches/${batchId}`)
-
     return {
       id: batch.id,
       provider: 'openai',
@@ -296,11 +284,8 @@ const openaiAdapter: BatchAdapter = {
 
     const results: BatchResult[] = []
 
-    // Download and parse output file
     if (status.outputFileId) {
-      const content = await downloadFile(status.outputFileId)
-      const lines = content.trim().split('\n')
-
+      const lines = (await downloadFile(status.outputFileId)).trim().split('\n')
       for (const line of lines) {
         const response: OpenAIBatchResponse = JSON.parse(line)
 
@@ -313,22 +298,11 @@ const openaiAdapter: BatchAdapter = {
           })
         } else if (response.response) {
           const content = response.response.body.choices[0]?.message?.content
-          let result: unknown = content
-
-          // Try to parse JSON if it looks like JSON
-          if (content?.startsWith('{') || content?.startsWith('[')) {
-            try {
-              result = JSON.parse(content)
-            } catch {
-              // Keep as string
-            }
-          }
-
           results.push({
             id: response.custom_id,
             customId: response.custom_id,
             status: 'completed',
-            result,
+            result: tryParseJson(content),
             usage: {
               promptTokens: response.response.body.usage.prompt_tokens,
               completionTokens: response.response.body.usage.completion_tokens,
@@ -339,11 +313,8 @@ const openaiAdapter: BatchAdapter = {
       }
     }
 
-    // Download and parse error file
     if (status.errorFileId) {
-      const content = await downloadFile(status.errorFileId)
-      const lines = content.trim().split('\n')
-
+      const lines = (await downloadFile(status.errorFileId)).trim().split('\n')
       for (const line of lines) {
         const response: OpenAIBatchResponse = JSON.parse(line)
         results.push({
@@ -359,134 +330,37 @@ const openaiAdapter: BatchAdapter = {
   },
 
   async waitForCompletion(batchId: string, pollInterval = 5000): Promise<BatchResult[]> {
-    while (true) {
-      const status = await this.getStatus(batchId)
-
-      if (status.status === 'completed' || status.status === 'failed') {
-        return this.getResults(batchId)
-      }
-
-      if (status.status === 'cancelled' || status.status === 'expired') {
-        throw new Error(`Batch ${status.status}`)
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, pollInterval))
-    }
+    return pollUntilComplete(this, batchId, {
+      pollInterval,
+      fetchResultsOn: TERMINAL_FOR_OPENAI,
+      throwOn: THROW_FOR_OPENAI,
+    })
   },
 }
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-/** Zod schema definition structure for type introspection */
-interface ZodDef {
-  typeName?: string
-  type?: unknown
-  shape?: () => Record<string, unknown>
-}
-
-/** Zod schema with _def property for introspection */
-interface ZodSchemaLike {
-  _def?: ZodDef
-}
-
-/**
- * Simple Zod to JSON Schema converter
- * In production, use a proper library like zod-to-json-schema
- */
-function zodToJsonSchema(zodSchema: unknown): Record<string, unknown> {
-  // This is a simplified converter - in production use zod-to-json-schema
-  const schema = zodSchema as ZodSchemaLike
-
-  if (!schema._def) {
-    return { type: 'object' }
-  }
-
-  const typeName = schema._def.typeName
-
-  switch (typeName) {
-    case 'ZodString':
-      return { type: 'string' }
-    case 'ZodNumber':
-      return { type: 'number' }
-    case 'ZodBoolean':
-      return { type: 'boolean' }
-    case 'ZodArray':
-      return { type: 'array', items: zodToJsonSchema(schema._def.type) }
-    case 'ZodObject': {
-      const shape = schema._def.shape?.() ?? {}
-      const properties: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(shape)) {
-        properties[key] = zodToJsonSchema(value)
-      }
-      return { type: 'object', properties, required: Object.keys(properties) }
-    }
-    default:
-      return { type: 'object' }
-  }
-}
-
-// ============================================================================
-// Register Adapter
-// ============================================================================
-
-// ============================================================================
-// OpenAI Flex Adapter
+// OpenAI flex adapter (FlexAdapter port)
 // ============================================================================
 
 /**
- * OpenAI Flex Adapter
+ * Flex processing uses concurrent requests for faster turnaround than batch
+ * (minutes vs 24h) at a similar discount. Ideal for 5–500 items.
  *
- * Flex processing uses concurrent requests with a service tier that provides
- * ~50% discount similar to batch, but with much faster turnaround (minutes vs 24hr).
- *
- * This is ideal for 5-500 items where you need results quickly but still want
- * cost savings.
- *
- * Note: As of 2024, OpenAI doesn't have an official "flex" tier API.
- * This adapter implements concurrent processing as a middle ground.
- * When OpenAI adds official flex support, this can be updated.
+ * As of 2026, OpenAI doesn't expose a dedicated "flex" tier API, so this
+ * adapter implements concurrent direct chat completions as a middle ground.
  */
 const openaiFlexAdapter: FlexAdapter = {
   async submitFlex(items: BatchItem[], options: { model?: string }): Promise<BatchResult[]> {
     const model = options.model || 'gpt-4o'
-    const CONCURRENCY = 10 // Higher concurrency for flex tier
-
-    const results: BatchResult[] = []
-
-    // Process items concurrently in batches
-    for (let i = 0; i < items.length; i += CONCURRENCY) {
-      const batch = items.slice(i, i + CONCURRENCY)
-
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          try {
-            return await processOpenAIItem(item, model)
-          } catch (error) {
-            return {
-              id: item.id,
-              customId: item.id,
-              status: 'failed' as const,
-              error: error instanceof Error ? error.message : 'Unknown error',
-            }
-          }
-        })
-      )
-
-      results.push(...batchResults)
-    }
-
-    return results
+    return processConcurrently(items, (item) => processOpenAIItem(item, model), {
+      concurrency: 10,
+    })
   },
 }
 
-/**
- * Process a single item via OpenAI Chat Completions API
- */
+/** Process a single item via OpenAI Chat Completions API. */
 async function processOpenAIItem(item: BatchItem, model: string): Promise<BatchResult> {
   const messages: Array<{ role: string; content: string }> = []
-
   if (item.options?.system) {
     messages.push({ role: 'system', content: item.options.system })
   }
@@ -499,15 +373,11 @@ async function processOpenAIItem(item: BatchItem, model: string): Promise<BatchR
     temperature: item.options?.temperature,
   }
 
-  // Add JSON schema if provided
   if (item.schema) {
     const zodSchema = convertSchema(item.schema)
     body['response_format'] = {
       type: 'json_schema',
-      json_schema: {
-        name: 'response',
-        schema: zodToJsonSchema(zodSchema),
-      },
+      json_schema: { name: 'response', schema: zodToJsonSchema(zodSchema) },
     }
   }
 
@@ -531,22 +401,12 @@ async function processOpenAIItem(item: BatchItem, model: string): Promise<BatchR
   }
 
   const content = data.choices[0]?.message?.content
-  let result: unknown = content
-
-  // Try to parse JSON if schema was provided or content looks like JSON
-  if (content && (item.schema || content.startsWith('{') || content.startsWith('['))) {
-    try {
-      result = JSON.parse(content)
-    } catch {
-      // Keep as string
-    }
-  }
 
   return {
     id: item.id,
     customId: item.id,
     status: 'completed',
-    result,
+    result: tryParseJson(content, !!item.schema),
     usage: {
       promptTokens: data.usage.prompt_tokens,
       completionTokens: data.usage.completion_tokens,
@@ -555,8 +415,12 @@ async function processOpenAIItem(item: BatchItem, model: string): Promise<BatchR
   }
 }
 
+// `failedResult` re-imported only to keep the import surface stable for tests
+// that may use it. The processConcurrently helper handles failures internally.
+void failedResult
+
 // ============================================================================
-// Register Adapters
+// Register adapters
 // ============================================================================
 
 registerBatchAdapter('openai', openaiAdapter)
