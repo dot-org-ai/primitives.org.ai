@@ -43,6 +43,11 @@ export type {
   PaymentRequired,
   AuthRequirement,
   ToolHandlerContext,
+  // id.org.ai canonical types re-exported via types.ts so consumers
+  // don't need a second import. Populated on `ToolHandlerContext` by
+  // `wrapTool()` (aip-lbtr).
+  Identity,
+  PaymentReceipt,
   // MCP compatibility
   MCPTool,
   MCPToolCall,
@@ -104,6 +109,11 @@ export {
 
 // Export tool definition helpers
 export { defineTool, defineAndRegister, createToolExecutor, toolBuilder } from './define.js'
+
+// Export broker-aware HTTP wrapper (aip-lbtr) — bridges Tool definitions
+// to id.org.ai's AuthBroker + PaymentBroker so paid/auth-gated tools work
+// declaratively without callers manually wiring brokers.
+export { wrapTool } from './wrap.js'
 
 // Export pre-built tools
 export {

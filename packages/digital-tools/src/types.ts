@@ -10,10 +10,15 @@
 
 import type { JSONSchema } from 'ai-functions'
 import type { Frame, ActionRef } from 'digital-objects'
+import type { Identity, PaymentReceipt } from 'id.org.ai'
 import type { z } from 'zod'
 
 // Re-export for downstream consumers (digital-tasks/digital-workers can use the same Frame)
 export type { Frame, ActionRef } from 'digital-objects'
+
+// Re-export id.org.ai canonical types so consumers don't need a separate import.
+// `wrapTool()` populates these on `ToolHandlerContext` after broker gating.
+export type { Identity, PaymentReceipt } from 'id.org.ai'
 
 // ============================================================================
 // Tool Category Ontology
@@ -361,12 +366,34 @@ export interface PaymentRequired {
  * Handlers that don't need any of this can keep the arity-1
  * `(args) => result` signature; arity-2 `(args, ctx) => result`
  * is opt-in.
+ *
+ * `wrapTool()` (the broker-aware HTTP wrapper) populates `identity`
+ * with a full id.org.ai `Identity` record and, when `pricing` is
+ * satisfied, populates `paymentReceipt` with the canonical receipt
+ * from `PaymentBroker.settle()`. Older dispatchers that pass an
+ * opaque `IdentityRef` string and/or the local `PaymentRail` shape
+ * remain supported (the handler signature widens, not narrows).
  */
 export interface ToolHandlerContext {
-  /** Identity of the caller (resolved by id.org.ai) */
-  identity: IdentityRef
-  /** Payment rail injected by PaymentBroker when `pricing` is satisfied */
+  /**
+   * Identity of the caller. Either:
+   *   - the canonical {@link Identity} record from `id.org.ai`
+   *     (populated by `wrapTool()` after `AuthBroker.gate()`), or
+   *   - an opaque {@link IdentityRef} string for legacy dispatchers.
+   */
+  identity: Identity | IdentityRef
+  /**
+   * Backwards-compatible local `PaymentRail` shape. Older dispatchers
+   * may set this; new code should prefer {@link paymentReceipt} which
+   * carries the full id.org.ai receipt (txRef, settledAt, response
+   * header, …).
+   */
   payment?: PaymentRail
+  /**
+   * Canonical {@link PaymentReceipt} from `PaymentBroker.settle()`.
+   * Populated by `wrapTool()` when the tool's `pricing` is satisfied.
+   */
+  paymentReceipt?: PaymentReceipt
   /** Parent Action that caused this tool invocation, if any */
   parentAction?: ActionRef
 }

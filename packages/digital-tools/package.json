@@ -39,6 +39,7 @@
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
     "digital-objects": "workspace:*",
+    "id.org.ai": "^0.3.0",
     "rpc.do": "^0.1.0",
     "zod": "^3.23.0"
   },

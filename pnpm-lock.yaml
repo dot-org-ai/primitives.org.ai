@@ -110,12 +110,12 @@ importers:
 
   packages/ai-experiments:
     dependencies:
+      ai-database:
+        specifier: workspace:*
+        version: link:../ai-database
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
-      chdb:
-        specifier: ^1.6.0
-        version: 1.6.0
 
   packages/ai-functions:
     dependencies:
@@ -473,6 +473,9 @@ importers:
       digital-objects:
         specifier: workspace:*
         version: link:../digital-objects
+      id.org.ai:
+        specifier: ^0.3.0
+        version: 0.3.0(express@5.2.1)(next@16.0.7(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(react-dom@19.2.1(react@19.2.0))(react@19.2.0))
       rpc.do:
         specifier: ^0.1.0
         version: 0.1.4
@@ -507,6 +510,9 @@ importers:
       rpc.do:
         specifier: '*'
         version: 0.1.4
+      schema.org.ai:
+        specifier: ^0.1.0
+        version: 0.1.0
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -4176,10 +4182,6 @@ packages:
   chat@4.27.0:
     resolution: {integrity: sha512-PrL4k263DSIlckhX8eHLT84RdTSznOBxCCfaDc5JVJtWaS0lJkCNctm/g3gIrI41AcDHcpc/3WDoUHVrbh0W4w==}
 
-  chdb@1.6.0:
-    resolution: {integrity: sha512-pURMhGVbTabjFaW7dP/TSeHenZ05G073EPgWf7GOL2I8Kp37M+xkQWGlWxWcGDKU6CSzFEuqcM23f8ZyrRaaMg==}
-    engines: {node: '>=18.0.0'}
-
   check-error@2.1.1:
     resolution: {integrity: sha512-OAlb+T7V4Op9OwdkjmguYRqncdlx5JiofwOAUkmTF+jNdHwzTaTs4sRAGpzLF3oOz5xAyDGrPgeIDFQmDOTiJw==}
     engines: {node: '>= 16'}
@@ -5732,9 +5734,6 @@ packages:
   node-addon-api@4.3.0:
     resolution: {integrity: sha512-73sE9+3UaLYYFmDsFZnqCInzPyh3MqIwZO9cw58yIqAZhONrrabrYyYe3TuIqtIiOuTXVhsGau8hcrhhwSsDIQ==}
 
-  node-addon-api@6.1.0:
-    resolution: {integrity: sha512-+eawOlIgy680F0kBzPUNFhMZGtJ1YmqM6l4+Crf4IkImjYrO/mqPwRMh352g23uIaQKFItcQ64I7KMaJxHgAVA==}
-
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
     engines: {node: '>=10.5.0'}
@@ -5752,10 +5751,6 @@ packages:
   node-fetch@3.3.2:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
-
-  node-gyp-build@4.8.4:
-    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
-    hasBin: true
 
   npm-run-path@4.0.1:
     resolution: {integrity: sha512-S48WzZW777zhNIrn7gxOlISNAqi9ZC/uQFnRdbeIHhZhCA6UqpkOT8T1G7BvfdgP4Er8gF4sUbaS0i7QvIfCWw==}
@@ -11233,11 +11228,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  chdb@1.6.0:
-    dependencies:
-      node-addon-api: 6.1.0
-      node-gyp-build: 4.8.4
-
   check-error@2.1.1: {}
 
   chokidar@5.0.0:
@@ -13306,8 +13296,6 @@ snapshots:
   node-addon-api@4.3.0:
     optional: true
 
-  node-addon-api@6.1.0: {}
-
   node-domexception@1.0.0: {}
 
   node-fetch@2.7.0:
@@ -13319,8 +13307,6 @@ snapshots:
       data-uri-to-buffer: 4.0.1
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
-
-  node-gyp-build@4.8.4: {}
 
   npm-run-path@4.0.1:
     dependencies:
