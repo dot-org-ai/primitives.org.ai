@@ -3,6 +3,9 @@
  */
 
 import type { AIFunctionDefinition, JSONSchema } from 'ai-functions'
+import type { Action } from 'digital-objects'
+import type { Worker } from 'digital-workers'
+import type { Task } from 'digital-tasks'
 
 // Re-export consolidated types from org.ai
 export type { Role, Team, Goal, Goals, KPI, OKR, KeyResult } from 'org.ai'
@@ -386,6 +389,97 @@ export interface SLAOptions {
   /** Priority-based SLA tiers */
   tiers?: Record<Priority, { deadlineMs: number }>
 }
+
+// ============================================================================
+// Channel Adapter (SVO co-design step 7 — aip-gvh0)
+// ============================================================================
+
+/**
+ * Identity reference — opaque pointer to an `id.org.ai` Identity record.
+ *
+ * String alias for now (matches `digital-workers.IdentityRef`); resolves to
+ * an upstream Identity (DID + scopes + payment instruments) once the
+ * `id.org.ai` submodule lands a typed surface. Re-declared here to avoid
+ * a hard import cycle through `digital-workers` for adapter-only callers.
+ */
+export type IdentityRef = string
+
+/**
+ * Channel kinds shipped with the digital-workers ecosystem.
+ *
+ * Per the SVO co-design (`docs/plans/2026-05-05-svo-co-design.md` §
+ * `human-in-the-loop.ChannelAdapter`) the following channel kinds are
+ * planned. Only `chat-sdk` is implemented in this package — other
+ * channels are reserved for sub-packages (`@org.ai/hitl-expo`,
+ * `@org.ai/hitl-slack`, etc.).
+ */
+export type ChannelKind = 'chat-sdk' | 'web' | 'expo' | 'email' | 'slack' | 'teams'
+
+/**
+ * Subscription handle returned by `dispatch` and `receive`.
+ *
+ * Follows the standard `unsubscribe()` pattern. `dispatch` returns one
+ * tied to the dispatched Task (so the caller can cancel a pending
+ * surface); `receive` returns one tied to the registered listener
+ * (so the caller can stop listening).
+ */
+export interface Subscription {
+  /** Stop listening / cancel the surfaced Task. Idempotent. */
+  unsubscribe(): void
+  /** Whether this subscription is still active. */
+  readonly closed: boolean
+}
+
+/**
+ * Channel adapter port.
+ *
+ * A `ChannelAdapter` is a concrete way a Worker is reached — Vercel
+ * Chat SDK (default for humans), web, mobile (Expo), email, Slack,
+ * Teams, agent runtime. It satisfies the dispatch/receive surface for
+ * a `digital-tasks.Task`.
+ *
+ * SVO co-design step 7 (aip-gvh0). The package owns this port; the
+ * Chat SDK adapter ships as the default `chat-sdk` implementation.
+ *
+ * @example
+ * ```ts
+ * import { defaultChannelAdapter } from 'human-in-the-loop'
+ *
+ * const sub = await defaultChannelAdapter.dispatch(task, worker)
+ * defaultChannelAdapter.receive((response) => {
+ *   if (response.verb === 'approved') doStuff(response)
+ * })
+ * ```
+ */
+export interface ChannelAdapter {
+  /** Discriminator for adapter selection / registry lookup. */
+  readonly kind: ChannelKind
+
+  /**
+   * Surface a Task to a Worker on this channel.
+   *
+   * Implementations push the Task body through the channel-native
+   * primitive (Chat SDK thread.post, email send, web push, etc.) and
+   * return a `Subscription` the caller can use to cancel the surfaced
+   * item before the Worker responds.
+   */
+  dispatch(task: Task, worker: Worker): Promise<Subscription>
+
+  /**
+   * Register a listener for Worker responses on this channel.
+   *
+   * Each Worker response comes through as an `Action` (e.g. `verb=
+   * 'approved'`, `verb='commented'`, `verb='replied'`) whose `subject`
+   * is the responding Worker's ThingRef and `cause` points at the
+   * dispatched Task's Action id. The caller should match `cause` back
+   * to its outstanding Tasks to correlate.
+   */
+  receive(callback: (response: Action) => void | Promise<void>): Subscription
+}
+
+// ============================================================================
+// Human Options
+// ============================================================================
 
 /**
  * Options for human interactions

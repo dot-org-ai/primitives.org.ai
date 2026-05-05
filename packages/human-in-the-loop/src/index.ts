@@ -363,6 +363,25 @@ export type {
   DashboardData,
 } from './fallback-resolution.js'
 
+// ============================================================================
+// Channel Adapter port + Vercel Chat SDK default (SVO step 7 — aip-gvh0)
+// ============================================================================
+
+// Export the ChannelAdapter port and Chat SDK adapter implementation.
+// The package owns the port; the Chat SDK adapter is the default channel
+// for human Workers. Other channels (web/expo/email/slack/teams) become
+// sub-packages and register their own adapters against this same port.
+export { chatSdkAdapter, defaultChannelAdapter } from './chat-sdk-adapter.js'
+
+export type {
+  ChatBotLike,
+  ChatThreadLike,
+  ChatMessageLike,
+  ChatSdkAdapterOptions,
+} from './chat-sdk-adapter.js'
+
+export type { ChannelAdapter, ChannelKind, Subscription, IdentityRef } from './types.js'
+
 // Export human-in-the-loop specific types
 export type {
   // Status and enums

@@ -30,6 +30,9 @@
   "dependencies": {
     "ai-functions": "workspace:*",
     "business-as-code": "workspace:*",
+    "chat": "^4.27.0",
+    "digital-objects": "workspace:*",
+    "digital-tasks": "workspace:*",
     "digital-workers": "workspace:*",
     "org.ai": "workspace:*",
     "rpc.do": "*"
