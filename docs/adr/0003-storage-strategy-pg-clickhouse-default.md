@@ -27,19 +27,31 @@ The `DBProvider` port serves all four adapters with declared capabilities:
 - **Tier 3 — analytics**: aggregations, time-series rollups, large-scale event scans. **Declared** — adapters say whether they support this efficiently. CH yes; PG with care; DO SQLite weak; R2 SQL TBD.
 - **Tier 4 — vector search**: embedding-similarity queries. **Declared and integration-shaped**. PG has `pgvector` natively; CH has vector functions; DO SQLite has no native vector support and requires **Vectorize as a sidecar** (per-deployment bindings, can't be dynamically provisioned the way DO SQLite databases can); R2 vector search is speculative/experimental and explicitly out of scope.
 
-### Two canonical stacks on the same port
+### Two canonical stacks on the same port — workload-driven choice
 
-**Stack A (portable, default for broader adoption):** Postgres (transactional + native pgvector) + ClickHouse (analytical + native vector functions). Both run on Workers (PG via Hyperdrive, CH via HTTP) or on Node. Bridge: Debezium-style replication or app-layer fan-out. **Vector search clean, no sidecar.** This is the recommended default for users who want portability.
+**Stack B (cascade-heavy default — Cloudflare-native):** DO SQLite (transactional, per-cascade isolation, scales horizontally by database count) + ClickHouse (analytical) + **Vectorize sidecar** when vector search is needed. Bridge: Pipelines → R2 → S3 Queue → CH ingest. **This is the default for the moat workload — cascading AI generations.** A single cascade can produce thousands of writes (entity + rels + sub-entities + sub-rels). Per-cascade DO isolation gives parallel write paths each at full single-DO throughput. PG's centralized-write model hits its ceiling (few-thousand inserts/sec) within one active cascade. Vectorize binding is the operational cost.
 
-**Stack B (Cloudflare-native):** DO SQLite (transactional, per-tenant, scales by database count) + ClickHouse (analytical) + **Vectorize sidecar** when vector search is needed. Bridge: Pipelines → R2 → S3 Queue → CH ingest. Vectorize introduces operational coupling — bindings must be provisioned per deployment, indexes can't be dynamically created the way DO SQLite databases can. R2 SQL becomes the alternative analytical layer once proven for our workloads.
+**Stack A (moderate-scale or non-cascade default — portable):** Postgres (transactional + native pgvector) + ClickHouse (analytical + native vector functions). Both run on Workers (PG via Hyperdrive, CH via HTTP) or on Node. Bridge: Debezium-style replication or app-layer fan-out. **Vector search clean, no sidecar.** Right choice for general-purpose AI primitive use, smaller cascades, broader adoption, simpler ops, or callers who specifically don't want Cloudflare lock-in. Hits the write ceiling on cascade-heavy workloads.
+
+**Storage choice = workload characteristics, not preference.** Callers running heavy cascade generation pick Stack B; callers running general AI primitives at moderate scale pick Stack A. The same `DBProvider` port serves both.
 
 Both stacks satisfy the same `DBProvider` port. Callers pick based on runtime constraints and existing infrastructure.
 
-### Cascade generation is the moat
+### Cascade generation is the moat — and dictates the storage shape
 
-The unique value of `ai-database` is **cascading AI generations** — not the storage adapters, which are infrastructure. The cascade generator sits *above* `DBProvider`: it produces SVO data (Things, Actions) that lands in whichever adapter is configured. Cascade is what gets the AIPromise / BatchProvider / ModelPolicy treatment. Architectural attention should concentrate on cascade quality, not on storage breadth.
+The unique value of `ai-database` is **cascading AI generations** — not the storage adapters, which are infrastructure. The cascade generator sits *above* `DBProvider`: it produces SVO data (Things, Actions) that lands in whichever adapter is configured.
 
-Storage adapter work is necessary infrastructure. Cascade generation work is the differentiator.
+The cascade workload is **write-heavy with read-back-during-traversal**. A single cascade traverses generated relations to inform subsequent generations — meaning point reads against just-written data are on the hot path. CH handles bulk insert but not these reads. PG handles them but only up to its centralized-write ceiling. DO SQLite handles both natively at per-database scale, with horizontal sharding via the per-cascade DO isolation pattern.
+
+This means the **cascade generator must be designed for sharded parallel writes from day one**. It should:
+
+- Write through a partition-aware adapter (one DO per cascade in Stack B; one PG schema or partition per cascade in Stack A's heavy use)
+- Read back through the same shard for traversal — no cross-shard reads on the hot path
+- Emit to CH for cross-cascade analytics asynchronously (Pipelines or app-layer fan-out)
+
+The `DBProvider` port exposes **shard-awareness** as part of its surface: adapters declare their sharding model (`per-cascade` for DO SQLite; `partitioned-by-tenant` for PG; `unsharded` for callers who don't need scale).
+
+Storage adapter work is necessary infrastructure. Cascade generation work — including the sharded-writes architecture that makes the moat workload viable — is the differentiator.
 
 ## Why not "Cloudflare-only"
 
@@ -60,7 +72,8 @@ Locks the audience to Workers. PG+CH is widely adopted; supporting it expands ad
 - DO SQLite stays first-class but is positioned for **per-tenant hot transactional data**, not as a universal default. Its analytics weakness and 10GB-per-database limit are documented so future architecture reviews don't re-suggest it for cross-tenant analytical queries.
 - R2 SQL is held back from initial implementation. PG + CH (Stack A) and DO SQLite + CH (Stack B) cover the canonical needs. Adding R2 SQL speculatively before it's proven creates surface that must be maintained for unclear payoff.
 - **R2 vector search is explicitly out of scope.** Multiple internal experiments have validated it works and scales, but it's not a canonical Cloudflare primitive yet. `ai-database` should not pull experimental providers; revisit when R2 vector lands as a stable Cloudflare offering.
-- **Vector search tilts the default toward Stack A.** pgvector is mature, no sidecar, works on Workers via Hyperdrive and on Node directly. Stack B requires Vectorize coupling when similarity search is needed — acceptable for callers who specifically want per-tenant DO SQLite isolation, but a real operational cost.
+- **Vector search adds a Vectorize sidecar cost to Stack B** (DO SQLite has no native vectors). Stack A has pgvector clean. This is a real operational cost for cascade-heavy users but acceptable given the cascade-throughput value Stack B delivers — Vectorize is a one-time per-deployment binding, not a per-cascade concern.
+- **Cascade write throughput dictates the stack choice, not portability.** Stack A's PG ceiling at ~few-thousand inserts/sec gets blown by a single active cascade. Stack B's DO SQLite per-cascade isolation is what makes the moat workload viable. Callers running heavy cascade generation must pick Stack B regardless of their portability preferences.
 - **Cascade generation is the architectural priority** — improving it pays back across all storage adapters and all callers.
 
 ## Follow-up beads
