@@ -1,17 +1,38 @@
 /**
- * Worker Export - AgentService WorkerEntrypoint
+ * Worker Export — dual purpose
  *
- * Provides AgentService as a WorkerEntrypoint with AgentServiceCore RpcTarget.
- * AgentService.connect() returns AgentServiceCore for agent operations.
+ * 1. **`AgentService` Cloudflare `WorkerEntrypoint`** — RPC-accessible service
+ *    for agent operations. Default export, used by wrangler. Existing surface.
+ * 2. **`agentAsWorker` adapter** — wraps an `Agent` (from this package) as a
+ *    `Worker` (from `digital-workers`). The adapter is what other packages
+ *    import when they want a kind-agnostic `Worker` over an autonomous agent
+ *    rather than the agent-specific surface. SVO co-design step 8 (aip-949e).
+ *
+ * Both exports coexist in this module; the dual-port shape lets callers reach
+ * for whichever port matches their need:
+ *
+ * ```ts
+ * import { Agent } from 'autonomous-agents'             // direct port
+ * import { agentAsWorker } from 'autonomous-agents/worker' // adapter port
+ * ```
  *
  * Uses real AI Gateway for agent reasoning/planning and Durable Objects
- * for agent state/memory persistence.
+ * for agent state/memory persistence (Cloudflare side).
  *
  * @packageDocumentation
  */
 
 // @ts-expect-error - cloudflare:workers is a Cloudflare Workers-specific module
 import { WorkerEntrypoint, RpcTarget } from 'cloudflare:workers'
+
+import type {
+  Worker as DigitalWorker,
+  WorkerStatus,
+  Contacts,
+  ContactPreferences,
+  IdentityRef,
+} from 'digital-workers'
+import type { Agent as AutonomousAgent } from './types.js'
 
 // ==================== Types ====================
 
@@ -822,3 +843,109 @@ export default AgentService
 
 // Export aliases
 export { AgentService as AgentWorker }
+
+// ==================== Worker Adapter (SVO step 8 — aip-949e) ====================
+
+/**
+ * Options for adapting an `Agent` to a `Worker`.
+ *
+ * The `Agent` returned by `Agent({ ... })` carries a name and a role but does
+ * not by itself carry the fields a `Worker` needs (id, contacts, identity).
+ * The adapter accepts those here so the same agent runtime can be presented
+ * as different Workers in different deployments (e.g. distinct identities or
+ * channels per environment).
+ */
+export interface AgentWorkerAdapterOptions {
+  /** Stable Worker id. If omitted, derived from the agent name (slugified). */
+  id?: string
+  /** Override the Worker `name`. Defaults to `agent.config.name`. */
+  name?: string
+  /** Initial Worker status. Defaults to `'available'`. */
+  status?: WorkerStatus
+  /**
+   * Contact channels through which this agent can be reached. Empty by
+   * default — most autonomous agents have no human-facing channel and are
+   * invoked programmatically. Callers wire this up when the agent should
+   * receive notifications via email/slack/etc.
+   */
+  contacts?: Contacts
+  /** Optional contact-routing preferences. */
+  preferences?: ContactPreferences
+  /** Reference to this Worker's `id.org.ai` Identity record. */
+  identity?: IdentityRef
+  /** Override skills. Defaults to `agent.config.role.skills`. */
+  skills?: string[]
+  /** Free-form metadata stored on the Worker. */
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * `agentAsWorker` — adapt an autonomous `Agent` to the kind-agnostic `Worker`
+ * interface from `digital-workers`.
+ *
+ * This is the **adapter port** of the `autonomous-agents` package. Use it
+ * when you want a `Worker` over an agent and don't care that the underlying
+ * runtime happens to be an autonomous agent (vs. a human, vs. some future
+ * worker kind). For agent-specific operations (`do`, `decide`, `approve`,
+ * goal/memory management, etc.), import the `Agent` from
+ * `autonomous-agents` directly.
+ *
+ * The returned object satisfies `Worker`. Runtime methods on `Worker` from
+ * the SVO co-design (`resolve()`/`do()`/`assign()`) are intentionally NOT
+ * synthesized here — those depend on broker integration and digital-tools
+ * dispatch, which are out of scope for this adapter (see the SVO plan).
+ *
+ * @example
+ * ```ts
+ * import { Agent } from 'autonomous-agents'
+ * import { agentAsWorker } from 'autonomous-agents/worker'
+ *
+ * const reviewer = Agent({ name: 'CodeReviewer', role: seniorEng })
+ * const worker = agentAsWorker(reviewer, {
+ *   id: 'agent_reviewer',
+ *   contacts: { api: { endpoint: 'https://api.internal/reviewer' } },
+ *   identity: 'did:web:example.com:agents:reviewer',
+ * })
+ * // `worker` is a `Worker` from digital-workers — pass it to anything that
+ * // takes a Worker (notify, ask, approve, withWorkers, …).
+ * ```
+ */
+export function agentAsWorker(
+  agent: AutonomousAgent,
+  options: AgentWorkerAdapterOptions = {}
+): DigitalWorker {
+  const name = options.name ?? agent.config.name
+  const id = options.id ?? slugifyId(name)
+
+  const worker: DigitalWorker = {
+    id,
+    name,
+    type: 'agent',
+    status: options.status ?? 'available',
+    contacts: options.contacts ?? {},
+    skills: options.skills ?? agent.config.role.skills,
+  }
+
+  if (options.preferences !== undefined) worker.preferences = options.preferences
+  if (options.identity !== undefined) worker.identity = options.identity
+  if (options.metadata !== undefined) worker.metadata = options.metadata
+
+  return worker
+}
+
+/**
+ * Slugify an agent name into a deterministic Worker id.
+ *
+ * Lowercases, replaces non-alphanumerics with `-`, collapses runs, trims
+ * leading/trailing dashes, and prefixes with `agent_` so the resulting id is
+ * easy to recognise in logs. If the name is empty after slugification, falls
+ * back to a stable random suffix.
+ */
+function slugifyId(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  if (slug.length > 0) return `agent_${slug}`
+  return `agent_${Math.random().toString(36).slice(2, 10)}`
+}
