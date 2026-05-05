@@ -55,10 +55,7 @@ function createFailureHandler(error: Error | string, delay = 0): TierHandler<nev
 /**
  * Create a mock tier handler that tracks calls
  */
-function createTrackingHandler<T>(
-  result: T,
-  tracker: { calls: number[] }
-): TierHandler<T> {
+function createTrackingHandler<T>(result: T, tracker: { calls: number[] }): TierHandler<T> {
   const startTime = Date.now()
   return {
     name: 'tracking-handler',
@@ -394,6 +391,8 @@ describe('CascadeExecutor', () => {
       })
 
       const resultPromise = executor.execute({ input: 'test' })
+      // Add a catch to prevent unhandled rejection before we can await it
+      resultPromise.catch(() => {})
       await vi.advanceTimersByTimeAsync(3001)
 
       await expect(resultPromise).rejects.toThrow(CascadeTimeoutError)
@@ -490,6 +489,8 @@ describe('CascadeExecutor', () => {
       })
 
       const resultPromise = executor.execute({ input: 'test' })
+      // Add a catch to prevent unhandled rejection before we can await it
+      resultPromise.catch(() => {})
       await vi.advanceTimersByTimeAsync(5001)
 
       try {
@@ -656,12 +657,8 @@ describe('CascadeExecutor', () => {
       await resultPromise
 
       // Should have start and end events for both tiers
-      const codeStart = events.find(
-        (e) => e.what.includes('code') && e.how.status === 'running'
-      )
-      const codeEnd = events.find(
-        (e) => e.what.includes('code') && e.how.status === 'failed'
-      )
+      const codeStart = events.find((e) => e.what.includes('code') && e.how.status === 'running')
+      const codeEnd = events.find((e) => e.what.includes('code') && e.how.status === 'failed')
       const genStart = events.find(
         (e) => e.what.includes('generative') && e.how.status === 'running'
       )
@@ -691,12 +688,8 @@ describe('CascadeExecutor', () => {
       await vi.runAllTimersAsync()
       await resultPromise
 
-      const cascadeStart = events.find(
-        (e) => e.what === 'cascade-start'
-      )
-      const cascadeComplete = events.find(
-        (e) => e.what === 'cascade-complete'
-      )
+      const cascadeStart = events.find((e) => e.what === 'cascade-start')
+      const cascadeComplete = events.find((e) => e.what === 'cascade-complete')
 
       expect(cascadeStart).toBeDefined()
       expect(cascadeComplete).toBeDefined()

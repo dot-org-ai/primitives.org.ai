@@ -43,9 +43,9 @@ describe('Barrier/Join Semantics', () => {
 
     it('should preserve order of results', async () => {
       // step2 resolves first but should be in position 1
-      const step1 = new Promise<number>(resolve => setTimeout(() => resolve(1), 100))
-      const step2 = new Promise<number>(resolve => setTimeout(() => resolve(2), 50))
-      const step3 = new Promise<number>(resolve => setTimeout(() => resolve(3), 150))
+      const step1 = new Promise<number>((resolve) => setTimeout(() => resolve(1), 100))
+      const step2 = new Promise<number>((resolve) => setTimeout(() => resolve(2), 50))
+      const step3 = new Promise<number>((resolve) => setTimeout(() => resolve(3), 150))
 
       const promise = waitForAll([step1, step2, step3])
       await vi.advanceTimersByTimeAsync(200)
@@ -63,9 +63,11 @@ describe('Barrier/Join Semantics', () => {
     })
 
     it('should support timeout option', async () => {
-      const slowStep = new Promise(resolve => setTimeout(() => resolve('slow'), 5000))
+      const slowStep = new Promise((resolve) => setTimeout(() => resolve('slow'), 5000))
 
       const promise = waitForAll([slowStep], { timeout: 1000 })
+      // Add a catch to prevent unhandled rejection before we can await it
+      promise.catch(() => {})
 
       await vi.advanceTimersByTimeAsync(1500)
 
@@ -73,7 +75,7 @@ describe('Barrier/Join Semantics', () => {
     })
 
     it('should return results within timeout', async () => {
-      const step1 = new Promise<string>(resolve => setTimeout(() => resolve('fast'), 100))
+      const step1 = new Promise<string>((resolve) => setTimeout(() => resolve('fast'), 100))
 
       const promise = waitForAll([step1], { timeout: 1000 })
       await vi.advanceTimersByTimeAsync(200)
@@ -90,9 +92,9 @@ describe('Barrier/Join Semantics', () => {
 
   describe('waitForAny', () => {
     it('should resolve when N of M steps complete', async () => {
-      const step1 = new Promise<string>(resolve => setTimeout(() => resolve('first'), 100))
-      const step2 = new Promise<string>(resolve => setTimeout(() => resolve('second'), 200))
-      const step3 = new Promise<string>(resolve => setTimeout(() => resolve('third'), 300))
+      const step1 = new Promise<string>((resolve) => setTimeout(() => resolve('first'), 100))
+      const step2 = new Promise<string>((resolve) => setTimeout(() => resolve('second'), 200))
+      const step3 = new Promise<string>((resolve) => setTimeout(() => resolve('third'), 300))
 
       const promise = waitForAny(2, [step1, step2, step3])
       await vi.advanceTimersByTimeAsync(250)
@@ -105,7 +107,7 @@ describe('Barrier/Join Semantics', () => {
     })
 
     it('should resolve immediately when N=0', async () => {
-      const step1 = new Promise<string>(resolve => setTimeout(() => resolve('a'), 1000))
+      const step1 = new Promise<string>((resolve) => setTimeout(() => resolve('a'), 1000))
 
       const result = await waitForAny(0, [step1])
 
@@ -123,10 +125,12 @@ describe('Barrier/Join Semantics', () => {
     })
 
     it('should support timeout', async () => {
-      const slowStep1 = new Promise(resolve => setTimeout(() => resolve('a'), 5000))
-      const slowStep2 = new Promise(resolve => setTimeout(() => resolve('b'), 5000))
+      const slowStep1 = new Promise((resolve) => setTimeout(() => resolve('a'), 5000))
+      const slowStep2 = new Promise((resolve) => setTimeout(() => resolve('b'), 5000))
 
       const promise = waitForAny(2, [slowStep1, slowStep2], { timeout: 1000 })
+      // Add a catch to prevent unhandled rejection before we can await it
+      promise.catch(() => {})
 
       await vi.advanceTimersByTimeAsync(1500)
 
@@ -134,8 +138,8 @@ describe('Barrier/Join Semantics', () => {
     })
 
     it('should return partial results on timeout when configured', async () => {
-      const fast = new Promise<string>(resolve => setTimeout(() => resolve('fast'), 100))
-      const slow = new Promise<string>(resolve => setTimeout(() => resolve('slow'), 5000))
+      const fast = new Promise<string>((resolve) => setTimeout(() => resolve('fast'), 100))
+      const slow = new Promise<string>((resolve) => setTimeout(() => resolve('slow'), 5000))
 
       const promise = waitForAny(2, [fast, slow], {
         timeout: 1000,
@@ -189,6 +193,8 @@ describe('Barrier/Join Semantics', () => {
       barrier.arrive('first')
 
       const promise = barrier.wait()
+      // Add a catch to prevent unhandled rejection before we can await it
+      promise.catch(() => {})
       await vi.advanceTimersByTimeAsync(1500)
 
       await expect(promise).rejects.toBeInstanceOf(BarrierTimeoutError)
@@ -265,7 +271,7 @@ describe('Barrier/Join Semantics', () => {
       const inputs = [1, 2, 3, 4, 5]
 
       // Map phase (fanout)
-      const mapped = await waitForAll(inputs.map(x => Promise.resolve(x * 2)))
+      const mapped = await waitForAll(inputs.map((x) => Promise.resolve(x * 2)))
 
       // Reduce phase (convergence)
       const reduced = mapped.reduce((sum, x) => sum + x, 0)
@@ -278,16 +284,16 @@ describe('Barrier/Join Semantics', () => {
     it('should limit concurrent executions', async () => {
       const maxConcurrent = 2
       const tasks = [
-        () => new Promise<number>(resolve => setTimeout(() => resolve(1), 100)),
-        () => new Promise<number>(resolve => setTimeout(() => resolve(2), 100)),
-        () => new Promise<number>(resolve => setTimeout(() => resolve(3), 100)),
-        () => new Promise<number>(resolve => setTimeout(() => resolve(4), 100)),
+        () => new Promise<number>((resolve) => setTimeout(() => resolve(1), 100)),
+        () => new Promise<number>((resolve) => setTimeout(() => resolve(2), 100)),
+        () => new Promise<number>((resolve) => setTimeout(() => resolve(3), 100)),
+        () => new Promise<number>((resolve) => setTimeout(() => resolve(4), 100)),
       ]
 
       let concurrentCount = 0
       let maxObservedConcurrent = 0
 
-      const trackedTasks = tasks.map(task => async () => {
+      const trackedTasks = tasks.map((task) => async () => {
         concurrentCount++
         maxObservedConcurrent = Math.max(maxObservedConcurrent, concurrentCount)
         try {
@@ -307,9 +313,9 @@ describe('Barrier/Join Semantics', () => {
 
     it('should preserve order even with varying task durations', async () => {
       const tasks = [
-        () => new Promise<string>(resolve => setTimeout(() => resolve('a'), 300)),
-        () => new Promise<string>(resolve => setTimeout(() => resolve('b'), 100)),
-        () => new Promise<string>(resolve => setTimeout(() => resolve('c'), 200)),
+        () => new Promise<string>((resolve) => setTimeout(() => resolve('a'), 300)),
+        () => new Promise<string>((resolve) => setTimeout(() => resolve('b'), 100)),
+        () => new Promise<string>((resolve) => setTimeout(() => resolve('c'), 200)),
       ]
 
       const promise = withConcurrencyLimit(tasks, 2)
@@ -351,6 +357,8 @@ describe('Barrier/Join Semantics', () => {
       barrier.arrive('first')
 
       const promise = barrier.wait()
+      // Add a catch to prevent unhandled rejection before we can await it
+      promise.catch(() => {})
       await vi.advanceTimersByTimeAsync(1500)
 
       let caughtError: BarrierTimeoutError | null = null
@@ -418,8 +426,8 @@ describe('Barrier/Join Semantics', () => {
       const controller = new AbortController()
 
       const slowTasks = [
-        new Promise<string>(resolve => setTimeout(() => resolve('a'), 5000)),
-        new Promise<string>(resolve => setTimeout(() => resolve('b'), 5000)),
+        new Promise<string>((resolve) => setTimeout(() => resolve('a'), 5000)),
+        new Promise<string>((resolve) => setTimeout(() => resolve('b'), 5000)),
       ]
 
       const promise = waitForAll(slowTasks, { signal: controller.signal })
