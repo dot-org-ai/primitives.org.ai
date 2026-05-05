@@ -623,6 +623,38 @@ export type {
 } from './ch-adapter.js'
 
 // =============================================================================
+// Cascade Write Strategy — sharded parallel writes (Phase 2 entry; aip-g1i9)
+// =============================================================================
+// Per ADR-0003: cascade orchestrator must write through a partition-aware
+// adapter. This module is the *primitive* the orchestrator (`aip-8yal`) calls.
+// PG path uses the CTE jsonb-bulk shape proven by the substrate-write-probes
+// (91ms p50 / 500 docs+499 rels on Neon HTTP); DO SQLite path routes through
+// the per-cascade DO via the adapter's `withContext` binding.
+
+export {
+  CascadeWriteStrategy,
+  CascadeShardingStrategies,
+  createCascadeWriteStrategy,
+  buildPgCommitBatchSql,
+  resolveDOIdName,
+  chunkBatch,
+} from './cascade-write-strategy.js'
+
+export type {
+  ShardRef,
+  CascadeShardContext,
+  CascadeShardingStrategy,
+  CascadeThing,
+  CascadeAction,
+  CascadeBatch,
+  CascadeBatchResult,
+  BulkCommitCapable,
+  ShardContextBindable,
+  AnalyticalEmitter,
+  CascadeWriteStrategyOptions,
+} from './cascade-write-strategy.js'
+
+// =============================================================================
 // DBProvider Port — SVO-shaped contract with declared capability tiers
 // =============================================================================
 // Per ADR-0003: Tier 1+2 are universal (shape unchanged from `schema/provider`);
