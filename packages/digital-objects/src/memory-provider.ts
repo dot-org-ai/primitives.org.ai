@@ -120,6 +120,10 @@ export class MemoryProvider implements DigitalObjectsProvider {
 
   async defineVerb(def: VerbDefinition): Promise<Verb> {
     const derived = deriveVerb(def.name)
+    // SVO co-design (aip-akqb): canonical Verb registries (verbs.org.ai,
+    // process.org.ai, tasks.org.ai) are not yet published. defineVerb()
+    // defaults `source: 'domain'` and `canonical: false` for user-defined
+    // verbs; no canonical verbs are pre-loaded into the registry.
     const verb: Verb = {
       name: def.name,
       action: def.action ?? derived.action,
@@ -131,6 +135,9 @@ export class MemoryProvider implements DigitalObjectsProvider {
       reverseIn: def.reverseIn ?? derived.reverseIn,
       inverse: def.inverse,
       description: def.description,
+      frame: def.frame,
+      source: def.source ?? 'domain',
+      canonical: def.canonical ?? false,
       createdAt: new Date(),
     }
     this.verbs.set(verb.name, verb)

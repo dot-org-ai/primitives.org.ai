@@ -436,7 +436,9 @@ export class NS implements DigitalObjectsProvider {
       if (path === '/batch/actions' && method === 'POST') {
         const rawBody = await request.json()
         const { actions } = BatchPerformActionsSchema.parse(rawBody)
-        const results = await this.performMany(actions as Array<{ verb: string; subject?: string; object?: string; data?: unknown }>)
+        const results = await this.performMany(
+          actions as Array<{ verb: string; subject?: string; object?: string; data?: unknown }>
+        )
         return Response.json(results)
       }
 
@@ -538,6 +540,13 @@ export class NS implements DigitalObjectsProvider {
     const derived = deriveVerb(def.name)
     const now = Date.now()
 
+    // SVO co-design (aip-akqb): frame/source/canonical are part of the
+    // Verb type shape, but the SQLite verbs table does not yet persist
+    // them — values are returned and cached in-memory only. A future
+    // migration will add `frame TEXT`, `source TEXT`, `canonical INTEGER`
+    // columns. Until canonical Verb registries (verbs.org.ai,
+    // process.org.ai, tasks.org.ai) publish, the registry is empty and
+    // user-defined verbs default to source='domain', canonical=false.
     this.sql.exec(
       `INSERT OR REPLACE INTO verbs
        (name, action, act, activity, event, reverse_by, reverse_at, reverse_in, inverse, description, created_at)
@@ -566,6 +575,9 @@ export class NS implements DigitalObjectsProvider {
       reverseIn: def.reverseIn ?? derived.reverseIn,
       inverse: def.inverse,
       description: def.description,
+      frame: def.frame,
+      source: def.source ?? 'domain',
+      canonical: def.canonical ?? false,
       createdAt: new Date(now),
     }
 

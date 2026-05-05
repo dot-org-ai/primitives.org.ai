@@ -58,7 +58,94 @@ export interface NounDefinition {
 }
 
 /**
+ * NounRef - Reference to a Noun by name
+ *
+ * String alias that documents intent: this string identifies a Noun
+ * (e.g., 'Customer', 'Order') registered in the ontology.
+ */
+export type NounRef = string
+
+/**
+ * ThingRef - Reference to a Thing by id
+ *
+ * String alias that documents intent: this string identifies a specific
+ * Thing instance (Thing.id) — the entity playing a role in an Action.
+ */
+export type ThingRef = string
+
+/**
+ * ActionRef - Reference to an Action by id
+ *
+ * String alias that documents intent: this string identifies a specific
+ * Action (Action.id) — used for parent/cause linkage between Actions.
+ */
+export type ActionRef = string
+
+/**
+ * FrameRole - Closed taxonomy of complement roles a Verb can take.
+ *
+ * Defined in CONTEXT.md. The literal `when`/`where` are carried directly
+ * on Action (timestamp, location) and are not in this taxonomy.
+ */
+export type FrameRole =
+  | 'subject'
+  | 'object'
+  | 'recipient'
+  | 'source'
+  | 'destination'
+  | 'instrument'
+  | 'topic'
+  | 'cause'
+  | 'manner'
+
+/**
+ * Frame - Set of complement roles a Verb declares.
+ *
+ * - `subject` is required ('any' permits any Noun, useful for permissive
+ *   defaults when a Verb is declared without a specific subject restriction)
+ * - `instrument` may reference a Tool literal
+ * - `cause` links to a parent Action
+ * - `manner` is an enum/string list, not a Thing reference
+ */
+export interface Frame {
+  subject: NounRef | 'any'
+  object?: NounRef | undefined
+  recipient?: NounRef | undefined
+  source?: NounRef | undefined
+  destination?: NounRef | undefined
+  instrument?: NounRef | 'Tool' | undefined
+  topic?: NounRef | undefined
+  cause?: 'Action' | undefined
+  manner?: string[] | undefined
+}
+
+/**
+ * VerbSource - Provenance taxonomy for canonical Verb registries.
+ *
+ * - `verbs.org.ai` — primary canonical registry (NOT YET PUBLISHED)
+ * - `apqc` — APQC Process Classification Framework
+ * - `onet` — O*NET occupational task taxonomy
+ * - `domain` — domain-specific verb defined locally (default for user-defined)
+ *
+ * NOTE: As of 2026-05-05 none of `verbs.org.ai`, `process.org.ai`, or
+ * `tasks.org.ai` are published. No canonical Verbs are pre-loaded into
+ * the registry; defineVerb() defaults to `source: 'domain'` and
+ * `canonical: false` until those upstream sources publish.
+ */
+export type VerbSource = 'verbs.org.ai' | 'apqc' | 'onet' | 'domain'
+
+/**
  * Verb - Action definition with all conjugations
+ *
+ * Carries:
+ * - linguistic conjugations (action/act/activity/event)
+ * - reverse forms (reverseBy/reverseAt/reverseIn)
+ * - optional Frame declaring complement-role types (SVO co-design)
+ * - optional provenance (source) and canonicality flag
+ *
+ * `frame`, `source`, and `canonical` are optional for backward
+ * compatibility. Verbs defined without a frame are treated as permissive
+ * (effectively `{ subject: 'any' }`) by tools that consume frames.
  */
 export interface Verb {
   name: string // 'create', 'publish'
@@ -71,6 +158,9 @@ export interface Verb {
   reverseIn?: string | undefined // 'createdIn'
   inverse?: string | undefined // 'delete'
   description?: string | undefined
+  frame?: Frame | undefined // Complement-role declaration (SVO co-design)
+  source?: VerbSource | undefined // Provenance; defaults to 'domain' when defining
+  canonical?: boolean | undefined // True for pre-loaded canonical verbs; defaults to false
   createdAt: Date
 }
 
@@ -86,6 +176,9 @@ export interface VerbDefinition {
   reverseIn?: string | undefined
   inverse?: string | undefined
   description?: string | undefined
+  frame?: Frame | undefined
+  source?: VerbSource | undefined
+  canonical?: boolean | undefined
 }
 
 /**
@@ -106,12 +199,18 @@ export interface Thing<T = Record<string, unknown>> {
  * - A graph edge (subject --verb--> object)
  * - An event (something happened)
  * - An audit record (who did what when)
+ *
+ * `roles` carries the remaining Frame slots beyond subject/object
+ * (recipient, source, destination, instrument, topic, cause, manner).
+ * Values are ThingRef (a Thing.id) for entity-shaped roles, or string
+ * for `manner` enum values. Optional for backward compatibility.
  */
 export interface Action<T = Record<string, unknown>> {
   id: string
   verb: string // References verb.name
   subject?: string | undefined // Thing ID (actor/from)
   object?: string | undefined // Thing ID (target/to)
+  roles?: Partial<Record<FrameRole, ThingRef | string>> | undefined // Remaining Frame slots
   data?: T | undefined // Payload/metadata
   status: ActionStatusType
   createdAt: Date
