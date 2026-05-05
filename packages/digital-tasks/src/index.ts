@@ -79,13 +79,17 @@ export type {
   WorkerRef,
   WorkerType,
   TaskDependency,
+  TaskDep,
   DependencyType,
   TaskProgress,
   TaskEvent,
+  Comment,
   CreateTaskOptions,
   UpdateTaskOptions,
   TaskQuery,
   TaskQueueStats,
+  // Action supertype (re-exported from digital-objects)
+  Action,
   // Function types (re-exported from ai-functions)
   FunctionDefinition,
   CodeFunctionDefinition,
@@ -154,8 +158,4 @@ export {
 
 export type { SerializeOptions } from './markdown.js'
 
-export {
-  parseMarkdown,
-  toMarkdown,
-  syncStatusFromMarkdown,
-} from './markdown.js'
+export { parseMarkdown, toMarkdown, syncStatusFromMarkdown } from './markdown.js'

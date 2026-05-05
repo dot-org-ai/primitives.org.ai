@@ -182,6 +182,56 @@ describe('Task Management', () => {
       expect(task.tags).toEqual(['urgent', 'frontend'])
       expect(task.metadata).toEqual({ source: 'api', version: '1.0' })
     })
+
+    it('should set Action supertype fields ($type, verb, tool alias)', async () => {
+      const func: FunctionDefinition = {
+        type: 'generative',
+        name: 'summarize',
+        args: { text: 'text' },
+        output: 'string',
+      }
+
+      const task = await createTask({ function: func })
+
+      // $type discriminator
+      expect(task.$type).toBe('Task')
+      // verb defaults to underlying function name
+      expect(task.verb).toBe('summarize')
+      // tool alias mirrors function (CONTEXT.md vocabulary migration)
+      expect(task.tool).toBe(task.function)
+    })
+
+    it('should accept GitHub-issue-shaped fields', async () => {
+      const func: FunctionDefinition = {
+        type: 'generative',
+        name: 'review-pr',
+        args: {},
+        output: 'string',
+      }
+
+      const assignees: WorkerRef[] = [
+        { type: 'human', id: 'user_1', name: 'Alice' },
+        { type: 'human', id: 'user_2', name: 'Bob' },
+      ]
+
+      const task = await createTask({
+        function: func,
+        title: 'Review PR #42',
+        body: '## Summary\n\nReview the proposed change to the auth flow.',
+        labels: ['review', 'auth'],
+        project: 'sprint-12',
+        assignees,
+      })
+
+      expect(task.title).toBe('Review PR #42')
+      expect(task.body).toContain('Review the proposed change')
+      expect(task.labels).toEqual(['review', 'auth'])
+      expect(task.project).toBe('sprint-12')
+      expect(task.assignees).toEqual(assignees)
+      // First assignee becomes primary `assignment`
+      expect(task.assignment?.worker).toEqual(assignees[0])
+      expect(task.status).toBe('assigned')
+    })
   })
 
   describe('getTask()', () => {
@@ -351,7 +401,7 @@ describe('Task Management', () => {
       const updated = await addComment(task.id, 'This is a comment', author)
 
       expect(updated).toBeDefined()
-      const commentEvent = updated!.events?.find(e => e.type === 'comment')
+      const commentEvent = updated!.events?.find((e) => e.type === 'comment')
       expect(commentEvent).toBeDefined()
       expect(commentEvent!.message).toBe('This is a comment')
       expect(commentEvent!.actor).toEqual(author)

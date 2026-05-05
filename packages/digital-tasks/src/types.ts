@@ -1,9 +1,17 @@
 /**
  * Types for digital-tasks
  *
- * Task = Function + metadata (status, progress, assignment, dependencies)
+ * Task = Action + issue-shaped metadata (title, body, comments, labels,
+ * dependencies, assignees, project). A Task is a specialization of an
+ * `Action` (`digital-objects.Action`) with project-management overlay,
+ * per the SVO co-design (`docs/plans/2026-05-05-svo-co-design.md`).
  *
- * Every task is a function call. The function can be:
+ * Every task wraps a callable Verb — historically the `function` field
+ * (an `ai-functions.FunctionDefinition`). Per CONTEXT.md the canonical
+ * name for callable Verbs is **Tool**; `function` is being renamed to
+ * `tool` over time. See the `function` / `tool` fields below.
+ *
+ * The function (now Tool) can be:
  * - Code: generates executable code
  * - Generative: AI generates content (no tools)
  * - Agentic: AI with tools in a loop
@@ -19,6 +27,7 @@ import type {
   AgenticFunctionDefinition,
   HumanFunctionDefinition,
 } from 'ai-functions'
+import type { Action } from 'digital-objects'
 
 // Re-export function types for convenience
 export type {
@@ -29,6 +38,9 @@ export type {
   HumanFunctionDefinition,
 }
 
+// Re-export Action so consumers can see the supertype
+export type { Action }
+
 // ============================================================================
 // Task Status and Priority
 // ============================================================================
@@ -37,15 +49,15 @@ export type {
  * Task lifecycle status
  */
 export type TaskStatus =
-  | 'pending'      // Created but not started
-  | 'queued'       // In queue waiting for worker
-  | 'assigned'     // Assigned to a worker
-  | 'in_progress'  // Being worked on
-  | 'blocked'      // Waiting on dependency
-  | 'review'       // Awaiting review
-  | 'completed'    // Successfully finished
-  | 'failed'       // Failed with error
-  | 'cancelled'    // Cancelled
+  | 'pending' // Created but not started
+  | 'queued' // In queue waiting for worker
+  | 'assigned' // Assigned to a worker
+  | 'in_progress' // Being worked on
+  | 'blocked' // Waiting on dependency
+  | 'review' // Awaiting review
+  | 'completed' // Successfully finished
+  | 'failed' // Failed with error
+  | 'cancelled' // Cancelled
 
 /**
  * Task priority levels
@@ -89,11 +101,11 @@ export interface TaskAssignment {
  * Dependency type
  */
 export type DependencyType =
-  | 'blocks'       // This task blocks another
-  | 'blocked_by'   // This task is blocked by another
-  | 'related_to'   // Related but not blocking
-  | 'parent'       // Parent task
-  | 'child'        // Child subtask
+  | 'blocks' // This task blocks another
+  | 'blocked_by' // This task is blocked by another
+  | 'related_to' // Related but not blocking
+  | 'parent' // Parent task
+  | 'child' // Child subtask
 
 /**
  * Task dependency
@@ -125,7 +137,17 @@ export interface TaskProgress {
  */
 export interface TaskEvent {
   id: string
-  type: 'created' | 'assigned' | 'started' | 'progress' | 'blocked' | 'unblocked' | 'completed' | 'failed' | 'cancelled' | 'comment'
+  type:
+    | 'created'
+    | 'assigned'
+    | 'started'
+    | 'progress'
+    | 'blocked'
+    | 'unblocked'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'comment'
   timestamp: Date
   actor?: WorkerRef
   data?: unknown
@@ -133,23 +155,96 @@ export interface TaskEvent {
 }
 
 // ============================================================================
+// Comments (issue-shaped child Actions)
+// ============================================================================
+
+/**
+ * Comment - a thin wrapper around a comment posted on a Task.
+ *
+ * Per the SVO co-design, comments are child Actions of verb 'commented'
+ * whose `cause` role points back at the parent Task's Action id. This
+ * shape is the surfaced view of such an Action for issue-shaped UIs.
+ */
+export interface Comment {
+  /** Comment id (matches the underlying Action id when persisted) */
+  id: string
+  /** Markdown body of the comment */
+  body: string
+  /** Who posted the comment */
+  author?: WorkerRef
+  /** When the comment was posted */
+  createdAt: Date
+}
+
+// ============================================================================
 // Core Task Interface
 // ============================================================================
 
 /**
- * Task = Function + metadata
+ * Task = Action + issue-shaped metadata
  *
- * A task wraps a function (code, generative, agentic, or human)
- * with lifecycle management, assignment, and dependencies.
+ * A Task is a specialization of `digital-objects.Action` carrying
+ * project-management overlay (title, body, comments, labels,
+ * dependencies, assignees, milestone/project). The Action supertype
+ * provides id/verb/subject/object/roles/data/createdAt/completedAt.
+ *
+ * Status: Action's status taxonomy is lifecycle-only
+ * (pending/active/completed/failed/cancelled). Task's status taxonomy
+ * is project-management shaped (queued/assigned/in_progress/blocked/
+ * review/...). We omit Action's `status` and replace it with the
+ * Task-specific `TaskStatus`. Both supersets share `pending`,
+ * `completed`, `failed`, `cancelled`.
+ *
+ * Verb: every Task is an Action of some Verb. For tasks created via
+ * the legacy `createTask({ function })` path, `verb` defaults to the
+ * function's name (e.g. `'summarize'`).
+ *
+ * Backward compatibility: all previously-valid Task shapes remain
+ * assignable. Newly added fields (title/body/labels/project/assignees/
+ * comments/$type/verb) are optional or have defaults populated by
+ * `createTask`.
  */
-export interface Task<TInput = unknown, TOutput = unknown> {
-  /** Unique task ID */
-  id: string
+export type Task<TInput = unknown, TOutput = unknown> = Omit<Action<TInput>, 'status'> & {
+  /** MDXLD type discriminator */
+  $type?: 'Task'
 
-  /** The function this task executes */
+  /**
+   * The function (Tool) this task executes.
+   *
+   * @deprecated The canonical name for callable Verbs is **Tool**
+   * (see CONTEXT.md). Prefer the `tool` alias on new code; both fields
+   * point at the same value when populated by `createTask`. The
+   * `function` field will be removed in a future major version once
+   * callers have migrated.
+   */
   function: FunctionDefinition<TInput, TOutput>
 
-  /** Current status */
+  /**
+   * Tool alias for `function`. Populated by `createTask` so consumers
+   * can read either name. Prefer `tool` in new code.
+   */
+  tool?: FunctionDefinition<TInput, TOutput>
+
+  /** Issue title (short, single-line) */
+  title?: string
+
+  /** Rich markdown body / description */
+  body?: string
+
+  /** GitHub-issue-shaped labels */
+  labels?: string[]
+
+  /** Milestone or project reference (string ref; cf. `projectId` for
+   *  the durable internal id when a `Project` exists in this package). */
+  project?: string
+
+  /** Comments posted on this task (child Actions of verb 'commented') */
+  comments?: Comment[]
+
+  /** Workers assigned to this task */
+  assignees?: WorkerRef[]
+
+  /** Current task status (specialization — see jsdoc above) */
   status: TaskStatus
 
   /** Priority level */
@@ -166,10 +261,10 @@ export interface Task<TInput = unknown, TOutput = unknown> {
   error?: string
 
   // Assignment
-  /** Who can work on this */
+  /** Worker types permitted to claim this task */
   allowedWorkers?: WorkerType[]
 
-  /** Current assignment */
+  /** Current assignment (single primary worker) */
   assignment?: TaskAssignment
 
   // Dependencies
@@ -181,9 +276,6 @@ export interface Task<TInput = unknown, TOutput = unknown> {
   progress?: TaskProgress
 
   // Timing
-  /** When created */
-  createdAt: Date
-
   /** Scheduled start time */
   scheduledFor?: Date
 
@@ -193,9 +285,6 @@ export interface Task<TInput = unknown, TOutput = unknown> {
   /** When started */
   startedAt?: Date
 
-  /** When completed */
-  completedAt?: Date
-
   /** Timeout in ms */
   timeout?: number
 
@@ -203,7 +292,8 @@ export interface Task<TInput = unknown, TOutput = unknown> {
   /** Parent task ID */
   parentId?: string
 
-  /** Project ID */
+  /** Project ID (internal `Project.id` when this Task belongs to a
+   *  Project in this package; distinct from `project` ref string) */
   projectId?: string
 
   // Metadata
@@ -215,6 +305,18 @@ export interface Task<TInput = unknown, TOutput = unknown> {
 
   /** Event history */
   events?: TaskEvent[]
+}
+
+/**
+ * Task dependency tuple — minimal shape from the SVO design doc.
+ *
+ * `TaskDependency` (above) is the richer in-package shape with a
+ * full DependencyType set; `TaskDep` is the issue-shaped pair from
+ * the design doc, retained as a convenience export.
+ */
+export interface TaskDep {
+  taskId: string
+  type: 'blocked_by' | 'related'
 }
 
 /**
@@ -296,6 +398,8 @@ export interface CreateTaskOptions<TInput = unknown, TOutput = unknown> {
   priority?: TaskPriority
   allowedWorkers?: WorkerType[]
   assignTo?: WorkerRef
+  /** Multiple assignees (issue-shaped); first becomes the primary `assignment` */
+  assignees?: WorkerRef[]
   dependencies?: string[]
   scheduledFor?: Date
   deadline?: Date
@@ -304,6 +408,15 @@ export interface CreateTaskOptions<TInput = unknown, TOutput = unknown> {
   parentId?: string
   projectId?: string
   metadata?: Record<string, unknown>
+  // Issue-shaped fields (SVO co-design)
+  /** Issue title (short, single-line) */
+  title?: string
+  /** Rich markdown body / description */
+  body?: string
+  /** GitHub-issue-shaped labels */
+  labels?: string[]
+  /** Milestone or project ref string */
+  project?: string
 }
 
 /**

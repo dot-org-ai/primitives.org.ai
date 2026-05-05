@@ -70,7 +70,15 @@ export async function createTask<TInput = unknown, TOutput = unknown>(
 
   const task: Task<TInput, TOutput> = {
     id: generateTaskId(),
+    $type: 'Task',
+    // Action supertype: every Task is an Action of some Verb. Default
+    // the verb to the underlying function's name when not supplied.
+    verb: options.function.name,
     function: options.function,
+    // Mirror function -> tool alias (CONTEXT.md: function is being
+    // renamed to tool; both fields are populated for the duration of
+    // the deprecation window).
+    tool: options.function,
     status: options.scheduledFor ? 'pending' : 'queued',
     priority: options.priority || 'normal',
     allowedWorkers,
@@ -104,11 +112,28 @@ export async function createTask<TInput = unknown, TOutput = unknown>(
   if (options.metadata !== undefined) {
     task.metadata = options.metadata
   }
+  // Issue-shaped fields (SVO co-design)
+  if (options.title !== undefined) {
+    task.title = options.title
+  }
+  if (options.body !== undefined) {
+    task.body = options.body
+  }
+  if (options.labels !== undefined) {
+    task.labels = options.labels
+  }
+  if (options.project !== undefined) {
+    task.project = options.project
+  }
+  if (options.assignees !== undefined) {
+    task.assignees = options.assignees
+  }
 
-  // Auto-assign if specified
-  if (options.assignTo) {
+  // Auto-assign if specified (single primary worker takes precedence)
+  const primaryAssignee = options.assignTo ?? options.assignees?.[0]
+  if (primaryAssignee) {
     task.assignment = {
-      worker: options.assignTo,
+      worker: primaryAssignee,
       assignedAt: now,
     }
     task.status = 'assigned'

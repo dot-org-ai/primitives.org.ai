@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "ai-functions": "workspace:*",
+    "digital-objects": "workspace:*",
     "digital-tools": "workspace:*",
     "digital-workers": "workspace:*",
     "rpc.do": "^0.1.0"
