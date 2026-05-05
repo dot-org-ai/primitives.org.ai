@@ -2,7 +2,3 @@ packages:
   - 'packages/*'
   - 'examples'
   - 'site'
-  # External submodule: dot-org-ai/id.org.ai (root package only; do not include
-  # its internal `packages/*` to avoid absorbing the upstream monorepo's nested
-  # workspace members). Submodule managed via `git submodule` under external/.
-  - 'external/id.org.ai'

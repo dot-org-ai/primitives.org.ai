@@ -35,7 +35,8 @@
   },
   "dependencies": {
     "@org.ai/types": "workspace:^",
-    "id.org.ai": "workspace:^",
+    "id.org.ai": "^0.3.0",
+    "schema.org.ai": "^0.1.0",
     "zod": "^3.24.0"
   },
   "keywords": [

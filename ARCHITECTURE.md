@@ -355,30 +355,27 @@ pnpm test       # Run tests across packages
 pnpm typecheck  # Type-check all packages
 ```
 
-### External Submodules
+### External npm dependencies
 
-Some primitives are developed in separate repositories and integrated here as
-git submodules under `external/`:
+Some primitives are developed in separate repositories and consumed here as
+regular npm dependencies:
 
-| Path | Upstream | Purpose |
-|------|----------|---------|
-| `external/id.org.ai` | [`dot-org-ai/id.org.ai`](https://github.com/dot-org-ai/id.org.ai) | Agent-first identity SDK (auth, OAuth, MCP, JWT, WorkOS). Pinned via `git submodule`. Workspace member at the repo root only — its internal `packages/*` are NOT absorbed into this monorepo's workspace. |
+| Package | Upstream | Purpose |
+|---------|----------|---------|
+| [`id.org.ai`](https://www.npmjs.com/package/id.org.ai) (`^0.3.0`) | [`dot-org-ai/id.org.ai`](https://github.com/dot-org-ai/id.org.ai) | Agent-first identity SDK (auth, OAuth, MCP, JWT, WorkOS). |
+| [`schema.org.ai`](https://www.npmjs.com/package/schema.org.ai) (`^0.1.0`) | [`dot-org-ai/schema.org.ai`](https://github.com/dot-org-ai/schema.org.ai) | Shared schema types referenced by id.org.ai and downstream consumers. |
 
-**Setup:** clone with `git clone --recurse-submodules ...` or run
-`git submodule update --init --recursive` after a regular clone. CI workflows
-check out submodules via `actions/checkout@v4` with `submodules: recursive`.
+> Note: the `org.ai` package (`packages/org.ai`) re-exports from `id.org.ai`.
+> The remote `id.org.ai` SDK has a different API surface than the previous
+> local stub (auth/OAuth-focused vs. the prior identity-record shape with
+> `User`, `AgentIdentity`, `Credential`, `Session`). Until `org.ai`'s identity
+> layer is reconciled with the upstream SDK, its tests against those legacy
+> symbols will fail. Source typechecks pass because `org.ai/src/identity.ts`
+> is a wildcard re-export.
 
-**Interim status:** the submodule approach lets us iterate on `id.org.ai`
-cross-repo without publish cycles. Once `id.org.ai` stabilises and is published
-to npm, the submodule will be replaced by a normal versioned dependency.
-
-> Note: the `org.ai` package (`packages/org.ai`) re-exports from `id.org.ai`
-> (`workspace:^`). The remote `id.org.ai` SDK has a different API surface than
-> the previous local stub (auth/OAuth-focused vs. the prior identity-record
-> shape with `User`, `AgentIdentity`, `Credential`, `Session`). Until
-> `org.ai`'s identity layer is reconciled with the upstream SDK, its tests
-> against those legacy symbols will fail. Source typechecks pass because
-> `org.ai/src/identity.ts` is a wildcard re-export.
+> Historical: `id.org.ai` was previously integrated as a git submodule under
+> `external/id.org.ai` (bead `aip-erex`). Migrated to npm in `aip-isod` once
+> `id.org.ai@0.3.0` and `schema.org.ai@0.1.0` were published.
 
 ## Stratified Package Layers
 
