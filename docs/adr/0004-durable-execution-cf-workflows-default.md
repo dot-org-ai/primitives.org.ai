@@ -39,9 +39,28 @@ The gap is structural — CF doesn't bill per step. For cascade-generation as th
 
 **Test/dev backend: in-process.** The existing `WorkflowRuntime` becomes the in-process adapter — used for tests, local development, and any caller who doesn't need durability across process restarts.
 
-### Port shape
+### Port shape and package home
 
-Define `DurableExecutionAdapter` in `ai-workflows`. Small interface, modeled after WDK's "Worlds" abstraction (which is the prior art for this exact pattern):
+Define `DurableExecutionAdapter` in `ai-workflows` and **expose it as a subpath export** at `ai-workflows/durable-execution`. The same dual-export pattern already used by `ai-workflows` (`./worker`), `human-in-the-loop` (planned `./worker`), and `autonomous-agents` (`./worker`, from `aip-949e`):
+
+```json
+"exports": {
+  ".":                    { "import": "./dist/index.js", ... },
+  "./worker":             { "import": "./dist/worker/index.js", ... },
+  "./durable-execution":  { "import": "./dist/durable-execution.js", ... }
+}
+```
+
+**Why this subpath, not a new package:**
+- `durable-execution` npm name is taken; `@org.ai/durable-execution` would work but adds a new package to maintain.
+- `ai-workflows` is the natural home — the port serves orchestration; orchestration is what `ai-workflows` is for.
+- Consumers (especially `ai-database` for cascade orchestration) import just the port via the subpath, not the whole `WorkflowRuntime`. Tree-shaking does the rest.
+- Resolves the apparent circular concern between `ai-workflows` and `ai-database`:
+  - Static graph: `ai-database` → `ai-workflows/durable-execution`. One arrow.
+  - Runtime loop: cascade calls adapter → adapter runs step → step writes via `DatabaseContext` port → port is satisfied by `ai-database`'s adapter (wired by user code). Port-mediated, not a static cycle.
+- Consistent with the existing dual-export discipline — `ai-workflows/.` is the high-level Workflow API; `ai-workflows/durable-execution` is the low-level port + adapters.
+
+The port itself, modeled after WDK's "Worlds" abstraction (which is the prior art for this exact pattern):
 
 ```ts
 interface DurableExecutionAdapter {
