@@ -81,6 +81,14 @@ export function defineTool(options) {
         description: options.description,
         category: options.category,
         subcategory: options.subcategory,
+        // SVO co-design (aip-oejp) — verb / frame / auth / pricing are optional
+        // and additive. Verb auto-registration in digital-objects is intentionally
+        // deferred (cross-package side effects from a defineTool() call would be
+        // surprising; see follow-up bead).
+        ...(options.verb !== undefined && { verb: options.verb }),
+        ...(options.frame !== undefined && { frame: options.frame }),
+        ...(options.auth !== undefined && { auth: options.auth }),
+        ...(options.pricing !== undefined && { pricing: options.pricing }),
         parameters: schemaToParameters(options.input),
         output: options.output
             ? {

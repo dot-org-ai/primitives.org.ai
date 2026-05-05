@@ -99,6 +99,14 @@ export function defineTool<TInput, TOutput>(
     description: options.description,
     category: options.category,
     ...(options.subcategory !== undefined && { subcategory: options.subcategory }),
+    // SVO co-design (aip-oejp) — all optional. Verb auto-registration in
+    // digital-objects is intentionally deferred (see bead aip-oejp follow-up):
+    // we store the metadata here so dispatchers can resolve it, but we don't
+    // mutate the cross-package Verb registry from a `defineTool()` side-effect.
+    ...(options.verb !== undefined && { verb: options.verb }),
+    ...(options.frame !== undefined && { frame: options.frame }),
+    ...(options.auth !== undefined && { auth: options.auth }),
+    ...(options.pricing !== undefined && { pricing: options.pricing }),
     parameters: schemaToParameters(options.input),
     ...(options.output && {
       output: {

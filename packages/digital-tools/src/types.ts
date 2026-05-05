@@ -9,7 +9,11 @@
  */
 
 import type { JSONSchema } from 'ai-functions'
+import type { Frame, ActionRef } from 'digital-objects'
 import type { z } from 'zod'
+
+// Re-export for downstream consumers (digital-tasks/digital-workers can use the same Frame)
+export type { Frame, ActionRef } from 'digital-objects'
 
 // ============================================================================
 // Tool Category Ontology
@@ -284,6 +288,90 @@ export interface ToolOutput {
 }
 
 // ============================================================================
+// SVO Co-Design Types (aip-oejp): verb / frame / auth / pricing / handler ctx
+// ============================================================================
+
+/**
+ * Reference to an Identity in `id.org.ai`.
+ *
+ * Currently a string ID; the canonical type will move to `id.org.ai`
+ * once that package is published. Until then, treat as opaque.
+ */
+export type IdentityRef = string
+
+/**
+ * Payment rail used to satisfy a tool's `pricing` requirement.
+ *
+ * Minimal local definition — the canonical type will come from
+ * `id.org.ai` (PaymentBroker) once that package is published.
+ */
+export interface PaymentRail {
+  /** Rail used to settle the payment */
+  rail: 'x402' | 'mpp'
+  /** Optional receipt / proof of payment from the broker */
+  receipt?: string
+}
+
+/**
+ * Authentication requirement for invoking a tool.
+ *
+ * Declares which auth scheme and scopes the caller must present
+ * before the handler is executed.
+ */
+export interface AuthRequirement {
+  /** OAuth scopes / API key scopes required */
+  scopes: string[]
+  /** Auth mechanism the tool requires; `none` means public */
+  required: 'oauth' | 'apiKey' | 'none'
+}
+
+/**
+ * Payment requirement attached to a tool, MDXLD-shaped and
+ * compatible with x402 / MPP payment rails.
+ *
+ * When present, callers must satisfy this before the handler runs;
+ * the broker (id.org.ai) negotiates an acceptable rail and injects
+ * a `PaymentRail` into the handler context.
+ */
+export interface PaymentRequired {
+  /** MDXLD type discriminator */
+  $type: 'PaymentRequired'
+  /** Amount as a string (preserves precision for crypto/fiat) */
+  amount: string
+  /** ISO 4217 currency code or asset symbol (e.g. 'USD', 'USDC') */
+  currency: string
+  /** Payment rails this tool will accept */
+  accepts: ('x402' | 'mpp')[]
+  /** Wallet address or stripeAccountId of the recipient */
+  recipient: string
+  /** Optional facilitator URL/identifier */
+  facilitator?: string
+}
+
+/**
+ * Context object passed to a tool handler when invoked through
+ * an SVO-aware dispatcher.
+ *
+ * This is distinct from the registry-level `ToolContext` (executor
+ * metadata for tracing/audit) — `ToolHandlerContext` carries
+ * runtime resources the handler needs to perform the action:
+ * the caller's identity, an injected payment rail (if `pricing`
+ * was satisfied), and the parent Action that caused the call.
+ *
+ * Handlers that don't need any of this can keep the arity-1
+ * `(args) => result` signature; arity-2 `(args, ctx) => result`
+ * is opt-in.
+ */
+export interface ToolHandlerContext {
+  /** Identity of the caller (resolved by id.org.ai) */
+  identity: IdentityRef
+  /** Payment rail injected by PaymentBroker when `pricing` is satisfied */
+  payment?: PaymentRail
+  /** Parent Action that caused this tool invocation, if any */
+  parentAction?: ActionRef
+}
+
+// ============================================================================
 // Core Tool Interface
 // ============================================================================
 
@@ -374,6 +462,31 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   /** Rate limiting */
   rateLimit?: RateLimit
 
+  // SVO Co-Design (aip-oejp) — all optional, additive over existing tools
+  /**
+   * Canonical Verb name this tool implements (e.g. 'send', 'transcribe').
+   *
+   * Used by SVO-aware dispatchers to resolve a Verb in `digital-objects`
+   * and pick a Tool registered for it. Cross-package Verb auto-registration
+   * is intentionally NOT performed here — see follow-up bead.
+   */
+  verb?: string
+
+  /**
+   * Frame declaring the complement-role types this tool accepts.
+   *
+   * Reuses the canonical {@link Frame} type from `digital-objects` so
+   * Tool frames and Verb frames stay in lockstep. When absent, the tool
+   * is treated as permissive (frame inferred from input shape).
+   */
+  frame?: Frame
+
+  /** Auth requirement gate; absent means no auth required */
+  auth?: AuthRequirement
+
+  /** Pricing requirement (x402/MPP); absent means free */
+  pricing?: PaymentRequired
+
   // Input/Output
   /** Input parameters */
   parameters: ToolParameter[]
@@ -381,8 +494,16 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   /** Output definition */
   output?: ToolOutput
 
-  /** The tool implementation */
-  handler: (input: TInput) => TOutput | Promise<TOutput>
+  /**
+   * The tool implementation.
+   *
+   * Backward-compatible: handlers may take just `(input)` (arity-1) or
+   * opt into the SVO handler context with `(input, ctx)` (arity-2).
+   * Dispatchers that don't have a {@link ToolHandlerContext} should
+   * call the handler with the input only — TypeScript permits this
+   * because the second parameter is optional.
+   */
+  handler: (input: TInput, ctx?: ToolHandlerContext) => TOutput | Promise<TOutput>
 
   // Metadata
   /** Tool author/owner */
@@ -447,8 +568,24 @@ export interface DefineToolOptions<TInput, TOutput> {
   input: Schema
   /** Output schema (optional) */
   output?: Schema
-  /** The handler function */
-  handler: (input: TInput) => TOutput | Promise<TOutput>
+
+  // SVO Co-Design (aip-oejp) — all optional, additive
+  /** Canonical Verb name this tool implements */
+  verb?: string
+  /** Frame from `digital-objects` declaring complement-role types */
+  frame?: Frame
+  /** Auth requirement; absent means no auth required */
+  auth?: AuthRequirement
+  /** Pricing requirement (x402/MPP); absent means free */
+  pricing?: PaymentRequired
+
+  /**
+   * The handler function.
+   *
+   * Backward-compatible: arity-1 `(input)` handlers continue to work;
+   * arity-2 `(input, ctx)` handlers receive the SVO {@link ToolHandlerContext}.
+   */
+  handler: (input: TInput, ctx?: ToolHandlerContext) => TOutput | Promise<TOutput>
   /** Additional options */
   options?: Partial<
     Omit<

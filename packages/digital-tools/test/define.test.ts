@@ -132,6 +132,110 @@ describe('defineTool', () => {
 
     expect(result).toEqual({ doubled: 10 })
   })
+
+  // SVO co-design (aip-oejp) — verb / frame / auth / pricing
+  describe('SVO co-design fields', () => {
+    it('omits SVO fields when not provided (backward compatible)', () => {
+      const tool = defineTool({
+        id: 'legacy.tool',
+        name: 'Legacy Tool',
+        description: 'Tool without SVO metadata',
+        category: 'data',
+        input: { type: 'object', properties: {} },
+        handler: async () => ({}),
+      })
+
+      expect(tool.verb).toBeUndefined()
+      expect(tool.frame).toBeUndefined()
+      expect(tool.auth).toBeUndefined()
+      expect(tool.pricing).toBeUndefined()
+    })
+
+    it('stores verb and frame', () => {
+      const tool = defineTool({
+        id: 'communication.email.send',
+        name: 'Send Email',
+        description: 'Sends an email',
+        category: 'communication',
+        verb: 'send',
+        frame: {
+          subject: 'Agent',
+          object: 'Email',
+          recipient: 'Person',
+        },
+        input: { type: 'object', properties: {} },
+        handler: async () => ({ ok: true }),
+      })
+
+      expect(tool.verb).toBe('send')
+      expect(tool.frame).toEqual({
+        subject: 'Agent',
+        object: 'Email',
+        recipient: 'Person',
+      })
+    })
+
+    it('stores auth requirement', () => {
+      const tool = defineTool({
+        id: 'integration.gmail.send',
+        name: 'Gmail Send',
+        description: 'Send via Gmail',
+        category: 'communication',
+        auth: { required: 'oauth', scopes: ['gmail.send'] },
+        input: { type: 'object', properties: {} },
+        handler: async () => ({ ok: true }),
+      })
+
+      expect(tool.auth).toEqual({ required: 'oauth', scopes: ['gmail.send'] })
+    })
+
+    it('stores pricing (PaymentRequired)', () => {
+      const tool = defineTool({
+        id: 'media.transcribe',
+        name: 'Transcribe',
+        description: 'Paid transcription tool',
+        category: 'media',
+        pricing: {
+          $type: 'PaymentRequired',
+          amount: '0.10',
+          currency: 'USD',
+          accepts: ['x402', 'mpp'],
+          recipient: '0xfeed',
+        },
+        input: { type: 'object', properties: {} },
+        handler: async () => ({ text: '...' }),
+      })
+
+      expect(tool.pricing?.$type).toBe('PaymentRequired')
+      expect(tool.pricing?.amount).toBe('0.10')
+      expect(tool.pricing?.accepts).toEqual(['x402', 'mpp'])
+    })
+
+    it('supports arity-2 handler with ToolHandlerContext', async () => {
+      const tool = defineTool({
+        id: 'svo.ctx.tool',
+        name: 'Ctx Tool',
+        description: 'Tool that reads handler context',
+        category: 'data',
+        input: { type: 'object', properties: { x: { type: 'number' } } },
+        handler: async (input: { x: number }, ctx) => ({
+          x: input.x,
+          identity: ctx?.identity ?? 'anonymous',
+          rail: ctx?.payment?.rail,
+        }),
+      })
+
+      const withCtx = await tool.handler(
+        { x: 1 },
+        { identity: 'id:alice', payment: { rail: 'x402' } }
+      )
+      expect(withCtx).toEqual({ x: 1, identity: 'id:alice', rail: 'x402' })
+
+      // Backward-compat: arity-1 invocation must still work
+      const withoutCtx = await tool.handler({ x: 2 })
+      expect(withoutCtx).toEqual({ x: 2, identity: 'anonymous', rail: undefined })
+    })
+  })
 })
 
 describe('defineAndRegister', () => {
@@ -158,41 +262,47 @@ describe('createToolExecutor', () => {
   beforeEach(() => {
     registry.clear()
 
-    registry.register(defineTool({
-      id: 'exec.test',
-      name: 'Exec Test',
-      description: 'Test execution',
-      category: 'data',
-      input: {
-        type: 'object',
-        properties: { value: { type: 'string' } },
-        required: ['value'],
-      },
-      handler: async (input: { value: string }) => ({
-        upper: input.value.toUpperCase(),
-      }),
-    }))
+    registry.register(
+      defineTool({
+        id: 'exec.test',
+        name: 'Exec Test',
+        description: 'Test execution',
+        category: 'data',
+        input: {
+          type: 'object',
+          properties: { value: { type: 'string' } },
+          required: ['value'],
+        },
+        handler: async (input: { value: string }) => ({
+          upper: input.value.toUpperCase(),
+        }),
+      })
+    )
 
-    registry.register(defineTool({
-      id: 'exec.agent-only',
-      name: 'Agent Only',
-      description: 'Agent only tool',
-      category: 'data',
-      input: { type: 'object', properties: {} },
-      handler: async () => ({ result: 'agent' }),
-      options: { audience: 'agent' },
-    }))
+    registry.register(
+      defineTool({
+        id: 'exec.agent-only',
+        name: 'Agent Only',
+        description: 'Agent only tool',
+        category: 'data',
+        input: { type: 'object', properties: {} },
+        handler: async () => ({ result: 'agent' }),
+        options: { audience: 'agent' },
+      })
+    )
 
-    registry.register(defineTool({
-      id: 'exec.error',
-      name: 'Error Tool',
-      description: 'Tool that throws',
-      category: 'data',
-      input: { type: 'object', properties: {} },
-      handler: async () => {
-        throw new Error('Tool error')
-      },
-    }))
+    registry.register(
+      defineTool({
+        id: 'exec.error',
+        name: 'Error Tool',
+        description: 'Tool that throws',
+        category: 'data',
+        input: { type: 'object', properties: {} },
+        handler: async () => {
+          throw new Error('Tool error')
+        },
+      })
+    )
   })
 
   it('executes a tool with context', async () => {
@@ -201,10 +311,9 @@ describe('createToolExecutor', () => {
       environment: 'test',
     })
 
-    const result = await executor.execute<{ value: string }, { upper: string }>(
-      'exec.test',
-      { value: 'hello' }
-    )
+    const result = await executor.execute<{ value: string }, { upper: string }>('exec.test', {
+      value: 'hello',
+    })
 
     expect(result.success).toBe(true)
     expect(result.data?.upper).toBe('HELLO')
@@ -264,8 +373,8 @@ describe('createToolExecutor', () => {
     const available = executor.listAvailable()
 
     // Should not include agent-only tool
-    expect(available.some(t => t.id === 'exec.test')).toBe(true)
-    expect(available.some(t => t.id === 'exec.agent-only')).toBe(false)
+    expect(available.some((t) => t.id === 'exec.test')).toBe(true)
+    expect(available.some((t) => t.id === 'exec.agent-only')).toBe(false)
   })
 })
 

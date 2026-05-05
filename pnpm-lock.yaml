@@ -479,6 +479,9 @@ importers:
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
+      digital-objects:
+        specifier: workspace:*
+        version: link:../digital-objects
       digital-tools:
         specifier: workspace:*
         version: link:../digital-tools
@@ -507,6 +510,9 @@ importers:
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
+      digital-objects:
+        specifier: workspace:*
+        version: link:../digital-objects
       rpc.do:
         specifier: ^0.1.0
         version: 0.1.4
@@ -532,6 +538,9 @@ importers:
       ai-workflows:
         specifier: workspace:*
         version: link:../ai-workflows
+      digital-objects:
+        specifier: workspace:*
+        version: link:../digital-objects
       org.ai:
         specifier: workspace:*
         version: link:../org.ai

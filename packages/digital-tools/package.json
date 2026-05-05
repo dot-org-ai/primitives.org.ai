@@ -38,6 +38,7 @@
   "dependencies": {
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
+    "digital-objects": "workspace:*",
     "rpc.do": "^0.1.0",
     "zod": "^3.23.0"
   },

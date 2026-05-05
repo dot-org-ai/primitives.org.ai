@@ -35,6 +35,14 @@ export type {
   ToolQuery,
   // Builder types
   DefineToolOptions,
+  // SVO co-design (aip-oejp): verb / frame / auth / pricing / handler ctx
+  Frame,
+  ActionRef,
+  IdentityRef,
+  PaymentRail,
+  PaymentRequired,
+  AuthRequirement,
+  ToolHandlerContext,
   // MCP compatibility
   MCPTool,
   MCPToolCall,
