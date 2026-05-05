@@ -12,7 +12,7 @@ _Avoid_: Entity type, model, class.
 **Verb**: A type of action (e.g., "send", "approve") with conjugations (action/act/activity/event) and a Frame describing its complement roles.
 _Avoid_: Action type (Action is the instance), method.
 
-**Frame**: The set of complement roles a Verb can take. Closed taxonomy of ten roles: `subject`, `object`, `recipient`, `source`, `destination`, `instrument`, `topic`, `cause`, `manner`, plus the literal `when`/`where` carried on Action.
+**Frame**: The set of complement roles a Verb can take. Closed taxonomy of nine roles: `subject`, `object`, `recipient`, `source`, `destination`, `instrument`, `topic`, `cause`, `manner`. Plus the literal `when` (timestamp) and `where` (location), carried on Action directly rather than as Frame slots.
 _Avoid_: Schema, case grammar.
 
 **Thing**: An instance of a Noun (e.g., a specific Customer record). Plays Subject or Object in an Action.
