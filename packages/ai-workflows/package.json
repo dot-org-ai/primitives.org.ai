@@ -13,6 +13,10 @@
     "./worker": {
       "import": "./dist/worker/index.js",
       "types": "./dist/worker/index.d.ts"
+    },
+    "./durable-execution": {
+      "import": "./dist/durable-execution.js",
+      "types": "./dist/durable-execution.d.ts"
     }
   },
   "scripts": {
