@@ -20,7 +20,7 @@ describe('TaskQueue', () => {
     it('should add and retrieve a task', async () => {
       const task: AnyTask = {
         id: 'test_task_1',
-        function: createTestFunc('test'),
+        tool: createTestFunc('test'),
         status: 'queued',
         priority: 'normal',
         createdAt: new Date(),
@@ -45,7 +45,7 @@ describe('TaskQueue', () => {
     it('should update task status', async () => {
       const task: AnyTask = {
         id: 'update_test',
-        function: createTestFunc('update'),
+        tool: createTestFunc('update'),
         status: 'queued',
         priority: 'normal',
         createdAt: new Date(),
@@ -62,7 +62,7 @@ describe('TaskQueue', () => {
     it('should update task priority', async () => {
       const task: AnyTask = {
         id: 'priority_test',
-        function: createTestFunc('priority'),
+        tool: createTestFunc('priority'),
         status: 'queued',
         priority: 'normal',
         createdAt: new Date(),
@@ -78,7 +78,7 @@ describe('TaskQueue', () => {
     it('should update task progress', async () => {
       const task: AnyTask = {
         id: 'progress_test',
-        function: createTestFunc('progress'),
+        tool: createTestFunc('progress'),
         status: 'in_progress',
         priority: 'normal',
         createdAt: new Date(),
@@ -98,7 +98,7 @@ describe('TaskQueue', () => {
     it('should add events to task history', async () => {
       const task: AnyTask = {
         id: 'event_test',
-        function: createTestFunc('event'),
+        tool: createTestFunc('event'),
         status: 'queued',
         priority: 'normal',
         createdAt: new Date(),
@@ -114,7 +114,7 @@ describe('TaskQueue', () => {
       })
 
       const updated = await queue.get('event_test')
-      const commentEvent = updated!.events?.find(e => e.type === 'comment')
+      const commentEvent = updated!.events?.find((e) => e.type === 'comment')
       expect(commentEvent).toBeDefined()
       expect(commentEvent!.message).toBe('Test comment')
     })
@@ -129,7 +129,7 @@ describe('TaskQueue', () => {
     it('should remove a task', async () => {
       const task: AnyTask = {
         id: 'remove_test',
-        function: createTestFunc('remove'),
+        tool: createTestFunc('remove'),
         status: 'queued',
         priority: 'normal',
         createdAt: new Date(),
@@ -156,7 +156,7 @@ describe('TaskQueue', () => {
       const tasks: AnyTask[] = [
         {
           id: 'query_1',
-          function: createTestFunc('task1'),
+          tool: createTestFunc('task1'),
           status: 'queued',
           priority: 'high',
           tags: ['frontend'],
@@ -166,7 +166,7 @@ describe('TaskQueue', () => {
         },
         {
           id: 'query_2',
-          function: createTestFunc('task2'),
+          tool: createTestFunc('task2'),
           status: 'in_progress',
           priority: 'normal',
           tags: ['backend'],
@@ -176,7 +176,7 @@ describe('TaskQueue', () => {
         },
         {
           id: 'query_3',
-          function: createTestFunc('task3'),
+          tool: createTestFunc('task3'),
           status: 'completed',
           priority: 'low',
           tags: ['frontend', 'ui'],
@@ -250,7 +250,7 @@ describe('TaskQueue', () => {
       const tasks: AnyTask[] = [
         {
           id: 'next_1',
-          function: createTestFunc('low'),
+          tool: createTestFunc('low'),
           status: 'queued',
           priority: 'low',
           createdAt: new Date(),
@@ -258,7 +258,7 @@ describe('TaskQueue', () => {
         },
         {
           id: 'next_2',
-          function: createTestFunc('high'),
+          tool: createTestFunc('high'),
           status: 'queued',
           priority: 'high',
           createdAt: new Date(),
@@ -280,7 +280,13 @@ describe('TaskQueue', () => {
     it('should respect allowedWorkers', async () => {
       const task: AnyTask = {
         id: 'worker_type_test',
-        function: { type: 'human', name: 'human-task', args: {}, output: 'object', instructions: 'Do something' },
+        tool: {
+          type: 'human',
+          name: 'human-task',
+          args: {},
+          output: 'object',
+          instructions: 'Do something',
+        },
         status: 'queued',
         priority: 'high',
         allowedWorkers: ['human'],
@@ -304,7 +310,7 @@ describe('TaskQueue', () => {
       const futureDate = new Date(Date.now() + 60000) // 1 minute in future
       const task: AnyTask = {
         id: 'scheduled_test',
-        function: createTestFunc('scheduled'),
+        tool: createTestFunc('scheduled'),
         status: 'pending',
         priority: 'high',
         scheduledFor: futureDate,
@@ -322,7 +328,7 @@ describe('TaskQueue', () => {
     it('should skip blocked tasks', async () => {
       const task: AnyTask = {
         id: 'blocked_test',
-        function: createTestFunc('blocked'),
+        tool: createTestFunc('blocked'),
         status: 'queued',
         priority: 'high',
         dependencies: [{ type: 'blocked_by', taskId: 'other_task', satisfied: false }],
@@ -342,7 +348,7 @@ describe('TaskQueue', () => {
     it('should claim a task and assign it to worker', async () => {
       const task: AnyTask = {
         id: 'claim_test',
-        function: createTestFunc('claim'),
+        tool: createTestFunc('claim'),
         status: 'queued',
         priority: 'normal',
         createdAt: new Date(),
@@ -364,7 +370,7 @@ describe('TaskQueue', () => {
     it('should not claim already assigned task', async () => {
       const task: AnyTask = {
         id: 'claim_assigned',
-        function: createTestFunc('claim'),
+        tool: createTestFunc('claim'),
         status: 'assigned',
         priority: 'normal',
         assignment: {
@@ -394,7 +400,7 @@ describe('TaskQueue', () => {
     it('should mark task as completed', async () => {
       const task: AnyTask = {
         id: 'complete_test',
-        function: createTestFunc('complete'),
+        tool: createTestFunc('complete'),
         status: 'in_progress',
         priority: 'normal',
         createdAt: new Date(),
@@ -411,7 +417,7 @@ describe('TaskQueue', () => {
     it('should satisfy dependencies in other tasks', async () => {
       const task1: AnyTask = {
         id: 'dep_complete_1',
-        function: createTestFunc('task1'),
+        tool: createTestFunc('task1'),
         status: 'in_progress',
         priority: 'normal',
         createdAt: new Date(),
@@ -420,7 +426,7 @@ describe('TaskQueue', () => {
 
       const task2: AnyTask = {
         id: 'dep_complete_2',
-        function: createTestFunc('task2'),
+        tool: createTestFunc('task2'),
         status: 'blocked',
         priority: 'normal',
         dependencies: [{ type: 'blocked_by', taskId: 'dep_complete_1', satisfied: false }],
@@ -442,7 +448,7 @@ describe('TaskQueue', () => {
     it('should mark task as failed', async () => {
       const task: AnyTask = {
         id: 'fail_test',
-        function: createTestFunc('fail'),
+        tool: createTestFunc('fail'),
         status: 'in_progress',
         priority: 'normal',
         createdAt: new Date(),
@@ -460,9 +466,30 @@ describe('TaskQueue', () => {
   describe('stats()', () => {
     it('should return queue statistics', async () => {
       const tasks: AnyTask[] = [
-        { id: 's1', function: createTestFunc('t1'), status: 'queued', priority: 'high', createdAt: new Date(), events: [] },
-        { id: 's2', function: createTestFunc('t2'), status: 'queued', priority: 'normal', createdAt: new Date(), events: [] },
-        { id: 's3', function: createTestFunc('t3'), status: 'completed', priority: 'low', createdAt: new Date(), events: [] },
+        {
+          id: 's1',
+          tool: createTestFunc('t1'),
+          status: 'queued',
+          priority: 'high',
+          createdAt: new Date(),
+          events: [],
+        },
+        {
+          id: 's2',
+          tool: createTestFunc('t2'),
+          status: 'queued',
+          priority: 'normal',
+          createdAt: new Date(),
+          events: [],
+        },
+        {
+          id: 's3',
+          tool: createTestFunc('t3'),
+          status: 'completed',
+          priority: 'low',
+          createdAt: new Date(),
+          events: [],
+        },
       ]
 
       for (const task of tasks) {

@@ -35,13 +35,15 @@ describe('Task Management', () => {
       }
 
       const task = await createTask({
-        function: func,
+        tool: func,
         input: { text: 'Long article content...' },
         priority: 'high',
       })
 
       expect(task).toBeDefined()
       expect(task.id).toMatch(/^task_/)
+      expect(task.tool).toEqual(func)
+      // Legacy `function` alias still populated during deprecation window
       expect(task.function).toEqual(func)
       expect(task.priority).toBe('high')
       expect(task.status).toBe('queued')
@@ -60,11 +62,11 @@ describe('Task Management', () => {
       }
 
       const task = await createTask({
-        function: func,
+        tool: func,
         priority: 'normal',
       })
 
-      expect(task.function.type).toBe('code')
+      expect(task.tool?.type).toBe('code')
       expect(task.allowedWorkers).toEqual(['any'])
     })
 
@@ -79,7 +81,7 @@ describe('Task Management', () => {
       }
 
       const task = await createTask({
-        function: func,
+        tool: func,
       })
 
       expect(task.allowedWorkers).toEqual(['human'])
@@ -95,7 +97,7 @@ describe('Task Management', () => {
       }
 
       const task = await createTask({
-        function: func,
+        tool: func,
       })
 
       expect(task.allowedWorkers).toEqual(['agent'])
@@ -109,9 +111,9 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task1 = await createTask({ function: func })
+      const task1 = await createTask({ tool: func })
       const task2 = await createTask({
-        function: { ...func, name: 'task2' },
+        tool: { ...func, name: 'task2' },
         dependencies: [task1.id],
       })
 
@@ -137,7 +139,7 @@ describe('Task Management', () => {
       }
 
       const task = await createTask({
-        function: func,
+        tool: func,
         assignTo: worker,
       })
 
@@ -157,7 +159,7 @@ describe('Task Management', () => {
       const scheduledFor = new Date(Date.now() + 60000)
 
       const task = await createTask({
-        function: func,
+        tool: func,
         scheduledFor,
       })
 
@@ -174,7 +176,7 @@ describe('Task Management', () => {
       }
 
       const task = await createTask({
-        function: func,
+        tool: func,
         tags: ['urgent', 'frontend'],
         metadata: { source: 'api', version: '1.0' },
       })
@@ -191,13 +193,14 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
 
       // $type discriminator
       expect(task.$type).toBe('Task')
       // verb defaults to underlying function name
       expect(task.verb).toBe('summarize')
-      // tool alias mirrors function (CONTEXT.md vocabulary migration)
+      // `tool` is canonical; legacy `function` alias mirrors it during
+      // the deprecation window (CONTEXT.md vocabulary migration).
       expect(task.tool).toBe(task.function)
     })
 
@@ -215,7 +218,7 @@ describe('Task Management', () => {
       ]
 
       const task = await createTask({
-        function: func,
+        tool: func,
         title: 'Review PR #42',
         body: '## Summary\n\nReview the proposed change to the auth flow.',
         labels: ['review', 'auth'],
@@ -243,7 +246,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const created = await createTask({ function: func })
+      const created = await createTask({ tool: func })
       const retrieved = await getTask(created.id)
 
       expect(retrieved).toBeDefined()
@@ -265,7 +268,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       const worker: WorkerRef = { type: 'agent', id: 'agent_1', name: 'Worker' }
 
       const started = await startTask(task.id, worker)
@@ -291,7 +294,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       const updated = await updateProgress(task.id, 50, 'Processing data')
 
       expect(updated).toBeDefined()
@@ -309,7 +312,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       const worker: WorkerRef = { type: 'agent', id: 'agent_1' }
       await startTask(task.id, worker)
 
@@ -337,7 +340,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       const result = await failTask(task.id, 'Something went wrong')
 
       expect(result.success).toBe(false)
@@ -353,7 +356,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       const error = new Error('Error object message')
       const result = await failTask(task.id, error)
 
@@ -371,7 +374,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       const cancelled = await cancelTask(task.id, 'No longer needed')
 
       expect(cancelled).toBe(true)
@@ -395,7 +398,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       const author: WorkerRef = { type: 'human', id: 'user_1', name: 'John' }
 
       const updated = await addComment(task.id, 'This is a comment', author)
@@ -417,10 +420,10 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const parent = await createTask({ function: func })
+      const parent = await createTask({ tool: func })
 
       const subtask = await createSubtask(parent.id, {
-        function: {
+        tool: {
           type: 'generative',
           name: 'subtask',
           args: {},
@@ -441,13 +444,13 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const parent = await createTask({ function: func })
+      const parent = await createTask({ tool: func })
 
       await createSubtask(parent.id, {
-        function: { type: 'generative', name: 'sub1', args: {}, output: 'string' },
+        tool: { type: 'generative', name: 'sub1', args: {}, output: 'string' },
       })
       await createSubtask(parent.id, {
-        function: { type: 'generative', name: 'sub2', args: {}, output: 'string' },
+        tool: { type: 'generative', name: 'sub2', args: {}, output: 'string' },
       })
 
       const subtasks = await getSubtasks(parent.id)
@@ -464,7 +467,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       await completeTask(task.id, 'done')
 
       const result = await waitForTask(task.id, { timeout: 1000 })
@@ -481,7 +484,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       await failTask(task.id, 'task failed')
 
       const result = await waitForTask(task.id, { timeout: 1000 })
@@ -497,7 +500,7 @@ describe('Task Management', () => {
         output: 'string',
       }
 
-      const task = await createTask({ function: func })
+      const task = await createTask({ tool: func })
       await cancelTask(task.id)
 
       const result = await waitForTask(task.id, { timeout: 1000 })

@@ -1,19 +1,21 @@
 /**
  * digital-tasks - Task management primitives for digital workers
  *
- * Task = Function + metadata (status, progress, assignment, dependencies)
+ * Task = Tool + metadata (status, progress, assignment, dependencies)
  *
- * Every task wraps a function (code, generative, agentic, or human)
- * with lifecycle management, worker assignment, and dependency tracking.
+ * Every task wraps a Tool (a callable Verb of type code, generative,
+ * agentic, or human) with lifecycle management, worker assignment, and
+ * dependency tracking. The `function` field is a deprecated alias for
+ * `tool` retained for backward compatibility.
  *
  * ## Quick Start
  *
  * ```ts
  * import { Task, createTask, taskQueue } from 'digital-tasks'
  *
- * // Create a task from a function
+ * // Create a task from a Tool
  * const task = await createTask({
- *   function: {
+ *   tool: {
  *     type: 'generative',
  *     name: 'summarize',
  *     args: { text: 'The text to summarize' },

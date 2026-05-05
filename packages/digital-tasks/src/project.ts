@@ -400,7 +400,7 @@ export async function materializeProject(
       } as FunctionDefinition
 
       const createTaskOptions: CreateTaskOptions = {
-        function: functionDef,
+        tool: functionDef,
         priority: taskDef.priority || 'normal',
         projectId: project.id,
         metadata: {

@@ -49,12 +49,14 @@ class InMemoryTaskQueue implements TaskQueue {
   }
 
   async add(task: AnyTask): Promise<void> {
+    // Read the underlying Tool, tolerating the legacy `function` alias.
+    const tool = task.tool ?? task.function
     // Add created event
     const event: TaskEvent = {
       id: `evt_${Date.now()}`,
       type: 'created',
       timestamp: new Date(),
-      message: `Task created: ${task.function.name}`,
+      message: `Task created: ${tool?.name ?? task.id}`,
     }
 
     const taskWithEvent = {
@@ -164,9 +166,9 @@ class InMemoryTaskQueue implements TaskQueue {
       results = results.filter((t) => priorities.includes(t.priority))
     }
 
-    // Filter by function type
+    // Filter by function type (reads `tool` with fallback to legacy `function`)
     if (options.functionType) {
-      results = results.filter((t) => t.function.type === options.functionType)
+      results = results.filter((t) => (t.tool ?? t.function)?.type === options.functionType)
     }
 
     // Filter by assigned worker
@@ -189,14 +191,17 @@ class InMemoryTaskQueue implements TaskQueue {
       results = results.filter((t) => t.parentId === options.parentId)
     }
 
-    // Text search
+    // Text search (reads `tool` with fallback to legacy `function`)
     if (options.search) {
       const search = options.search.toLowerCase()
-      results = results.filter(
-        (t) =>
-          t.function.name.toLowerCase().includes(search) ||
-          t.function.description?.toLowerCase().includes(search)
-      )
+      results = results.filter((t) => {
+        const tool = t.tool ?? t.function
+        if (!tool) return false
+        return (
+          tool.name.toLowerCase().includes(search) ||
+          tool.description?.toLowerCase().includes(search)
+        )
+      })
     }
 
     // Sort

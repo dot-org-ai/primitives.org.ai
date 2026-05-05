@@ -209,21 +209,26 @@ export type Task<TInput = unknown, TOutput = unknown> = Omit<Action<TInput>, 'st
   $type?: 'Task'
 
   /**
-   * The function (Tool) this task executes.
+   * The Tool (callable Verb) this task executes. This is the canonical
+   * field per CONTEXT.md. `createTask` always populates `tool`; the
+   * legacy `function` alias is also populated during the deprecation
+   * window so existing readers keep working.
    *
-   * @deprecated The canonical name for callable Verbs is **Tool**
-   * (see CONTEXT.md). Prefer the `tool` alias on new code; both fields
-   * point at the same value when populated by `createTask`. The
-   * `function` field will be removed in a future major version once
-   * callers have migrated.
-   */
-  function: FunctionDefinition<TInput, TOutput>
-
-  /**
-   * Tool alias for `function`. Populated by `createTask` so consumers
-   * can read either name. Prefer `tool` in new code.
+   * Optional on the type so that older literals constructed with only
+   * `function` still typecheck; in practice every Task has exactly one
+   * underlying callable Verb available via `task.tool ?? task.function`.
    */
   tool?: FunctionDefinition<TInput, TOutput>
+
+  /**
+   * Legacy alias for `tool`.
+   *
+   * @deprecated Use `tool` instead. The canonical name for callable
+   * Verbs is **Tool** (see CONTEXT.md). `createTask` continues to
+   * populate this alongside `tool` for the duration of the deprecation
+   * window. Slated for removal in the next major version.
+   */
+  function?: FunctionDefinition<TInput, TOutput>
 
   /** Issue title (short, single-line) */
   title?: string
@@ -333,7 +338,10 @@ export type AnyTask = Task<any, any>
  * Create task from a Code function
  */
 export interface CodeTaskOptions<TInput = unknown, TOutput = unknown> {
-  function: CodeFunctionDefinition<TInput, TOutput>
+  /** Tool (callable Verb) to run. Preferred over `function`. */
+  tool?: CodeFunctionDefinition<TInput, TOutput>
+  /** @deprecated Use `tool` instead. */
+  function?: CodeFunctionDefinition<TInput, TOutput>
   input?: TInput
   priority?: TaskPriority
   assignTo?: WorkerRef
@@ -348,7 +356,10 @@ export interface CodeTaskOptions<TInput = unknown, TOutput = unknown> {
  * Create task from a Generative function
  */
 export interface GenerativeTaskOptions<TInput = unknown, TOutput = unknown> {
-  function: GenerativeFunctionDefinition<TInput, TOutput>
+  /** Tool (callable Verb) to run. Preferred over `function`. */
+  tool?: GenerativeFunctionDefinition<TInput, TOutput>
+  /** @deprecated Use `tool` instead. */
+  function?: GenerativeFunctionDefinition<TInput, TOutput>
   input?: TInput
   priority?: TaskPriority
   assignTo?: WorkerRef
@@ -363,7 +374,10 @@ export interface GenerativeTaskOptions<TInput = unknown, TOutput = unknown> {
  * Create task from an Agentic function
  */
 export interface AgenticTaskOptions<TInput = unknown, TOutput = unknown> {
-  function: AgenticFunctionDefinition<TInput, TOutput>
+  /** Tool (callable Verb) to run. Preferred over `function`. */
+  tool?: AgenticFunctionDefinition<TInput, TOutput>
+  /** @deprecated Use `tool` instead. */
+  function?: AgenticFunctionDefinition<TInput, TOutput>
   input?: TInput
   priority?: TaskPriority
   assignTo?: WorkerRef
@@ -378,7 +392,10 @@ export interface AgenticTaskOptions<TInput = unknown, TOutput = unknown> {
  * Create task from a Human function
  */
 export interface HumanTaskOptions<TInput = unknown, TOutput = unknown> {
-  function: HumanFunctionDefinition<TInput, TOutput>
+  /** Tool (callable Verb) to run. Preferred over `function`. */
+  tool?: HumanFunctionDefinition<TInput, TOutput>
+  /** @deprecated Use `tool` instead. */
+  function?: HumanFunctionDefinition<TInput, TOutput>
   input?: TInput
   priority?: TaskPriority
   assignTo?: WorkerRef
@@ -391,9 +408,16 @@ export interface HumanTaskOptions<TInput = unknown, TOutput = unknown> {
 
 /**
  * Generic task creation options
+ *
+ * Either `tool` (preferred) or the deprecated `function` alias must be
+ * provided. `createTask` normalizes to `tool` and also populates the
+ * legacy `function` alias on the resulting Task for backward compat.
  */
 export interface CreateTaskOptions<TInput = unknown, TOutput = unknown> {
-  function: FunctionDefinition<TInput, TOutput>
+  /** Tool (callable Verb) to run. Preferred over `function`. */
+  tool?: FunctionDefinition<TInput, TOutput>
+  /** @deprecated Use `tool` instead. */
+  function?: FunctionDefinition<TInput, TOutput>
   input?: TInput
   priority?: TaskPriority
   allowedWorkers?: WorkerType[]

@@ -38,10 +38,7 @@ describe('Project DSL', () => {
 
     it('should create a task with subtasks', () => {
       const t = task('Parent task', {
-        subtasks: [
-          task('Subtask 1'),
-          task('Subtask 2'),
-        ],
+        subtasks: [task('Subtask 1'), task('Subtask 2')],
       })
 
       expect(t.subtasks).toHaveLength(2)
@@ -59,24 +56,14 @@ describe('Project DSL', () => {
 
   describe('parallel()', () => {
     it('should create a parallel group', () => {
-      const group = parallel(
-        task('Task A'),
-        task('Task B'),
-        task('Task C'),
-      )
+      const group = parallel(task('Task A'), task('Task B'), task('Task C'))
 
       expect(group.__type).toBe('parallel')
       expect(group.tasks).toHaveLength(3)
     })
 
     it('should support nested groups', () => {
-      const group = parallel(
-        task('Task A'),
-        sequential(
-          task('Step 1'),
-          task('Step 2'),
-        ),
-      )
+      const group = parallel(task('Task A'), sequential(task('Step 1'), task('Step 2')))
 
       expect(group.tasks).toHaveLength(2)
       expect((group.tasks[1] as SequentialGroup).__type).toBe('sequential')
@@ -85,11 +72,7 @@ describe('Project DSL', () => {
 
   describe('sequential()', () => {
     it('should create a sequential group', () => {
-      const group = sequential(
-        task('Step 1'),
-        task('Step 2'),
-        task('Step 3'),
-      )
+      const group = sequential(task('Step 1'), task('Step 2'), task('Step 3'))
 
       expect(group.__type).toBe('sequential')
       expect(group.tasks).toHaveLength(3)
@@ -98,11 +81,8 @@ describe('Project DSL', () => {
     it('should support nested groups', () => {
       const group = sequential(
         task('Setup'),
-        parallel(
-          task('Build frontend'),
-          task('Build backend'),
-        ),
-        task('Deploy'),
+        parallel(task('Build frontend'), task('Build backend')),
+        task('Deploy')
       )
 
       expect(group.tasks).toHaveLength(3)
@@ -129,15 +109,8 @@ describe('Project DSL', () => {
       const project = createProject({
         name: 'Feature Launch',
         tasks: [
-          parallel(
-            task('Design mockups'),
-            task('Write technical spec'),
-          ),
-          sequential(
-            task('Implement backend'),
-            task('Implement frontend'),
-            task('Write tests'),
-          ),
+          parallel(task('Design mockups'), task('Write technical spec')),
+          sequential(task('Implement backend'), task('Implement frontend'), task('Write tests')),
         ],
       })
 
@@ -178,10 +151,7 @@ describe('Project DSL', () => {
 
     it('should build a project with fluent API', () => {
       const project = workflow('Feature Launch')
-        .parallel(
-          task('Design'),
-          task('Spec'),
-        )
+        .parallel(task('Design'), task('Spec'))
         .then(task('Implement'))
         .then(task('Test'))
         .build()
@@ -229,10 +199,7 @@ describe('Project DSL', () => {
     it('should convert project to actual Task objects', async () => {
       const project = createProject({
         name: 'Test Project',
-        tasks: [
-          task('Task 1'),
-          task('Task 2'),
-        ],
+        tasks: [task('Task 1'), task('Task 2')],
       })
 
       const { tasks } = await materializeProject(project)
@@ -245,13 +212,7 @@ describe('Project DSL', () => {
     it('should create dependencies for sequential tasks', async () => {
       const project = createProject({
         name: 'Sequential Project',
-        tasks: [
-          sequential(
-            task('Step 1'),
-            task('Step 2'),
-            task('Step 3'),
-          ),
-        ],
+        tasks: [sequential(task('Step 1'), task('Step 2'), task('Step 3'))],
       })
 
       const { tasks } = await materializeProject(project)
@@ -268,20 +229,14 @@ describe('Project DSL', () => {
     it('should not create dependencies for parallel tasks', async () => {
       const project = createProject({
         name: 'Parallel Project',
-        tasks: [
-          parallel(
-            task('Task A'),
-            task('Task B'),
-            task('Task C'),
-          ),
-        ],
+        tasks: [parallel(task('Task A'), task('Task B'), task('Task C'))],
       })
 
       const { tasks } = await materializeProject(project)
 
       expect(tasks).toHaveLength(3)
       // Parallel tasks should have no dependencies between them
-      tasks.forEach(t => {
+      tasks.forEach((t) => {
         expect(t.dependencies).toBeUndefined()
       })
     })
@@ -289,15 +244,7 @@ describe('Project DSL', () => {
     it('should handle nested groups', async () => {
       const project = createProject({
         name: 'Nested Project',
-        tasks: [
-          sequential(
-            parallel(
-              task('A1'),
-              task('A2'),
-            ),
-            task('B'),
-          ),
-        ],
+        tasks: [sequential(parallel(task('A1'), task('A2')), task('B'))],
       })
 
       const { tasks } = await materializeProject(project)
@@ -315,10 +262,7 @@ describe('Project DSL', () => {
         name: 'Subtask Project',
         tasks: [
           task('Parent', {
-            subtasks: [
-              task('Child 1'),
-              task('Child 2'),
-            ],
+            subtasks: [task('Child 1'), task('Child 2')],
           }),
         ],
       })
@@ -338,7 +282,7 @@ describe('Project DSL', () => {
     const createTestTasks = (): AnyTask[] => [
       {
         id: 'task_1',
-        function: { type: 'generative', name: 'Task 1', args: {}, output: 'string' },
+        tool: { type: 'generative', name: 'Task 1', args: {}, output: 'string' },
         status: 'queued',
         priority: 'normal',
         createdAt: new Date(),
@@ -346,7 +290,7 @@ describe('Project DSL', () => {
       },
       {
         id: 'task_2',
-        function: { type: 'generative', name: 'Task 2', args: {}, output: 'string' },
+        tool: { type: 'generative', name: 'Task 2', args: {}, output: 'string' },
         status: 'queued',
         priority: 'normal',
         dependencies: [{ type: 'blocked_by', taskId: 'task_1', satisfied: false }],
@@ -355,7 +299,7 @@ describe('Project DSL', () => {
       },
       {
         id: 'task_3',
-        function: { type: 'generative', name: 'Task 3', args: {}, output: 'string' },
+        tool: { type: 'generative', name: 'Task 3', args: {}, output: 'string' },
         status: 'queued',
         priority: 'normal',
         dependencies: [{ type: 'blocked_by', taskId: 'task_2', satisfied: false }],
@@ -414,8 +358,8 @@ describe('Project DSL', () => {
         const ready = getReadyTasks(tasks)
 
         expect(ready).toHaveLength(2)
-        expect(ready.map(t => t.id)).toContain('task_1')
-        expect(ready.map(t => t.id)).toContain('task_2')
+        expect(ready.map((t) => t.id)).toContain('task_1')
+        expect(ready.map((t) => t.id)).toContain('task_2')
       })
 
       it('should exclude non-queued tasks', () => {
@@ -438,7 +382,7 @@ describe('Project DSL', () => {
         const tasks: AnyTask[] = [
           {
             id: 'cycle_1',
-            function: { type: 'generative', name: 'Cycle 1', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'Cycle 1', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             dependencies: [{ type: 'blocked_by', taskId: 'cycle_2', satisfied: false }],
@@ -447,7 +391,7 @@ describe('Project DSL', () => {
           },
           {
             id: 'cycle_2',
-            function: { type: 'generative', name: 'Cycle 2', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'Cycle 2', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             dependencies: [{ type: 'blocked_by', taskId: 'cycle_1', satisfied: false }],
@@ -479,7 +423,7 @@ describe('Project DSL', () => {
         const tasks: AnyTask[] = [
           {
             id: 'independent_1',
-            function: { type: 'generative', name: 'Ind 1', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'Ind 1', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             createdAt: new Date(),
@@ -487,7 +431,7 @@ describe('Project DSL', () => {
           },
           {
             id: 'independent_2',
-            function: { type: 'generative', name: 'Ind 2', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'Ind 2', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             createdAt: new Date(),
@@ -508,7 +452,7 @@ describe('Project DSL', () => {
         const tasks: AnyTask[] = [
           {
             id: 'A',
-            function: { type: 'generative', name: 'A', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'A', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             createdAt: new Date(),
@@ -516,7 +460,7 @@ describe('Project DSL', () => {
           },
           {
             id: 'B',
-            function: { type: 'generative', name: 'B', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'B', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             dependencies: [{ type: 'blocked_by', taskId: 'A', satisfied: false }],
@@ -525,7 +469,7 @@ describe('Project DSL', () => {
           },
           {
             id: 'C',
-            function: { type: 'generative', name: 'C', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'C', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             dependencies: [{ type: 'blocked_by', taskId: 'A', satisfied: false }],
@@ -534,7 +478,7 @@ describe('Project DSL', () => {
           },
           {
             id: 'D',
-            function: { type: 'generative', name: 'D', args: {}, output: 'string' },
+            tool: { type: 'generative', name: 'D', args: {}, output: 'string' },
             status: 'queued',
             priority: 'normal',
             dependencies: [

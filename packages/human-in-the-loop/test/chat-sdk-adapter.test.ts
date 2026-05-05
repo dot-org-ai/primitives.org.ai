@@ -73,7 +73,7 @@ const baseTask: Task = {
   verb: 'review',
   $type: 'Task',
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function: { name: 'review', type: 'human' as any } as any,
+  tool: { name: 'review', type: 'human' as any } as any,
   title: 'Review deployment v2.0.0',
   body: 'Please approve before 5pm.',
   status: 'pending',

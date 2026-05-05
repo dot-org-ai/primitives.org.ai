@@ -28,7 +28,7 @@ function generateTaskId(): string {
  * @example
  * ```ts
  * const task = await createTask({
- *   function: {
+ *   tool: {
  *     type: 'generative',
  *     name: 'summarize',
  *     args: { text: 'The text to summarize' },
@@ -45,6 +45,14 @@ export async function createTask<TInput = unknown, TOutput = unknown>(
 ): Promise<Task<TInput, TOutput>> {
   const now = new Date()
 
+  // Resolve the underlying Tool from either `tool` (preferred) or
+  // the legacy `function` alias. Exactly one path is required; throw
+  // a clear error if neither is set so callers see this at runtime.
+  const tool = options.tool ?? options.function
+  if (!tool) {
+    throw new Error("createTask requires a 'tool' (preferred) or legacy 'function' option")
+  }
+
   // Convert string dependencies to TaskDependency array
   let dependencies: TaskDependency[] | undefined
   if (options.dependencies && options.dependencies.length > 0) {
@@ -55,10 +63,10 @@ export async function createTask<TInput = unknown, TOutput = unknown>(
     }))
   }
 
-  // Determine allowed workers from function type
+  // Determine allowed workers from the Tool's function type
   let allowedWorkers = options.allowedWorkers
   if (!allowedWorkers) {
-    const funcType = options.function.type
+    const funcType = tool.type
     if (funcType === 'human') {
       allowedWorkers = ['human']
     } else if (funcType === 'agentic') {
@@ -72,13 +80,13 @@ export async function createTask<TInput = unknown, TOutput = unknown>(
     id: generateTaskId(),
     $type: 'Task',
     // Action supertype: every Task is an Action of some Verb. Default
-    // the verb to the underlying function's name when not supplied.
-    verb: options.function.name,
-    function: options.function,
-    // Mirror function -> tool alias (CONTEXT.md: function is being
-    // renamed to tool; both fields are populated for the duration of
-    // the deprecation window).
-    tool: options.function,
+    // the verb to the underlying Tool's name when not supplied.
+    verb: tool.name,
+    // Tool is the canonical field (CONTEXT.md). The legacy `function`
+    // alias is populated alongside for the duration of the deprecation
+    // window so older readers continue to work.
+    tool,
+    function: tool,
     status: options.scheduledFor ? 'pending' : 'queued',
     priority: options.priority || 'normal',
     allowedWorkers,
