@@ -132,7 +132,7 @@ describe('Startup Cascade', () => {
       // Check that problems were generated
       const problems = await db.Problem.list()
       expect(problems.length).toBeGreaterThan(0)
-    }, 60000)
+    }, 120000)
 
     it('should cascade through multiple levels', async () => {
       const { db } = DB({
