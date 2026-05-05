@@ -53,6 +53,7 @@ export type {
 
 export {
   Graph,
+  defineGraph,
   getEntityNames,
   getTypeUris,
   getEntity,
@@ -65,6 +66,21 @@ export {
   splitGenericParams,
   parseDefaultValue,
 } from './graph.js'
+
+export type {
+  DocUrl,
+  FuzzyQuery,
+  GraphDepth,
+  GraphInputOf,
+  GraphOf,
+  InferDoc,
+  InferGraphResult,
+  InferIncoming,
+  InferOutgoing,
+  InferPayload,
+  InferRelationships,
+  InferWrite,
+} from './infer.js'
 
 // =============================================================================
 // Verbs

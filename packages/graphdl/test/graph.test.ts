@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   Graph,
+  defineGraph,
   getEntityNames,
   getTypeUris,
   getEntity,
@@ -20,6 +21,15 @@ describe('Graph', () => {
       expect(schema.entities.size).toBe(2)
       expect(schema.typeUris.get('User')).toBe('https://schema.org.ai/Person')
       expect(schema.typeUris.get('Org')).toBe('https://schema.org.ai/Organization')
+    })
+
+    it('defineGraph is an alias for Graph', () => {
+      const schema = defineGraph({
+        User: 'https://schema.org.ai/Person',
+      })
+
+      expect(schema.entities.get('User')?.name).toBe('User')
+      expect(schema.typeUris.get('User')).toBe('https://schema.org.ai/Person')
     })
 
     it('creates entities with no fields for simple mappings', () => {

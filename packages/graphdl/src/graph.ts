@@ -15,6 +15,7 @@ import type {
   ParsedField,
   PrimitiveType,
 } from './types.js'
+import type { GraphOf } from './infer.js'
 import { parseOperator } from './relationship.js'
 
 // =============================================================================
@@ -167,14 +168,14 @@ export function parseDefaultValue(value: string): unknown {
 /**
  * Parse a single field definition into a ParsedField
  */
-function parseField(name: string, definition: string | [string]): ParsedField {
+function parseField(name: string, definition: string | readonly [string]): ParsedField {
   // Handle array literal syntax: ['->Author.posts']
   if (Array.isArray(definition)) {
     const inner = parseField(name, definition[0])
     return { ...inner, isArray: true }
   }
 
-  let type = definition
+  let type = definition as string
 
   // Parse default value: 'type = value' syntax
   // Must be done BEFORE operator parsing since '=' could appear in prompts
@@ -398,7 +399,7 @@ function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
 
     // Parse field definition
     if (typeof fieldDef === 'string' || Array.isArray(fieldDef)) {
-      fields.set(fieldName, parseField(fieldName, fieldDef as string | [string]))
+      fields.set(fieldName, parseField(fieldName, fieldDef))
     }
   }
 
@@ -492,13 +493,13 @@ function parseEntity(name: string, definition: EntityDefinition): ParsedEntity {
  * // => 'https://schema.org.ai/Person'
  * ```
  */
-export function Graph(input: GraphInput): ParsedGraph {
+export function Graph<TInput extends GraphInput>(input: TInput): GraphOf<TInput> {
   const entities = new Map<string, ParsedEntity>()
   const typeUris = new Map<string, string>()
 
   // Handle empty input - return empty graph
   if (!input || Object.keys(input).length === 0) {
-    return { entities, typeUris }
+    return { entities, typeUris } as GraphOf<TInput>
   }
 
   // First pass: parse all entities
@@ -534,8 +535,11 @@ export function Graph(input: GraphInput): ParsedGraph {
     }
   }
 
-  return { entities, typeUris }
+  return { entities, typeUris } as GraphOf<TInput>
 }
+
+/** Alias for callers that prefer a verb over the historical `Graph()` factory. */
+export const defineGraph = Graph
 
 // =============================================================================
 // Graph Utilities

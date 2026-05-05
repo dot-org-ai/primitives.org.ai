@@ -316,7 +316,7 @@ export interface Noun {
  * - An array relation: ['->Author.posts'] (many-to-many with backref)
  * - Optional modifier: 'string?'
  */
-export type FieldDefinition = string | [string]
+export type FieldDefinition = string | readonly [string]
 
 /**
  * Entity definition in the Graph DSL
