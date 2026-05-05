@@ -1,5 +1,20 @@
 # ai-functions
 
+## 2.2.0
+
+### Minor Changes
+
+- Deepen `language-models` with per-model resilience and tier policy data
+  (aip-70mk). The `ModelPolicy` MDXLD type (`$type: 'ModelPolicy'`) and
+  `policyFor()` derivation layer now live in `language-models`. The runtime
+  machinery in `ai-functions` (`RetryPolicy`, `CircuitBreaker`,
+  `FallbackChain`) gains `forModel(alias)` factories that read policy from
+  the catalog. Default behaviour is preserved when no alias is provided.
+- New helpers: `tiersForModel(alias)`, `modelSupportsTier(alias, tier)`,
+  re-exported `modelPolicyFor` (alias for `policyFor`).
+- New types re-exported: `ModelPolicy`, `BatchTier`, `RetryPolicyData`,
+  `CircuitBreakerPolicyData`, `ErrorCategoryName`, `FlexAdapter`.
+
 ## 2.1.3
 
 ### Patch Changes

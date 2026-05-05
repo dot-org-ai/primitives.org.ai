@@ -27,6 +27,7 @@
 import type { FunctionOptions } from './template.js'
 import type { SimpleSchema } from './schema.js'
 import { getLogger } from './logger.js'
+import { policyFor, type BatchTier } from 'language-models'
 
 // ============================================================================
 // Types
@@ -655,6 +656,33 @@ export function getFlexAdapter(provider: BatchProvider): FlexAdapter {
  */
 export function hasFlexAdapter(provider: BatchProvider): boolean {
   return flexAdapters[provider] !== null
+}
+
+// ============================================================================
+// Tier eligibility (per-model policy)
+// ============================================================================
+
+/**
+ * List the batch tiers a model is eligible for.
+ *
+ * Reads `ModelPolicy.batchTier` from `language-models` — this is the per-model
+ * policy data, distinct from the runtime adapter registration above.
+ *
+ * @example
+ * ```ts
+ * tiersForModel('sonnet')   // ['immediate', 'batch']
+ * tiersForModel('gpt-4o')   // ['immediate', 'flex', 'batch']
+ * ```
+ */
+export function tiersForModel(alias: string): BatchTier[] {
+  return policyFor(alias).batchTier
+}
+
+/**
+ * Check whether a model is eligible for a given tier.
+ */
+export function modelSupportsTier(alias: string, tier: BatchTier): boolean {
+  return tiersForModel(alias).includes(tier)
 }
 
 // ============================================================================

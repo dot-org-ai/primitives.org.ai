@@ -9,8 +9,16 @@
  * - Error classification for intelligent retry decisions
  * - Partial retry for batch operations
  *
+ * Per-model policy data (which models retry how, who falls back to whom,
+ * which batch tiers each model supports) lives in `language-models`'s
+ * `policyFor()`. The classes in this file are the *machinery* that reads
+ * that policy. See `RetryPolicy.forModel`, `CircuitBreaker.forModel`,
+ * `FallbackChain.forModel`.
+ *
  * @packageDocumentation
  */
+
+import { policyFor, type ModelPolicy, type ErrorCategoryName } from 'language-models'
 
 // ============================================================================
 // ERROR TYPES AND CLASSIFICATION
@@ -342,6 +350,47 @@ export class RetryPolicy {
   }
 
   /**
+   * Build a RetryPolicy from a model's `ModelPolicy` (loaded via
+   * `language-models`). Per-call `overrides` win over policy data.
+   *
+   * @example
+   * ```ts
+   * const policy = RetryPolicy.forModel('sonnet')
+   * // Uses retry settings derived for anthropic/claude-sonnet-4.5
+   * ```
+   */
+  static forModel(alias: string, overrides: RetryOptions = {}): RetryPolicy {
+    const policy = policyFor(alias)
+    return RetryPolicy.fromPolicy(policy, overrides)
+  }
+
+  /**
+   * Build a RetryPolicy directly from a `ModelPolicy`. Useful when the policy
+   * is already in hand (e.g. from a request context).
+   */
+  static fromPolicy(policy: ModelPolicy, overrides: RetryOptions = {}): RetryPolicy {
+    const retryable = new Set<ErrorCategoryName>(policy.retry.retryableCategories)
+    const shouldRetry = (error: unknown): boolean => {
+      // Honour error's own retryable property when present.
+      if (error && typeof error === 'object' && 'retryable' in error) {
+        const flag = (error as { retryable: boolean }).retryable
+        if (flag === false) return false
+      }
+      const category = classifyError(error)
+      return retryable.has(category as ErrorCategoryName)
+    }
+    return new RetryPolicy({
+      maxRetries: policy.retry.maxRetries,
+      baseDelay: policy.retry.baseDelay,
+      maxDelay: policy.retry.maxDelay,
+      multiplier: policy.retry.multiplier,
+      jitter: policy.retry.jitter,
+      shouldRetry,
+      ...overrides,
+    })
+  }
+
+  /**
    * Execute an operation with retry logic
    */
   async execute<T>(operation: (info: RetryInfo) => Promise<T>): Promise<T> {
@@ -531,6 +580,20 @@ export class CircuitBreaker {
   }
 
   /**
+   * Build a CircuitBreaker for a specific model, using its `ModelPolicy`.
+   * Per-call overrides win over policy data.
+   */
+  static forModel(alias: string, overrides: CircuitBreakerOptions = {}): CircuitBreaker {
+    const policy = policyFor(alias)
+    return new CircuitBreaker({
+      failureThreshold: policy.circuitBreaker.failureThreshold,
+      resetTimeout: policy.circuitBreaker.resetTimeout,
+      successThreshold: policy.circuitBreaker.successThreshold,
+      ...overrides,
+    })
+  }
+
+  /**
    * Current circuit state
    */
   get state(): CircuitState {
@@ -683,6 +746,33 @@ export class FallbackChain<T = unknown, P = unknown> {
     }
     this.models = models
     this.options = options
+  }
+
+  /**
+   * Build a FallbackChain from a model's `ModelPolicy`. The caller supplies
+   * an `executor` that takes a model id and returns a promise — the chain
+   * applies it to the primary model first, then to each fallback in order.
+   *
+   * @example
+   * ```ts
+   * const chain = FallbackChain.forModel('sonnet', (modelId, params) =>
+   *   ai({ model: modelId, prompt: params!.prompt })
+   * )
+   * await chain.execute({ prompt: 'Hello' })
+   * ```
+   */
+  static forModel<T = unknown, P = unknown>(
+    alias: string,
+    executor: (modelId: string, params?: P) => Promise<T>,
+    options: FallbackOptions = {}
+  ): FallbackChain<T, P> {
+    const policy = policyFor(alias)
+    const ids = [policy.$id, ...policy.fallbackChain]
+    const models: FallbackModel<T, P>[] = ids.map((id) => ({
+      name: id,
+      execute: (params?: P) => executor(id, params),
+    }))
+    return new FallbackChain<T, P>(models, options)
   }
 
   /**

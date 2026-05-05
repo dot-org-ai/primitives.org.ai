@@ -187,6 +187,11 @@ export {
   withBatch as withBatchQueue,
   registerBatchAdapter,
   getBatchAdapter,
+  registerFlexAdapter,
+  getFlexAdapter,
+  hasFlexAdapter,
+  tiersForModel,
+  modelSupportsTier,
   isBatchMode,
   deferToBatch,
   BATCH_MODE_SYMBOL,
@@ -198,9 +203,20 @@ export {
   type BatchResult,
   type BatchSubmitResult,
   type BatchAdapter,
+  type FlexAdapter,
   type BatchQueueOptions,
   type DeferredOptions,
 } from './batch-queue.js'
+
+// Export per-model policy data (sourced from language-models)
+export {
+  policyFor as modelPolicyFor,
+  type ModelPolicy,
+  type BatchTier,
+  type RetryPolicyData,
+  type CircuitBreakerPolicyData,
+  type ErrorCategoryName,
+} from 'language-models'
 
 // Export batch map for automatic batching
 export {
