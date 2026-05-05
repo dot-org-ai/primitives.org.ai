@@ -17,6 +17,7 @@
  */
 
 import type { SimpleSchema } from 'ai-functions'
+import type { Thing, ThingRef } from 'digital-objects'
 import type { CapabilityTier, CapabilityProfile } from './capability-tiers.js'
 
 // Import consolidated types from org.ai
@@ -24,6 +25,30 @@ import type { Role, Team, Goal, Goals, KPI, OKR, TeamMember, KeyResult } from 'o
 
 // Re-export org.ai types for convenience
 export type { Role, Team, Goal, Goals, KPI, OKR, TeamMember, KeyResult }
+
+// Re-export digital-objects core types used by Worker/Role surfaces
+export type { Thing, ThingRef }
+
+// ============================================================================
+// Identity (SVO co-design — aip-ttfk)
+// ============================================================================
+
+/**
+ * IdentityRef — opaque reference to an `id.org.ai` Identity record.
+ *
+ * String alias for now: resolves to an upstream Identity (DID + scopes +
+ * payment instruments) once `id.org.ai` and the local API surfaces align.
+ * The upstream package (submoduled at `external/id.org.ai/`) is not yet
+ * importable as a typed dependency from this workspace, so the runtime
+ * shape is intentionally left as `string` here. Callers should treat the
+ * value as opaque and resolve it through an `id.org.ai` client.
+ *
+ * Per the SVO co-design plan (`docs/plans/2026-05-05-svo-co-design.md`,
+ * step 4), a `Worker` carries an `IdentityRef` so AuthBroker and
+ * PaymentBroker can gate Tool invocations on the worker's scopes and
+ * funding instruments.
+ */
+export type IdentityRef = string
 
 // ============================================================================
 // Worker Types
@@ -245,6 +270,13 @@ export interface Worker {
   capabilityTier?: CapabilityTier
   /** Full capability profile for detailed configuration */
   capabilityProfile?: CapabilityProfile
+  /**
+   * Reference to this Worker's `id.org.ai` Identity record (DID + scopes +
+   * payment instruments). Optional for backward compatibility — populated
+   * by deployments that have wired up an `id.org.ai` AuthBroker/
+   * PaymentBroker. SVO co-design step 4 (aip-ttfk).
+   */
+  identity?: IdentityRef
   metadata?: Record<string, unknown>
 }
 
@@ -693,6 +725,49 @@ export interface DecideOptions<T = string> {
 // ============================================================================
 // Role and Goals
 // ============================================================================
+
+/**
+ * OrgRole — a slot in an org structure (e.g., 'CEO', 'PDM') filled by a
+ * specific Person or Agent.
+ *
+ * SVO co-design step 4 (aip-ttfk). This is the Noun-extending Role from
+ * `docs/plans/2026-05-05-svo-co-design.md`: a `Thing` whose data records
+ * the slot's current `filler` and an optional `fallbackChain` for when
+ * the filler is unavailable. A `Worker` whose `id` references an
+ * `OrgRole` resolves to the current filler at invocation time.
+ *
+ * NAMING NOTE: the design doc calls this type `Role`, but `Role` is
+ * already imported from `org.ai` and re-exported above as a different
+ * concept (a job-description-shaped HR Role with skills, permissions,
+ * responsibilities). Renamed here to `OrgRole` to avoid the collision;
+ * see the aip-ttfk bead comment for the surfaced conflict.
+ *
+ * @example
+ * ```ts
+ * const ceo: OrgRole = {
+ *   id: 'role_ceo',
+ *   noun: 'OrgRole',
+ *   data: {
+ *     $type: 'Role',
+ *     name: 'CEO',
+ *     filler: 'person_priya',
+ *     fallbackChain: ['person_alex'],
+ *   },
+ *   createdAt: new Date(),
+ *   updatedAt: new Date(),
+ * }
+ * ```
+ */
+export interface OrgRole
+  extends Thing<{
+    $type: 'Role'
+    /** Display name of the slot (e.g., 'CEO', 'PDM') */
+    name: string
+    /** Current filler — a Person or Agent ThingRef */
+    filler: ThingRef
+    /** Fallback fillers tried in order if `filler` is unavailable */
+    fallbackChain?: ThingRef[]
+  }> {}
 
 /**
  * WorkerRole - extends Role from org.ai with worker-specific requirements

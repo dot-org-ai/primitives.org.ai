@@ -31,6 +31,7 @@
   "dependencies": {
     "ai-functions": "workspace:*",
     "ai-workflows": "workspace:*",
+    "digital-objects": "workspace:*",
     "org.ai": "workspace:*",
     "rpc.do": "*",
     "zod": "^3.23.0"
