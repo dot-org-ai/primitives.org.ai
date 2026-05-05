@@ -2,7 +2,7 @@
 
 ![Stability: Experimental](https://img.shields.io/badge/stability-experimental-red)
 
-Runtime A/B testing for AI variants in production. Traffic splitting, multi-armed bandits, parameter sweeps, and ClickHouse-backed (`chdb`) outcome tracking.
+Runtime A/B testing for AI variants in production. Traffic splitting, multi-armed bandits, parameter sweeps, and ClickHouse-backed outcome tracking via the canonical `ai-database` adapter.
 
 ## Lifecycle
 

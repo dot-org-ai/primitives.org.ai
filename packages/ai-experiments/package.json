@@ -11,8 +11,8 @@
       "types": "./dist/index.d.ts"
     },
     "./storage": {
-      "import": "./dist/chdb-storage.js",
-      "types": "./dist/chdb-storage.d.ts"
+      "import": "./dist/clickhouse-storage.js",
+      "types": "./dist/clickhouse-storage.d.ts"
     }
   },
   "scripts": {
@@ -24,8 +24,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "workspace:*",
-    "chdb": "^1.6.0"
+    "ai-database": "workspace:*",
+    "ai-functions": "workspace:*"
   },
   "keywords": [
     "ai",

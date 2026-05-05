@@ -43,6 +43,16 @@ export {
   createFileBackend,
 } from './tracking.js'
 
-// Export ClickHouse storage backend
-export { ChdbStorage, createChdbBackend } from './chdb-storage.js'
-export type { ChdbStorageOptions } from './chdb-storage.js'
+// Export ClickHouse storage backend (canonical adapter via ai-database)
+export {
+  ClickHouseExperimentStorage,
+  createClickHouseExperimentStorage,
+  bootstrapExperimentsSchema,
+  // Backwards-compat aliases
+  ChdbStorage,
+  createChdbBackend,
+} from './clickhouse-storage.js'
+export type {
+  ClickHouseExperimentStorageOptions,
+  ChdbStorageOptions,
+} from './clickhouse-storage.js'
