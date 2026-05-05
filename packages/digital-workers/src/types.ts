@@ -18,6 +18,7 @@
 
 import type { SimpleSchema } from 'ai-functions'
 import type { Thing, ThingRef } from 'digital-objects'
+import type { ThingRef as SchemaThingRef } from 'schema.org.ai'
 import type { CapabilityTier, CapabilityProfile } from './capability-tiers.js'
 
 // Import consolidated types from org.ai
@@ -34,21 +35,22 @@ export type { Thing, ThingRef }
 // ============================================================================
 
 /**
- * IdentityRef — opaque reference to an `id.org.ai` Identity record.
+ * IdentityRef — reference to an `id.org.ai` Identity record.
  *
- * String alias for now: resolves to an upstream Identity (DID + scopes +
- * payment instruments) once `id.org.ai` and the local API surfaces align.
- * The upstream package (submoduled at `external/id.org.ai/`) is not yet
- * importable as a typed dependency from this workspace, so the runtime
- * shape is intentionally left as `string` here. Callers should treat the
- * value as opaque and resolve it through an `id.org.ai` client.
+ * Widened from the `string`-only placeholder introduced in aip-ttfk to the
+ * `schema.org.ai` `ThingRef` shape now that the upstream package has shipped
+ * (`schema.org.ai@^0.1.0`). Two shapes are accepted:
+ *   - bare string `$id` (back-compat with the original `IdentityRef = string`)
+ *   - `{ $id, $type, name? }` typed reference, so callers can route by class
+ *     without first resolving the Identity record.
  *
  * Per the SVO co-design plan (`docs/plans/2026-05-05-svo-co-design.md`,
  * step 4), a `Worker` carries an `IdentityRef` so AuthBroker and
  * PaymentBroker can gate Tool invocations on the worker's scopes and
- * funding instruments.
+ * funding instruments. The typed form lets `Worker.resolve()` skip a
+ * fetch when `$type` is already known.
  */
-export type IdentityRef = string
+export type IdentityRef = SchemaThingRef
 
 // ============================================================================
 // Worker Types

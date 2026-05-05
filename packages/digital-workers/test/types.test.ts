@@ -24,6 +24,7 @@ import type {
   DoResult,
   ActionTarget,
   WorkerContext,
+  IdentityRef,
 } from '../src/types.js'
 
 describe('Worker Types', () => {
@@ -111,6 +112,54 @@ describe('Worker Types', () => {
       expect(agent.capabilityProfile?.tier).toBe('code')
       expect(agent.capabilityProfile?.tools).toContain('calculate')
     })
+
+    // aip-t86f: Worker.identity widened from string-only to schema.org.ai
+    // ThingRef (string | { $id, $type, name? }). Bare strings still work;
+    // typed refs let resolve() skip a fetch when $type is already known.
+    it('should support bare-string identity (back-compat with aip-ttfk)', () => {
+      const worker: Worker = {
+        id: 'worker_1',
+        name: 'Test Worker',
+        type: 'human',
+        status: 'available',
+        contacts: { email: 'alice@company.com' },
+        identity: 'identity:did:example:alice',
+      }
+
+      expect(worker.identity).toBe('identity:did:example:alice')
+      // Type-level: bare string is still a valid IdentityRef
+      const bare: IdentityRef = 'identity:did:example:alice'
+      expect(typeof bare).toBe('string')
+    })
+
+    it('should support typed ThingRef identity ({ $id, $type, name? })', () => {
+      const worker: Worker = {
+        id: 'worker_2',
+        name: 'Alice',
+        type: 'human',
+        status: 'available',
+        contacts: { email: 'alice@company.com' },
+        identity: {
+          $id: 'identity:did:example:alice',
+          $type: 'Identity',
+          name: 'Alice',
+        },
+      }
+
+      // Narrow on the typed-object branch
+      if (typeof worker.identity === 'object' && worker.identity !== null) {
+        expect(worker.identity.$id).toBe('identity:did:example:alice')
+        expect(worker.identity.$type).toBe('Identity')
+        expect(worker.identity.name).toBe('Alice')
+      } else {
+        // Force failure if the type narrowing didn't pick the object branch
+        expect.fail('expected typed ThingRef identity')
+      }
+
+      // Type-level: typed-ref shape is also a valid IdentityRef
+      const typed: IdentityRef = { $id: 'id:1', $type: 'Identity' }
+      expect(typed).toBeDefined()
+    })
   })
 
   describe('WorkerRef interface', () => {
@@ -184,8 +233,17 @@ describe('Worker Types', () => {
 
     it('should support all channel types', () => {
       const channels: ContactChannel[] = [
-        'email', 'slack', 'teams', 'discord', 'phone',
-        'sms', 'whatsapp', 'telegram', 'web', 'api', 'webhook',
+        'email',
+        'slack',
+        'teams',
+        'discord',
+        'phone',
+        'sms',
+        'whatsapp',
+        'telegram',
+        'web',
+        'api',
+        'webhook',
       ]
       expect(channels).toHaveLength(11)
     })
