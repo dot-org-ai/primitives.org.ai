@@ -4,7 +4,7 @@
  * This module is a re-export layer that delegates to focused modules:
  * - ai-schemas.ts - Schema-based AI function generation
  * - function-registry.ts - Function definition and registry
- * - ai-proxy.ts - Auto-define proxy functionality
+ * - primitives.ts - Auto-define proxy functionality (`define`, `createSmartAI`, `aiProxy`)
  *
  * All exports are maintained for backward compatibility.
  */
@@ -33,9 +33,11 @@ export {
 } from './function-registry.js'
 
 // ============================================================================
-// Re-export from ai-proxy.ts - Auto-define proxy functionality
+// Re-export from primitives.ts - Auto-define proxy functionality
+// (formerly in ai-proxy.ts; inlined to give property-access tracking a single
+// owner in ai-promise.ts)
 // ============================================================================
-export { define, createSmartAI, ai, type AIProxy } from './ai-proxy.js'
+export { define, createSmartAI, aiProxy as ai, type AIProxy } from './primitives.js'
 
 // ============================================================================
 // Local exports - withTemplate utility
