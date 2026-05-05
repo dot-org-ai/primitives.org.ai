@@ -1,3 +1,3 @@
-import config from '@mdxld/config/eslint'
+import config from '@org.ai/config/eslint'
 
 export default config
