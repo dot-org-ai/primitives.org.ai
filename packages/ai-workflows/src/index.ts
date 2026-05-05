@@ -63,6 +63,18 @@
 // Main Workflow API
 export { Workflow, createTestContext, parseEvent, type WorkflowInstance } from './workflow.js'
 
+// WorkflowRuntime - single owner of the `$` runtime contract
+// (composes cascade-context, database-context, on/send/every internally).
+// New callers should reach for createWorkflowRuntime() to understand exactly
+// what `$` contains end-to-end. The Workflow() function wraps a runtime with
+// schedule/timer lifecycle; for tests, runtime.dispatch() is the canonical
+// surface.
+export {
+  createWorkflowRuntime,
+  type WorkflowRuntime,
+  type WorkflowRuntimeOptions,
+} from './runtime.js'
+
 // Standalone event handling (for global registration)
 export { on, registerEventHandler, getEventHandlers, clearEventHandlers } from './on.js'
 
