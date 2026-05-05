@@ -560,3 +560,41 @@ export type { RelationOperatorType } from './constants.js'
 // =============================================================================
 
 export { RDBProviderAdapter, createRDBAdapter } from './rdb-provider-adapter.js'
+
+// =============================================================================
+// DBProvider Port — SVO-shaped contract with declared capability tiers
+// =============================================================================
+// Per ADR-0003: Tier 1+2 are universal (shape unchanged from `schema/provider`);
+// Tier 3 (analytics) and Tier 4 (vector search) are declared per-adapter.
+// Sharding model is declared so cascade write strategy can pick the right adapter.
+
+export {
+  DEFAULT_TIER_CAPABILITIES,
+  getProviderCapabilities,
+  hasActionRecording,
+  hasVerbRegistry,
+  hasVectorSearch,
+  hasAnalytics,
+} from './db-provider-port.js'
+
+export type {
+  // Tier capability declarations
+  ProviderTierCapabilities,
+  ShardingModel,
+  AnalyticsCapability,
+  VectorSearchCapability,
+  VectorSimilarityMetric,
+  // SVO surface
+  FrameRole,
+  SVOAction,
+  ActionQuery,
+  VerbDefinitionInput,
+  VerbRecord,
+  DBProviderSVO,
+  // Tier-3/4 method shapes
+  VectorSearchHit,
+  VectorSearchPort,
+  AnalyticsPort,
+  // Composed port
+  DBProviderPort,
+} from './db-provider-port.js'
