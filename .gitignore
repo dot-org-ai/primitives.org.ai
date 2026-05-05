@@ -141,6 +141,14 @@ vite.config.ts.timestamp-*
 # Turbo
 .turbo/
 
+# Stale build artifacts in package src/ directories (tsc emits to dist/)
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map
+# Exception: intentional ambient module declaration
+!packages/ai-database/src/mdxdb-modules.d.ts
+
 # OS
 .DS_Store
 Thumbs.db
