@@ -355,6 +355,31 @@ pnpm test       # Run tests across packages
 pnpm typecheck  # Type-check all packages
 ```
 
+### External Submodules
+
+Some primitives are developed in separate repositories and integrated here as
+git submodules under `external/`:
+
+| Path | Upstream | Purpose |
+|------|----------|---------|
+| `external/id.org.ai` | [`dot-org-ai/id.org.ai`](https://github.com/dot-org-ai/id.org.ai) | Agent-first identity SDK (auth, OAuth, MCP, JWT, WorkOS). Pinned via `git submodule`. Workspace member at the repo root only — its internal `packages/*` are NOT absorbed into this monorepo's workspace. |
+
+**Setup:** clone with `git clone --recurse-submodules ...` or run
+`git submodule update --init --recursive` after a regular clone. CI workflows
+check out submodules via `actions/checkout@v4` with `submodules: recursive`.
+
+**Interim status:** the submodule approach lets us iterate on `id.org.ai`
+cross-repo without publish cycles. Once `id.org.ai` stabilises and is published
+to npm, the submodule will be replaced by a normal versioned dependency.
+
+> Note: the `org.ai` package (`packages/org.ai`) re-exports from `id.org.ai`
+> (`workspace:^`). The remote `id.org.ai` SDK has a different API surface than
+> the previous local stub (auth/OAuth-focused vs. the prior identity-record
+> shape with `User`, `AgentIdentity`, `Credential`, `Session`). Until
+> `org.ai`'s identity layer is reconciled with the upstream SDK, its tests
+> against those legacy symbols will fail. Source typechecks pass because
+> `org.ai/src/identity.ts` is a wildcard re-export.
+
 ## Stratified Package Layers
 
 This section provides detailed layer analysis with actual package.json dependencies and layer rules.

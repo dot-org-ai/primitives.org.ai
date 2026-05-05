@@ -4,3 +4,6 @@
 [submodule "ai/primitives"]
 	path = ai/primitives
 	url = https://github.com/dot-org-ai/primitives.org.ai.git
+[submodule "external/id.org.ai"]
+	path = external/id.org.ai
+	url = https://github.com/dot-org-ai/id.org.ai

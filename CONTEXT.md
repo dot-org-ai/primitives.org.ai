@@ -43,6 +43,13 @@ _Avoid_: Event (Actions surface as events but the durable record is the Action),
 
 ### Identity (`id.org.ai`)
 
+> The `id.org.ai` package now lives in its own repository at
+> [`dot-org-ai/id.org.ai`](https://github.com/dot-org-ai/id.org.ai) and is
+> integrated here as a git submodule under `external/id.org.ai`. This is an
+> interim arrangement; once the upstream stabilises and publishes to npm, it
+> will be consumed as a regular versioned dependency. See
+> [ARCHITECTURE.md](./ARCHITECTURE.md#external-submodules) for setup.
+
 **Person**: A specific human. A Thing of Noun "Person".
 _Avoid_: User, account.
 
