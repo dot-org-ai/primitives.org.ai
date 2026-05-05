@@ -599,6 +599,29 @@ export type WorkerStatusType = (typeof WorkerStatus)[number]
 /** Type URL constants */
 export const WORKER_TYPE = 'https://schema.org.ai/Worker' as const
 export const AGENT_TYPE = 'https://schema.org.ai/Agent' as const
+
+/**
+ * Canonical Person type IRI — matches `IRIS.Person` from `schema.org.ai`
+ * (`https://schema.org/Person`).
+ *
+ * `Person` is the canonical Schema.org identity for a human. New code should
+ * prefer `PERSON_TYPE` over the deprecated {@link HUMAN_TYPE}.
+ *
+ * @see https://schema.org/Person
+ * @see {@link HUMAN_TYPE} (deprecated alias)
+ */
+export const PERSON_TYPE = 'https://schema.org/Person' as const
+
+/**
+ * Legacy worker-subtype IRI for humans.
+ *
+ * @deprecated Use {@link PERSON_TYPE} (`https://schema.org/Person`) instead.
+ *   `HUMAN_TYPE` predates the migration to `schema.org.ai`'s canonical
+ *   `Person` type. It is retained for backward compatibility with existing
+ *   `WorkerType`/`HumanType` discriminated unions and runtime values that
+ *   still emit `'https://schema.org.ai/Human'`. Removal is a semver-major
+ *   change.
+ */
 export const HUMAN_TYPE = 'https://schema.org.ai/Human' as const
 
 /** All worker types */
