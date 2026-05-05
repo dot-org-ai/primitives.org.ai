@@ -82,30 +82,63 @@ interface Action<T = unknown> {
 
 ### `id.org.ai.Identity`
 
+**Note (2026-05-05 update):** The shapes below were corrected against `id.org.ai@0.3.0` and `schema.org.ai@0.1.0` (both published on npm).
+
+Two earlier drafts were wrong:
+- `PaymentInstrument.rail: 'x402' | 'mpp'` — real shape uses `rails: PaymentRail[]` records (`{ protocol, method, network?, asset? }`); one instrument can satisfy multiple rails (USDC wallet pays via both x402-exact and MPP-charge-tempo).
+- `PaymentRequired.accepts: ('x402' | 'mpp')[]` — real shape is a discriminated union of three intents.
+
+Also: `ThingRef` is widened in `schema.org.ai@0.1.0` to `string | { $id, $type, name? }` (was just `string` in our `digital-objects`). Bare strings still work; typed refs let `Worker.resolve()` skip a fetch.
+
+`IdentityRef` should be `ThingRef` (the schema.org.ai widened form), not a separate `string` alias.
+
+The L2→L3 transition (`'subscribe'`) is no longer library-emitted in `id.org.ai`; only L0→L1 (`provision`) and L1→L2 (`claim`) are emitted by the state machine. L3 is downstream product surface.
+
 ```ts
+// All from id.org.ai@^0.3.0
 interface Identity {
-  did: string                              // Decentralized Identifier
-  subject: ThingRef                        // → Person or Agent
-  scopes: string[]                         // OAuth-style permissions
-  paymentInstruments: PaymentInstrument[]  // wallets, SPTs, Stripe customers
-  contacts: ContactChannel[]               // how this Identity is reachable
+  did?: string                             // Decentralized Identifier (optional in 0.3.0)
+  subject?: ThingRef                       // → Person or Agent (optional in 0.3.0; back-compat with legacy shape)
+  scopes?: string[]                        // OAuth-style permissions
+  paymentInstruments?: PaymentInstrument[]
+  contacts?: ContactChannel[]
 }
 
 interface PaymentInstrument {
   $type: 'wallet' | 'spt' | 'stripeCustomer'
-  rail: 'x402' | 'mpp'
+  rails: PaymentRail[]                     // one instrument can satisfy multiple rails
   pubkey?: string
   sptHandle?: string
   spendCap?: { amount: string, currency: string, period: 'session' | 'day' }
 }
 
+interface PaymentRail {
+  protocol: 'x402' | 'mpp'                 // x402 v2 spec; MPP IETF draft draft-httpauth-payment-00
+  method: 'exact' | 'tempo' | 'stripe-spt' | 'solana' | 'lightning' | 'card'
+  network?: string                         // e.g., 'base', 'solana'
+  asset?: string                           // e.g., 'USDC'
+}
+
 interface AuthBroker {
-  check(identity: Identity, requirement: AuthRequirement): Promise<AuthDecision>
+  gate(req: Request, need: AuthRequirement): Promise<AuthDecision>
+  identify(req: Request): Promise<Identity | null>
+  check(identity: Identity, need: AuthRequirement): Promise<AuthDecision>
 }
 
 interface PaymentBroker {
-  negotiate(identity: Identity, pricing: PaymentRequired): Promise<PaymentRail>
-  pay(rail: PaymentRail, response: Response): Promise<PaymentReceipt>
+  settle(req: Request, identity: Identity, required: PaymentRequired): Promise<PaymentReceipt>
+  session(...): Promise<PaymentSession>    // not yet implemented in 0.3.0 (MPP escrow)
+  instrumentsFor(identity: Identity): PaymentInstrument[]
+}
+
+// AuthRequirement is a discriminated union — bare CapabilityLevel for the 95% case,
+// or a typed object for FGA-shaped checks
+type AuthRequirement = CapabilityLevel | {
+  minLevel?: CapabilityLevel
+  scopes?: string[]
+  anyScopes?: string[]
+  roles?: string[]
+  resource?: ThingRef                      // for fine-grained-authorization (FGA) checks
 }
 ```
 
@@ -142,11 +175,19 @@ interface Tool<TArgs = unknown, TResult = unknown> {
   handler: (args: TArgs, ctx: ToolContext) => Promise<TResult>
 }
 
-interface PaymentRequired {
-  $type: 'PaymentRequired'
+// PaymentRequired is a union of three shapes per id.org.ai@0.3.0:
+type PaymentRequired =
+  // 1. Bare shorthand for the 95% case
+  | { amount: string; currency: string; recipient: string }
+  // 2. Explicit charge intent with multi-rail support
+  | { intent: 'charge'; accepts: RailQuote[] }
+  // 3. MPP escrow / session intent (broker.session() — not yet implemented in 0.3.0)
+  | { intent: 'session'; budget: string; ttlSeconds: number; accepts: RailQuote[] }
+
+interface RailQuote {
+  rail: PaymentRail
   amount: string
   currency: string
-  accepts: ('x402' | 'mpp')[]
   recipient: string                        // wallet address or stripeAccountId
   facilitator?: string
 }
