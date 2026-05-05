@@ -1015,3 +1015,28 @@ export function createInProcessDurableExecution(
 
   return adapter
 }
+
+// =============================================================================
+// Cloudflare Workflows adapter (re-export)
+// =============================================================================
+
+// Re-export the Cloudflare Workflows adapter so callers using the
+// `ai-workflows/durable-execution` subpath can reach both the port and its CF
+// implementation through a single import. See `./durable-execution-cloudflare.ts`
+// for the bridge logic and `docs/adr/0004-durable-execution-cf-workflows-default.md`
+// for the rationale.
+export {
+  createCloudflareWorkflowsDurableExecution,
+  createWorkflowEntrypoint,
+  type CloudflareWorkflowsDurableExecution,
+  type CloudflareWorkflowsDurableExecutionOptions,
+  type CloudflareWorkflowsLimits,
+  type WorkflowEnvelope,
+  type WorkflowEntrypointConstructor,
+  type WorkflowEntrypointLike,
+  type WorkflowEventLike,
+  type WorkflowInstanceLike,
+  type WorkflowsBindingLike,
+  type WorkflowStepConfigLike,
+  type WorkflowStepLike,
+} from './durable-execution-cloudflare.js'
