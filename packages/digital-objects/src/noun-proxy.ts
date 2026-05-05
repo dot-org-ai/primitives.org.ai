@@ -53,8 +53,11 @@ function generateEntityId(type: string): string {
 // =============================================================================
 
 function getTenantContext(): string {
-  const tenant =
-    (typeof process !== 'undefined' && process.env?.['HEADLESSLY_TENANT']) || 'default'
+  // Read HEADLESSLY_TENANT from a Node-style `process.env` if present.
+  // We avoid `@types/node` here (the package targets Cloudflare Workers types),
+  // so probe `globalThis` defensively rather than referencing the global `process`.
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+  const tenant = proc?.env?.['HEADLESSLY_TENANT'] || 'default'
   return `https://headless.ly/~${tenant}`
 }
 
@@ -62,7 +65,15 @@ function getTenantContext(): string {
 // Global Provider
 // =============================================================================
 
-let globalProvider: NounProvider | undefined
+/**
+ * Either a regular NounProvider or a pipelineable variant.
+ * Used internally so callers can supply either kind without forcing
+ * `PipelineableNounProvider` to extend `NounProvider` (which would violate
+ * variance because `RpcPromise<T>` is `PromiseLike<T>`, not `Promise<T>`).
+ */
+type AnyNounProvider = NounProvider | PipelineableNounProvider
+
+let globalProvider: AnyNounProvider | undefined
 
 // =============================================================================
 // Entity Registry (for $ context in after hooks)
@@ -127,12 +138,12 @@ export function clearEventBus(): void {
 }
 
 // Scoped provider support for multi-tenant
-let providerFactory: ((context?: string) => NounProvider) | undefined
+let providerFactory: ((context?: string) => AnyNounProvider) | undefined
 
 /**
  * Set the global NounProvider used by all Noun proxies
  */
-export function setProvider(provider: NounProvider): void {
+export function setProvider(provider: AnyNounProvider): void {
   globalProvider = provider
 }
 
@@ -140,7 +151,7 @@ export function setProvider(provider: NounProvider): void {
  * Set a provider factory for scoped/multi-tenant usage.
  * When set, getProvider() calls the factory with the current context.
  */
-export function setProviderFactory(factory: (context?: string) => NounProvider): void {
+export function setProviderFactory(factory: (context?: string) => AnyNounProvider): void {
   providerFactory = factory
 }
 
@@ -155,7 +166,7 @@ export function clearProviderFactory(): void {
  * Get the current global NounProvider.
  * Throws if no provider has been configured via setProvider().
  */
-export function getProvider(): NounProvider {
+export function getProvider(): AnyNounProvider {
   if (providerFactory) {
     return providerFactory()
   }
@@ -168,7 +179,7 @@ export function getProvider(): NounProvider {
 /**
  * Check if the current provider supports promise pipelining
  */
-function isPipelineable(provider: NounProvider): provider is PipelineableNounProvider {
+function isPipelineable(provider: AnyNounProvider): provider is PipelineableNounProvider {
   return 'pipelineable' in provider && (provider as PipelineableNounProvider).pipelineable === true
 }
 
@@ -205,16 +216,20 @@ function matchFilterValue(fieldValue: unknown, filterValue: unknown): boolean {
           if (fieldValue === opVal) return false
           break
         case '$gt':
-          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue <= opVal) return false
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue <= opVal)
+            return false
           break
         case '$gte':
-          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue < opVal) return false
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue < opVal)
+            return false
           break
         case '$lt':
-          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue >= opVal) return false
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue >= opVal)
+            return false
           break
         case '$lte':
-          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue > opVal) return false
+          if (typeof fieldValue !== 'number' || typeof opVal !== 'number' || fieldValue > opVal)
+            return false
           break
         case '$in':
           if (!Array.isArray(opVal) || !opVal.includes(fieldValue)) return false
@@ -391,7 +406,7 @@ export class MemoryNounProvider implements NounProvider {
     type: string,
     verb: string,
     id: string,
-    data?: Record<string, unknown>,
+    data?: Record<string, unknown>
   ): Promise<NounInstance> {
     const existing = this.store.get(id)
     if (!existing || existing.$type !== type) {
@@ -433,9 +448,7 @@ export class MemoryNounProvider implements NounProvider {
     }
     // Find the event at the target version (per-entity lookup)
     const entityEvents = this.eventLogByEntity.get(id) ?? []
-    const targetEvent = entityEvents.find(
-      (e) => e.version === toVersion && e.data !== null,
-    )
+    const targetEvent = entityEvents.find((e) => e.version === toVersion && e.data !== null)
     if (!targetEvent || !targetEvent.data) {
       throw new Error(`Version ${toVersion} not found for ${type}: ${id}`)
     }
@@ -526,7 +539,11 @@ function buildVerbLookups(schema: NounSchema): {
  *
  * Returns { fieldName: targetValue } or empty object if not resolvable.
  */
-function resolveVerbTransition(schema: NounSchema, verb: string, entity?: NounInstance): Record<string, unknown> {
+function resolveVerbTransition(
+  schema: NounSchema,
+  verb: string,
+  entity?: NounInstance
+): Record<string, unknown> {
   const rawValue = schema.raw[verb]
   if (typeof rawValue !== 'string') return {}
 
@@ -572,7 +589,7 @@ function resolveVerbTransition(schema: NounSchema, verb: string, entity?: NounIn
 function hasHooks(
   beforeHooks: Map<string, BeforeHookHandler[]>,
   afterHooks: Map<string, AfterHookHandler[]>,
-  verb: VerbConjugation,
+  verb: VerbConjugation
 ): boolean {
   const bHooks = beforeHooks.get(verb.activity)
   const aHooks = afterHooks.get(verb.event)
@@ -597,7 +614,7 @@ function hasHooks(
  * @param schema - The parsed NounSchema
  * @param scopedProvider - Optional provider override for multi-tenant scoped usage
  */
-export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvider): NounEntity {
+export function createNounProxy(schema: NounSchema, scopedProvider?: AnyNounProvider): NounEntity {
   const { actionMap, activityMap, eventMap } = buildVerbLookups(schema)
   const beforeHooks = new Map<string, BeforeHookHandler[]>()
   const afterHooks = new Map<string, AfterHookHandler[]>()
@@ -606,7 +623,7 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
    * Resolve the provider for this Noun proxy.
    * Priority: scoped provider (per-Noun) > global provider
    */
-  function resolveProvider(): NounProvider {
+  function resolveProvider(): AnyNounProvider {
     return scopedProvider ?? getProvider()
   }
 
@@ -624,12 +641,15 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
       // Read verbs (always available) — always passthrough pipelineable results
       if (prop === 'get') {
         return (id: string, options?: { include?: string[]; populate?: string[] }) => {
-          const normalizedOptions = options
-            ? {
-                ...options,
-                include: options.include || options.populate,
-              }
-            : undefined
+          // Normalize: accept either `include` or `populate` and forward as `include`.
+          // Build the options object conditionally to honour `exactOptionalPropertyTypes`.
+          let normalizedOptions: { include?: string[]; populate?: string[] } | undefined
+          if (options) {
+            const include = options.include ?? options.populate
+            normalizedOptions = {}
+            if (include !== undefined) normalizedOptions.include = include
+            if (options.populate !== undefined) normalizedOptions.populate = options.populate
+          }
           return resolveProvider().get(schema.name, id, normalizedOptions)
         }
       }
@@ -774,7 +794,17 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
               const aHooks = afterHooks.get(actionVerb.event)
               if (aHooks) {
                 for (const hook of aHooks) {
-                  await hook({ $id: id, $type: schema.name, $context: '', $version: 0, $createdAt: '', $updatedAt: '' }, entityRegistry)
+                  await hook(
+                    {
+                      $id: id,
+                      $type: schema.name,
+                      $context: '',
+                      $version: 0,
+                      $createdAt: '',
+                      $updatedAt: '',
+                    },
+                    entityRegistry
+                  )
                 }
               }
 
@@ -784,7 +814,10 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
         }
 
         // Custom verb (qualify, close, pause, cancel, reactivate, ...)
-        return (idOrData?: string | Record<string, unknown>, maybeData?: Record<string, unknown>) => {
+        return (
+          idOrData?: string | Record<string, unknown>,
+          maybeData?: Record<string, unknown>
+        ) => {
           // Support both: Contact.qualify(id) and Contact.qualify(id, data)
           const id = typeof idOrData === 'string' ? idOrData : undefined
           const data = typeof idOrData === 'object' ? idOrData : maybeData
@@ -794,7 +827,12 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
           if (id && isPipelineable(provider) && !hasHooks(beforeHooks, afterHooks, actionVerb)) {
             const transition = resolveVerbTransition(schema, prop)
             const mergedData = { ...transition, ...data }
-            return provider.perform(schema.name, prop, id, Object.keys(mergedData).length > 0 ? mergedData : undefined)
+            return provider.perform(
+              schema.name,
+              prop,
+              id,
+              Object.keys(mergedData).length > 0 ? mergedData : undefined
+            )
           }
 
           return (async () => {
@@ -818,7 +856,12 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
 
             let instance: NounInstance
             if (id) {
-              instance = await provider.perform(schema.name, prop, id, Object.keys(mergedData).length > 0 ? mergedData : undefined)
+              instance = await provider.perform(
+                schema.name,
+                prop,
+                id,
+                Object.keys(mergedData).length > 0 ? mergedData : undefined
+              )
             } else {
               // If no ID, treat data as the operation payload
               instance = await provider.create(schema.name, mergedData)
@@ -884,7 +927,10 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
     },
   }
 
-  return new Proxy({} as NounEntity, handler)
+  // The handler is typed against `Record<string, unknown>` (an open shape) since
+  // the proxy synthesises NounEntity behaviour at runtime from the schema.
+  // Cast at the boundary so callers see the typed `NounEntity` interface.
+  return new Proxy({}, handler) as NounEntity
 }
 
 /**
@@ -898,9 +944,9 @@ export function createNounProxy(schema: NounSchema, scopedProvider?: NounProvide
  * @returns A provider factory suitable for setProviderFactory()
  */
 export function createScopedProvider(
-  createProvider: (contextUrl: string) => NounProvider,
-): (context?: string) => NounProvider {
-  const cache = new Map<string, NounProvider>()
+  createProvider: (contextUrl: string) => AnyNounProvider
+): (context?: string) => AnyNounProvider {
+  const cache = new Map<string, AnyNounProvider>()
   return (context?: string) => {
     const url = context ?? getTenantContext()
     let provider = cache.get(url)

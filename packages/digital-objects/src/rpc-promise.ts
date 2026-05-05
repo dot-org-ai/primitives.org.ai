@@ -48,7 +48,7 @@ export function createRpcPromise<T>(source: PromiseLike<T>): RpcPromise<T> {
 
     then<TResult1 = T, TResult2 = never>(
       onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
       return source.then(onfulfilled ?? undefined, onrejected ?? undefined)
     },
@@ -74,7 +74,7 @@ export function createRpcPromise<T>(source: PromiseLike<T>): RpcPromise<T> {
         source.then((resolved) => {
           if (resolved == null) return undefined as unknown
           return (resolved as Record<string, unknown>)[propName] as unknown
-        }),
+        })
       )
     },
   }) as RpcPromise<T>
@@ -104,7 +104,7 @@ export function isRpcPromise<T = unknown>(value: unknown): value is RpcPromise<T
  */
 export function wrapRpcPromise<T>(
   promise: PromiseLike<unknown>,
-  transform: (raw: unknown) => T,
+  transform: (raw: unknown) => T
 ): RpcPromise<T> {
   const transformed = promise.then(transform)
   return createRpcPromise(transformed)
@@ -163,19 +163,13 @@ export class BatchCollector {
   private queue: BatchOperation[] = []
   private scheduled = false
 
-  constructor(
-    private executeBatch: (operations: BatchOperation[]) => Promise<unknown[]>,
-  ) {}
+  constructor(private executeBatch: (operations: BatchOperation[]) => Promise<unknown[]>) {}
 
   /**
    * Enqueue an operation for batching.
    * Returns a promise that resolves when the batch is flushed.
    */
-  enqueue(
-    method: BatchOperation['method'],
-    type: string,
-    args: unknown[],
-  ): Promise<unknown> {
+  enqueue(method: BatchOperation['method'], type: string, args: unknown[]): Promise<unknown> {
     return new Promise((resolve, reject) => {
       this.queue.push({ method, type, args, resolve, reject })
 
@@ -199,7 +193,9 @@ export class BatchCollector {
     try {
       const results = await this.executeBatch(ops)
       for (let i = 0; i < ops.length; i++) {
-        ops[i].resolve(results[i])
+        // Loop bound guarantees defined; tell the compiler.
+        const op = ops[i]!
+        op.resolve(results[i])
       }
     } catch (error) {
       for (const op of ops) {

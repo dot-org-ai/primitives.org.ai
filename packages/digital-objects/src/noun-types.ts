@@ -102,7 +102,7 @@ export interface NounInstance {
  * Throw to reject the operation.
  */
 export type BeforeHookHandler = (
-  data: Record<string, unknown>,
+  data: Record<string, unknown>
 ) => void | Record<string, unknown> | Promise<void> | Promise<Record<string, unknown>>
 
 /**
@@ -111,7 +111,7 @@ export type BeforeHookHandler = (
  */
 export type AfterHookHandler = (
   instance: NounInstance,
-  $?: Record<string, unknown>,
+  $?: Record<string, unknown>
 ) => void | Promise<void>
 
 /**
@@ -148,6 +148,18 @@ export interface NounEntity {
 }
 
 /**
+ * Options for entity retrieval.
+ *
+ * `include`/`populate` request that the provider expand related entities
+ * referenced by the result. Both keys are accepted as aliases by the proxy
+ * and forwarded to the provider in a normalized form.
+ */
+export interface GetOptions {
+  include?: string[]
+  populate?: string[]
+}
+
+/**
  * Provider interface for Noun runtime storage
  *
  * The Noun proxy dispatches all operations to a NounProvider.
@@ -155,13 +167,18 @@ export interface NounEntity {
  */
 export interface NounProvider {
   create(type: string, data: Record<string, unknown>): Promise<NounInstance>
-  get(type: string, id: string): Promise<NounInstance | null>
+  get(type: string, id: string, options?: GetOptions): Promise<NounInstance | null>
   find(type: string, where?: Record<string, unknown>): Promise<NounInstance[]>
   findOne(type: string, where?: Record<string, unknown>): Promise<NounInstance | null>
   update(type: string, id: string, data: Record<string, unknown>): Promise<NounInstance>
   delete(type: string, id: string): Promise<boolean>
   count?(type: string, where?: Record<string, unknown>): Promise<number>
-  perform(type: string, verb: string, id: string, data?: Record<string, unknown>): Promise<NounInstance>
+  perform(
+    type: string,
+    verb: string,
+    id: string,
+    data?: Record<string, unknown>
+  ): Promise<NounInstance>
   rollback(type: string, id: string, toVersion: number): Promise<NounInstance>
 }
 
@@ -200,21 +217,25 @@ export interface RpcPromise<T> extends PromiseLike<T> {
    */
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
   ): PromiseLike<TResult1 | TResult2>
 }
 
 /**
- * A NounProvider that supports promise pipelining
+ * A NounProvider variant that supports promise pipelining.
  *
- * Methods return RpcPromise<T> instead of Promise<T>, allowing the Noun
+ * Methods return `RpcPromise<T>` instead of `Promise<T>`, allowing the Noun
  * proxy to pass through pipelineable results without forcing resolution.
  * This enables single-round-trip chains via capnweb / rpc.do.
  *
- * The Noun proxy detects this interface via the `pipelineable` discriminator
- * and preserves chaining instead of forcing immediate await.
+ * Note: this interface intentionally does NOT extend `NounProvider`.
+ * `RpcPromise<T>` is a `PromiseLike<T>` (no `catch`/`finally`/`Symbol.toStringTag`),
+ * so direct inheritance would violate variance under `exactOptionalPropertyTypes`.
+ * Consumers that accept either provider should use the union
+ * `NounProvider | PipelineableNounProvider` and discriminate on the
+ * `pipelineable` flag.
  */
-export interface PipelineableNounProvider extends NounProvider {
+export interface PipelineableNounProvider {
   /** Whether this provider supports promise pipelining */
   readonly pipelineable: true
 
@@ -228,7 +249,7 @@ export interface PipelineableNounProvider extends NounProvider {
   /** Pipelined create — returns RpcPromise instead of bare Promise */
   create(type: string, data: Record<string, unknown>): RpcPromise<NounInstance>
   /** Pipelined get — returns RpcPromise instead of bare Promise */
-  get(type: string, id: string): RpcPromise<NounInstance | null>
+  get(type: string, id: string, options?: GetOptions): RpcPromise<NounInstance | null>
   /** Pipelined find — returns RpcPromise instead of bare Promise */
   find(type: string, where?: Record<string, unknown>): RpcPromise<NounInstance[]>
   /** Pipelined findOne — returns RpcPromise instead of bare Promise */
@@ -237,8 +258,15 @@ export interface PipelineableNounProvider extends NounProvider {
   update(type: string, id: string, data: Record<string, unknown>): RpcPromise<NounInstance>
   /** Pipelined delete — returns RpcPromise instead of bare Promise */
   delete(type: string, id: string): RpcPromise<boolean>
+  /** Optional pipelined count */
+  count?(type: string, where?: Record<string, unknown>): RpcPromise<number>
   /** Pipelined perform — returns RpcPromise instead of bare Promise */
-  perform(type: string, verb: string, id: string, data?: Record<string, unknown>): RpcPromise<NounInstance>
+  perform(
+    type: string,
+    verb: string,
+    id: string,
+    data?: Record<string, unknown>
+  ): RpcPromise<NounInstance>
   /** Pipelined rollback — returns RpcPromise instead of bare Promise */
   rollback(type: string, id: string, toVersion: number): RpcPromise<NounInstance>
 }
