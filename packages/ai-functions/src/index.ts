@@ -411,6 +411,12 @@ export {
 // Convenience composer
 export { wrapForV3, type WrapForV3Options } from './wrap-for-v3.js'
 
+// Type re-export — downstream packages (services-as-software EvaluatorPanel
+// model-injection point, etc.) need `LanguageModelV3` for typing wrapped-model
+// arguments. Re-exporting from ai-functions avoids forcing every consumer to
+// depend on `@ai-sdk/provider` directly.
+export type { LanguageModelV3 } from '@ai-sdk/provider'
+
 // Pluggable persistence primitive for trace/eval entries
 export {
   InMemoryEvalLogStore,
