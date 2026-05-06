@@ -30,6 +30,14 @@
     "./tax": {
       "types": "./dist/services/tax.d.ts",
       "import": "./dist/services/tax.js"
+    },
+    "./treasury": {
+      "types": "./dist/services/treasury.d.ts",
+      "import": "./dist/services/treasury.js"
+    },
+    "./payroll": {
+      "types": "./dist/services/payroll.d.ts",
+      "import": "./dist/services/payroll.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

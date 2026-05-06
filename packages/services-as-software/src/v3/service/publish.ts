@@ -13,7 +13,8 @@
  *   3. Mint a {@link RuntimeUnit} from svc + report.
  *   4. Mint a {@link MarketplaceListing} from svc + RuntimeUnit + the
  *      auto-derived UI shapes (via {@link deriveAll}).
- *   5. Persist both via the in-memory stores.
+ *   5. Persist both via the configured `MarketplaceRepo` / `RuntimeUnitRepo`
+ *      (in-memory by default; `ai-database`-backed in production).
  *   6. Transition `verified → published` via
  *      {@link ServiceLifecycle.markPublished}.
  *
@@ -22,8 +23,8 @@
 
 import { deriveAll } from '../shapes/derive-all.js'
 import {
-  marketplaceStore,
-  runtimeUnitStore,
+  getMarketplaceRepo,
+  getRuntimeUnitRepo,
   type MarketplaceListing,
   type MarketplaceVisibility,
   type RuntimeUnit,
@@ -212,8 +213,8 @@ export async function publishService<TIn, TOut>(
 
   // 4. Persist both. Order matters only insofar as a concurrent reader
   //    should never see a listing whose runtimeUnit isn't yet present.
-  runtimeUnitStore.put(runtimeUnit)
-  marketplaceStore.put(listing)
+  await getRuntimeUnitRepo().put(runtimeUnit)
+  await getMarketplaceRepo().put(listing)
 
   // 5. Transition `verified → published`.
   ServiceLifecycle.markPublished(svc.$id, listing)

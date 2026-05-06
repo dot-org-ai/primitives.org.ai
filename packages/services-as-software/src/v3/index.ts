@@ -140,10 +140,30 @@ export { publishService } from './service/publish.js'
 export { requiresReverify, BEHAVIORAL_FIELDS } from './service/reverify-policy.js'
 
 export {
+  // Async repo factory accessors + configure functions (round 5+)
+  getMarketplaceRepo,
+  getRuntimeUnitRepo,
+  configureMarketplaceRepo,
+  configureRuntimeUnitRepo,
+  __resetMarketplaceReposForTests,
+  // Adapter implementations
+  InMemoryMarketplaceRepo,
+  InMemoryRuntimeUnitRepo,
+  AiDatabaseMarketplaceRepo,
+  AiDatabaseRuntimeUnitRepo,
+  // Schema + Noun definitions for the ai-database adapter
+  MarketplaceListingNoun,
+  RuntimeUnitNoun,
+  MarketplaceRepoSchema,
+  // Backward-compat
   marketplaceStore,
   runtimeUnitStore,
   type MarketplaceListFilter,
   type RuntimeUnitListFilter,
+  type MarketplaceListingFilter,
+  type MarketplaceRepo,
+  type RuntimeUnitFilter,
+  type RuntimeUnitRepo,
 } from './marketplace/index.js'
 
 // ----------------------------------------------------------------------------

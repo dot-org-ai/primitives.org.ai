@@ -25,3 +25,9 @@ export type { ARInvoice, CollectedAR } from './ar.js'
 
 export { tax, TaxPeriodSchema, FiledReturnSchema } from './tax.js'
 export type { TaxPeriod, FiledReturn } from './tax.js'
+
+export { treasury, TreasuryDayInputSchema, TreasuryPositionOutputSchema } from './treasury.js'
+export type { TreasuryDayInput, TreasuryPositionOutput } from './treasury.js'
+
+export { payroll, PayrollPeriodInputSchema, PayrollRunOutputSchema } from './payroll.js'
+export type { PayrollPeriodInput, PayrollRunOutput } from './payroll.js'

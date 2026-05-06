@@ -1,116 +1,172 @@
 /**
- * In-memory persistence for {@link MarketplaceListing} + {@link RuntimeUnit}.
+ * Repo singletons + factory accessors for {@link MarketplaceListing} +
+ * {@link RuntimeUnit} persistence.
  *
- * Round-4 stop-gap. Two `Map<string, T>` registries keyed by `$id`, plus a
- * tiny CRUD-shaped namespace per record type. Tests reset state via
- * `__resetForTests()`.
+ * Round-5+ replaces the round-4 in-memory `Map<string, T>` registries with
+ * a {@link MarketplaceRepo} / {@link RuntimeUnitRepo} port (see
+ * `./repo.ts`). The default repo is the in-memory adapter
+ * (`./in-memory-repo.ts`) so callers that haven't wired `ai-database` keep
+ * compiling and tests still pass without setup. Production callers wire
+ * the `ai-database`-backed adapter via {@link configureMarketplaceRepo} /
+ * {@link configureRuntimeUnitRepo}.
  *
- * TODO: replace in-memory store with ai-database Repo writes (round 5+).
+ * @example Wire production persistence
+ * ```ts
+ * import { DB } from 'ai-database'
+ * import {
+ *   AiDatabaseMarketplaceRepo,
+ *   AiDatabaseRuntimeUnitRepo,
+ *   MarketplaceRepoSchema,
+ *   configureMarketplaceRepo,
+ *   configureRuntimeUnitRepo,
+ * } from 'services-as-software/v3'
+ *
+ * const { db } = DB({ ...MarketplaceRepoSchema })
+ * configureMarketplaceRepo(new AiDatabaseMarketplaceRepo(db))
+ * configureRuntimeUnitRepo(new AiDatabaseRuntimeUnitRepo(db))
+ * ```
  *
  * @packageDocumentation
  */
 
 import type { MarketplaceListing } from './listing.js'
 import type { RuntimeUnit } from './runtime-unit.js'
+import type {
+  MarketplaceListingFilter,
+  MarketplaceRepo,
+  RuntimeUnitFilter,
+  RuntimeUnitRepo,
+} from './repo.js'
+import { InMemoryMarketplaceRepo, InMemoryRuntimeUnitRepo } from './in-memory-repo.js'
 
 // ============================================================================
-// MarketplaceListing store
+// Backward-compat filter aliases
 // ============================================================================
-
-const listings = new Map<string, MarketplaceListing>()
 
 /**
- * Filter applied by {@link marketplaceStore.list}. All fields are AND-ed; an
- * absent field matches anything.
+ * @deprecated Round-4 alias retained for source-compat. Use
+ * {@link MarketplaceListingFilter} from `./repo.js` directly.
  */
-export interface MarketplaceListFilter {
-  visibility?: MarketplaceListing['visibility']
-  tenantRef?: string
-  serviceRef?: string
+export type MarketplaceListFilter = MarketplaceListingFilter
+
+/**
+ * @deprecated Round-4 alias retained for source-compat. Use
+ * {@link RuntimeUnitFilter} from `./repo.js` directly.
+ */
+export type RuntimeUnitListFilter = RuntimeUnitFilter
+
+// ============================================================================
+// Singleton repo holders
+// ============================================================================
+
+let activeMarketplaceRepo: MarketplaceRepo = new InMemoryMarketplaceRepo()
+let activeRuntimeUnitRepo: RuntimeUnitRepo = new InMemoryRuntimeUnitRepo()
+
+// ============================================================================
+// Factory-pattern accessors
+// ============================================================================
+
+/**
+ * Get the currently-configured {@link MarketplaceRepo}. Defaults to a
+ * process-local in-memory adapter; replace via
+ * {@link configureMarketplaceRepo}.
+ */
+export function getMarketplaceRepo(): MarketplaceRepo {
+  return activeMarketplaceRepo
 }
 
+/**
+ * Get the currently-configured {@link RuntimeUnitRepo}. Defaults to a
+ * process-local in-memory adapter; replace via
+ * {@link configureRuntimeUnitRepo}.
+ */
+export function getRuntimeUnitRepo(): RuntimeUnitRepo {
+  return activeRuntimeUnitRepo
+}
+
+/**
+ * Replace the active {@link MarketplaceRepo}. Production callers wire the
+ * `ai-database`-backed adapter at boot. Tests that need a clean store
+ * may construct a fresh {@link InMemoryMarketplaceRepo} and pass it here.
+ */
+export function configureMarketplaceRepo(repo: MarketplaceRepo): void {
+  activeMarketplaceRepo = repo
+}
+
+/**
+ * Replace the active {@link RuntimeUnitRepo}. See
+ * {@link configureMarketplaceRepo}.
+ */
+export function configureRuntimeUnitRepo(repo: RuntimeUnitRepo): void {
+  activeRuntimeUnitRepo = repo
+}
+
+/**
+ * Reset both repos to fresh in-memory adapters. Test seam.
+ */
+export function __resetMarketplaceReposForTests(): void {
+  activeMarketplaceRepo = new InMemoryMarketplaceRepo()
+  activeRuntimeUnitRepo = new InMemoryRuntimeUnitRepo()
+}
+
+// ============================================================================
+// Backward-compat wrappers — DEPRECATED
+// ============================================================================
+
+/**
+ * @deprecated Round-4 in-memory store wrapper. Forwards to the configured
+ * {@link MarketplaceRepo} via {@link getMarketplaceRepo}. Migrate callers
+ * to `await getMarketplaceRepo().put(listing)` etc. — every method is now
+ * async.
+ *
+ * Retained so the v3 barrel keeps compiling for callers that haven't
+ * migrated yet (no in-tree caller does today).
+ */
 export const marketplaceStore = {
-  /** Insert or replace a listing keyed by `$id`. */
-  put(listing: MarketplaceListing): void {
-    listings.set(listing.$id, listing)
+  /** @deprecated Use `await getMarketplaceRepo().put(listing)`. */
+  put(listing: MarketplaceListing): Promise<void> {
+    return getMarketplaceRepo().put(listing)
   },
-  /** Fetch by `$id`; `undefined` when absent. */
-  get(id: string): MarketplaceListing | undefined {
-    return listings.get(id)
+  /** @deprecated Use `await getMarketplaceRepo().get(id)`. */
+  get(id: string): Promise<MarketplaceListing | undefined> {
+    return getMarketplaceRepo().get(id)
   },
-  /** Enumerate listings, optionally filtered. */
-  list(filter?: MarketplaceListFilter): MarketplaceListing[] {
-    const out: MarketplaceListing[] = []
-    for (const listing of listings.values()) {
-      if (filter?.visibility !== undefined && listing.visibility !== filter.visibility) continue
-      if (filter?.tenantRef !== undefined && listing.tenantRef !== filter.tenantRef) continue
-      if (filter?.serviceRef !== undefined && listing.serviceRef !== filter.serviceRef) continue
-      out.push(listing)
-    }
-    return out
+  /** @deprecated Use `await getMarketplaceRepo().list(filter)`. */
+  list(filter?: MarketplaceListFilter): Promise<MarketplaceListing[]> {
+    return getMarketplaceRepo().list(filter)
   },
-  /**
-   * Convenience accessor — return the most-recently-published listing for a
-   * given service ref, or `undefined` when none exist.
-   */
-  byService(serviceRef: string): MarketplaceListing | undefined {
-    let latest: MarketplaceListing | undefined
-    for (const listing of listings.values()) {
-      if (listing.serviceRef !== serviceRef) continue
-      if (!latest || listing.publishedAt > latest.publishedAt) latest = listing
-    }
-    return latest
+  /** @deprecated Use `await getMarketplaceRepo().byService(serviceRef)`. */
+  byService(serviceRef: string): Promise<MarketplaceListing | undefined> {
+    return getMarketplaceRepo().byService(serviceRef)
   },
-  /** Test seam: clear state. Production code never calls this. */
+  /** @deprecated Use {@link __resetMarketplaceReposForTests}. */
   __resetForTests(): void {
-    listings.clear()
+    __resetMarketplaceReposForTests()
   },
 }
-
-// ============================================================================
-// RuntimeUnit store
-// ============================================================================
-
-const runtimeUnits = new Map<string, RuntimeUnit>()
 
 /**
- * Filter applied by {@link runtimeUnitStore.list}. All fields are AND-ed.
+ * @deprecated Round-4 in-memory store wrapper. See {@link marketplaceStore}.
  */
-export interface RuntimeUnitListFilter {
-  serviceRef?: string
-  tenantRef?: string
-}
-
 export const runtimeUnitStore = {
-  /** Insert or replace a runtime unit keyed by `$id`. */
-  put(unit: RuntimeUnit): void {
-    runtimeUnits.set(unit.$id, unit)
+  /** @deprecated Use `await getRuntimeUnitRepo().put(unit)`. */
+  put(unit: RuntimeUnit): Promise<void> {
+    return getRuntimeUnitRepo().put(unit)
   },
-  /** Fetch by `$id`; `undefined` when absent. */
-  get(id: string): RuntimeUnit | undefined {
-    return runtimeUnits.get(id)
+  /** @deprecated Use `await getRuntimeUnitRepo().get(id)`. */
+  get(id: string): Promise<RuntimeUnit | undefined> {
+    return getRuntimeUnitRepo().get(id)
   },
-  /** Enumerate runtime units, optionally filtered. */
-  list(filter?: RuntimeUnitListFilter): RuntimeUnit[] {
-    const out: RuntimeUnit[] = []
-    for (const unit of runtimeUnits.values()) {
-      if (filter?.serviceRef !== undefined && unit.serviceRef !== filter.serviceRef) continue
-      if (filter?.tenantRef !== undefined && unit.tenantRef !== filter.tenantRef) continue
-      out.push(unit)
-    }
-    return out
+  /** @deprecated Use `await getRuntimeUnitRepo().list(filter)`. */
+  list(filter?: RuntimeUnitListFilter): Promise<RuntimeUnit[]> {
+    return getRuntimeUnitRepo().list(filter)
   },
-  /** Convenience accessor — most recent runtime unit for a service. */
-  byService(serviceRef: string): RuntimeUnit | undefined {
-    let latest: RuntimeUnit | undefined
-    for (const unit of runtimeUnits.values()) {
-      if (unit.serviceRef !== serviceRef) continue
-      if (!latest || unit.emittedAt > latest.emittedAt) latest = unit
-    }
-    return latest
+  /** @deprecated Use `await getRuntimeUnitRepo().byService(serviceRef)`. */
+  byService(serviceRef: string): Promise<RuntimeUnit | undefined> {
+    return getRuntimeUnitRepo().byService(serviceRef)
   },
-  /** Test seam: clear state. Production code never calls this. */
+  /** @deprecated Use {@link __resetMarketplaceReposForTests}. */
   __resetForTests(): void {
-    runtimeUnits.clear()
+    __resetMarketplaceReposForTests()
   },
 }

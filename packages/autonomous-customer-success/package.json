@@ -14,6 +14,14 @@
     "./support-triage": {
       "types": "./dist/services/support-triage.d.ts",
       "import": "./dist/services/support-triage.js"
+    },
+    "./nps-followup": {
+      "types": "./dist/services/nps-followup.d.ts",
+      "import": "./dist/services/nps-followup.js"
+    },
+    "./churn-rescue": {
+      "types": "./dist/services/churn-rescue.d.ts",
+      "import": "./dist/services/churn-rescue.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
