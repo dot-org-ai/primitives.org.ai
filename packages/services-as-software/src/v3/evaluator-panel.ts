@@ -21,12 +21,19 @@
  * multi-persona-reviewer primitive. Per the deferred-placement decision in
  * v3 §9, EvaluatorPanel lands inline here in `services-as-software/src/v3/`.
  *
- * The {@link EvaluatorPanel.run} method is currently a STUB returning a
- * hardcoded `'all-approved'` verdict. Real LLM dispatch wires through to
- * `ai-functions.generate` once SaS `Service.invoke` lands.
+ * **Round 7 (this commit):** {@link EvaluatorPanel.run} is now real — each
+ * persona resolves to an `ai-functions.generateObject` call against a typed
+ * `VerdictSchema`. Iteration semantics (`iterationPolicy.maxRounds`) live on
+ * the panel surface but are *driven by the caller* (Service.verify or
+ * Service.invoke) — the panel itself doesn't know what to revise, so it just
+ * counts rounds and returns. Round 8 will weave round-feedback into the
+ * carry-prompt.
  *
  * @packageDocumentation
  */
+
+import { generateObject } from 'ai-functions'
+import { z } from 'zod'
 
 // ============================================================================
 // Persona shape
@@ -115,6 +122,13 @@ export interface PanelVerdict {
   approvals: PanelApproval[]
   /** Number of iteration rounds the panel actually ran (>= 1). */
   rounds: number
+  /**
+   * USD cost summed across every persona's LLM call this run. Estimated from
+   * the AI SDK's `usage` shape (round 7+ will route through
+   * `ai-functions.budget` for per-model pricing). Always >= 0; `0` for the
+   * defensive no-personas case.
+   */
+  costUsd: number
 }
 
 // ============================================================================
@@ -125,8 +139,7 @@ export interface PanelVerdict {
  * Loose run-time context threaded into {@link EvaluatorPanel.run}.
  *
  * Intentionally permissive: the concrete shape is being negotiated with the
- * SaS `Service.invoke` work and the foundation-types branch. Today both
- * fields are opaque to the panel.
+ * SaS `Service.invoke` work and the foundation-types branch.
  */
 export interface PanelRunContext {
   /**
@@ -139,6 +152,13 @@ export interface PanelRunContext {
    * per-persona transcript). Per ADR-0007.
    */
   tenantRef?: string
+  /**
+   * Iteration round counter. Defaults to `1`. The caller increments this when
+   * re-invoking the panel after a `partial` / `rejected` verdict. Round 7
+   * tracks the count only — round-feedback weaving (per BaC ch.10 track-record
+   * updates) is out of scope for this round.
+   */
+  rounds?: number
 }
 
 // ============================================================================
@@ -186,9 +206,6 @@ export interface EvaluatorPanelSpec {
 /**
  * Materialised EvaluatorPanel — the typed value the SaS `ServiceSpec.evaluators`
  * field accepts.
- *
- * Per v3 §9 the `run()` method is a STUB pending integration with
- * `ai-functions.generate` and SaS `Service.invoke`.
  */
 export interface EvaluatorPanel {
   readonly $id: string
@@ -201,23 +218,236 @@ export interface EvaluatorPanel {
   }
   readonly mode: 'parallel-multi-call' | 'aggregate-single-call'
   /**
-   * Run the panel against `target`. Currently a STUB.
+   * Run the panel against `target`.
    *
-   * Contract (target shape once wired):
-   *   1. For each persona, dispatch an `ai-functions.generate` call carrying
-   *      `persona.persona` as the system prompt and `persona.config` as
-   *      structured rubric inputs.
+   * Contract:
+   *   1. For each persona, dispatch an `ai-functions.generateObject` call
+   *      carrying `persona.persona` as the system-style prompt and
+   *      `persona.config` as structured rubric inputs. Mode selects between
+   *      N parallel calls (`parallel-multi-call`) or one merged call
+   *      (`aggregate-single-call`).
    *   2. Aggregate the per-persona verdicts under `signOffPolicy`.
-   *   3. If at least one must-approve persona rejected and the round count is
-   *      under `iterationPolicy.maxRounds`, optionally re-run (round-robin
-   *      with the rejection rationale appended). Otherwise honour
-   *      `onMaxRoundsExceeded`.
-   *   4. Return a {@link PanelVerdict} with `rounds` set to the actual
-   *      iteration count.
-   *
-   * STUB: returns hardcoded `'all-approved'` with one approval per persona.
+   *   3. Track which round this is via `ctx.rounds` (defaults to 1). The
+   *      panel itself does not iterate — it returns the verdict and lets the
+   *      caller (Service.verify or Service.invoke) decide whether to re-run
+   *      with feedback. When `rounds >= maxRounds`, `onMaxRoundsExceeded`
+   *      semantics are the caller's responsibility (round 8 wiring).
+   *   4. Sum LLM costs into `PanelVerdict.costUsd`.
    */
   run(target: unknown, ctx?: PanelRunContext): Promise<PanelVerdict>
+}
+
+// ============================================================================
+// LLM dispatch — persona → verdict
+// ============================================================================
+
+/**
+ * Single-persona verdict shape used by the LLM. Round 7 keeps it minimal:
+ * `verdict` + `rationale`. Future rounds may add `confidence`, `evidence`,
+ * `cite-rubric-item`, etc.
+ */
+const VerdictSchema = z.object({
+  verdict: z.enum(['approve', 'reject']),
+  rationale: z.string(),
+})
+
+/**
+ * Defensive hard cap on iteration rounds, applied regardless of
+ * `iterationPolicy.maxRounds`. Prevents a misconfigured panel from looping
+ * forever if a future version starts iterating internally.
+ */
+const HARD_MAX_ROUNDS = 5
+
+/**
+ * JSON.stringify with bigint coercion (carried-input may include bigints).
+ */
+function safeStringify(v: unknown): string {
+  return JSON.stringify(v, (_k, val) => (typeof val === 'bigint' ? val.toString() : val))
+}
+
+/**
+ * Naïve cost estimator from the AI SDK's `usage` shape. Round 7 uses a flat
+ * Sonnet-class default ($3/M input, $15/M output) when token counts are
+ * present; otherwise falls back to a $0.001 per-call placeholder. Mirrors
+ * the round-6 `cascade-walker` heuristic — round 8 will route both through
+ * `ai-functions.budget`.
+ */
+function estimateCostFromUsage(usage: unknown): number {
+  if (usage && typeof usage === 'object') {
+    const u = usage as { inputTokens?: number; outputTokens?: number }
+    const inT = typeof u.inputTokens === 'number' ? u.inputTokens : 0
+    const outT = typeof u.outputTokens === 'number' ? u.outputTokens : 0
+    if (inT > 0 || outT > 0) {
+      return (inT * 3) / 1_000_000 + (outT * 15) / 1_000_000
+    }
+  }
+  return 0.001
+}
+
+/**
+ * Build the per-persona prompt. Concatenates the persona descriptor, its
+ * config knobs (verbatim JSON), the target under review, and an explicit
+ * instruction to emit a `{ verdict, rationale }` object.
+ */
+function buildPersonaPrompt(persona: AgenticPersona, target: unknown, round: number): string {
+  return [
+    persona.persona,
+    `Persona config (knobs): ${safeStringify(persona.config)}`,
+    `Review round: ${round}`,
+    `Target under review:`,
+    safeStringify(target),
+    `Emit a single verdict object: verdict ('approve' | 'reject') and a concise rationale.`,
+  ].join('\n\n')
+}
+
+/**
+ * Dispatch one persona → one verdict. Used by `parallel-multi-call`.
+ */
+async function runPersonaCall(
+  persona: AgenticPersona,
+  target: unknown,
+  round: number
+): Promise<{ approval?: PanelApproval; rejection?: PanelRejection; costUsd: number }> {
+  const prompt = buildPersonaPrompt(persona, target, round)
+  const result = await generateObject({
+    model: 'sonnet',
+    schema: VerdictSchema,
+    prompt,
+  })
+  // ai-functions.generateObject types `result.object` as the schema arg
+  // itself (T = schema), not its inferred output. Round 7+ in ai-functions
+  // will tighten this with a `z.infer<S>` overload; until then we narrow
+  // via the schema's own `_output` type via a single typed cast.
+  const verdict = result.object as unknown as z.infer<typeof VerdictSchema>
+  const costUsd = estimateCostFromUsage(result.usage)
+  if (verdict.verdict === 'approve') {
+    return {
+      approval: { reviewer: persona.name, rationale: verdict.rationale },
+      costUsd,
+    }
+  }
+  return {
+    rejection: { reviewer: persona.name, rationale: verdict.rationale },
+    costUsd,
+  }
+}
+
+/**
+ * Dispatch all personas in ONE LLM call. Builds an aggregate schema with one
+ * verdict slot per persona (keyed by `name`) and a single merged prompt that
+ * lists every persona's descriptor + config.
+ */
+async function runAggregateCall(
+  personas: AgenticPersona[],
+  target: unknown,
+  round: number
+): Promise<{ approvals: PanelApproval[]; rejections: PanelRejection[]; costUsd: number }> {
+  // Build a per-persona schema slot keyed by name. Zod accepts a record-like
+  // shape via z.object on a literal — we construct it dynamically from the
+  // persona list.
+  const shape: Record<string, typeof VerdictSchema> = {}
+  for (const p of personas) {
+    shape[p.name] = VerdictSchema
+  }
+  const aggregateSchema = z.object(shape)
+
+  const personaBlock = personas
+    .map(
+      (p, i) =>
+        `## Persona ${i + 1}: ${p.name}\n` +
+        `${p.persona}\n` +
+        `Config (knobs): ${safeStringify(p.config)}`
+    )
+    .join('\n\n')
+
+  const prompt = [
+    `You are emitting verdicts for ${personas.length} reviewer personas in a single pass.`,
+    `Each persona has its own descriptor and config; render each one's review independently.`,
+    `Review round: ${round}`,
+    personaBlock,
+    `Target under review:`,
+    safeStringify(target),
+    `Emit one verdict object per persona, keyed by persona name. Each value: { verdict: 'approve' | 'reject', rationale: string }.`,
+  ].join('\n\n')
+
+  const result = await generateObject({
+    model: 'sonnet',
+    schema: aggregateSchema,
+    prompt,
+  })
+  const costUsd = estimateCostFromUsage(result.usage)
+  const approvals: PanelApproval[] = []
+  const rejections: PanelRejection[] = []
+  // See note in `runPersonaCall`: `result.object` is typed as the schema arg.
+  const obj = result.object as unknown as Record<
+    string,
+    { verdict: 'approve' | 'reject'; rationale: string }
+  >
+  for (const p of personas) {
+    const slot = obj[p.name]
+    if (!slot) {
+      // Defensive: the LLM omitted a persona's slot. Treat as rejection so
+      // the panel doesn't silently approve unreviewed axes.
+      rejections.push({
+        reviewer: p.name,
+        rationale: '(missing) aggregate response omitted this persona; defaulting to reject',
+      })
+      continue
+    }
+    if (slot.verdict === 'approve') {
+      approvals.push({ reviewer: p.name, rationale: slot.rationale })
+    } else {
+      rejections.push({ reviewer: p.name, rationale: slot.rationale })
+    }
+  }
+  return { approvals, rejections, costUsd }
+}
+
+// ============================================================================
+// Sign-off resolution
+// ============================================================================
+
+/**
+ * Resolve the aggregate verdict from per-persona approvals/rejections under
+ * the panel's `signOffPolicy`.
+ *
+ *   - `'all-approve'` — any must-approve rejection → `'rejected'`; otherwise
+ *     all-approved means every persona approved (advisory rejections still
+ *     downgrade to `'partial'`).
+ *   - `'majority'`    — `approves > N/2` → `'all-approved'`; else if any
+ *     approval exists → `'partial'`; else `'rejected'`. Must-approve
+ *     rejections still hard-block to `'rejected'` (a must-approve persona
+ *     overriding majority is the whole point of the must-approve flag).
+ *   - `'weighted'`    — TODO: weight metadata pending. Treat as 'majority'.
+ */
+function resolveVerdict(
+  personas: AgenticPersona[],
+  approvals: PanelApproval[],
+  rejections: PanelRejection[],
+  policy: 'all-approve' | 'majority' | 'weighted'
+): 'all-approved' | 'partial' | 'rejected' {
+  const personaByName = new Map(personas.map((p) => [p.name, p]))
+
+  // Must-approve rejection always hard-blocks regardless of policy — the
+  // 'must-approve' flag exists precisely to override aggregate logic.
+  const mustApproveRejected = rejections.some(
+    (r) => personaByName.get(r.reviewer)?.signOff === 'must-approve'
+  )
+
+  if (policy === 'all-approve') {
+    if (rejections.length === 0) return 'all-approved'
+    if (mustApproveRejected) return 'rejected'
+    // Only advisory rejections — partial.
+    return 'partial'
+  }
+
+  // 'majority' (and 'weighted' for now — TODO: weight metadata pending).
+  if (mustApproveRejected) return 'rejected'
+  const total = approvals.length + rejections.length
+  if (total === 0) return 'rejected'
+  if (approvals.length > total / 2) return 'all-approved'
+  if (approvals.length === 0) return 'rejected'
+  return 'partial'
 }
 
 // ============================================================================
@@ -225,7 +455,8 @@ export interface EvaluatorPanel {
 // ============================================================================
 
 /**
- * Internal helper — applied so the stub run signature can close over the spec.
+ * Internal helper — builds an EvaluatorPanel value with the real `run`
+ * implementation closing over the spec.
  */
 function buildPanel(spec: EvaluatorPanelSpec): EvaluatorPanel {
   const mode = spec.mode ?? 'parallel-multi-call'
@@ -236,17 +467,65 @@ function buildPanel(spec: EvaluatorPanelSpec): EvaluatorPanel {
     signOffPolicy: spec.signOffPolicy,
     iterationPolicy: spec.iterationPolicy,
     mode,
-    // TODO: dispatch to ai-functions.generate when SaS Service.invoke lands.
-    async run(_target: unknown, _ctx?: PanelRunContext): Promise<PanelVerdict> {
-      const approvals: PanelApproval[] = spec.personas.map((p) => ({
-        reviewer: p.name,
-        rationale: 'stub-approval pending ai-functions.generate wiring',
-      }))
+    async run(target: unknown, ctx?: PanelRunContext): Promise<PanelVerdict> {
+      // Defensive no-personas case — return an empty all-approved verdict.
+      if (spec.personas.length === 0) {
+        return {
+          verdict: 'all-approved',
+          rejections: [],
+          approvals: [],
+          rounds: ctx?.rounds ?? 1,
+          costUsd: 0,
+        }
+      }
+
+      // Round count: ctx.rounds defaults to 1; clamped to the lesser of the
+      // configured maxRounds and the defensive HARD_MAX_ROUNDS. The caller
+      // increments ctx.rounds when re-invoking; we surface the value back on
+      // the verdict but do not iterate internally (round 8 work).
+      const requestedRound = ctx?.rounds ?? 1
+      const cappedMax = Math.min(spec.iterationPolicy.maxRounds, HARD_MAX_ROUNDS)
+      const round = Math.max(1, Math.min(requestedRound, cappedMax))
+
+      let approvals: PanelApproval[]
+      let rejections: PanelRejection[]
+      let costUsd: number
+
+      if (mode === 'aggregate-single-call') {
+        const agg = await runAggregateCall(spec.personas, target, round)
+        approvals = agg.approvals
+        rejections = agg.rejections
+        costUsd = agg.costUsd
+      } else {
+        // 'parallel-multi-call' — N independent LLM calls in parallel.
+        const results = await Promise.all(
+          spec.personas.map((p) => runPersonaCall(p, target, round))
+        )
+        approvals = []
+        rejections = []
+        costUsd = 0
+        for (const r of results) {
+          if (r.approval) approvals.push(r.approval)
+          if (r.rejection) rejections.push(r.rejection)
+          costUsd += r.costUsd
+        }
+      }
+
+      const verdict = resolveVerdict(spec.personas, approvals, rejections, spec.signOffPolicy)
+
+      // NOTE: When `round >= cappedMax` and verdict is 'partial' | 'rejected',
+      // `iterationPolicy.onMaxRoundsExceeded` semantics ('escalate' vs
+      // 'auto-fail') are the *caller's* responsibility — the panel reports
+      // the verdict and the round count; Service.verify / Service.invoke
+      // decides whether to surface to HITL or finalise. Round 8 will wire a
+      // structured `escalate-required` flag here when callers need it.
+
       return {
-        verdict: 'all-approved',
-        rejections: [],
+        verdict,
+        rejections,
         approvals,
-        rounds: 1,
+        rounds: round,
+        costUsd,
       }
     },
   }

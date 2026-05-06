@@ -3,31 +3,35 @@
  * `binding.cascade` step-by-step, emitting {@link InvocationEvent}s as work
  * progresses.
  *
- * This is the **first concrete LLM dispatch** in services-as-software v3
- * (round 6). The Generative branch wires through to
- * `ai-functions.generateObject`; the Code branch invokes the inline handler
- * (or stubs an ActionRef indirection); the Agentic and Human branches are
- * still mocked, with comments marking them as round-7 work.
+ * Round-7 status: **Generative AND Agentic branches are real LLM dispatch.**
+ *   - Generative: `ai-functions.generateObject` (round 6).
+ *   - Agentic:    `ai-functions.generateText` with the tool-use loop
+ *                 (`tools` + `maxSteps`) — round 7. Tools are looked up in
+ *                 the `digital-tools` registry by `toolPermissions` name.
+ *
+ * The Code branch invokes the inline handler (or stubs an ActionRef
+ * indirection); the Human branch is still mocked, with comments marking it
+ * as round-8 work (HITL channels + workflow-signal park/resume).
  *
  * The walker is decoupled from the FSM transitions in `runtime.ts`: the
  * caller (`runtime.ts`) emits `state-changed` events around the call, and
  * this module emits the per-step `cascade-progress`, `cost-incurred`,
  * `preview-available`, and `clarification-needed` events.
  *
- * **Cost capture is wire-only for round 6.** A `cost-incurred` event is
- * emitted with a {@link Money} amount derived from the LLM response (when
- * available); downstream ledger persistence (autonomous-finance Repo writes)
- * lands in round 7+.
+ * **Cost capture is wire-only.** A `cost-incurred` event is emitted with a
+ * {@link Money} amount derived from the LLM response (when available);
+ * downstream ledger persistence (autonomous-finance Repo writes) lands in
+ * round 8+.
  *
  * @packageDocumentation
  */
 
-import { generateObject } from 'ai-functions'
+import { generateObject, generateText } from 'ai-functions'
 import { z, type ZodTypeAny } from 'zod'
 
 import type { Money } from 'autonomous-finance'
 import type { ActionRef } from 'digital-objects'
-import type { FunctionRef } from 'digital-tools'
+import { getTool, type AnyTool, type FunctionRef, type ToolParameter } from 'digital-tools'
 
 import type { ServiceInstance } from '../service.js'
 import type { InvocationEvent } from './invocation-event.js'
@@ -56,7 +60,7 @@ export interface RunCascadeOpts<TIn, TOut> {
  * {@link FunctionRef} to its concrete runtime, and return the typed final
  * output.
  *
- * Round-6 dispatch matrix:
+ * Round-7 dispatch matrix:
  *
  *   - `code`        — calls the inline `handler` (or stubs through an
  *                     {@link ActionRef}); zero-cost emission.
@@ -64,8 +68,13 @@ export interface RunCascadeOpts<TIn, TOut> {
  *                     declared `modelHint` (or the runtime default), with
  *                     the Service's `schema.output` for the LAST generative
  *                     step and a `z.string()` schema for earlier ones.
- *   - `agentic`     — STILL MOCK; round 7 will wire the AgenticLoop.
- *   - `human`       — STILL MOCK; round 7 will wire HITL channels +
+ *   - `agentic`     — real `ai-functions.generateText` tool-use loop;
+ *                     resolves `toolPermissions` against the `digital-tools`
+ *                     registry and dispatches with `maxSteps: 10`.
+ *                     `mode: 'supervised'` additionally emits an advisory
+ *                     `evaluator-signoff` event (real supervision UI lands
+ *                     in round 8).
+ *   - `human`       — STILL MOCK; round 8 will wire HITL channels +
  *                     workflow-signal park/resume.
  *
  * Errors throw; `runtime.ts` catches and emits the typed `'failed'` event.
@@ -131,14 +140,45 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
       }
 
       case 'agentic': {
-        // TODO(round 7): wire ai-functions.AgenticLoop with persona +
-        // toolPermissions + signOff. Until then: stub.
-        current = current ?? null
+        const isLast = i === cascade.length - 1
+        const stepSchema: ZodTypeAny = isLast
+          ? (service.schema.output as unknown as ZodTypeAny)
+          : z.string()
+        const { value, costUsd } = await runAgenticStep<TIn>({
+          fn,
+          service,
+          input,
+          carry: current,
+          schema: stepSchema,
+          emit: (event) => emit(event as InvocationEvent<TOut>),
+          stepProgressBase: pct,
+        })
+        current = value
         emit({
           kind: 'cost-incurred',
-          cost: { amount: 0n, currency: 'USD' } satisfies Money,
+          cost: { amount: usdToMicroCents(costUsd), currency: 'USD' } satisfies Money,
           functionRef: fn.name,
         })
+        // Emit a partial preview keyed by the Function's name so the
+        // customer-runtime can render mid-cascade output.
+        emit({
+          kind: 'preview-available',
+          slot: fn.name,
+          payload: isLast ? (value as Partial<TOut>) : ({} as Partial<TOut>),
+        })
+        // Supervised mode: emit an advisory sign-off event after the loop
+        // completes. The InvocationEvent union locks `verdict` to
+        // 'approve' | 'reject' (no `'advisory'` member yet — round 8 widens
+        // the union and adds the supervision UI). For now we mark the
+        // rationale string so consumers can detect advisory verdicts.
+        if (fn.mode === 'supervised') {
+          emit({
+            kind: 'evaluator-signoff',
+            reviewer: fn.persona ?? fn.name,
+            verdict: 'approve',
+            rationale: '(advisory) supervised-mode auto-approve — UI gate lands round 8',
+          })
+        }
         break
       }
 
@@ -234,14 +274,181 @@ async function runGenerativeStep<TIn>(opts: {
 
   // ai-functions.generateObject returns `usage` as `unknown` — duck-type it
   // for token counts and estimate cost. Real per-model pricing lives in
-  // `ai-functions.budget`; round 7 will route through there.
+  // `ai-functions.budget`; round 8 will route through there.
   const costUsd = estimateCostFromUsage(result.usage, model)
   return { value: result.object, costUsd }
+}
+
+/**
+ * Agentic Function — real `ai-functions.generateText` tool-use loop dispatch.
+ *
+ * Resolves each name in `fn.toolPermissions` against the global
+ * `digital-tools` registry, converts each `Tool` to the AI-SDK tool shape
+ * (`{ description, parameters: zod, execute }`), then calls
+ * `generateText({ tools, maxSteps })`. The AI SDK drives the
+ * model→tool→model loop internally; `maxSteps` caps iterations.
+ *
+ * Round-7 caps `maxSteps` at 10 unconditionally — round 8 will read this off
+ * the {@link AgenticFunctionRef} (e.g. an `iterationLimit` field or a
+ * derivation from `concurrency`). The `persona` field is appended to the
+ * system prompt when non-empty.
+ *
+ * Missing tools throw with a `Tool not registered: <name>` message;
+ * `runtime.ts` catches and emits the typed `'failed'` event with
+ * `reason: 'external-failure'` and that string as `detail`.
+ *
+ * Per-iteration tracing is currently approximate: `cascade-progress` events
+ * are emitted via the `onStepFinish` callback (one per model step); a
+ * `preview-available` event with an empty payload is emitted alongside so
+ * the customer-runtime knows the loop made forward progress.
+ */
+async function runAgenticStep<TIn>(opts: {
+  fn: Extract<FunctionRef, { kind: 'agentic' }>
+  service: ServiceInstance<TIn, unknown>
+  input: TIn
+  carry: unknown
+  schema: ZodTypeAny
+  emit: (event: InvocationEvent<unknown>) => void
+  stepProgressBase: number
+}): Promise<{ value: unknown; costUsd: number }> {
+  const { fn, service, input, carry, schema, emit, stepProgressBase } = opts
+
+  // Round-7 cap. TODO(round 8): read from `fn` (e.g. `fn.iterationLimit`).
+  const maxIterations = 10
+
+  // Resolve tools by id from the global digital-tools registry. Missing
+  // tools are a hard failure: the cascade can't proceed if a permission
+  // resolves to nothing, so we throw with a deterministic message and let
+  // runtime.ts emit the typed `'failed'` event.
+  const requestedNames = fn.toolPermissions ?? []
+  const resolved: AnyTool[] = []
+  for (const name of requestedNames) {
+    const tool = getTool(name)
+    if (!tool) {
+      throw new Error(`Tool not registered: ${name}`)
+    }
+    resolved.push(tool)
+  }
+
+  // Convert each digital-tools `Tool` to the AI-SDK tool shape. The SDK
+  // expects `{ description, parameters: zod, execute }`. We synthesise a
+  // permissive Zod schema from the tool's `ToolParameter[]` (each parameter
+  // becomes a top-level property; required-ness honoured).
+  const sdkTools: Record<
+    string,
+    { description: string; parameters: ZodTypeAny; execute: (args: unknown) => Promise<unknown> }
+  > = {}
+  for (const tool of resolved) {
+    sdkTools[tool.id] = {
+      description: tool.description,
+      parameters: toolParametersToZod(tool.parameters),
+      execute: async (args: unknown) => {
+        // The Tool's handler signature varies; pass the args through. The
+        // arity-2 (`(input, ctx)`) form receives `undefined` for ctx in
+        // this dispatcher — SVO broker integration lands in round 8.
+        const handler = tool.handler as (input: unknown) => unknown | Promise<unknown>
+        return await handler(args)
+      },
+    }
+  }
+
+  // Build the system + user prompts. Persona becomes part of the system
+  // prompt when present so the agent narrates as that role.
+  const systemParts = [
+    `You are an agentic worker dispatched by service "${service.name}".`,
+    `Promise: ${service.promise}`,
+  ]
+  if (fn.persona) {
+    systemParts.push(`Persona: ${fn.persona}`)
+  }
+  const system = systemParts.join('\n\n')
+
+  const prompt = [
+    `Step: ${fn.name}`,
+    `Input: ${safeStringify(input)}`,
+    `Carry value from previous step: ${safeStringify(carry)}`,
+    `Available tools: ${requestedNames.join(', ') || '(none)'}`,
+    `Use the tools to complete the step. When you have a final answer that satisfies ` +
+      `the schema, return plain text describing it.`,
+  ].join('\n\n')
+
+  // AgenticFunctionRef does not yet declare a `modelHint` (the field lives on
+  // GenerativeFunctionRef only). Default to 'sonnet' for now; round 8 will
+  // either add `modelHint` to AgenticFunctionRef or route via ModelPolicy.
+  const model = 'sonnet'
+
+  // Track per-iteration progress. `onStepFinish` fires once per model step
+  // (one model call + tool execution). We use it to emit cascade-progress
+  // events back through the InvocationHandle.
+  let callCount = 0
+  const result = await generateText({
+    model,
+    system,
+    prompt,
+    tools: sdkTools,
+    maxSteps: maxIterations,
+    // The AI SDK's `onStepFinish` fires after each model step. We can't
+    // reference it via the typed options here (the SDK's type is wrapped),
+    // so we attach it via the loose extension permitted by GenerateTextOptions.
+    ...({
+      onStepFinish: (_step: unknown) => {
+        callCount++
+        emit({
+          kind: 'cascade-progress',
+          functionRef: fn.name,
+          pct: stepProgressBase + (callCount / maxIterations) * 0.0001,
+        })
+        emit({
+          kind: 'preview-available',
+          slot: `${fn.name}:iter:${callCount}`,
+          payload: {},
+        })
+      },
+    } as Record<string, unknown>),
+  } as Parameters<typeof generateText>[0])
+
+  // The final value is either the schema-typed text (when the schema is
+  // string-y) or a coerced parse of the text. Round 7 keeps this loose:
+  // we trust the model's final text for non-string schemas; round 8 will
+  // route through `generateObject` for the final shaping pass.
+  const finalText = (result as { text?: string }).text ?? ''
+  let value: unknown = finalText
+  if (schema._def?.typeName !== 'ZodString') {
+    // Best-effort coercion — if the model emitted JSON, parse it; else
+    // keep the raw text and let the consumer's runtime validate.
+    try {
+      value = JSON.parse(finalText) as unknown
+    } catch {
+      value = finalText
+    }
+  }
+
+  const costUsd = estimateCostFromUsage((result as { usage?: unknown }).usage, model)
+  return { value, costUsd }
 }
 
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Convert a digital-tools `ToolParameter[]` into a single Zod object schema
+ * suitable for the AI SDK's `tools[name].parameters` slot.
+ *
+ * Round-7 simplification: each parameter becomes a `z.unknown()` field with
+ * a description copied across; required-ness is honoured via `.optional()`.
+ * Round 8 will route through a JSON-Schema → Zod converter so per-field
+ * validation kicks in (today the model's tool-call args are passed through
+ * to the tool handler unchecked beyond presence/absence).
+ */
+function toolParametersToZod(params: ReadonlyArray<ToolParameter>): ZodTypeAny {
+  const shape: Record<string, ZodTypeAny> = {}
+  for (const p of params) {
+    const field: ZodTypeAny = z.unknown().describe(p.description)
+    shape[p.name] = p.required === false ? field.optional() : field
+  }
+  return z.object(shape)
+}
 
 /**
  * Index of the LAST generative cascade step, or `-1` if none. Only this
