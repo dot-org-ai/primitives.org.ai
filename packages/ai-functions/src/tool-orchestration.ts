@@ -300,6 +300,13 @@ export class ToolValidator {
 
 /**
  * Routes tool calls to registered handlers
+ *
+ * @deprecated Phase C Week 2 — `ToolRouter` has zero production callers in
+ * primitives.org.ai (audited 2026-05-06; see `bd show aip-ibid`). Only the
+ * `ai-primitives` umbrella re-export tests reference it. AI SDK 6's native
+ * tool-routing under `generateText({ tools })` and `Agent` / `ToolLoopAgent`
+ * cover the same surface. Will be removed in the Phase C semver bump
+ * alongside `AgenticLoop` and `createAgenticLoop`.
  */
 export class ToolRouter {
   private tools = new Map<string, Tool>()
@@ -395,6 +402,15 @@ export class ToolRouter {
 
 /**
  * Orchestrates multi-turn model→tools→model loops
+ *
+ * @deprecated Phase C Week 2 — `AgenticLoop` has zero production callers in
+ * primitives.org.ai (audited 2026-05-06; see `bd show aip-ibid`). Only the
+ * `ai-primitives` umbrella re-export tests reference it. The production
+ * cascade walker (`services-as-software/v3/invoke/cascade-walker.ts:178`)
+ * already uses AI SDK 6's `generateText({ tools, maxSteps: 10 })` directly
+ * for agentic steps — no consumer code paths through this class. AI SDK 6's
+ * `Agent` / `ToolLoopAgent` (`stopWhen: stepCountIs(N)`) are the going-
+ * forward primitives. Will be removed in the Phase C semver bump.
  */
 export class AgenticLoop {
   private options: LoopOptions
@@ -1138,6 +1154,12 @@ export function timeoutTool<T extends Tool>(tool: T, timeoutMs: number): Tool {
 
 /**
  * Create an agentic loop with sensible defaults
+ *
+ * @deprecated Phase C Week 2 — `createAgenticLoop` has zero production
+ * callers in primitives.org.ai (only `ai-primitives` umbrella re-export
+ * tests). Use AI SDK 6's `Agent` / `ToolLoopAgent` with
+ * `stopWhen: stepCountIs(N)` instead. Will be removed alongside
+ * `AgenticLoop` in the Phase C semver bump. See `bd show aip-ibid`.
  */
 export function createAgenticLoop(options: Partial<LoopOptions> & { tools: Tool[] }): AgenticLoop {
   return new AgenticLoop({
