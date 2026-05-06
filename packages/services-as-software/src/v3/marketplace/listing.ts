@@ -23,6 +23,7 @@ import type {
   OrderShape,
   PortalShape,
 } from '../shapes/types.js'
+import type { Audience } from '../types.js'
 
 // ============================================================================
 // Visibility
@@ -77,11 +78,32 @@ export interface MarketplaceListingRendered {
  * `archetype` mirrors the originating Service's archetype ref so the catalog
  * read-path can filter listings by archetype without dereferencing the
  * Service. Always populated by `Service.publish()` from `service.archetype`.
+ *
+ * `name` / `promise` / `description` / `audience` are denormalized from the
+ * originating Service at write-time (round-14, per ADR-0005). They power the
+ * catalog read-path's filter + free-text search without re-deriving from
+ * `rendered.catalog.hero` and without dereferencing the Service. The CH MV
+ * exposes the same columns (per ADR-0005 §Decision); the in-memory adapter
+ * filters on these fields directly.
+ *
+ * When the originating Service's `audience` is an array (e.g.
+ * `['human', 'business']`), the FIRST element is denormalized into
+ * `MarketplaceListing.audience` for filter-shape simplicity. Multi-audience
+ * Services still match queries for ANY of their audiences via the rendered
+ * shape; round-15+ extends the filter axis to multi-audience exact-match.
  */
 export interface MarketplaceListing {
   readonly $id: string
   readonly $type: 'MarketplaceListing'
   readonly serviceRef: string
+
+  // Denormalized at write-time (round-14) for catalog query/filter
+  // performance; sourced from `service.{name,promise,description,audience}`.
+  readonly name: string
+  readonly promise: string
+  readonly description?: string
+  readonly audience: Audience
+
   readonly archetype: ServiceArchetypeRef
   readonly visibility: MarketplaceVisibility
   readonly tenantRef?: string

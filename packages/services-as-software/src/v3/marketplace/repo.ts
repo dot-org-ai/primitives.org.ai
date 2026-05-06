@@ -34,12 +34,20 @@ import type { VersionVector } from '../lineage.js'
  * `archetype` filters by the originating Service's archetype ref (now a
  * first-class field on {@link MarketplaceListing}). Both the in-memory and
  * `ai-database` adapters honour it.
+ *
+ * `audience` filters by the round-14 denormalized primary audience column
+ * on {@link MarketplaceListing}. `query` is a free-text substring match
+ * against `name + promise + description` (case-insensitive); the in-memory
+ * `ai-database` adapter performs it client-side, the CH adapter delegates
+ * to the Vectorize sidecar per ADR-0005.
  */
 export interface MarketplaceListingFilter {
   visibility?: MarketplaceVisibility
   tenantRef?: string
   serviceRef?: string
   archetype?: string
+  audience?: string
+  query?: string
 }
 
 /**

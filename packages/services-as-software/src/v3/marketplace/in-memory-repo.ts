@@ -55,12 +55,20 @@ export class InMemoryMarketplaceRepo implements MarketplaceRepo {
   }
 
   async list(filter?: MarketplaceListingFilter): Promise<MarketplaceListing[]> {
+    const needle = filter?.query?.toLowerCase()
     const out: MarketplaceListing[] = []
     for (const listing of this.listings.values()) {
       if (filter?.visibility !== undefined && listing.visibility !== filter.visibility) continue
       if (filter?.tenantRef !== undefined && listing.tenantRef !== filter.tenantRef) continue
       if (filter?.serviceRef !== undefined && listing.serviceRef !== filter.serviceRef) continue
       if (filter?.archetype !== undefined && listing.archetype !== filter.archetype) continue
+      if (filter?.audience !== undefined && listing.audience !== filter.audience) continue
+      if (needle !== undefined && needle.length > 0) {
+        const haystack = `${listing.name} ${listing.promise} ${
+          listing.description ?? ''
+        }`.toLowerCase()
+        if (!haystack.includes(needle)) continue
+      }
       out.push(listing)
     }
     return out

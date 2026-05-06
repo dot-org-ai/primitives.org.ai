@@ -42,3 +42,29 @@ export type {
   MigrationGuideOutput,
   BreakingChangeSeverity,
 } from './migration-guide-writer.js'
+
+export {
+  tutorialAuthor,
+  TutorialLanguageSchema,
+  FeatureDocInputSchema,
+  PublishedTutorialOutputSchema,
+} from './tutorial-author.js'
+export type {
+  TutorialLanguage,
+  FeatureDocInput,
+  PublishedTutorialOutput,
+} from './tutorial-author.js'
+
+export {
+  exampleSuiteBuilder,
+  ExampleLanguageSchema,
+  ExampleCiStatusSchema,
+  RepoExamplesInputSchema,
+  PublishedExamplesOutputSchema,
+} from './example-suite-builder.js'
+export type {
+  ExampleLanguage,
+  ExampleCiStatus,
+  RepoExamplesInput,
+  PublishedExamplesOutput,
+} from './example-suite-builder.js'

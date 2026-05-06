@@ -26,6 +26,14 @@
     "./migration-guide-writer": {
       "types": "./dist/services/migration-guide-writer.d.ts",
       "import": "./dist/services/migration-guide-writer.js"
+    },
+    "./tutorial-author": {
+      "types": "./dist/services/tutorial-author.d.ts",
+      "import": "./dist/services/tutorial-author.js"
+    },
+    "./example-suite-builder": {
+      "types": "./dist/services/example-suite-builder.d.ts",
+      "import": "./dist/services/example-suite-builder.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

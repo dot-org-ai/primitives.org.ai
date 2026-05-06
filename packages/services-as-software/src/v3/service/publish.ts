@@ -30,7 +30,7 @@ import {
   type RuntimeUnit,
 } from '../marketplace/index.js'
 import type { ServiceInstance } from '../service.js'
-import type { Schema } from '../types.js'
+import type { Audience, Schema } from '../types.js'
 
 import { ServiceLifecycle, ServicePublishError } from './lifecycle.js'
 import { requiresReverify } from './reverify-policy.js'
@@ -123,8 +123,26 @@ function buildRuntimeUnit(
 }
 
 /**
+ * Pick the single denormalized {@link Audience} for a listing from a Service's
+ * `audience` field (which may be a single value or an array). Per round-14 we
+ * keep the listing's `audience` column scalar for filter-shape simplicity;
+ * when the Service serves multiple audiences we denormalize the FIRST entry.
+ *
+ * Round-15+ extends the filter axis to honour all declared audiences (today
+ * the `rendered` shapes still encode the full multi-audience surface).
+ */
+function pickPrimaryAudience(audience: Audience | Audience[]): Audience {
+  return Array.isArray(audience) ? audience[0] ?? 'human' : audience
+}
+
+/**
  * Build a {@link MarketplaceListing} from svc + the runtime unit + the
  * pre-derived UI shapes. Calls {@link deriveAll} for the rendered block.
+ *
+ * Round-14 denormalizes `name` / `promise` / `description` / `audience` from
+ * `svc` onto the listing for catalog filter + free-text-search performance
+ * (per ADR-0005). Multi-audience Services collapse to the first declared
+ * audience for the scalar filter column — see {@link pickPrimaryAudience}.
  */
 function buildListing(
   svc: ServiceInstance<unknown, unknown>,
@@ -140,6 +158,10 @@ function buildListing(
     $id: listingId,
     $type: 'MarketplaceListing',
     serviceRef: svc.$id,
+    name: svc.name,
+    promise: svc.promise,
+    ...(svc.description !== undefined && { description: svc.description }),
+    audience: pickPrimaryAudience(svc.audience),
     archetype: svc.archetype,
     visibility,
     ...(tenantRef !== undefined && { tenantRef }),

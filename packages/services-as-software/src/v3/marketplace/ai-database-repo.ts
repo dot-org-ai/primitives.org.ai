@@ -35,8 +35,10 @@ import type { VersionVector } from '../lineage.js'
 /**
  * `MarketplaceListing` Noun. The schema declares the **filterable** scalar
  * fields the catalog read-path indexes on (`serviceRef`, `archetype`,
- * `visibility`, `tenantRef`, `publishedAt`); the deeply-nested `rendered` /
- * `provenance` blocks ride along as opaque payload via `metadata`.
+ * `visibility`, `tenantRef`, `publishedAt`, plus the round-14 denormalized
+ * `name` / `promise` / `description` / `audience` columns); the deeply-nested
+ * `rendered` / `provenance` blocks ride along as opaque payload via
+ * `metadata`.
  *
  * MDXLD conventions: every persisted listing carries `$id` (the canonical
  * id minted by `Service.publish`) and `$type === 'MarketplaceListing'`.
@@ -50,6 +52,17 @@ export const MarketplaceListingNoun = defineNoun({
     'and a back-reference to the paired RuntimeUnit.',
   properties: {
     serviceRef: { type: 'string', description: 'Originating Service `$id`.' },
+    name: { type: 'string', description: 'Denormalized Service name (round-14, ADR-0005).' },
+    promise: { type: 'string', description: 'Denormalized Service promise (round-14, ADR-0005).' },
+    description: {
+      type: 'string',
+      description: 'Denormalized Service description; absent when Service has none.',
+    },
+    audience: {
+      type: 'string',
+      description:
+        'Denormalized primary Service audience; first entry when Service.audience is an array.',
+    },
     archetype: { type: 'string', description: 'Originating Service archetype ref.' },
     visibility: { type: 'string', description: "'public' | 'tenant' | tenant-id list (JSON)." },
     tenantRef: { type: 'string', description: 'Owning tenant; required when visibility=tenant.' },
@@ -108,6 +121,10 @@ export const RuntimeUnitNoun = defineNoun({
 export const MarketplaceRepoSchema = {
   MarketplaceListing: {
     serviceRef: 'string',
+    name: 'string',
+    promise: 'string',
+    'description?': 'string',
+    audience: 'string',
     archetype: 'string',
     visibility: 'string',
     'tenantRef?': 'string',
@@ -202,6 +219,7 @@ export class AiDatabaseMarketplaceRepo implements MarketplaceRepo {
       | undefined
     if (!ops) return []
     const raw = await ops.list()
+    const needle = filter?.query?.toLowerCase()
     const out: MarketplaceListing[] = []
     for (const r of raw) {
       const listing = stripPersistenceMeta(r) as unknown as MarketplaceListing
@@ -209,6 +227,13 @@ export class AiDatabaseMarketplaceRepo implements MarketplaceRepo {
       if (filter?.tenantRef !== undefined && listing.tenantRef !== filter.tenantRef) continue
       if (filter?.serviceRef !== undefined && listing.serviceRef !== filter.serviceRef) continue
       if (filter?.archetype !== undefined && listing.archetype !== filter.archetype) continue
+      if (filter?.audience !== undefined && listing.audience !== filter.audience) continue
+      if (needle !== undefined && needle.length > 0) {
+        const haystack = `${listing.name} ${listing.promise} ${
+          listing.description ?? ''
+        }`.toLowerCase()
+        if (!haystack.includes(needle)) continue
+      }
       out.push(listing)
     }
     return out
