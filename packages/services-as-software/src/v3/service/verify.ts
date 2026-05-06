@@ -8,10 +8,12 @@
  *
  * **Mock cascade walker is the substrate today** — the round-3
  * `createInvocationHandle` emits a synthetic `evaluator-signoff` burst per
- * persona; the predicate evaluator below is a stub that approves any report
- * carrying at least one approve sign-off when the outcome contract uses
- * `kind: 'evaluator-pass'`. Real ai-functions / ai-workflows wiring + a full
- * predicate evaluator land in round 5/6.
+ * persona. The predicate evaluator now delegates to the real
+ * `predicate-eval` module (cluster-1 sb-v3-migration gap-fix) which covers
+ * all 9 leaf predicate kinds + AND/OR composition. The legacy
+ * `evaluator-pass`-without-`panelVerdict` shortcut is preserved so callers
+ * that never wired an `EvaluationContext` see the same pass/fail surface.
+ * Real ai-functions / ai-workflows cascade wiring lands in round 5/6.
  *
  * @packageDocumentation
  */
@@ -24,6 +26,10 @@ import type { ServiceInstance } from '../service.js'
 import type { VersionVector } from '../lineage.js'
 import { ServiceLifecycle } from './lifecycle.js'
 import { getMarketplaceRepo } from '../marketplace/persistence.js'
+import {
+  evaluatePredicate as evaluatePredicateFull,
+  type EvaluationContext,
+} from './predicate-eval.js'
 
 // ============================================================================
 // Public option + report types
@@ -59,6 +65,12 @@ export interface VerifyOpts {
  * One fixture run by `verifyService`. `expect` knobs let a caller assert
  * against ProofPredicate-style outcomes + load-bearing / overall-floor
  * thresholds (per the extended `ProofPredicate` union in v3 §8).
+ *
+ * `context` (optional) supplies the verify-time {@link EvaluationContext}
+ * slots the full predicate evaluator reads when a fixture's predicate is
+ * not pure `evaluator-pass` (cluster-1 sb-v3-migration gap-fix). When
+ * omitted, only `evaluator-pass` predicates can be evaluated (and `output`
+ * is auto-populated from the fixture's `delivered` event when present).
  */
 export interface VerifyFixture {
   input: unknown
@@ -69,6 +81,14 @@ export interface VerifyFixture {
       loadBearing?: string[]
     }
   }
+  /**
+   * Verify-time context fed into the predicate evaluator. The runtime
+   * auto-populates `output` from the fixture's terminal `delivered` event
+   * when this field omits it; everything else is caller-supplied (sb's
+   * Stage-35 gate wires `rubricBreakdown` + `unmetRequirements` from the
+   * RuntimeUnitInput).
+   */
+  context?: Partial<EvaluationContext>
 }
 
 /** One reason a fixture failed verification. */
@@ -136,19 +156,34 @@ function snapshotVersionVector(svc: ServiceInstance<unknown, unknown>): VersionV
 }
 
 /**
- * Stub predicate evaluator. The full evaluator is round-6 work; for now we
- * approve any predicate whose `kind === 'evaluator-pass'` provided the run
- * collected at least one `evaluator-signoff` event with `verdict: 'approve'`.
+ * Verify-time predicate evaluator entrypoint. Cluster-1 (sb-v3-migration)
+ * gap-fix: delegates to the real `predicate-eval` evaluator that covers all
+ * 9 leaf kinds + AND/OR composition.
  *
- * Other predicate kinds default to "pass" (the publish-side gate is the
- * authoritative cost-aware checker; verify-side here is a smoke test).
+ * **Back-compat shortcut.** The previous implementation special-cased
+ * `evaluator-pass` against the `passes` count emitted by the synthetic
+ * cascade walker. To keep that surface intact (so existing callers that
+ * never wire a verify-time `EvaluationContext` keep observing the same
+ * pass/fail behaviour), we still apply the old rule when the predicate is
+ * a bare `evaluator-pass` AND the caller did not supply `panelVerdict` in
+ * the context. Any other predicate (or any predicate composed via AND/OR)
+ * goes straight through the full evaluator.
+ *
+ * Returns `{ ok, reason }` shaped like the old API so the rest of
+ * `runFixture` is unchanged.
  */
-function evaluatePredicate(
+async function evaluatePredicate(
   predicate: ProofPredicate | undefined,
-  passes: VerificationEvaluatorPass[]
-): { ok: boolean; reason?: string } {
+  passes: VerificationEvaluatorPass[],
+  context: EvaluationContext
+): Promise<{ ok: boolean; reason?: string }> {
   if (!predicate) return { ok: true }
-  if (predicate.kind === 'evaluator-pass') {
+
+  // Legacy `evaluator-pass`-only path: when the caller did not wire a real
+  // PanelVerdict in `context`, infer one from the cascade walker's
+  // `passes` so existing callers continue to observe the round-3 behaviour
+  // (predicate passes when at least one approve sign-off was emitted).
+  if (predicate.kind === 'evaluator-pass' && context.panelVerdict === undefined) {
     if (passes.length === 0) {
       return {
         ok: false,
@@ -157,9 +192,10 @@ function evaluatePredicate(
     }
     return { ok: true }
   }
-  // TODO(round 6): wire the remaining predicate kinds (schema-match, human-sign,
-  // external, load-bearing-pass, overall-floor, and/or composition).
-  return { ok: true }
+
+  const result = await evaluatePredicateFull(predicate, context)
+  if (result.passed) return { ok: true }
+  return { ok: false, reason: result.failures.join('; ') || 'predicate failed' }
 }
 
 /**
@@ -185,6 +221,7 @@ async function runFixture<TIn, TOut>(
   const passes: VerificationEvaluatorPass[] = []
   const events: InvocationEvent<TOut>[] = []
   let failure: VerificationFailure | undefined
+  let deliveredOutput: unknown
 
   for await (const ev of handle.events as AsyncIterable<InvocationEvent<TOut>>) {
     if (collectEvents) events.push(ev)
@@ -198,12 +235,24 @@ async function runFixture<TIn, TOut>(
     } else if (ev.kind === 'failed') {
       failure = { reason: ev.reason, detail: ev.detail }
     } else if (ev.kind === 'delivered') {
+      // Capture the cascade's terminal output so `schema-match` predicates
+      // can validate it without the caller having to plumb context.output
+      // explicitly. Fixture-supplied `context.output` still wins below.
+      deliveredOutput = (ev as unknown as { output?: unknown }).output
       break
     }
   }
 
+  // Build the verify-time EvaluationContext. The caller's `fixture.context`
+  // wins on every slot — verify auto-populates only `output` (from the
+  // delivered event) when the caller didn't supply one.
+  const context: EvaluationContext = {
+    ...(deliveredOutput !== undefined && { output: deliveredOutput }),
+    ...fixture.context,
+  }
+
   // Apply the fixture's predicate expectation, if any.
-  const predicateResult = evaluatePredicate(fixture.expect?.predicate, passes)
+  const predicateResult = await evaluatePredicate(fixture.expect?.predicate, passes, context)
   if (!predicateResult.ok && !failure) {
     failure = {
       reason: 'predicate-failed',

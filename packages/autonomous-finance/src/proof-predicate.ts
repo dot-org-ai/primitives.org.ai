@@ -5,13 +5,16 @@
  * this module is the gap-filler. SaS's Service.outcomeContract.predicate
  * uses these to express "definition of done."
  *
- * Six leaf predicates + AND/OR composition:
- *   - schema-match     : output matches schema
- *   - evaluator-pass   : EvaluatorPanel approves at threshold
- *   - human-sign       : human with signerRoles signs
- *   - external         : external verifier (e.g. github CI + merged) approves
- *   - load-bearing-pass: a named subset of rubric items all pass (sb killThreshold)
- *   - overall-floor    : N of total rubric items pass (sb killThreshold)
+ * Seven leaf predicates + AND/OR composition:
+ *   - schema-match            : output matches schema
+ *   - evaluator-pass          : EvaluatorPanel approves at threshold
+ *   - human-sign              : human with signerRoles signs
+ *   - external                : external verifier (e.g. github CI + merged) approves
+ *   - load-bearing-pass       : a named subset of rubric items all pass (sb killThreshold)
+ *   - overall-floor           : N of total rubric items pass (sb killThreshold)
+ *   - unmet-requirements-pass : no `severity: 'blocking'` UnmetRequirements remain
+ *                               (sb-n7d open-blocking gate); when `categories` is
+ *                               supplied, only those categories are checked.
  */
 
 export type ProofPredicate =
@@ -25,6 +28,7 @@ export type ProofPredicate =
   | { kind: 'external'; verifier: string; spec: unknown }
   | { kind: 'load-bearing-pass'; itemSet: string[] }
   | { kind: 'overall-floor'; minPasses: number; outOfTotal: number }
+  | { kind: 'unmet-requirements-pass'; categories?: string[] }
   | { kind: 'and'; predicates: ProofPredicate[] }
   | { kind: 'or'; predicates: ProofPredicate[] }
 
@@ -65,6 +69,31 @@ export const OverallFloor = (opts: { minPasses: number; outOfTotal: number }): P
   minPasses: opts.minPasses,
   outOfTotal: opts.outOfTotal,
 })
+
+/**
+ * `UnmetRequirementsPass` — sb-n7d's open-blocking gate as a first-class
+ * predicate.
+ *
+ * Passes iff no `severity: 'blocking'` UnmetRequirement is present in the
+ * verify-time evaluation context. `severity: 'warning'` items are ignored.
+ *
+ * When `categories` is supplied, only requirements whose `category` matches
+ * one of the listed values are considered (others are ignored regardless of
+ * severity). When omitted, ALL categories are inspected.
+ *
+ * @example
+ *   // Any blocking unmet requirement fails the predicate.
+ *   UnmetRequirementsPass()
+ *
+ *   // Only blocking items in the 'compliance' or 'security' buckets fail.
+ *   UnmetRequirementsPass({ categories: ['compliance', 'security'] })
+ */
+export const UnmetRequirementsPass = (opts?: { categories?: string[] }): ProofPredicate => {
+  if (opts?.categories !== undefined) {
+    return { kind: 'unmet-requirements-pass', categories: opts.categories }
+  }
+  return { kind: 'unmet-requirements-pass' }
+}
 
 export const AND = (...predicates: ProofPredicate[]): ProofPredicate => ({
   kind: 'and',

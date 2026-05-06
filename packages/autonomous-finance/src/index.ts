@@ -43,6 +43,7 @@ export {
   External,
   LoadBearingPass,
   OverallFloor,
+  UnmetRequirementsPass,
   AND,
   OR,
 } from './proof-predicate.js'

@@ -140,6 +140,23 @@ export { verifyService } from './service/verify.js'
 export { publishService } from './service/publish.js'
 export { requiresReverify, BEHAVIORAL_FIELDS } from './service/reverify-policy.js'
 
+// Predicate evaluator (cluster-1 sb-v3-migration gap-fix)
+export { evaluatePredicate } from './service/predicate-eval.js'
+export type {
+  EvaluationContext,
+  PredicateEvalResult,
+  RubricItemBreakdown,
+  UnmetRequirement,
+} from './service/predicate-eval.js'
+
+// External-verifier registry for `kind: 'external'` predicates
+export {
+  registerVerifier,
+  getVerifier,
+  __resetVerifiersForTests,
+} from './service/external-verifiers.js'
+export type { ExternalVerifier, ExternalVerifierResult } from './service/external-verifiers.js'
+
 export {
   // Async repo factory accessors + configure functions (round 5+)
   getMarketplaceRepo,
