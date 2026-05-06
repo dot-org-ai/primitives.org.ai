@@ -54,6 +54,7 @@ export type {
   ClarificationPolicy,
   ClarificationTrigger,
 } from './binding.js'
+export { OUT_OF_CASCADE_TARGETS, ServiceDefineError, validateTriggers } from './binding.js'
 
 // OutputContract (technical schema; distinct from autonomous-finance OutcomeContract)
 export type { OutputContract, SchemaWithUI, FieldUIHint } from './output-contract.js'
@@ -164,6 +165,22 @@ export {
   type MarketplaceRepo,
   type RuntimeUnitFilter,
   type RuntimeUnitRepo,
+  // Round-13 catalog read-path primitive (ADR-0005)
+  getServiceCollection,
+  configureServiceCollection,
+  InMemoryServiceCollection,
+  CHServiceCollection,
+  DEFAULT_PAGE_SIZE,
+  MAX_PAGE_SIZE,
+  clampPageSize,
+  type ServiceCollection,
+  type ServiceCollectionFilter,
+  type ServiceCollectionOpts,
+  type ServiceCollectionPage,
+  type ServiceCollectionCursor,
+  type ServiceCollectionOrder,
+  type CHServiceCollectionOpts,
+  type CHClientPort,
 } from './marketplace/index.js'
 
 // ----------------------------------------------------------------------------
@@ -194,7 +211,7 @@ export {
 // Service namespace value + lifecycle FSM (v3 §5 + §10)
 // ----------------------------------------------------------------------------
 
-export { Service, define, fromFunction, load } from './service/index.js'
+export { Service, define, fromFunction, load, collection } from './service/index.js'
 export type { FromFunctionOpts } from './service/index.js'
 
 export {

@@ -11,28 +11,32 @@
 import { define } from './define.js'
 import { fromFunction } from './from-function.js'
 import { load } from './load.js'
+import { collection } from './collection.js'
 
 // ============================================================================
 // Namespace value
 // ============================================================================
 
 /**
- * The `Service` namespace value. Carries the three factory functions per
- * v3 §5 — `define` for full specs, `fromFunction` for migrating existing
- * `ai-functions` calls, and `load` for fetching published Services from the
- * marketplace.
+ * The `Service` namespace value. Carries the four factory functions per
+ * v3 §5 + ADR-0005:
+ *   - `define`        — full specs
+ *   - `fromFunction`  — migrating existing `ai-functions` calls
+ *   - `load`          — fetching published Services from the marketplace
+ *   - `collection`    — paginated catalog read-path (round-13, ADR-0005)
  */
 export const Service = {
   define,
   fromFunction,
   load,
+  collection,
 }
 
 // ============================================================================
 // Re-exports
 // ============================================================================
 
-export { define, fromFunction, load }
+export { define, fromFunction, load, collection }
 
 export type { FromFunctionOpts } from './from-function.js'
 

@@ -38,6 +38,8 @@ import type {
   RuntimeUnitRepo,
 } from './repo.js'
 import { InMemoryMarketplaceRepo, InMemoryRuntimeUnitRepo } from './in-memory-repo.js'
+import type { ServiceCollection } from './collection.js'
+import { InMemoryServiceCollection } from './in-memory-collection.js'
 
 // ============================================================================
 // Backward-compat filter aliases
@@ -61,6 +63,9 @@ export type RuntimeUnitListFilter = RuntimeUnitFilter
 
 let activeMarketplaceRepo: MarketplaceRepo = new InMemoryMarketplaceRepo()
 let activeRuntimeUnitRepo: RuntimeUnitRepo = new InMemoryRuntimeUnitRepo()
+// Default {@link ServiceCollection} wraps whatever {@link MarketplaceRepo} is
+// active at the time of first read; replace via {@link configureServiceCollection}.
+let activeServiceCollection: ServiceCollection | undefined
 
 // ============================================================================
 // Factory-pattern accessors
@@ -102,11 +107,37 @@ export function configureRuntimeUnitRepo(repo: RuntimeUnitRepo): void {
 }
 
 /**
- * Reset both repos to fresh in-memory adapters. Test seam.
+ * Get the currently-configured {@link ServiceCollection}. Defaults to an
+ * {@link InMemoryServiceCollection} wrapping the active
+ * {@link MarketplaceRepo}; replace via {@link configureServiceCollection}.
+ *
+ * The default is constructed lazily on first read so that callers who
+ * configure a custom {@link MarketplaceRepo} via {@link configureMarketplaceRepo}
+ * don't get a collection pinned to a stale repo.
+ */
+export function getServiceCollection(): ServiceCollection {
+  if (activeServiceCollection === undefined) {
+    activeServiceCollection = new InMemoryServiceCollection(activeMarketplaceRepo)
+  }
+  return activeServiceCollection
+}
+
+/**
+ * Replace the active {@link ServiceCollection}. Production callers wire the
+ * `CHServiceCollection` (per ADR-0005) at boot.
+ */
+export function configureServiceCollection(collection: ServiceCollection): void {
+  activeServiceCollection = collection
+}
+
+/**
+ * Reset both repos + the {@link ServiceCollection} singleton to fresh
+ * in-memory adapters. Test seam.
  */
 export function __resetMarketplaceReposForTests(): void {
   activeMarketplaceRepo = new InMemoryMarketplaceRepo()
   activeRuntimeUnitRepo = new InMemoryRuntimeUnitRepo()
+  activeServiceCollection = undefined
 }
 
 // ============================================================================

@@ -45,8 +45,10 @@ export {
 export {
   getMarketplaceRepo,
   getRuntimeUnitRepo,
+  getServiceCollection,
   configureMarketplaceRepo,
   configureRuntimeUnitRepo,
+  configureServiceCollection,
   __resetMarketplaceReposForTests,
   // Backward-compat surface (deprecated wrappers + filter aliases)
   marketplaceStore,
@@ -54,3 +56,24 @@ export {
   type MarketplaceListFilter,
   type RuntimeUnitListFilter,
 } from './persistence.js'
+
+// ServiceCollection — round-13 catalog read-path primitive (per ADR-0005)
+export type {
+  ServiceCollection,
+  ServiceCollectionFilter,
+  ServiceCollectionOpts,
+  ServiceCollectionPage,
+  ServiceCollectionCursor,
+  ServiceCollectionOrder,
+} from './collection.js'
+export { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, clampPageSize } from './collection.js'
+
+// In-memory adapter — default
+export { InMemoryServiceCollection } from './in-memory-collection.js'
+
+// CH-backed adapter — round-13 stub for ADR-0005 production read-path
+export {
+  CHServiceCollection,
+  type CHServiceCollectionOpts,
+  type CHClientPort,
+} from './ch-collection.js'

@@ -182,9 +182,18 @@ export const claudeCodeFeatureBuild: ServiceInstance<FeatureBuildInput, FeatureB
         EvaluatorPass({ panelRef: 'self', minScore: 'all-approved' }),
         External({ verifier: 'github', spec: { ci: 'passing', merged: true } })
       ),
-      amount: { amount: 20000n, currency: 'USD' },
+      // OutcomeContractWithTiers (round-13): mirror the Pricing.outcome tiers
+      // here so the headline {Money} figure is computed lazily by
+      // `resolveOutcomeAmount(contract)` from `selectedTierId` rather than
+      // baked at declaration time. Service.invoke selects the tier (S/M/L)
+      // based on input characteristics (feature complexity).
+      tiers: [
+        { id: 'S', amount: 20000n, currency: 'USD', description: 'Small feature' },
+        { id: 'M', amount: 80000n, currency: 'USD', description: 'Medium feature' },
+        { id: 'L', amount: 240000n, currency: 'USD', description: 'Large feature' },
+      ],
       // 14-day SLA; onTimeout escalates per refundContract.
-      expiresAt: 'P14D',
+      timeoutDays: 14,
       onTimeout: 'escalate',
     },
 

@@ -109,9 +109,10 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
   const cascade = service.binding.cascade
 
   // Find the index of the LAST generative step — only this step receives the
-  // Service's output schema; earlier generative steps get a generic z.string()
-  // because per-step Function-level outputContracts don't exist yet
-  // (round 7+ will support per-step schemas via Function-level outputContract).
+  // Service's output schema as the fallback; earlier generative steps fall
+  // back to `z.string()`. Per-step Function-level output contracts (round-13)
+  // override BOTH fallbacks via `GenerativeFunctionRef.outputSchema` — when a
+  // step declares its own schema, the walker uses it regardless of position.
   const lastGenerativeIdx = findLastGenerativeIdx(cascade)
 
   // Carry the value forward through the cascade. Starts as the typed input;
@@ -138,9 +139,13 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
 
       case 'generative': {
         const isLast = i === lastGenerativeIdx
-        const stepSchema: ZodTypeAny = isLast
-          ? (service.schema.output as unknown as ZodTypeAny)
-          : z.string()
+        // Per-step opt-in: when the FunctionRef declares its own
+        // `outputSchema`, use it; otherwise fall back to the Service's
+        // `schema.output` for the LAST generative step and `z.string()` for
+        // earlier ones.
+        const declaredSchema = fn.outputSchema as ZodTypeAny | undefined
+        const stepSchema: ZodTypeAny =
+          declaredSchema ?? (isLast ? (service.schema.output as unknown as ZodTypeAny) : z.string())
         const { value, costUsd, model } = await runGenerativeStep<TIn>({
           fn,
           service,

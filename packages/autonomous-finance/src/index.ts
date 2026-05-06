@@ -53,8 +53,10 @@ export type {
   OutcomeContractBase,
   OutcomeContractWithExpiresAt,
   OutcomeContractWithTimeoutDays,
+  OutcomeContractWithTiers,
   ProofOfResult,
 } from './outcome-contract.js'
+export { resolveOutcomeAmount } from './outcome-contract.js'
 
 // SLA policy
 export type { SLAPolicy, SLATarget } from './sla.js'

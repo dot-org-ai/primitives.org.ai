@@ -15,6 +15,95 @@
 import type { FunctionRef } from 'digital-tools'
 
 // ============================================================================
+// Out-of-cascade trigger targets
+// ============================================================================
+
+/**
+ * Well-known target names for `BindingTrigger.action === 'route-to'` that
+ * resolve OUTSIDE the current Service's cascade — typically sibling Services
+ * or human-handoff queues. The runtime dispatches these via cross-cascade
+ * routing once that lands (round 9+); until then, the Service.define()
+ * validator simply allows them through with an internal note.
+ *
+ * Kept as a `Set<string>` (not a string-literal union) so adapters can
+ * augment the catalogue at runtime without a type change here.
+ */
+export const OUT_OF_CASCADE_TARGETS: ReadonlySet<string> = new Set([
+  'csm-handoff',
+  'collections-handoff',
+  'human-agent',
+  'sdr-review',
+  'cfo-review',
+  'attorney-review',
+  'controller-review',
+])
+
+/**
+ * Error thrown by `Service.define()` when a {@link BindingTrigger} declares a
+ * `target` that is neither a {@link FunctionRef.name} in the cascade nor one
+ * of the {@link OUT_OF_CASCADE_TARGETS} well-known handoffs.
+ *
+ * The thrown error includes both the offending target and the list of valid
+ * in-cascade names so catalog authors get an immediately-actionable hint.
+ */
+export class ServiceDefineError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ServiceDefineError'
+  }
+}
+
+/**
+ * Validate {@link ServiceBinding.triggers} against the cascade.
+ *
+ * For each trigger with `action === 'route-to'`:
+ *   - if `target` matches a {@link FunctionRef.name} in `cascade` → OK
+ *   - else if `target` is in {@link OUT_OF_CASCADE_TARGETS} → OK
+ *     (cross-cascade dispatch lands round 9+)
+ *   - else → throw {@link ServiceDefineError} with the valid names listed
+ *
+ * Triggers with `action !== 'route-to'` (escalate / auto-fail / auto-accept)
+ * skip the target check — those actions don't need a target.
+ *
+ * `'route-to'` triggers MUST declare a `target`; missing target throws.
+ */
+export function validateTriggers(
+  cascade: ReadonlyArray<FunctionRef>,
+  triggers: ReadonlyArray<BindingTrigger> | undefined,
+  serviceName: string
+): void {
+  if (!triggers || triggers.length === 0) return
+
+  const inCascadeNames = new Set(cascade.map((fn) => fn.name))
+
+  for (let i = 0; i < triggers.length; i++) {
+    const trigger = triggers[i]!
+    if (trigger.action !== 'route-to') continue
+
+    if (trigger.target === undefined) {
+      throw new ServiceDefineError(
+        `Service.define(${JSON.stringify(serviceName)}): binding.triggers[${i}] has ` +
+          `action: 'route-to' but no 'target' is declared.`
+      )
+    }
+
+    if (inCascadeNames.has(trigger.target)) continue
+    if (OUT_OF_CASCADE_TARGETS.has(trigger.target)) continue
+
+    const validInCascade = [...inCascadeNames].map((n) => JSON.stringify(n)).join(', ')
+    const validOutOfCascade = [...OUT_OF_CASCADE_TARGETS].map((n) => JSON.stringify(n)).join(', ')
+    throw new ServiceDefineError(
+      `Service.define(${JSON.stringify(serviceName)}): binding.triggers[${i}].target ` +
+        `${JSON.stringify(
+          trigger.target
+        )} is not a known cascade Function name or out-of-cascade ` +
+        `handoff target. Valid in-cascade names: ${validInCascade}. ` +
+        `Valid out-of-cascade handoffs: ${validOutOfCascade}.`
+    )
+  }
+}
+
+// ============================================================================
 // Trigger routing (NEW in v3 §6)
 // ============================================================================
 

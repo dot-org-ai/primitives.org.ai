@@ -123,10 +123,20 @@ export interface CodeFunctionRef<TInput = unknown, TOutput = unknown> extends Ba
  *
  * `modelHint` is an optional preferred model spec (e.g. `'claude-opus-4'`);
  * the runtime is free to substitute based on cost/availability policy.
+ *
+ * `outputSchema` (round-13) is an optional per-step output contract used by
+ * the cascade walker to constrain mid-cascade Generative output. When
+ * present, the walker passes it to `ai-functions.generateObject` for that
+ * step; when absent, the walker falls back to the Service's
+ * `schema.output` for the LAST Generative step and `z.string()` for earlier
+ * ones. Typed as `unknown` because the canonical Standard Schema type lives
+ * in `services-as-software` and `digital-tools` shouldn't pull that
+ * dependency — call sites cast to their concrete schema type.
  */
 export interface GenerativeFunctionRef extends BaseFunctionRef {
   kind: 'generative'
   modelHint?: string
+  outputSchema?: unknown
 }
 
 /**

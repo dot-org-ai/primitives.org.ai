@@ -20,6 +20,7 @@
 
 import type { FunctionRef, HumanFunctionRef } from 'digital-tools'
 
+import { validateTriggers } from '../binding.js'
 import { createInvocationHandle } from '../invoke/runtime.js'
 import type { ServiceSpec } from '../service-spec.js'
 import type {
@@ -294,6 +295,12 @@ export function define<TIn, TOut>(
 
   // 2. Validate cascade kinds + Human FunctionRef constraints.
   validateCascade(expanded.binding.cascade, expanded.name)
+
+  // 2b. Validate `binding.triggers[].target` against in-cascade Function names
+  //     plus the well-known out-of-cascade handoffs (csm-handoff,
+  //     collections-handoff, human-agent, sdr-review, etc.). Triggers with
+  //     `action !== 'route-to'` skip the target check.
+  validateTriggers(expanded.binding.cascade, expanded.binding.triggers, expanded.name)
 
   // 3. Resolve archetype + merge defaults.
   const archetype = archetypes.get(expanded.archetype)
