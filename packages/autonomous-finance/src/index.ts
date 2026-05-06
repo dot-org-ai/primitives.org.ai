@@ -74,6 +74,7 @@ export type {
   MeteredEntry,
   CompositeBase,
   SubscriptionPlan,
+  PercentOfBasis,
 } from './pricing.js'
 export { Pricing, money } from './pricing.js'
 export type { Pricing as PricingValue } from './pricing.js'

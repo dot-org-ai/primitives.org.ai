@@ -1,10 +1,13 @@
 /**
- * Pricing — discriminated union with four factory variants.
+ * Pricing — discriminated union with five factory variants.
  *
  *   outcome       — pay on delivery; tiers by complexity (S/M/L)
  *   subscription  — recurring plan + optional metered overage
  *   perInvocation — flat per-call with included-tier ladder
  *   composite     — one-time base + metered events
+ *   percent-of    — proportional charge against a realised basis
+ *                   (invoice amount, collected amount, transaction volume)
+ *                   with optional cap / floor
  *
  * Each factory returns a typed Pricing value with discriminator on .kind.
  */
@@ -61,6 +64,23 @@ export interface SubscriptionPlan {
   interval: 'day' | 'week' | 'month' | 'quarter' | 'year'
 }
 
+/**
+ * Standard bases the {@link Pricing.percentOf} runtime knows how to resolve
+ * at settlement time. Adapters MAY accept arbitrary basis strings for
+ * domain-specific metering, but the canonical four cover the common cases:
+ *
+ *   invoice-amount       — face value of an outbound invoice
+ *   collected-amount     — funds actually received (post-settlement)
+ *   transaction-volume   — gross payment volume processed
+ *   <custom string>      — provider-defined; must be resolvable in the
+ *                          metering runtime
+ */
+export type PercentOfBasis =
+  | 'invoice-amount'
+  | 'collected-amount'
+  | 'transaction-volume'
+  | (string & {})
+
 export type Pricing =
   | {
       kind: 'outcome'
@@ -81,6 +101,23 @@ export type Pricing =
       kind: 'composite'
       base: CompositeBase
       metered: MeteredEntry[]
+    }
+  | {
+      kind: 'percent-of'
+      basis: PercentOfBasis
+      /**
+       * Rate in basis points (1/100ths of a percent). Examples: `200` = 2%,
+       * `75` = 0.75%, `1000` = 10%.
+       *
+       * The metering runtime computes the charge as
+       * `(realised_basis * rateBasisPoints) / 10000`, then clamps the
+       * result by the optional `cap` / `floor` (when present).
+       */
+      rateBasisPoints: number
+      /** Optional upper bound on the per-event charge. */
+      cap?: Money
+      /** Optional lower bound on the per-event charge. */
+      floor?: Money
     }
 
 export const Pricing = {
@@ -111,6 +148,45 @@ export const Pricing = {
 
   composite(opts: { base: CompositeBase; metered: MeteredEntry[] }): Pricing {
     return { kind: 'composite', base: opts.base, metered: opts.metered }
+  },
+
+  /**
+   * Percent-of-basis pricing — proportional charge against a realised
+   * basis (e.g. invoice amount, collected amount, transaction volume).
+   *
+   * The metering runtime resolves `basis` to a concrete bigint at
+   * settlement time, then computes the charge as
+   * `(realised_basis * rateBasisPoints) / 10000`, optionally clamped by
+   * `cap` / `floor`.
+   *
+   * @example AR Service: 2% of collected funds
+   * ```ts
+   * Pricing.percentOf({ basis: 'collected-amount', rateBasisPoints: 200 })
+   * ```
+   *
+   * @example Capped: 0.75% of transaction volume, max $50/event
+   * ```ts
+   * Pricing.percentOf({
+   *   basis: 'transaction-volume',
+   *   rateBasisPoints: 75,
+   *   cap: { amount: 5000n, currency: 'USD' },
+   * })
+   * ```
+   */
+  percentOf(opts: {
+    basis: PercentOfBasis
+    rateBasisPoints: number
+    cap?: Money
+    floor?: Money
+  }): Pricing {
+    const result: Extract<Pricing, { kind: 'percent-of' }> = {
+      kind: 'percent-of',
+      basis: opts.basis,
+      rateBasisPoints: opts.rateBasisPoints,
+    }
+    if (opts.cap !== undefined) result.cap = opts.cap
+    if (opts.floor !== undefined) result.floor = opts.floor
+    return result
   },
 }
 

@@ -60,10 +60,7 @@ export class InMemoryMarketplaceRepo implements MarketplaceRepo {
       if (filter?.visibility !== undefined && listing.visibility !== filter.visibility) continue
       if (filter?.tenantRef !== undefined && listing.tenantRef !== filter.tenantRef) continue
       if (filter?.serviceRef !== undefined && listing.serviceRef !== filter.serviceRef) continue
-      // `archetype` is forward-compat — MarketplaceListing has no archetype
-      // field today, so we accept the filter and ignore it (no listing
-      // matches a present `archetype` filter until the field exists).
-      if (filter?.archetype !== undefined) continue
+      if (filter?.archetype !== undefined && listing.archetype !== filter.archetype) continue
       out.push(listing)
     }
     return out

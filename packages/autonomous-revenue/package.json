@@ -14,6 +14,14 @@
     "./lead-qualification": {
       "types": "./dist/services/lead-qualification.d.ts",
       "import": "./dist/services/lead-qualification.js"
+    },
+    "./meeting-prep": {
+      "types": "./dist/services/meeting-prep.d.ts",
+      "import": "./dist/services/meeting-prep.js"
+    },
+    "./contract-redliner": {
+      "types": "./dist/services/contract-redliner.d.ts",
+      "import": "./dist/services/contract-redliner.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

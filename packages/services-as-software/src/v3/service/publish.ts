@@ -46,11 +46,17 @@ import type { VerificationReport } from './verify.js'
  * `visibility` defaults to `'public'`; `tenantRef` is required when
  * `visibility === 'tenant'`. `force` overrides the ADR-0006 re-verify gate
  * (use sparingly — every behavioral edit should re-verify).
+ *
+ * `publishedBy` identifies the actor (a `digital-objects` ThingRef-shaped
+ * id, e.g. `'role:service-operator'` or `'user:alice'`) that becomes the
+ * `subject` of the SVO `publish` Action emitted on success. Defaults to
+ * `'role:service-operator'` when omitted.
  */
 export interface PublishOpts {
   visibility?: MarketplaceVisibility
   tenantRef?: string
   force?: boolean
+  publishedBy?: string
 }
 
 // ============================================================================
@@ -134,6 +140,7 @@ function buildListing(
     $id: listingId,
     $type: 'MarketplaceListing',
     serviceRef: svc.$id,
+    archetype: svc.archetype,
     visibility,
     ...(tenantRef !== undefined && { tenantRef }),
     publishedAt: new Date().toISOString(),
@@ -143,6 +150,62 @@ function buildListing(
       verificationReportRef: reportId,
     },
     runtimeUnitRef: runtimeUnitId,
+  }
+}
+
+// ============================================================================
+// SVO Action emission (round-9 follow-up: emit `publish` Action on success)
+// ============================================================================
+
+/**
+ * Default publisher identity when `PublishOpts.publishedBy` is omitted.
+ * `role:`-prefixed id is the `digital-objects` ThingRef convention for an
+ * unattributed actor acting in a named role.
+ */
+const DEFAULT_PUBLISHER = 'role:service-operator'
+
+/**
+ * Best-effort SVO Action emission for `Service.publish` per CONTEXT.md.
+ * Shape: `{ verb: 'publish', subject: <publisher>, object: <serviceRef>,
+ * recipient: <listingId> }`.
+ *
+ * When the configured `MarketplaceRepo` is the `ai-database`-backed adapter
+ * we route through the repo's `db.actions.create` surface; for the in-memory
+ * default we skip emission (no Action store today — round-11+ wires a
+ * standalone in-memory Action sink).
+ *
+ * Failure to emit MUST NOT fail the publish — the listing is the source of
+ * truth and the Action log is observability. Emission errors are swallowed
+ * with a `console.warn` so callers see them in dev without breaking prod.
+ */
+async function emitPublishAction(
+  svc: ServiceInstance<unknown, unknown>,
+  listing: MarketplaceListing,
+  publishedBy: string
+): Promise<void> {
+  const repo = getMarketplaceRepo()
+  // Duck-type check: ai-database adapter exposes a `db` field with an
+  // `actions.create` API. The in-memory adapter does not — skip silently.
+  const dbHolder = repo as unknown as {
+    db?: { actions?: { create(opts: unknown): Promise<unknown> } }
+  }
+  const create = dbHolder.db?.actions?.create
+  if (typeof create !== 'function') return
+
+  try {
+    await create.call(dbHolder.db!.actions, {
+      actor: publishedBy,
+      action: 'publish',
+      object: svc.$id,
+      objectData: { listingRef: listing.$id, recipient: listing.$id },
+      meta: { archetype: svc.archetype, visibility: listing.visibility },
+    })
+  } catch (err) {
+    // Observability surface — do not fail publish on Action-log error.
+    console.warn(
+      `[Service.publish] SVO Action emission failed for ${svc.$id} → ${listing.$id}:`,
+      err
+    )
   }
 }
 
@@ -218,6 +281,11 @@ export async function publishService<TIn, TOut>(
 
   // 5. Transition `verified → published`.
   ServiceLifecycle.markPublished(svc.$id, listing)
+
+  // 6. Emit SVO `publish` Action — best-effort, swallowed on failure
+  //    (ai-database backend only; in-memory backend is a no-op).
+  const publishedBy = opts?.publishedBy ?? DEFAULT_PUBLISHER
+  await emitPublishAction(svc as ServiceInstance<unknown, unknown>, listing, publishedBy)
 
   return listing
 }

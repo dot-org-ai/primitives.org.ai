@@ -8,12 +8,13 @@
  *     supervision, escalation is event-driven via triggers;
  *   - clarification disabled (uses the v3 round 6 `{ enabled: false }`
  *     form) — AR follow-up runs on its own without nagging the operator;
- *   - outcome pricing is *percent-of-collected* (200 cents per $100 ⇒ 2%);
+ *   - pricing is `Pricing.percentOf({ basis: 'collected-amount',
+ *     rateBasisPoints: 200 })` — 2% of realised collections — and the
  *     OutcomeContract requires Stripe payment confirmation via the
  *     External proof-predicate before the buyer is charged.
  *
  * Per design v3 §3 (Catalog HOW finance) + §6 (event triggers + autonomous
- * Agentic) + §7 (outcome pricing) + §8 (External proof-predicate).
+ * Agentic) + §7 (percent-of pricing) + §8 (External proof-predicate).
  *
  * @packageDocumentation
  */
@@ -145,11 +146,13 @@ export const ar: ServiceInstance<ARInvoice, CollectedAR> = Service.define<ARInvo
     onTimeout: 'escalate',
   },
 
-  // Outcome pricing — percent-of-collected: 200 cents per $100 collected
-  // (i.e. 2.0% of the collected amount). The metering runtime resolves
-  // `collected-pct` against the realised charge total at settlement time.
-  pricing: Pricing.outcome({
-    tiers: [{ id: 'collected-pct', amount: 200n, currency: 'USD' }],
+  // Percent-of-collected pricing: 2.0% of realised collections (200 bps).
+  // The metering runtime resolves the `collected-amount` basis to the
+  // settled charge total at settlement time and computes the charge as
+  // `(collected_amount * 200) / 10000`.
+  pricing: Pricing.percentOf({
+    basis: 'collected-amount',
+    rateBasisPoints: 200,
   }),
 
   refundContract: 'no-charge-if-not-qualified',

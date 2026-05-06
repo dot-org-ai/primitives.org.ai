@@ -31,9 +31,9 @@ import type { VersionVector } from '../lineage.js'
  * Filter accepted by {@link MarketplaceRepo.list}. All fields are AND-ed; an
  * absent field matches anything.
  *
- * `archetype` is forward-compat — accepted today but not yet a first-class
- * field on {@link MarketplaceListing}; adapters MAY ignore it until the
- * field is added (round 6+).
+ * `archetype` filters by the originating Service's archetype ref (now a
+ * first-class field on {@link MarketplaceListing}). Both the in-memory and
+ * `ai-database` adapters honour it.
  */
 export interface MarketplaceListingFilter {
   visibility?: MarketplaceVisibility

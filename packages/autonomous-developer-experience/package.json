@@ -14,6 +14,14 @@
     "./api-docs-writer": {
       "types": "./dist/services/api-docs-writer.d.ts",
       "import": "./dist/services/api-docs-writer.js"
+    },
+    "./changelog-generator": {
+      "types": "./dist/services/changelog-generator.d.ts",
+      "import": "./dist/services/changelog-generator.js"
+    },
+    "./sdk-generator": {
+      "types": "./dist/services/sdk-generator.d.ts",
+      "import": "./dist/services/sdk-generator.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

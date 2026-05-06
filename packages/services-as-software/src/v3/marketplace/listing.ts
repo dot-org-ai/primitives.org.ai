@@ -13,6 +13,7 @@
  * @packageDocumentation
  */
 
+import type { ServiceArchetypeRef } from '../archetype/registry.js'
 import type { ServiceLineage } from '../lineage.js'
 import type {
   CatalogShape,
@@ -72,11 +73,16 @@ export interface MarketplaceListingRendered {
 /**
  * Typed marketplace listing. Persisted by `./persistence.ts`; one is emitted
  * per successful `Service.publish()` per v3 §11.
+ *
+ * `archetype` mirrors the originating Service's archetype ref so the catalog
+ * read-path can filter listings by archetype without dereferencing the
+ * Service. Always populated by `Service.publish()` from `service.archetype`.
  */
 export interface MarketplaceListing {
   readonly $id: string
   readonly $type: 'MarketplaceListing'
   readonly serviceRef: string
+  readonly archetype: ServiceArchetypeRef
   readonly visibility: MarketplaceVisibility
   readonly tenantRef?: string
   readonly publishedAt: string

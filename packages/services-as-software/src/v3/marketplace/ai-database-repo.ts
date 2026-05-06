@@ -34,9 +34,9 @@ import type { VersionVector } from '../lineage.js'
 
 /**
  * `MarketplaceListing` Noun. The schema declares the **filterable** scalar
- * fields the catalog read-path indexes on (`serviceRef`, `visibility`,
- * `tenantRef`, `publishedAt`); the deeply-nested `rendered` / `provenance`
- * blocks ride along as opaque payload via `metadata`.
+ * fields the catalog read-path indexes on (`serviceRef`, `archetype`,
+ * `visibility`, `tenantRef`, `publishedAt`); the deeply-nested `rendered` /
+ * `provenance` blocks ride along as opaque payload via `metadata`.
  *
  * MDXLD conventions: every persisted listing carries `$id` (the canonical
  * id minted by `Service.publish`) and `$type === 'MarketplaceListing'`.
@@ -50,6 +50,7 @@ export const MarketplaceListingNoun = defineNoun({
     'and a back-reference to the paired RuntimeUnit.',
   properties: {
     serviceRef: { type: 'string', description: 'Originating Service `$id`.' },
+    archetype: { type: 'string', description: 'Originating Service archetype ref.' },
     visibility: { type: 'string', description: "'public' | 'tenant' | tenant-id list (JSON)." },
     tenantRef: { type: 'string', description: 'Owning tenant; required when visibility=tenant.' },
     publishedAt: { type: 'string', description: 'ISO-8601 publish timestamp.' },
@@ -107,6 +108,7 @@ export const RuntimeUnitNoun = defineNoun({
 export const MarketplaceRepoSchema = {
   MarketplaceListing: {
     serviceRef: 'string',
+    archetype: 'string',
     visibility: 'string',
     'tenantRef?': 'string',
     publishedAt: 'string',
@@ -206,8 +208,7 @@ export class AiDatabaseMarketplaceRepo implements MarketplaceRepo {
       if (filter?.visibility !== undefined && listing.visibility !== filter.visibility) continue
       if (filter?.tenantRef !== undefined && listing.tenantRef !== filter.tenantRef) continue
       if (filter?.serviceRef !== undefined && listing.serviceRef !== filter.serviceRef) continue
-      // `archetype` filter: forward-compat — see InMemoryMarketplaceRepo.
-      if (filter?.archetype !== undefined) continue
+      if (filter?.archetype !== undefined && listing.archetype !== filter.archetype) continue
       out.push(listing)
     }
     return out

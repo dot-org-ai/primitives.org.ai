@@ -25,6 +25,8 @@ import type { CatalogHero, CatalogShape, PricingSummary } from './types.js'
  * - `subscription`   → `'starting-at'`     (single plan amount + metered tail)
  * - `per-invocation` → `'per-call'`        (per-tier ladder)
  * - `composite`      → `'starting-at'`     (one-time base + metered events)
+ * - `percent-of`     → `'starting-at'`     (rate + basis renders as a single
+ *                                            "X% of <basis>" headline)
  *
  * Absent pricing → `'contact-us'`.
  */
@@ -38,6 +40,8 @@ function pricingSummaryFor(pricing: Pricing | undefined): PricingSummary {
     case 'per-invocation':
       return 'per-call'
     case 'composite':
+      return 'starting-at'
+    case 'percent-of':
       return 'starting-at'
   }
 }
