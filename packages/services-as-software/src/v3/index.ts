@@ -234,6 +234,7 @@ export type { FromFunctionOpts } from './service/index.js'
 export {
   ServiceLifecycle,
   ServicePublishError,
+  ServiceLoadError,
   mintServiceId,
   expandDoSugar,
   NotImplementedError,

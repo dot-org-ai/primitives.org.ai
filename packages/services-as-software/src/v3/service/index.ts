@@ -40,6 +40,8 @@ export { define, fromFunction, load, collection }
 
 export type { FromFunctionOpts } from './from-function.js'
 
+export { ServiceLoadError } from './load.js'
+
 export { ServiceLifecycle, ServicePublishError, type ServiceLifecycleState } from './lifecycle.js'
 
 export { mintServiceId } from './mint-id.js'
