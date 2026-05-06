@@ -330,6 +330,15 @@ export interface BatchItemResult<T, R> {
 
 /**
  * Retry policy for executing operations with exponential backoff
+ *
+ * @deprecated Phase C Week 3 — `RetryPolicy` has 1 real production caller
+ * (audited 2026-05-06; see `bd show aip-ibid`):
+ *   `ai-database/src/cascade-orchestrator.ts:1235` (loose coupling — dynamic
+ *    import + graceful try/catch fallback when ai-functions not available).
+ * AI SDK 6's `customProvider({ retryPolicy })` and `wrapLanguageModel(model,
+ * retryMiddleware)` cover the same surface. Migration tracked in aip-ibid;
+ * the one callsite can move on a separate commit. Will be removed in the
+ * Phase C semver bump.
  */
 export class RetryPolicy {
   private readonly options: Required<Omit<RetryOptions, 'shouldRetry'>> & {
@@ -559,6 +568,12 @@ export interface CircuitBreakerMetrics {
  * - CLOSED: Normal operation, failures tracked
  * - OPEN: Fail fast, reject all requests
  * - HALF-OPEN: Allow single test request
+ *
+ * @deprecated Phase C Week 3 — `CircuitBreaker` has zero real callers in
+ * primitives.org.ai (audited 2026-05-06; only comment-only references in
+ * `language-models/src/index.ts`; see `bd show aip-ibid`). AI SDK 6's
+ * `wrapLanguageModel(model, circuitMiddleware)` replacement is the going-
+ * forward primitive. Will be removed in the Phase C semver bump.
  */
 export class CircuitBreaker {
   private _state: CircuitState = 'closed'
@@ -734,6 +749,14 @@ export interface FallbackMetrics {
  *
  * Tries models in order until one succeeds:
  * sonnet -> opus -> gpt-4o -> gemini
+ *
+ * @deprecated Phase C Week 3 — `FallbackChain` (LLM model failover) has
+ * zero real callers in primitives.org.ai (audited 2026-05-06; the
+ * `human-in-the-loop` package's `FallbackChain` is a different class for
+ * HITL fallback resolution, not LLM failover). AI SDK 4.3+ ships native
+ * `customProvider({ fallbackProvider })` which is the going-forward
+ * primitive. See `bd show aip-ibid`. Will be removed in the Phase C
+ * semver bump.
  */
 export class FallbackChain<T = unknown, P = unknown> {
   private readonly models: FallbackModel<T, P>[]
