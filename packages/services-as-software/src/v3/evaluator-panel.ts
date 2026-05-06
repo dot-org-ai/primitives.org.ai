@@ -125,10 +125,11 @@ export interface PanelVerdict {
   /** Number of iteration rounds the panel actually ran (>= 1). */
   rounds: number
   /**
-   * USD cost summed across every persona's LLM call this run. Estimated from
-   * the AI SDK's `usage` shape (round 7+ will route through
-   * `ai-functions.budget` for per-model pricing). Always >= 0; `0` for the
-   * defensive no-personas case.
+   * USD cost summed across every persona's LLM call this run. Round-11
+   * routes per-call cost through `ai-functions.BudgetTracker` for real
+   * per-model pricing (Sonnet/Opus/Haiku/GPT-4o/Gemini all priced
+   * correctly; unknown models fall back to Sonnet rates with a one-time
+   * warn). Always >= 0; `0` for the defensive no-personas case.
    */
   costUsd: number
 }
@@ -285,6 +286,11 @@ function buildPersonaPrompt(persona: AgenticPersona, target: unknown, round: num
 
 /**
  * Dispatch one persona → one verdict. Used by `parallel-multi-call`.
+ *
+ * Round-11 wiring: the model name (currently `'sonnet'` for every persona —
+ * a per-persona `modelHint` is round-12 work) is threaded through to
+ * {@link estimateCostFromUsage} so the cost is priced against the real rate
+ * table rather than a hardcoded constant.
  */
 async function runPersonaCall(
   persona: AgenticPersona,
@@ -292,8 +298,12 @@ async function runPersonaCall(
   round: number
 ): Promise<{ approval?: PanelApproval; rejection?: PanelRejection; costUsd: number }> {
   const prompt = buildPersonaPrompt(persona, target, round)
+  // Round-11: capture the model so the cost estimate is per-model rather
+  // than hardcoded Sonnet. Round-12 will read `persona.config.modelHint`
+  // (or similar) so each persona can pick its own model.
+  const model = 'sonnet'
   const result = await generateObject({
-    model: 'sonnet',
+    model,
     schema: VerdictSchema,
     prompt,
   })
@@ -302,7 +312,7 @@ async function runPersonaCall(
   // will tighten this with a `z.infer<S>` overload; until then we narrow
   // via the schema's own `_output` type via a single typed cast.
   const verdict = result.object as unknown as z.infer<typeof VerdictSchema>
-  const costUsd = estimateCostFromUsage(result.usage)
+  const costUsd = estimateCostFromUsage(result.usage, model)
   if (verdict.verdict === 'approve') {
     return {
       approval: { reviewer: persona.name, rationale: verdict.rationale },
@@ -353,12 +363,18 @@ async function runAggregateCall(
     `Emit one verdict object per persona, keyed by persona name. Each value: { verdict: 'approve' | 'reject', rationale: string }.`,
   ].join('\n\n')
 
+  // Round-11: capture the model so the cost estimate is per-model rather
+  // than hardcoded Sonnet. The aggregate-call mode runs every persona under
+  // a single model — round-12 may allow heterogeneous models per persona,
+  // at which point the aggregate path will need to choose the most
+  // expensive (or sum across slots) for a conservative estimate.
+  const model = 'sonnet'
   const result = await generateObject({
-    model: 'sonnet',
+    model,
     schema: aggregateSchema,
     prompt,
   })
-  const costUsd = estimateCostFromUsage(result.usage)
+  const costUsd = estimateCostFromUsage(result.usage, model)
   const approvals: PanelApproval[] = []
   const rejections: PanelRejection[] = []
   // See note in `runPersonaCall`: `result.object` is typed as the schema arg.

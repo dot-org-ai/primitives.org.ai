@@ -19,3 +19,17 @@ export {
   RedlinedContractOutputSchema,
 } from './contract-redliner.js'
 export type { ContractDocInput, RedlinedContractOutput } from './contract-redliner.js'
+
+export {
+  proposalGenerator,
+  OpportunityInputSchema,
+  ProposalOutputSchema,
+} from './proposal-generator.js'
+export type { OpportunityInput, ProposalOutput } from './proposal-generator.js'
+
+export {
+  renewalWorkbench,
+  UpcomingRenewalInputSchema,
+  RenewalBriefOutputSchema,
+} from './renewal-workbench.js'
+export type { UpcomingRenewalInput, RenewalBriefOutput } from './renewal-workbench.js'

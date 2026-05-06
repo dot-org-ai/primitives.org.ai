@@ -1,9 +1,8 @@
 /**
  * Catalog barrel — autonomous-customer-success Services.
  *
- * Currently ships three Services (`supportTriage`, `npsFollowup`,
- * `churnRescue`); future Services (`onboardingRunbook`, `accountReview`)
- * re-export from here as they land.
+ * Ships five Services (`supportTriage`, `npsFollowup`, `churnRescue`,
+ * `accountReview`, `onboardingRunbook`).
  *
  * @packageDocumentation
  */
@@ -31,3 +30,19 @@ export {
   type ChurnSignalInput,
   type ChurnDecisionOutput,
 } from './churn-rescue.js'
+
+export {
+  accountReview,
+  AccountReviewInputSchema,
+  AccountBriefOutputSchema,
+  type AccountReviewInput,
+  type AccountBriefOutput,
+} from './account-review.js'
+
+export {
+  onboardingRunbook,
+  NewCustomerInputSchema,
+  ActivatedCustomerOutputSchema,
+  type NewCustomerInput,
+  type ActivatedCustomerOutput,
+} from './onboarding-runbook.js'

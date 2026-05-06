@@ -349,9 +349,9 @@ async function runGenerativeStep<TIn>(opts: {
     prompt,
   })
 
-  // ai-functions.generateObject returns `usage` as `unknown` — duck-type it
-  // for token counts and estimate cost. Real per-model pricing lives in
-  // `ai-functions.budget`; round 8 will route through there.
+  // ai-functions.generateObject returns `usage` as `unknown` —
+  // estimateCostFromUsage handles the duck-typing and (round-11) routes
+  // through `ai-functions.BudgetTracker` for real per-model pricing.
   const costUsd = estimateCostFromUsage(result.usage, model)
   return { value: result.object, costUsd }
 }

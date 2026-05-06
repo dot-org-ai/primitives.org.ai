@@ -22,6 +22,14 @@
     "./contract-redliner": {
       "types": "./dist/services/contract-redliner.d.ts",
       "import": "./dist/services/contract-redliner.js"
+    },
+    "./proposal-generator": {
+      "types": "./dist/services/proposal-generator.d.ts",
+      "import": "./dist/services/proposal-generator.js"
+    },
+    "./renewal-workbench": {
+      "types": "./dist/services/renewal-workbench.d.ts",
+      "import": "./dist/services/renewal-workbench.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

@@ -22,6 +22,14 @@
     "./churn-rescue": {
       "types": "./dist/services/churn-rescue.d.ts",
       "import": "./dist/services/churn-rescue.js"
+    },
+    "./account-review": {
+      "types": "./dist/services/account-review.d.ts",
+      "import": "./dist/services/account-review.js"
+    },
+    "./onboarding-runbook": {
+      "types": "./dist/services/onboarding-runbook.d.ts",
+      "import": "./dist/services/onboarding-runbook.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
