@@ -95,6 +95,15 @@ export interface CacheStorage<T> {
 
 /**
  * In-memory cache implementation with TTL and LRU eviction support
+ *
+ * @deprecated Phase C Week 1 — `MemoryCache` has zero production callers in
+ * primitives.org.ai (audited 2026-05-06; see `bd show aip-ibid`). New code
+ * should use `cacheMiddleware` (for `wrapLanguageModel`) or
+ * `embeddingCacheMiddleware` (for `wrapEmbeddingModel`) instead — both
+ * compose with AI SDK 6's `wrapLanguageModel` / `wrapEmbeddingModel` and
+ * carry per-call telemetry (TraceEvent emission) and budget tracking when
+ * paired via `wrapForV3`. The `MemoryCache` class will be removed in the
+ * Phase C semver bump alongside `EmbeddingCache` and `GenerationCache`.
  */
 export class MemoryCache<T> implements CacheStorage<T> {
   private cache: Map<string, CacheEntry<T>> = new Map()
@@ -380,6 +389,14 @@ export interface BatchEmbeddingResult {
 
 /**
  * Specialized cache for embedding vectors
+ *
+ * @deprecated Phase C Week 1 — `EmbeddingCache` has zero production callers
+ * in primitives.org.ai (audited 2026-05-06; see `bd show aip-ibid`). New
+ * code should use `embeddingCacheMiddleware` (for `wrapEmbeddingModel`) —
+ * it composes with AI SDK 6 directly and carries trace + budget telemetry
+ * when paired via `wrapForV3`. Note: `embeddingCacheMiddleware` keys on the
+ * whole batch, not per-text — callers wanting per-text caching should pass
+ * stable per-text batches. Will be removed in the Phase C semver bump.
  */
 export class EmbeddingCache {
   private storage: MemoryCache<number[]>
@@ -504,6 +521,12 @@ export interface GenerationCacheGetOptions {
 
 /**
  * Specialized cache for generation results
+ *
+ * @deprecated Phase C Week 1 — `GenerationCache` has zero production callers
+ * in primitives.org.ai (audited 2026-05-06; see `bd show aip-ibid`). New
+ * code should use `cacheMiddleware` (for `wrapLanguageModel`) — it composes
+ * with AI SDK 6 directly and carries trace + budget telemetry when paired
+ * via `wrapForV3`. Will be removed in the Phase C semver bump.
  */
 export class GenerationCache {
   private storage: MemoryCache<unknown>
