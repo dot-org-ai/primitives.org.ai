@@ -1,0 +1,41 @@
+{
+  "name": "autonomous-marketing",
+  "version": "0.0.1",
+  "description": "Catalog package — marketing Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: campaign-brief-generator, seo-content-pillar-author, paid-ad-creative-iterator. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-revenue / autonomous-developer-experience / autonomous-startups.",
+  "private": true,
+  "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./campaign-brief-generator": {
+      "types": "./dist/services/campaign-brief-generator.d.ts",
+      "import": "./dist/services/campaign-brief-generator.js"
+    },
+    "./seo-content-pillar-author": {
+      "types": "./dist/services/seo-content-pillar-author.d.ts",
+      "import": "./dist/services/seo-content-pillar-author.js"
+    },
+    "./paid-ad-creative-iterator": {
+      "types": "./dist/services/paid-ad-creative-iterator.d.ts",
+      "import": "./dist/services/paid-ad-creative-iterator.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-marketing#readme"
+}
