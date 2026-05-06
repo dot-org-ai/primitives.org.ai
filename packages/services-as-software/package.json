@@ -20,8 +20,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-objects": "workspace:*",
+    "digital-tools": "workspace:*",
     "digital-workers": "workspace:*"
   },
   "keywords": [
