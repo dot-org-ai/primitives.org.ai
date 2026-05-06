@@ -34,6 +34,10 @@
     "./campaign-orchestrator": {
       "types": "./dist/services/campaign-orchestrator.d.ts",
       "import": "./dist/services/campaign-orchestrator.js"
+    },
+    "./win-loss-analyzer": {
+      "types": "./dist/services/win-loss-analyzer.d.ts",
+      "import": "./dist/services/win-loss-analyzer.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

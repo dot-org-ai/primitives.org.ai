@@ -30,6 +30,10 @@
     "./onboarding-runbook": {
       "types": "./dist/services/onboarding-runbook.d.ts",
       "import": "./dist/services/onboarding-runbook.js"
+    },
+    "./csm-qbr-deck": {
+      "types": "./dist/services/csm-qbr-deck.d.ts",
+      "import": "./dist/services/csm-qbr-deck.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

@@ -40,3 +40,10 @@ export {
   CampaignResultOutputSchema,
 } from './campaign-orchestrator.js'
 export type { CampaignBriefInput, CampaignResultOutput } from './campaign-orchestrator.js'
+
+export {
+  winLossAnalyzer,
+  ClosedOpportunitySchema,
+  WinLossReportSchema,
+} from './win-loss-analyzer.js'
+export type { ClosedOpportunity, WinLossReport } from './win-loss-analyzer.js'

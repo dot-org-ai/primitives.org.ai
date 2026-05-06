@@ -42,6 +42,10 @@
     "./audit-prep": {
       "types": "./dist/services/audit-prep.d.ts",
       "import": "./dist/services/audit-prep.js"
+    },
+    "./expense-policy-enforcer": {
+      "types": "./dist/services/expense-policy-enforcer.d.ts",
+      "import": "./dist/services/expense-policy-enforcer.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

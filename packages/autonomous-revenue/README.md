@@ -17,13 +17,17 @@ Concrete `Service.define({...})` calls for revenue-generating work that the agen
   const handle = await leadQualification.invoke({ leadId, source, email, formFields })
   ```
 
-## Future Services (sketched)
+- **`meeting-prep`** — calendar event → research participants + companies → brief + suggested talking points.
+- **`proposal-generator`** — qualified opportunity → contextual proposal → review panel → send.
+- **`contract-redliner`** — vendor MSA → policy comparison → redline + risk memo.
+- **`renewal-workbench`** — upcoming renewal → usage trend + value brief + next-step playbook.
+- **`campaign-orchestrator`** — campaign brief → audience build + content draft + send + measure → iterate.
+- **`win-loss-analyzer`** — closed-deal post-mortem. Cascade: `extract-opp-history (Code) → conduct-buyer-interview (Agentic, supervised) → synthesize-win-loss-pattern (Generative) → emit-report (Code)`. EvaluatorPanel of 3 personas (insight-novelty-reviewer + actionability-checker + sales-leader-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, External(salesforce.opportunity-updated))`. Pricing: `Pricing.outcome` across S/M/L deal-size tiers ($199 / $999 / $4,999). Service-level reward = `rep-quota-attainment-improvement`. Lineage: `business.org.ai/cells/sales-managers/win-loss-analysis`.
 
-- **`meeting-prep`** — calendar event → research participants + companies → brief + suggested talking points
-- **`proposal-generator`** — qualified opportunity → contextual proposal → review panel → send
-- **`contract-redliner`** — vendor MSA → policy comparison → redline + risk memo
-- **`renewal-workbench`** — upcoming renewal → usage trend + value brief + next-step playbook
-- **`campaign-orchestrator`** — campaign brief → audience build + content draft + send + measure → iterate
+  ```ts
+  import { winLossAnalyzer } from 'autonomous-revenue/win-loss-analyzer'
+  // typed as ServiceInstance<ClosedOpportunity, WinLossReport>
+  ```
 
 ## Why a separate package
 

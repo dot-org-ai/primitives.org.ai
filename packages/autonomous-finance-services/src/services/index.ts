@@ -39,3 +39,10 @@ export {
   SupportingDocTypeSchema,
 } from './audit-prep.js'
 export type { AuditPeriodInput, AuditBinderOutput, SupportingDocType } from './audit-prep.js'
+
+export {
+  expensePolicyEnforcer,
+  ExpenseClaimSchema,
+  PolicyDecisionSchema,
+} from './expense-policy-enforcer.js'
+export type { ExpenseClaim, PolicyDecision } from './expense-policy-enforcer.js'

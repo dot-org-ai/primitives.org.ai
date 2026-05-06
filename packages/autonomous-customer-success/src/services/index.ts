@@ -46,3 +46,11 @@ export {
   type NewCustomerInput,
   type ActivatedCustomerOutput,
 } from './onboarding-runbook.js'
+
+export {
+  csmQbrDeck,
+  QBRRequestSchema,
+  QBRDeckOutputSchema,
+  type QBRRequest,
+  type QBRDeckOutput,
+} from './csm-qbr-deck.js'

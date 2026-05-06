@@ -17,12 +17,16 @@ Concrete `Service.define({...})` calls for customer-success work that the agenti
   // typed as ServiceInstance<Ticket, Triaged>
   ```
 
-## Future Services (sketched)
+- **`nps-followup`** — NPS survey response → sentiment classify → categorize → escalate or thank.
+- **`onboarding-runbook`** — new customer → tailored onboarding plan → execution + checkpoints.
+- **`churn-rescue`** — cancellation signal → diagnostic → save offer or graceful exit.
+- **`account-review`** — quarterly account health → renewal forecast → expansion brief.
+- **`csm-qbr-deck`** — quarterly business review deck generator. Cascade: `fetch-account-metrics (Code) → narrative-section-author (Generative) → action-items-section (Generative) → render-deck (Code)`. EvaluatorPanel of 3 personas (narrative-quality-reviewer + action-items-checker + csm-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(csm))`. Pricing: `Pricing.subscription` ($399/mo per-customer cadence) + per-deck-generated metered overage ($99). Service-level reward = `customer-attended-QBR-rate`. Lineage: `business.org.ai/cells/customer-success-managers/quarterly-business-review`.
 
-- **`nps-followup`** — survey response → sentiment classify → categorize → escalate or thank
-- **`onboarding-runbook`** — new customer → tailored onboarding plan → execution + checkpoints
-- **`churn-rescue`** — cancellation signal → diagnostic → save offer or graceful exit
-- **`account-review`** — quarterly account health → renewal forecast → expansion brief
+  ```ts
+  import { csmQbrDeck } from 'autonomous-customer-success/csm-qbr-deck'
+  // typed as ServiceInstance<QBRRequest, QBRDeckOutput>
+  ```
 
 ## Why a separate package
 
