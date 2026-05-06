@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^3.0.0",
+    "@ai-sdk/provider": "^3.0.7",
     "@org.ai/types": "workspace:*",
     "ai": "^6.0.0",
     "ai-providers": "workspace:^",

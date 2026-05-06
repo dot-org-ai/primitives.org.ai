@@ -2,6 +2,16 @@
  * cost-estimate — shared LLM-cost heuristic used across the v3 invoke
  * machinery (cascade walker, evaluator panel).
  *
+ * **Modern path (round 14+):** new code should prefer wrapping the model
+ * with `wrapForV3({ budget: { tracker } })` from `ai-functions`. That uses
+ * the AI SDK 6 `LanguageModelV3Middleware` `budgetMiddleware` to record
+ * usage directly off the model result, without the post-hoc duck-typing
+ * this module performs. This file is kept as the fallback path for
+ * non-wrapped model calls (legacy callers, tools that bypass the wrap
+ * chain). Round-15+ work will migrate `cascade-walker.ts` and
+ * `evaluator-panel.ts` to `wrapForV3` directly; until then the surface
+ * here stays unchanged.
+ *
  * Round-11 wiring: the previously-hardcoded Sonnet rate is replaced with a
  * real {@link BudgetTracker} dispatch from `ai-functions`. The tracker owns
  * the per-model pricing table (gpt-4o, claude-opus-4-…, gemini-1.5-pro, etc.

@@ -122,6 +122,9 @@ importers:
       '@ai-sdk/amazon-bedrock':
         specifier: ^3.0.0
         version: 3.0.68(zod@3.25.76)
+      '@ai-sdk/provider':
+        specifier: ^3.0.7
+        version: 3.0.7
       '@org.ai/types':
         specifier: workspace:*
         version: link:../types

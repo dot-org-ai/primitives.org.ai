@@ -386,3 +386,34 @@ export {
   type Logger,
   type LoggerConfig,
 } from './logger.js'
+
+// ============================================================================
+// V3 middleware stack — cache / budget / trace via wrapLanguageModel
+// ============================================================================
+
+// Composable middleware primitives
+export {
+  cacheMiddleware,
+  budgetMiddleware,
+  traceMiddleware,
+  type CacheMiddlewareOptions,
+  type CacheMiddlewareStore,
+  type BudgetMiddlewareOptions,
+  type PricingOverlay,
+  type TraceEvent,
+  type TraceEventKind,
+  type TraceMiddlewareOptions,
+} from './middleware/index.js'
+
+// Convenience composer
+export { wrapForV3, type WrapForV3Options } from './wrap-for-v3.js'
+
+// Pluggable persistence primitive for trace/eval entries
+export {
+  InMemoryEvalLogStore,
+  getEvalLogStore,
+  configureEvalLogStore,
+  type EvalLogEntry,
+  type EvalLogListOptions,
+  type EvalLogStore,
+} from './eval-log/index.js'
