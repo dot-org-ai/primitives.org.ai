@@ -1,9 +1,33 @@
 {
   "name": "autonomous-startups",
-  "version": "0.0.0",
-  "description": "Meta-primitive for generating and operating autonomous startups across every business model — Services-as-Software, Headless SaaS, API-aaS, DaaS, IaaS, PaaS, Marketplace, Directory, and others. Stub / deferred — see README.",
+  "version": "0.0.1",
+  "description": "Catalog package — startup-shaped Services-as-Software defined on the autonomous-finance substrate + services-as-software primitive. Initial: claude-code-feature-build (the v3 worked example). Future: cross-business-model primitives (SaaSProduct / APIProduct / DataProduct / ...).",
   "private": true,
   "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./claude-code-feature-build": {
+      "types": "./dist/services/claude-code-feature-build.d.ts",
+      "import": "./dist/services/claude-code-feature-build.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
   "license": "MIT",
   "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-startups#readme"
 }

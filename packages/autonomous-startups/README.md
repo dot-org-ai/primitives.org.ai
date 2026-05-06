@@ -1,19 +1,30 @@
 # autonomous-startups
 
-> **Status: stub / deferred.** This package is intentionally empty. See [Why deferred](#why-deferred).
+> **Status: shipping.** First Service (`claude-code-feature-build`) is live — the v3 worked example, ported to a real `Service.define({...})` call. Sibling of `autonomous-finance-services`, `autonomous-customer-success`, `autonomous-revenue`, `autonomous-developer-experience`.
 
-The meta-primitive for generating and operating autonomous startups, across every business model — not just Services-as-Software.
+The catalog package for startup-shaped Services-as-Software, plus the future home of the meta-primitive for autonomous startups across every business model — not just Services-as-Software.
 
-## What this is
+## Initial Service
 
-`autonomous-startups` sits above `business-as-code` as the `L7` paradigm for *the autonomous business itself*. Where `business-as-code` provides the deterministic rails (Goals, OKRs, Oversight, Process, the experimentation machine) and `services-as-software` provides one specific business-model primitive (deliver outcomes via cascaded Functions), `autonomous-startups` provides:
+- **`claude-code-feature-build`** — ship a feature to your repo, reviewed by 4 specialists. Cascade: `brainstorm (Generative) → plan (Agentic) → scope (Agentic) → dispatch (Code) → dev × N (Agentic, fan-out)`. EvaluatorPanel of 4 personas (`qa-reviewer / arch-reviewer / security-reviewer / product-reviewer`). OutcomeContract = `AND(EvaluatorPass(panel:self, all-approved), External(github, { ci: 'passing', merged: true }))`. Pricing: outcome tiers — S=$200, M=$800, L=$2400 by feature complexity. Reward laddering to customer CSAT. Lineage to `business.org.ai/cells/software-developers/feature-implementation`.
 
-- One typed primitive per business-model archetype
-- Higher-order generators that produce N businesses across a strategic-token grid (the "1M businesses from every (ICP × Problem)" thesis, generalized beyond Services-as-Software)
-- Shared substrate over `business-as-code` rails + `autonomous-finance` economics
-- Marketplace, portal, onboarding UI primitives common across business models
+```ts
+import { claudeCodeFeatureBuild } from 'autonomous-startups/claude-code-feature-build'
 
-## Business models in scope
+const handle = claudeCodeFeatureBuild.invoke({
+  repoRef: 'github.com/acme/widgets',
+  featureBrief: 'Add a Stripe webhook handler for subscription.deleted events that rolls users back to the free plan.',
+  acceptanceCriteria: ['rollback within 60s', 'idempotent on replay', 'covered by an integration test'],
+})
+```
+
+Type inference flows: `claudeCodeFeatureBuild: ServiceInstance<FeatureBuildInput, FeatureBuildOutput>`. `handle.result` resolves to `FeatureBuildOutput`.
+
+## Future scope: meta-primitive for every business model
+
+This package will eventually grow to host the meta-primitive for *the autonomous business itself* — sitting above `business-as-code` (deterministic rails: Goals/OKRs/Oversight/Process) and `services-as-software` (one specific business-model primitive). It will provide one typed primitive per business-model archetype, higher-order generators producing N businesses across a strategic-token grid (the "1M businesses from every (ICP × Problem)" thesis, generalized beyond Services-as-Software), and shared substrate over `business-as-code` rails + `autonomous-finance` economics.
+
+### Business models in scope (planned)
 
 | Primitive | Maps to business model |
 |---|---|
@@ -28,29 +39,9 @@ The meta-primitive for generating and operating autonomous startups, across ever
 
 Each primitive shares structure (a typed mint contract, a durable invocation/usage FSM, pricing, oversight, lineage) but differs in delivery mechanics, customer experience, and economic model.
 
-## Why deferred
-
-This package depends on several primitives that are still being designed and built:
-
-- **`services-as-software`** — the first business-model primitive needs to land first; its shape informs the abstraction over all business models. (Design: `docs/plans/2026-05-05-services-as-software-design.md`.)
-- **`business-as-code`** — the `$` umbrella + Goals/OKRs/Reward/Oversight rails. (Design: `docs/plans/2026-05-05-business-as-code-stack-design.md`.)
-- **`autonomous-finance`** — the financial substrate (Money/Cost/Card/Account/Ledger/OutcomeContract/SLAPolicy + provider adapters).
-- **`digital-tools`** Function-as-typed-primitive — the Four Functions (Code/Generative/Agentic/Human) promoted to a first-class kind.
-
-Designing `autonomous-startups` before these stabilize would bake premature assumptions into the abstraction. We keep this package as a stub to:
-
-1. Reserve the name and the conceptual slot
-2. Track the work via beads epic `aip-n1b8`
-3. Make the deferral explicit in the package map (so contributors don't propose competing meta-packages)
-
-## What to do here today
-
-Nothing. The work happens in the prerequisites. When `services-as-software` is shipped and at least one other business-model primitive has been prototyped, this package gets a real design pass and starts to fill in.
-
 ## References
 
-- Design conversation: 2026-05-05 architecture review session
 - Beads epic: `aip-n1b8`
 - Companion design docs:
+  - `docs/plans/2026-05-05-services-as-software-design-v3.md` (§3 has the Claude Code worked example)
   - `docs/plans/2026-05-05-business-as-code-stack-design.md`
-  - `docs/plans/2026-05-05-services-as-software-design.md` (forthcoming)

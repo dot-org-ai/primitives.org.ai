@@ -357,9 +357,35 @@ importers:
         specifier: ^3.105.0
         version: 3.114.17(@cloudflare/workers-types@4.20251202.0)
 
-  packages/autonomous-customer-success: {}
+  packages/autonomous-customer-success:
+    dependencies:
+      autonomous-finance:
+        specifier: workspace:*
+        version: link:../autonomous-finance
+      digital-tools:
+        specifier: workspace:*
+        version: link:../digital-tools
+      services-as-software:
+        specifier: workspace:*
+        version: link:../services-as-software
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
 
-  packages/autonomous-developer-experience: {}
+  packages/autonomous-developer-experience:
+    dependencies:
+      autonomous-finance:
+        specifier: workspace:*
+        version: link:../autonomous-finance
+      digital-tools:
+        specifier: workspace:*
+        version: link:../digital-tools
+      services-as-software:
+        specifier: workspace:*
+        version: link:../services-as-software
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
 
   packages/autonomous-finance:
     dependencies:
@@ -382,9 +408,35 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
-  packages/autonomous-revenue: {}
+  packages/autonomous-revenue:
+    dependencies:
+      autonomous-finance:
+        specifier: workspace:*
+        version: link:../autonomous-finance
+      digital-tools:
+        specifier: workspace:*
+        version: link:../digital-tools
+      services-as-software:
+        specifier: workspace:*
+        version: link:../services-as-software
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
 
-  packages/autonomous-startups: {}
+  packages/autonomous-startups:
+    dependencies:
+      autonomous-finance:
+        specifier: workspace:*
+        version: link:../autonomous-finance
+      digital-tools:
+        specifier: workspace:*
+        version: link:../digital-tools
+      services-as-software:
+        specifier: workspace:*
+        version: link:../services-as-software
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
 
   packages/business-as-code:
     dependencies:

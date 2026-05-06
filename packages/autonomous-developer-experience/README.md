@@ -1,6 +1,6 @@
 # autonomous-developer-experience
 
-> **Status: stub / deferred.** Depends on `services-as-software` v2 + `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** `api-docs-writer` is implemented on the v3 `services-as-software` surface + `autonomous-finance` substrate. Sibling packages: `autonomous-finance-services` (`bookkeeper`), `autonomous-customer-success`, `autonomous-revenue`.
 
 Catalog package: developer-experience Services-as-Software, defined on the primitive substrate.
 
@@ -26,11 +26,11 @@ See `autonomous-customer-success/README.md` — same rationale: one functional a
 
 ## Status
 
-Real implementation depends on:
+Shipped against the v3 surface:
 
-- **`services-as-software` v2** shipping (`Service.define` + `Service.invoke` + `outcomeContract` with `External` predicate)
-- **`autonomous-finance`** `Pricing.composite({ base, metered })` — one-time + metered model
-- **`ai-evaluate`** EvaluatorPanel + reusable persona library (`coverage-pedant`, `signature-checker`, `docs-style-guide`)
+- **`services-as-software` v3** — `Service.define` + `EvaluatorPanel.define` + `Personas` (coverage / accuracy / voice) + `OutcomeContract.predicate` with `External({ verifier: 'github-pages' })`.
+- **`autonomous-finance`** — `Pricing.composite({ base, metered })` (one-time per-repo + metered per-symbol), `RefundContracts['quality-floor-fail']`, `AuthorityBoundaries['self-only']`.
+- **`digital-tools`** — `Code` / `Generative` / `Agentic` Function sugar (no `Human` — pure-autonomous).
 
 ## References
 

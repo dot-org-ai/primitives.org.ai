@@ -1,16 +1,21 @@
 # autonomous-revenue
 
-> **Status: stub / deferred.** Depends on `services-as-software` v2 + `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** `lead-qualification` is implemented against `services-as-software/v3` + the `autonomous-finance` substrate. Future Services below remain sketched.
 
 Catalog package: revenue / sales Services-as-Software, defined on the primitive substrate.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for revenue-generating work that the agentic economy can deliver as software. Sibling of `autonomous-finance/services/*`, `autonomous-customer-success`, `autonomous-developer-experience`.
+Concrete `Service.define({...})` calls for revenue-generating work that the agentic economy can deliver as software. Sibling of `autonomous-finance-services`, `autonomous-customer-success`, `autonomous-developer-experience`.
 
-## Initial Service
+## Shipped Services
 
-- **`lead-qualification`** — inbound lead → enrich (Clearbit + LinkedIn via `$.api.*`) → BANT/MEDDIC qualify → route. External-API integration density (5 tool permissions). Service-level reward = `closed-won-rate` (matches BaC ch.7:138 worked example). Trigger-based HITL routing on revenue threshold (>$100M → SDR review). Lineage: `occupations.org.ai/SalesRepresentatives` × `processes.org.ai/InboundLeadQualification`.
+- **`lead-qualification`** — inbound lead → enrich (Clearbit + LinkedIn via `$.api.*`) → BANT/MEDDIC qualify → route. External-API integration density (5 tool permissions). Service-level reward = `closed-won-rate` (matches BaC ch.7:138 worked example). Trigger-based HITL routing on revenue threshold (>$100M → SDR review). EvaluatorPanel of two skeptic personas (ICP fit + buying intent). OutcomeContract = AND(SchemaMatch + EvaluatorPass + External Salesforce verification). Outcome pricing at $5.00 per qualified lead, refund contract `no-charge-if-not-qualified`. Lineage: `occupations.org.ai/SalesRepresentatives` × `processes.org.ai/InboundLeadQualification`.
+
+  ```ts
+  import { leadQualification } from 'autonomous-revenue/lead-qualification'
+  const handle = await leadQualification.invoke({ leadId, source, email, formFields })
+  ```
 
 ## Future Services (sketched)
 
@@ -26,12 +31,16 @@ See `autonomous-customer-success/README.md` — same rationale: one functional a
 
 ## Status
 
-Real implementation depends on:
+Shipped:
 
-- **`services-as-software` v2** shipping (`Service.define` + `Service.invoke` + `OutcomeContract`)
-- **`autonomous-finance`** `Pricing.outcome({ tiers })` (per-qualified-lead pricing)
-- **`business-as-code`** `$.Reward` + `$.KeyResult` ladder (closed-won-rate → Profit terminal hill)
-- **`ai-evaluate`** EvaluatorPanel + reusable persona library (`icp-fit-skeptic`, `intent-evaluator`)
+- **`services-as-software/v3`** `Service.define` + `OutcomeContract` + `EvaluatorPanel` + `Personas`
+- **`autonomous-finance`** `Pricing.outcome({ tiers })`, `AND` / `SchemaMatch` / `EvaluatorPass` / `External` predicates
+- **`digital-tools`** `Code` / `Agentic` Function sugar with per-Function `RewardSignal`
+
+Deferred / placeholder until:
+
+- **`business-as-code`** `$.Reward` + `$.KeyResult` ladder (closed-won-rate → Profit terminal hill) — current `kr:lead-qualification:*` are placeholder strings
+- **`Service.invoke`** real cascade execution — today the cascade compiles but invocation handles return stub events
 
 ## References
 

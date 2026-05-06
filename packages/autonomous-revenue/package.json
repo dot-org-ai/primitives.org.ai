@@ -1,9 +1,33 @@
 {
   "name": "autonomous-revenue",
-  "version": "0.0.0",
-  "description": "Catalog package — revenue / sales Services-as-Software defined on the primitive substrate. Initial: lead-qualification (BANT/MEDDIC + Clearbit + LinkedIn enrichment). Future: meeting-prep, proposal-generator, contract-redliner, renewal-workbench, campaign-orchestrator. Stub — see README.",
+  "version": "0.0.1",
+  "description": "Catalog package — revenue / sales Services-as-Software defined on the autonomous-finance substrate + services-as-software primitive. Initial: lead-qualification (BANT/MEDDIC + Clearbit + LinkedIn enrichment). Future: meeting-prep, proposal-generator, contract-redliner, renewal-workbench, campaign-orchestrator. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-developer-experience.",
   "private": true,
   "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./lead-qualification": {
+      "types": "./dist/services/lead-qualification.d.ts",
+      "import": "./dist/services/lead-qualification.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
   "license": "MIT",
   "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-revenue#readme"
 }

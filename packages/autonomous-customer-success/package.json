@@ -1,9 +1,33 @@
 {
   "name": "autonomous-customer-success",
-  "version": "0.0.0",
-  "description": "Catalog package — customer-success Services-as-Software defined on the primitive substrate. Initial: support-triage. Future: nps-followup, onboarding-runbook, churn-rescue, account-review. Stub — see README.",
+  "version": "0.0.1",
+  "description": "Catalog package — customer-success Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: support-triage. Future: nps-followup, onboarding-runbook, churn-rescue, account-review. Sibling to autonomous-finance-services / autonomous-revenue / autonomous-developer-experience.",
   "private": true,
   "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./support-triage": {
+      "types": "./dist/services/support-triage.d.ts",
+      "import": "./dist/services/support-triage.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
   "license": "MIT",
   "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-customer-success#readme"
 }
