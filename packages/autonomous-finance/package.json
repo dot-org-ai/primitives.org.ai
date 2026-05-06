@@ -1,9 +1,23 @@
 {
   "name": "autonomous-finance",
-  "version": "0.0.0",
-  "description": "Financial nervous system for the agentic economy — typed primitives (Money/Cost/Card/Account/Ledger/OutcomeContract/SLAPolicy) + provider adapters (Stripe, Tempo, x402, Privy, Lightspark) + canonical catalog of finance Services (bookkeeper, controller, AP, AR, tax, treasury, payroll). Stub / scaffolded — see README.",
+  "version": "0.0.1",
+  "description": "Financial nervous system for the agentic economy — typed primitives (Money/Cost/Card/Account/Ledger/OutcomeContract/SLAPolicy) + provider adapters (Stripe, Tempo, x402, Privy, Lightspark) + canonical catalog of finance Services (bookkeeper, controller, AP, AR, tax, treasury, payroll). See README.",
   "private": true,
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
   "license": "MIT",
   "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-finance#readme"
 }

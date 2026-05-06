@@ -2,6 +2,10 @@
 
 The primitives.org.ai monorepo provides composable AI primitives that share one ontology: a Subject-Verb-Object record of who did what to what. This file names the load-bearing concepts so packages don't drift into parallel vocabularies.
 
+## Vision
+
+The big-picture thesis lives in [`THESIS.md`](./THESIS.md). One-paragraph version: this repo ships the OSS primitives for the **agentic economy** — software economics applied to the ~$100T services market. The headline products are **`services-as-software`** (the cars: cascade-delivered outcome-priced Services) and **`business-as-code`** (the deterministic rails: typed Goals/OKRs/Reward/Oversight/Process/Audit). Beneath them, **`autonomous-finance`** is the financial nervous system; **`digital-objects`** is the SVO substrate; **`autonomous-{cs,revenue,dx,startups}`** are catalog packages of canonical Services. Three-tier ecosystem: OSS primitives (this repo) → managed runtimes (`platform.do`, `api.services`) → catalogs (`agents.do`, `startup-builder`'s 1M-Service combinator). See `THESIS.md` for the full design rationale; `docs/plans/2026-05-05-*-design*.md` for current architectural decisions.
+
 ## Language
 
 ### Storage ontology (`digital-objects`)
