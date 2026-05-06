@@ -54,3 +54,11 @@ export {
   type QBRRequest,
   type QBRDeckOutput,
 } from './csm-qbr-deck.js'
+
+export {
+  expansionOpportunityDetector,
+  UsageTrendWebhookSchema,
+  ExpansionOutreachOutputSchema,
+  type UsageTrendWebhook,
+  type ExpansionOutreachOutput,
+} from './expansion-opportunity-detector.js'

@@ -34,6 +34,10 @@
     "./example-suite-builder": {
       "types": "./dist/services/example-suite-builder.d.ts",
       "import": "./dist/services/example-suite-builder.js"
+    },
+    "./release-readiness-checklist": {
+      "types": "./dist/services/release-readiness-checklist.d.ts",
+      "import": "./dist/services/release-readiness-checklist.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

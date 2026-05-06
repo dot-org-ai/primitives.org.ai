@@ -8,17 +8,15 @@ Catalog package: developer-experience Services-as-Software, defined on the primi
 
 Concrete `Service.define({...})` calls for developer-facing work that the agentic economy can deliver as software. Sibling of `autonomous-finance/services/*`, `autonomous-customer-success`, `autonomous-revenue`.
 
-## Initial Service
+## Shipped Services
 
 - **`api-docs-writer`** — repo URL → AST extract API surface → describe each symbol → cross-link → publish to GitHub Pages. Pure-autonomous (zero HITL, zero clarification round-trips). Composite pricing (one-time per repo + metered per documented symbol). External predicate verifies GitHub Pages deployment + 200 status. Lineage: `occupations.org.ai/TechnicalWriters` × `processes.org.ai/APIReferenceAuthoring`.
-
-## Future Services (sketched)
-
-- **`changelog-generator`** — git history range → categorized + customer-facing changelog → publish
-- **`sdk-generator`** — OpenAPI spec → typed SDK in N languages → published packages
-- **`migration-guide-writer`** — version diff → migration guide with code transformations
-- **`tutorial-author`** — feature doc → end-to-end tutorial with runnable code
-- **`example-suite-builder`** — repo + examples directory → maintained example apps with CI
+- **`changelog-generator`** — git history range → categorized + customer-facing changelog → publish.
+- **`sdk-generator`** — OpenAPI spec → typed SDK in N languages → published packages.
+- **`migration-guide-writer`** — version diff → migration guide with code transformations.
+- **`tutorial-author`** — feature doc → end-to-end tutorial with runnable code.
+- **`example-suite-builder`** — repo + examples directory → maintained example apps with CI.
+- **`release-readiness-checklist`** — pre-release gate Service triggered when a PR is labelled `release-candidate`. Cascade: `fetch-pr-diff-issues-tests (Code) → check-release-notes-completeness (Generative) → check-breaking-changes-documented (Generative) → maintainer-sign-off-on-release-blockers (Human) → emit-readiness-report-and-set-pr-status-check (Code)`. EvaluatorPanel of 3 personas (check-coverage + breaking-changes-flagged + maintainer-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(maintainer))`. Pricing: `Pricing.perInvocation` 3-tier by changed-LOC (small-PR / medium-PR / large-PR). Service-level reward = `post-release-incident-rate-improvement`. Archetype: `quality-gate`. Lineage: `business.org.ai/cells/software-developers/release-readiness-gate`.
 
 ## Why a separate package
 

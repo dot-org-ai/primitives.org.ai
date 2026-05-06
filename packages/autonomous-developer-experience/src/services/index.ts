@@ -68,3 +68,10 @@ export type {
   RepoExamplesInput,
   PublishedExamplesOutput,
 } from './example-suite-builder.js'
+
+export {
+  releaseReadinessChecklist,
+  ReleaseCandidatePRSchema,
+  ReadinessReportSchema,
+} from './release-readiness-checklist.js'
+export type { ReleaseCandidatePR, ReadinessReport } from './release-readiness-checklist.js'

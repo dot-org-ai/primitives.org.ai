@@ -46,6 +46,10 @@
     "./expense-policy-enforcer": {
       "types": "./dist/services/expense-policy-enforcer.d.ts",
       "import": "./dist/services/expense-policy-enforcer.js"
+    },
+    "./cash-runway-projector": {
+      "types": "./dist/services/cash-runway-projector.d.ts",
+      "import": "./dist/services/cash-runway-projector.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

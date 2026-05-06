@@ -28,6 +28,13 @@ Concrete `Service.define({...})` calls for customer-success work that the agenti
   // typed as ServiceInstance<QBRRequest, QBRDeckOutput>
   ```
 
+- **`expansion-opportunity-detector`** — usage-trend-driven expansion-revenue play. Trigger: account-usage-trend webhook (any account where MAU growth > 30% in 30 days). Cascade: `fetch-account-usage-and-product-graph (Code) → identify-expansion-vector-and-buying-signals (Generative) → research-org-stakeholders-and-recent-news (Agentic, supervised) → draft-csm-outreach-with-expansion-hypothesis (Generative) → csm-review-and-send (Human)`. EvaluatorPanel of 3 personas (insight-novelty-reviewer + outreach-quality-checker + csm-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(csm))`. Pricing: `Pricing.percentOf` (basis: `expansion-arr-realized`, 500 bps / 5%, capped at $25k/account). Service-level reward = `net-revenue-retention-rate-improvement`. Archetype: `expansion-research`. Lineage: `business.org.ai/cells/customer-success-managers/expansion-opportunity-detection`.
+
+  ```ts
+  import { expansionOpportunityDetector } from 'autonomous-customer-success/expansion-opportunity-detector'
+  // typed as ServiceInstance<UsageTrendWebhook, ExpansionOutreachOutput>
+  ```
+
 ## Why a separate package
 
 Each catalog package owns one functional area (finance, customer-success, revenue, developer-experience). Each ships independently, has its own release cadence, and depends only on the primitive substrate (services-as-software + autonomous-finance + business-as-code). No cross-domain coupling.

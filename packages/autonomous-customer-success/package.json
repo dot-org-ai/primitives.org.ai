@@ -34,6 +34,10 @@
     "./csm-qbr-deck": {
       "types": "./dist/services/csm-qbr-deck.d.ts",
       "import": "./dist/services/csm-qbr-deck.js"
+    },
+    "./expansion-opportunity-detector": {
+      "types": "./dist/services/expansion-opportunity-detector.d.ts",
+      "import": "./dist/services/expansion-opportunity-detector.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

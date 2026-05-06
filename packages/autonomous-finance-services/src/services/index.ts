@@ -46,3 +46,10 @@ export {
   PolicyDecisionSchema,
 } from './expense-policy-enforcer.js'
 export type { ExpenseClaim, PolicyDecision } from './expense-policy-enforcer.js'
+
+export {
+  cashRunwayProjector,
+  CashSnapshotInputSchema,
+  RunwayProjectionOutputSchema,
+} from './cash-runway-projector.js'
+export type { CashSnapshotInput, RunwayProjectionOutput } from './cash-runway-projector.js'
