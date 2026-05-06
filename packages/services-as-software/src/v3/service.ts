@@ -42,66 +42,54 @@ import type { InvocationHandle, InvokeOpts } from './invoke/index.js'
 export type { InvocationHandle, InvokeOpts } from './invoke/index.js'
 
 // ============================================================================
-// Method-side placeholder types (filled by next agents)
+// Verify / Publish / Marketplace types (real shapes from sibling modules)
 // ============================================================================
 
-/**
- * Options accepted by `service.verify()`. Placeholder shape — the next agent
- * adds `fixtures`, `emitToCascadeEventLog` (per v3 §10), `cascadeEventTags`,
- * holdout sampling, and snapshot diffing.
- *
- * TODO(next-agent: Service.verify): expand to the real options shape.
- */
-export interface VerifyOpts {
-  /** When true, verify-time events land on the canonical cascade-event log. */
-  emitToCascadeEventLog?: boolean
-  /** Tags applied to verify-time events for downstream filtering. */
-  cascadeEventTags?: string[]
-}
+// Round-4 deliverable: real shapes ship from `./service/verify.js` +
+// `./service/publish.js` + `./marketplace/`. We import them locally so
+// `ServiceInstance` below can reference them by name, and re-export so the
+// historical `service.js` import points stay stable.
 
-/**
- * Result of `service.verify()`. Placeholder — the runtime agent fills in
- * per-fixture pass/fail, evaluator scores, cost capture, and cascade-event
- * refs (when `emitToCascadeEventLog` was set).
- *
- * TODO(next-agent: Service.verify): expand to the real report shape.
- */
-export interface VerificationReport {
-  /** ISO-8601 timestamp the verification ran at. */
-  readonly verifiedAt: string
-  /** Whether all fixtures passed. */
-  readonly passed: boolean
-}
+import type {
+  VerifyOpts,
+  VerificationReport,
+  VerificationFailure,
+  VerificationEvaluatorPass,
+  VerifyFixture,
+} from './service/verify.js'
 
-/**
- * Options accepted by `service.publish()`. Placeholder — the next agent adds
- * marketplace targeting (`agents.do` / `api.services` / `platform.do`),
- * pricing-page render hints, and re-verify gating (per v3 §11).
- *
- * TODO(next-agent: Service.publish): expand to the real options shape.
- */
-export interface PublishOpts {
-  /** Target marketplace slug (e.g. `'agents.do'`, `'api.services'`). */
-  marketplace?: string
-  /** Skip re-verify gating; throws if the latest report is stale. */
-  skipReverifyGate?: boolean
-}
+import type { PublishOpts } from './service/publish.js'
 
-/**
- * Marketplace listing emitted by `service.publish()`. Placeholder — the
- * runtime agent fills in pricing-page render fields, MarketMemoryEvent refs,
- * and listing visibility / state.
- *
- * TODO(next-agent: MarketplaceListing): replace with the full record per
- * v3 design §12.
- */
-export interface MarketplaceListing {
-  /** Stable id of the listing in the catalog database. */
-  readonly $id: string
-  /** Marketplace slug the listing was published to. */
-  readonly marketplace: string
-  /** ISO-8601 timestamp the listing was published at. */
-  readonly publishedAt: string
+import type {
+  MarketplaceListing,
+  MarketplaceListingProvenance,
+  MarketplaceListingRendered,
+  MarketplaceVisibility,
+  RuntimeUnit,
+  RuntimeUnitCommitment,
+  RuntimeUnitContract,
+  RuntimeUnitDemand,
+  RuntimeUnitFulfillment,
+  RuntimeUnitMarketplace,
+} from './marketplace/index.js'
+
+export type {
+  VerifyOpts,
+  VerificationReport,
+  VerificationFailure,
+  VerificationEvaluatorPass,
+  VerifyFixture,
+  PublishOpts,
+  MarketplaceListing,
+  MarketplaceListingProvenance,
+  MarketplaceListingRendered,
+  MarketplaceVisibility,
+  RuntimeUnit,
+  RuntimeUnitCommitment,
+  RuntimeUnitContract,
+  RuntimeUnitDemand,
+  RuntimeUnitFulfillment,
+  RuntimeUnitMarketplace,
 }
 
 // ============================================================================

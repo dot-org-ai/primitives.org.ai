@@ -37,6 +37,8 @@ import type { ServiceArchetype } from '../archetype/registry.js'
 import { ServiceLifecycle } from './lifecycle.js'
 import { mintServiceId } from './mint-id.js'
 import { expandDoSugar, type ServiceSpecWithDoSugar } from './expand-do-sugar.js'
+import { verifyService } from './verify.js'
+import { publishService } from './publish.js'
 
 // ============================================================================
 // Validation helpers
@@ -169,26 +171,40 @@ function buildBoundMethods<TIn, TOut>(
       return createInvocationHandle<TIn, TOut>(service, input, opts)
     },
 
-    verify(_opts?: VerifyOpts): Promise<VerificationReport> {
-      // ROUND 5: replace with the cascade-fixture runner per v3 §10.
-      void _opts
-      return Promise.reject(
-        new Error(
-          `Service.verify runtime not yet wired (round 5): ${serviceId}. ` +
-            `The verify cascade-event hook lands per v3 §10.`
+    verify(opts?: VerifyOpts): Promise<VerificationReport> {
+      // Wired round-4: dispatch through the registered service so the bound
+      // method retains identity even when stored detached. Mock cascade walker
+      // is used end-to-end (round 3 substrate); real ai-functions wiring
+      // lands in round 5/6.
+      const service = ServiceLifecycle.getService(serviceId) as
+        | ServiceInstance<TIn, TOut>
+        | undefined
+      if (!service) {
+        return Promise.reject(
+          new Error(
+            `Service ${serviceId} not registered in lifecycle — was it created via Service.define()?`
+          )
         )
-      )
+      }
+      return verifyService<TIn, TOut>(service, opts)
     },
 
-    publish(_opts?: PublishOpts): Promise<MarketplaceListing> {
-      // ROUND 5: replace with the publish gate per v3 §11 (re-verify rules).
-      void _opts
-      return Promise.reject(
-        new Error(
-          `Service.publish runtime not yet wired (round 5): ${serviceId}. ` +
-            `The publish + MarketplaceListing path lands per v3 §11.`
+    publish(opts?: PublishOpts): Promise<MarketplaceListing> {
+      // Wired round-4: dispatch through the registered service. The publish
+      // gate enforces ADR-0006 re-verify rules + emits a typed
+      // MarketplaceListing + RuntimeUnit, persisted in-memory pending the
+      // round-5 ai-database Repo writes.
+      const service = ServiceLifecycle.getService(serviceId) as
+        | ServiceInstance<TIn, TOut>
+        | undefined
+      if (!service) {
+        return Promise.reject(
+          new Error(
+            `Service ${serviceId} not registered in lifecycle — was it created via Service.define()?`
+          )
         )
-      )
+      }
+      return publishService<TIn, TOut>(service, opts)
     },
 
     retire(reason?: string): Promise<void> {

@@ -28,7 +28,13 @@ The typed primitive layer. `services-as-software`, `business-as-code`, and any L
 - **`privy-adapter`** — non-custodial wallets (150+ markets per Stripe Sessions 2026)
 - **`lightspark-adapter`** — Lightning Network
 
-### Catalog Services (logical L5) — `import { bookkeeper } from 'autonomous-finance/services/bookkeeper'`
+### Catalog Services — moved to `autonomous-finance-services` (sibling package)
+
+Originally planned as `autonomous-finance/services/*` subpath imports. That fails at the workspace dep graph (catalog needs `services-as-software`, but `services-as-software` already depends on `autonomous-finance`'s `Money`/`Pricing`/`OutcomeContract` substrate — Turborepo correctly rejects the cycle even with peer-dep declarations).
+
+Catalog now lives at `packages/autonomous-finance-services/`. Substrate stays clean at L3 with no SaS dep.
+
+Original (pre-split) catalog:
 
 Concrete Services that prove the framework. Each is a full `Service.define({...})` call:
 

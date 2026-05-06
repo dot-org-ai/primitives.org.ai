@@ -301,18 +301,26 @@ Per v2 §13, re-verify is required when fields affecting the cascade change. Con
 
 `Service.publish()` reads the latest `VerificationReport` and computes a field-diff against the version that was verified. Stale → throws `VerifyRequired`. (Full ADR-0006 to follow.)
 
-## 12. Catalog packages (NEW — packages now scaffolded)
+## 12. Catalog packages (UPDATED — split discovered during round 4)
+
+**Original v3 design (subpath catalog at `autonomous-finance/services/*`) DOES NOT WORK** — Turborepo correctly rejects the cycle: catalog needs `services-as-software`, but `services-as-software` already depends on `autonomous-finance`'s substrate (`Money`/`Pricing`/`OutcomeContract`). Even peer-dep declarations don't break the graph cycle.
+
+**Resolution: each catalog domain ships in its own L5 package.** Substrate (`autonomous-finance`) stays clean at L3 with no SaS dep.
 
 ```
 packages/
   autonomous-startups/          (deferred meta-package; see README)
-  autonomous-finance/           (substrate + adapters + bookkeeper/controller/AP/AR/tax/treasury/payroll)
+  autonomous-finance/           (substrate ONLY — Money / Cost / Card / Account / Ledger
+                                / OutcomeContract / ProofPredicate / SLAPolicy / Pricing
+                                / RefundContract / AuthorityBoundary / FinanceProvider)
+  autonomous-finance-services/  (NEW — catalog: bookkeeper + controller / ap / ar / tax /
+                                treasury / payroll)
   autonomous-customer-success/  (catalog: support-triage + future)
   autonomous-revenue/           (catalog: lead-qualification + future)
   autonomous-developer-experience/ (catalog: api-docs-writer + future)
 ```
 
-Each ships a README + package.json stub today. Real implementation lands when `services-as-software` v3 ships.
+Each catalog package depends on `services-as-software`, `autonomous-finance`, `digital-tools`, and Zod. The substrate package depends only on Zod.
 
 Beads epics:
 - `aip-n1b8` — autonomous-startups (deferred meta)

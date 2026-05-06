@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./v3": {
+      "import": "./dist/v3/index.js",
+      "types": "./dist/v3/index.d.ts"
     }
   },
   "scripts": {

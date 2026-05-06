@@ -1,0 +1,33 @@
+{
+  "name": "autonomous-finance-services",
+  "version": "0.0.1",
+  "description": "Catalog package — finance Services-as-Software defined on the autonomous-finance substrate + services-as-software primitive. Initial: bookkeeper. Future: controller, AP, AR, tax, treasury, payroll. Sibling to autonomous-customer-success / autonomous-revenue / autonomous-developer-experience.",
+  "private": true,
+  "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./bookkeeper": {
+      "types": "./dist/services/bookkeeper.d.ts",
+      "import": "./dist/services/bookkeeper.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-finance-services#readme"
+}

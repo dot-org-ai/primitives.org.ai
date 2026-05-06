@@ -115,9 +115,36 @@ export type {
   ServiceInstance,
   VerifyOpts,
   VerificationReport,
+  VerificationFailure,
+  VerificationEvaluatorPass,
+  VerifyFixture,
   PublishOpts,
   MarketplaceListing,
+  MarketplaceListingProvenance,
+  MarketplaceListingRendered,
+  MarketplaceVisibility,
+  RuntimeUnit,
+  RuntimeUnitCommitment,
+  RuntimeUnitContract,
+  RuntimeUnitDemand,
+  RuntimeUnitFulfillment,
+  RuntimeUnitMarketplace,
 } from './service.js'
+
+// ----------------------------------------------------------------------------
+// Service.verify + Service.publish + marketplace persistence (v3 §10 + §11)
+// ----------------------------------------------------------------------------
+
+export { verifyService } from './service/verify.js'
+export { publishService } from './service/publish.js'
+export { requiresReverify, BEHAVIORAL_FIELDS } from './service/reverify-policy.js'
+
+export {
+  marketplaceStore,
+  runtimeUnitStore,
+  type MarketplaceListFilter,
+  type RuntimeUnitListFilter,
+} from './marketplace/index.js'
 
 // ----------------------------------------------------------------------------
 // Service.invoke — handle, FSM, event union, options, runtime factory
