@@ -32,7 +32,7 @@
  * @packageDocumentation
  */
 
-import { generateObject } from 'ai-functions'
+import { generateObject, type LanguageModelV3 } from 'ai-functions'
 import { z } from 'zod'
 
 import { estimateCostFromUsage } from './invoke/cost-estimate.js'
@@ -162,6 +162,15 @@ export interface PanelRunContext {
    * updates) is out of scope for this round.
    */
   rounds?: number
+  /**
+   * Optional per-call model override. When supplied, beats the panel-level
+   * default but is itself beaten by per-persona `config.modelHint`. Pass a
+   * pre-wrapped `LanguageModelV3` (e.g. `wrapForV3(model, { cache, budget,
+   * trace })`) so each persona's `generateObject` call flows through the
+   * harness's middleware stack. See {@link EvaluatorPanelSpec.model} for the
+   * full resolution-order contract.
+   */
+  model?: LanguageModelV3
 }
 
 // ============================================================================
@@ -204,6 +213,28 @@ export interface EvaluatorPanelSpec {
    *     cost-aware shortcut from v3 §9.
    */
   mode?: 'parallel-multi-call' | 'aggregate-single-call'
+  /**
+   * Optional panel-level default model. When supplied, every internal
+   * `generateObject` / `generateText` call routes through this model unless
+   * overridden by a per-call `panel.run({ model })` or a per-persona
+   * `config.modelHint`.
+   *
+   * Cluster-5 follow-up: the harness wraps a {@link LanguageModelV3} with
+   * `wrapForV3(model, { cache, budget, trace })` and passes the wrapped value
+   * here so the cache/budget/trace middleware bind to the panel's actual LLM
+   * calls (rather than relying on process-wide `V3_EVAL_CACHE=1` env gating).
+   *
+   * Resolution order (highest precedence first):
+   *
+   *   1. per-persona `config.modelHint` (string alias resolved via ai-providers)
+   *   2. per-call `panel.run(input, { model })`
+   *   3. panel-level `EvaluatorPanelSpec.model` (this field)
+   *   4. legacy string-name fallback (`'sonnet'`)
+   *
+   * Backward compat: when this field is omitted at every layer, the existing
+   * round-7 string-name resolution path is preserved.
+   */
+  model?: LanguageModelV3
 }
 
 /**
@@ -221,6 +252,13 @@ export interface EvaluatorPanel {
   }
   readonly mode: 'parallel-multi-call' | 'aggregate-single-call'
   /**
+   * Panel-level default model (cluster-5 follow-up). When supplied at
+   * `define()` time, used for every internal LLM call unless overridden at
+   * `run()` time (`ctx.model`) or by a per-persona `modelHint`. `undefined`
+   * when no panel-level model was provided.
+   */
+  readonly model?: LanguageModelV3
+  /**
    * Run the panel against `target`.
    *
    * Contract:
@@ -229,13 +267,16 @@ export interface EvaluatorPanel {
    *      `persona.config` as structured rubric inputs. Mode selects between
    *      N parallel calls (`parallel-multi-call`) or one merged call
    *      (`aggregate-single-call`).
-   *   2. Aggregate the per-persona verdicts under `signOffPolicy`.
-   *   3. Track which round this is via `ctx.rounds` (defaults to 1). The
+   *   2. Resolve the model for each call in this order:
+   *      `persona.config.modelHint` > `ctx.model` > `spec.model` >
+   *      legacy `'sonnet'` string-name fallback.
+   *   3. Aggregate the per-persona verdicts under `signOffPolicy`.
+   *   4. Track which round this is via `ctx.rounds` (defaults to 1). The
    *      panel itself does not iterate — it returns the verdict and lets the
    *      caller (Service.verify or Service.invoke) decide whether to re-run
    *      with feedback. When `rounds >= maxRounds`, `onMaxRoundsExceeded`
    *      semantics are the caller's responsibility (round 8 wiring).
-   *   4. Sum LLM costs into `PanelVerdict.costUsd`.
+   *   5. Sum LLM costs into `PanelVerdict.costUsd`.
    */
   run(target: unknown, ctx?: PanelRunContext): Promise<PanelVerdict>
 }
@@ -287,26 +328,36 @@ function buildPersonaPrompt(persona: AgenticPersona, target: unknown, round: num
 /**
  * Dispatch one persona → one verdict. Used by `parallel-multi-call`.
  *
- * Reads `persona.config.modelHint` (when present) so each persona can pick
- * its own model — e.g. `Personas.skeptic({ modelHint: 'opus' })` for
- * high-stakes review. Falls back to `'sonnet'` when the persona declares no
- * preference. The chosen model is threaded through to
- * {@link estimateCostFromUsage} so the cost is priced against the real rate
- * table rather than a hardcoded constant.
+ * Resolves the model for this call using the cluster-5 resolution order:
+ *
+ *   1. `persona.config.modelHint` (string alias) — wins; lets a single
+ *      persona escalate to e.g. `'opus'` for high-stakes review.
+ *   2. `injectedModel` (a pre-wrapped {@link LanguageModelV3} from the
+ *      panel-level default or a per-call override).
+ *   3. legacy `'sonnet'` string-name fallback.
+ *
+ * The resolved model is also threaded through to {@link estimateCostFromUsage}
+ * so the cost is priced against the real rate table rather than a hardcoded
+ * constant. When the resolved model is a `LanguageModelV3` instance (not a
+ * string), we price against its `modelId` so the rate-card lookup still works.
  */
 async function runPersonaCall(
   persona: AgenticPersona,
   target: unknown,
-  round: number
+  round: number,
+  injectedModel: LanguageModelV3 | undefined
 ): Promise<{ approval?: PanelApproval; rejection?: PanelRejection; costUsd: number }> {
   const prompt = buildPersonaPrompt(persona, target, round)
-  // Per-persona modelHint, falling back to Sonnet when the persona declared
-  // no preference. The Personas factories store this on `config.modelHint`
-  // (round-12 fix); custom literal personas may set it directly.
+  // Resolution order: persona.config.modelHint > injectedModel > 'sonnet'.
   const modelHint = persona.config['modelHint']
-  const model: string = typeof modelHint === 'string' ? modelHint : 'sonnet'
+  const personaHint: string | undefined = typeof modelHint === 'string' ? modelHint : undefined
+  const resolvedModel: string | LanguageModelV3 = personaHint ?? injectedModel ?? 'sonnet'
+  // For cost estimation we need a model identifier string. When a wrapped
+  // V3 model is supplied, use its `modelId`; otherwise use the string alias.
+  const costModelId =
+    typeof resolvedModel === 'string' ? resolvedModel : resolvedModel.modelId ?? 'sonnet'
   const result = await generateObject({
-    model,
+    model: resolvedModel,
     schema: VerdictSchema,
     prompt,
   })
@@ -315,7 +366,7 @@ async function runPersonaCall(
   // will tighten this with a `z.infer<S>` overload; until then we narrow
   // via the schema's own `_output` type via a single typed cast.
   const verdict = result.object as unknown as z.infer<typeof VerdictSchema>
-  const costUsd = estimateCostFromUsage(result.usage, model)
+  const costUsd = estimateCostFromUsage(result.usage, costModelId)
   if (verdict.verdict === 'approve') {
     return {
       approval: { reviewer: persona.name, rationale: verdict.rationale },
@@ -336,7 +387,8 @@ async function runPersonaCall(
 async function runAggregateCall(
   personas: AgenticPersona[],
   target: unknown,
-  round: number
+  round: number,
+  injectedModel: LanguageModelV3 | undefined
 ): Promise<{ approvals: PanelApproval[]; rejections: PanelRejection[]; costUsd: number }> {
   // Build a per-persona schema slot keyed by name. Zod accepts a record-like
   // shape via z.object on a literal — we construct it dynamically from the
@@ -368,16 +420,19 @@ async function runAggregateCall(
 
   // Aggregate mode runs every persona under a SINGLE LLM call — per-persona
   // `modelHint` is intentionally NOT honoured here (you can't ask one model
-  // to roleplay another model's pricing). Use Service-level / panel-level
-  // modelHint for aggregate mode; per-persona modelHint is only honoured in
-  // 'parallel-multi-call' mode (see `runPersonaCall`).
-  const model = 'sonnet'
+  // to roleplay another model's pricing). The panel-level / per-call
+  // `injectedModel` IS honoured though, so the harness's `wrapForV3`
+  // middleware still binds to this single LLM call. Falls back to the
+  // legacy `'sonnet'` string-name when no model is injected.
+  const resolvedModel: string | LanguageModelV3 = injectedModel ?? 'sonnet'
+  const costModelId =
+    typeof resolvedModel === 'string' ? resolvedModel : resolvedModel.modelId ?? 'sonnet'
   const result = await generateObject({
-    model,
+    model: resolvedModel,
     schema: aggregateSchema,
     prompt,
   })
-  const costUsd = estimateCostFromUsage(result.usage, model)
+  const costUsd = estimateCostFromUsage(result.usage, costModelId)
   const approvals: PanelApproval[] = []
   const rejections: PanelRejection[] = []
   // See note in `runPersonaCall`: `result.object` is typed as the schema arg.
@@ -462,6 +517,7 @@ function resolveVerdict(
  */
 function buildPanel(spec: EvaluatorPanelSpec): EvaluatorPanel {
   const mode = spec.mode ?? 'parallel-multi-call'
+  const panelModel = spec.model
   return {
     $id: spec.$id,
     $type: 'EvaluatorPanel',
@@ -469,6 +525,10 @@ function buildPanel(spec: EvaluatorPanelSpec): EvaluatorPanel {
     signOffPolicy: spec.signOffPolicy,
     iterationPolicy: spec.iterationPolicy,
     mode,
+    // Surface the panel-level model on the materialised value. Tests + the
+    // SaS introspection layer can read this to confirm the injection point
+    // is bound. `exactOptionalPropertyTypes` requires conditional spread.
+    ...(panelModel !== undefined && { model: panelModel }),
     async run(target: unknown, ctx?: PanelRunContext): Promise<PanelVerdict> {
       // Defensive no-personas case — return an empty all-approved verdict.
       if (spec.personas.length === 0) {
@@ -489,19 +549,25 @@ function buildPanel(spec: EvaluatorPanelSpec): EvaluatorPanel {
       const cappedMax = Math.min(spec.iterationPolicy.maxRounds, HARD_MAX_ROUNDS)
       const round = Math.max(1, Math.min(requestedRound, cappedMax))
 
+      // Cluster-5: resolve the injected model for THIS run. Per-call
+      // `ctx.model` beats the panel-level default. Per-persona `modelHint`
+      // is resolved inside `runPersonaCall` (string-name escalation path)
+      // and trumps `injectedModel` for that one persona's call.
+      const injectedModel: LanguageModelV3 | undefined = ctx?.model ?? panelModel
+
       let approvals: PanelApproval[]
       let rejections: PanelRejection[]
       let costUsd: number
 
       if (mode === 'aggregate-single-call') {
-        const agg = await runAggregateCall(spec.personas, target, round)
+        const agg = await runAggregateCall(spec.personas, target, round, injectedModel)
         approvals = agg.approvals
         rejections = agg.rejections
         costUsd = agg.costUsd
       } else {
         // 'parallel-multi-call' — N independent LLM calls in parallel.
         const results = await Promise.all(
-          spec.personas.map((p) => runPersonaCall(p, target, round))
+          spec.personas.map((p) => runPersonaCall(p, target, round, injectedModel))
         )
         approvals = []
         rejections = []
