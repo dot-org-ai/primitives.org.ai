@@ -1,10 +1,10 @@
 /**
  * Personas — reusable persona factory library (v3 §9).
  *
- * Ten factories — six general-purpose evaluation axes plus four specialized
- * domain factories that cover the regulator/safety surfaces Services in
- * regulated verticals frequently need. Each factory mints an
- * {@link AgenticPersona} ready to drop into an
+ * Fourteen factories — six general-purpose evaluation axes plus eight
+ * specialized domain factories that cover the regulator/safety/realism
+ * surfaces Services in production verticals frequently need. Each factory
+ * mints an {@link AgenticPersona} ready to drop into an
  * {@link EvaluatorPanelSpec.personas} array.
  *
  * Custom personas remain first-class — construct an `AgenticPersona` literal
@@ -28,11 +28,23 @@
  *   - {@link Personas.dataPrivacy}          — privacy-impact review (GDPR /
  *     CCPA / PIPEDA / general), PII-category-aware, minimization-checked.
  *
- * All factories default `signOff` to `'must-approve'`. Each factory mints a
- * default `name` of the form `'<archetype>-<domain>'` (e.g.
- * `'pedantic-validator-gaap'`). Callers may pass an explicit `name` to
- * override — useful when the panel uses natural names like `'qa-reviewer'`
- * instead of the minted convention.
+ * Specialized (production-evaluation realism surfaces):
+ *   - {@link Personas.factualAccuracy}      — fact-checking with source-
+ *     citation enforcement (citations required, source-quality tiered).
+ *   - {@link Personas.brandSafety}          — brand-voice + reputational-risk
+ *     review for customer/public-facing output.
+ *   - {@link Personas.budgetRealism}        — cost / time / scope realism
+ *     check for proposals, plans, and forecasts (advisory).
+ *   - {@link Personas.timelineRealism}      — schedule + sequencing realism
+ *     check for roadmaps and timelines (advisory).
+ *
+ * Most factories default `signOff` to `'must-approve'`. The two realism
+ * factories (`budgetRealism`, `timelineRealism`) default to `'advisory'` —
+ * they are load-bearing inputs for Services that propose work, but their
+ * verdicts are guidance, not gates. Each factory mints a default `name` of
+ * the form `'<archetype>-<discriminator>'` (e.g. `'pedantic-validator-gaap'`).
+ * Callers may pass an explicit `name` to override — useful when the panel
+ * uses natural names like `'qa-reviewer'` instead of the minted convention.
  *
  * @packageDocumentation
  */
@@ -287,6 +299,164 @@ export interface DataPrivacyPersonaOpts {
   modelHint?: string
 }
 
+/**
+ * Source-quality tiers surfaced by {@link Personas.factualAccuracy}. The list
+ * is ordered from most-authoritative (`primary`) to least-authoritative
+ * (`first-party`); `(string & {})` keeps autocomplete on the curated tiers
+ * while allowing custom sourcing taxonomies without a library bump.
+ */
+export type FactualSourceType =
+  | 'primary'
+  | 'peer-reviewed'
+  | 'government'
+  | 'industry-standard'
+  | 'first-party'
+
+/**
+ * Options for {@link Personas.factualAccuracy}.
+ */
+export interface FactualAccuracyPersonaOpts {
+  /**
+   * When `true` (default), every load-bearing factual claim must carry an
+   * inline citation. When `false`, claims may be unsupported but the persona
+   * still flags source-quality issues on whatever citations are present.
+   */
+  citationRequired?: boolean
+  /**
+   * Acceptable source-quality tiers. Defaults to all five
+   * (`primary`, `peer-reviewed`, `government`, `industry-standard`,
+   * `first-party`). Narrowing this list lets the persona reject otherwise-
+   * valid citations from disallowed tiers (e.g. excluding `first-party` for a
+   * regulatory filing).
+   */
+  sourceTypes?: FactualSourceType[]
+  /**
+   * Minimum citation count per load-bearing claim. Defaults to `1`. Raise to
+   * `2`+ for high-stakes domains (medical, legal) where corroborating sources
+   * are part of the editorial standard.
+   */
+  minCitationsPerClaim?: number
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * citations may live in long source documents — a high-context-window model
+   * is the right default for fact-grounding work.
+   */
+  modelHint?: string
+}
+
+/**
+ * Tone register surfaced by {@link Personas.brandSafety}. `(string & {})`
+ * keeps autocomplete on the curated registers while allowing arbitrary brand-
+ * voice descriptors (e.g. `'playful-formal'`) without a library bump.
+ */
+export type BrandToneRange =
+  | 'formal'
+  | 'conversational'
+  | 'technical'
+  | 'irreverent'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {})
+
+/**
+ * Options for {@link Personas.brandSafety}.
+ */
+export interface BrandSafetyPersonaOpts {
+  /**
+   * Optional reference into the brand-voice guide
+   * (e.g. `'brand:do-industries/voice'`). When omitted, the persona applies
+   * a generic brand-voice baseline keyed to `toneRange`. Resolution is
+   * deferred to the runtime.
+   */
+  brandVoiceRef?: string
+  /**
+   * Tone register the artifact should match. Defaults to `'conversational'`.
+   */
+  toneRange?: BrandToneRange
+  /**
+   * Reputational-risk tolerance.
+   *   - `'high'`   — only flag content with extreme reputational risk.
+   *   - `'medium'` (default) — flag content with material reputational risk.
+   *   - `'low'`    — flag content with any non-trivial reputational risk.
+   */
+  riskTolerance?: 'high' | 'medium' | 'low'
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Budget axes surfaced by {@link Personas.budgetRealism}.
+ */
+export type BudgetType = 'cost' | 'time' | 'scope' | 'all'
+
+/**
+ * Optional sanity ranges for {@link Personas.budgetRealism}. Each cap is the
+ * upper bound the persona treats as plausible without further justification —
+ * proposals exceeding any cap are flagged as overrun-risk candidates. Omit a
+ * field to defer to the LLM's own training-data norms for that axis.
+ */
+export interface BudgetSanityRanges {
+  /** Maximum plausible cost in USD. */
+  costUsdMax?: number
+  /** Maximum plausible duration in weeks. */
+  timeWeeksMax?: number
+  /** Maximum plausible scope-item count (deliverables, features, etc). */
+  scopeItemsMax?: number
+}
+
+/**
+ * Options for {@link Personas.budgetRealism}.
+ */
+export interface BudgetRealismPersonaOpts {
+  /**
+   * Budget axis the persona scrutinizes. Defaults to `'all'` (cost, time,
+   * and scope simultaneously). Narrow when the artifact only carries one
+   * axis (e.g. a cost-only quote).
+   */
+  budgetType?: BudgetType
+  /**
+   * Optional sanity ranges. When omitted (default), the persona uses its own
+   * training-data norms for each axis.
+   */
+  sanityRanges?: BudgetSanityRanges
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Options for {@link Personas.timelineRealism}.
+ */
+export interface TimelineRealismPersonaOpts {
+  /**
+   * When `true` (default), the persona is dependency-aware — it flags missing
+   * cross-task dependencies, unmodelled handoffs, and invalid sequencing.
+   * When `false`, the persona only checks raw duration plausibility per task.
+   */
+  dependencyAware?: boolean
+  /**
+   * How many weeks of forward planning the persona scrutinizes. Defaults to
+   * `12` weeks (one quarter). Plans extending beyond this horizon are not
+   * rejected — just not scrutinized for fine-grained sequencing past the
+   * lookahead.
+   */
+  lookaheadWeeks?: number
+  /**
+   * When `true`, the persona requires that the plan declares an explicit
+   * critical path. Defaults to `false` (advisory observation only when
+   * critical path is missing).
+   */
+  criticalPathRequired?: boolean
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
 // ============================================================================
 // Factories
 // ============================================================================
@@ -306,7 +476,8 @@ function slug(s: string): string {
 }
 
 /**
- * `Personas` namespace — six factory functions.
+ * `Personas` namespace — fourteen factory functions
+ * (six general-purpose + eight specialized).
  */
 export const Personas = {
   /**
@@ -620,6 +791,231 @@ export const Personas = {
         framework,
         piiCategories,
         minimizationCheck,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Factual-accuracy reviewer — fact-checks the artifact and enforces source-
+   * citation discipline. Flags unsupported claims, missing citations, and
+   * source-quality issues (e.g. citing a blog post in a regulatory filing
+   * that should cite primary sources). Always `'must-approve'` — Services
+   * whose output makes load-bearing factual claims (financial, legal,
+   * medical, technical) cannot ship unsupported assertions.
+   *
+   * Defaults to `modelHint: 'opus'` because citations may live in long source
+   * documents — high-context-window models are the right default here.
+   *
+   * `$id` namespace: `persona:factual-accuracy:cit-<required>-min-<n>`.
+   *
+   * @example
+   * ```ts
+   * Personas.factualAccuracy() // citations required, all source types, min 1
+   * Personas.factualAccuracy({ minCitationsPerClaim: 2 })
+   * Personas.factualAccuracy({ sourceTypes: ['primary', 'peer-reviewed'] })
+   * ```
+   */
+  factualAccuracy(opts: FactualAccuracyPersonaOpts = {}): AgenticPersona {
+    const citationRequired = opts.citationRequired ?? true
+    const sourceTypes: FactualSourceType[] = opts.sourceTypes ?? [
+      'primary',
+      'peer-reviewed',
+      'government',
+      'industry-standard',
+      'first-party',
+    ]
+    const minCitationsPerClaim = opts.minCitationsPerClaim ?? 1
+    const citationClause = citationRequired
+      ? ` Every load-bearing factual claim MUST carry at least ` +
+        `${minCitationsPerClaim} inline citation${minCitationsPerClaim === 1 ? '' : 's'}; ` +
+        `reject any uncited claim.`
+      : ` Citations are optional — but flag any source-quality issues on whatever ` +
+        `citations are present.`
+    return {
+      name:
+        opts.name ??
+        `factual-accuracy-cit-${
+          citationRequired ? 'required' : 'optional'
+        }-min-${minCitationsPerClaim}`,
+      persona:
+        `You are a factual-accuracy reviewer. Scrutinize the artifact for ` +
+        `unsupported factual claims and source-quality issues. ` +
+        `Acceptable source tiers (most-authoritative first): ${sourceTypes.join(', ')}. ` +
+        `Reject citations from any tier outside that list.` +
+        citationClause +
+        ` Cite the specific claim and the missing / inadequate source when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:factual-accuracy:cit-${
+          citationRequired ? 'required' : 'optional'
+        }-min-${minCitationsPerClaim}`,
+        archetype: 'factual-accuracy',
+        citationRequired,
+        sourceTypes,
+        minCitationsPerClaim,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Brand-safety reviewer — brand-voice + reputational-risk review for
+   * customer/public-facing output. Scrutinizes the artifact for off-brand
+   * language, controversial claims, and reputational risks calibrated to
+   * `riskTolerance`. Always `'must-approve'` — public-facing copy with
+   * reputational risk is dispositive.
+   *
+   * `$id` namespace: `persona:brand-safety:<tone>-<risk>`.
+   *
+   * @example
+   * ```ts
+   * Personas.brandSafety() // conversational tone, medium risk tolerance
+   * Personas.brandSafety({ brandVoiceRef: 'brand:do-industries/voice' })
+   * Personas.brandSafety({ toneRange: 'formal', riskTolerance: 'low' })
+   * ```
+   */
+  brandSafety(opts: BrandSafetyPersonaOpts = {}): AgenticPersona {
+    const toneRange: BrandToneRange = opts.toneRange ?? 'conversational'
+    const riskTolerance: 'high' | 'medium' | 'low' = opts.riskTolerance ?? 'medium'
+    const brandVoiceClause =
+      opts.brandVoiceRef !== undefined
+        ? ` Apply the brand voice referenced by ${opts.brandVoiceRef}.`
+        : ` Apply a generic brand-voice baseline keyed to the ${toneRange} register.`
+    const riskClause =
+      riskTolerance === 'high'
+        ? ` Flag only content with extreme reputational risk.`
+        : riskTolerance === 'low'
+        ? ` Flag content with any non-trivial reputational risk.`
+        : ` Flag content with material reputational risk.`
+    return {
+      name: opts.name ?? `brand-safety-${slug(toneRange)}-${slug(riskTolerance)}`,
+      persona:
+        `You are a brand-safety reviewer. Scrutinize the artifact for off-brand ` +
+        `language, controversial claims, and reputational risks. The expected ` +
+        `tone register is ${toneRange}.` +
+        brandVoiceClause +
+        riskClause +
+        ` Reject on any qualifying finding; cite the specific phrasing and the ` +
+        `brand-voice or risk dimension when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:brand-safety:${slug(toneRange)}-${slug(riskTolerance)}`,
+        archetype: 'brand-safety',
+        toneRange,
+        riskTolerance,
+        ...(opts.brandVoiceRef !== undefined && { brandVoiceRef: opts.brandVoiceRef }),
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Budget-realism reviewer — cost / time / scope realism check for
+   * proposals, plans, and forecasts. Flags cost-overrun risk, timeline-
+   * overrun risk, and scope-creep risk. Defaults to `'advisory'` sign-off —
+   * load-bearing for any Service that proposes work, but the verdict is
+   * guidance rather than a gate (the human reviewer makes the call).
+   *
+   * `$id` namespace: `persona:budget-realism:<budgetType>`.
+   *
+   * @example
+   * ```ts
+   * Personas.budgetRealism() // all axes, no sanity ranges
+   * Personas.budgetRealism({ budgetType: 'cost' })
+   * Personas.budgetRealism({ sanityRanges: { costUsdMax: 250_000 } })
+   * ```
+   */
+  budgetRealism(opts: BudgetRealismPersonaOpts = {}): AgenticPersona {
+    const budgetType: BudgetType = opts.budgetType ?? 'all'
+    const sanityRanges: BudgetSanityRanges = opts.sanityRanges ?? {}
+    const axesClause =
+      budgetType === 'all'
+        ? ` Scrutinize cost, time, and scope simultaneously.`
+        : ` Scrutinize the ${budgetType} axis only.`
+    const rangeParts: string[] = []
+    if (sanityRanges.costUsdMax !== undefined) {
+      rangeParts.push(`cost ≤ $${sanityRanges.costUsdMax.toLocaleString('en-US')}`)
+    }
+    if (sanityRanges.timeWeeksMax !== undefined) {
+      rangeParts.push(`duration ≤ ${sanityRanges.timeWeeksMax} weeks`)
+    }
+    if (sanityRanges.scopeItemsMax !== undefined) {
+      rangeParts.push(`scope items ≤ ${sanityRanges.scopeItemsMax}`)
+    }
+    const sanityClause =
+      rangeParts.length > 0
+        ? ` Apply these sanity ranges: ${rangeParts.join('; ')}. Flag any axis ` +
+          `exceeding its cap as overrun-risk without further justification.`
+        : ` No explicit sanity ranges supplied — apply your own training-data ` +
+          `norms for what's plausible on each axis.`
+    return {
+      name: opts.name ?? `budget-realism-${slug(budgetType)}`,
+      persona:
+        `You are a budget-realism reviewer. Scrutinize the artifact (proposal, ` +
+        `plan, forecast, or estimate) for cost-overrun risk, timeline-overrun ` +
+        `risk, and scope-creep risk.` +
+        axesClause +
+        sanityClause +
+        ` Flag overrun-risk candidates with the axis, the asserted figure, and ` +
+        `the basis for the overrun concern.`,
+      signOff: 'advisory',
+      config: {
+        $id: `persona:budget-realism:${slug(budgetType)}`,
+        archetype: 'budget-realism',
+        budgetType,
+        sanityRanges,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Timeline-realism reviewer — schedule + sequencing realism check for
+   * plans, roadmaps, and timelines. Flags unrealistic sequencing, missing
+   * dependencies, and no-slack assumptions. Defaults to `'advisory'` sign-
+   * off — guidance for the human planner, not a hard gate.
+   *
+   * `$id` namespace: `persona:timeline-realism:lookahead-<weeks>`.
+   *
+   * @example
+   * ```ts
+   * Personas.timelineRealism() // dependency-aware, 12-week lookahead
+   * Personas.timelineRealism({ lookaheadWeeks: 26 })
+   * Personas.timelineRealism({ criticalPathRequired: true })
+   * ```
+   */
+  timelineRealism(opts: TimelineRealismPersonaOpts = {}): AgenticPersona {
+    const dependencyAware = opts.dependencyAware ?? true
+    const lookaheadWeeks = opts.lookaheadWeeks ?? 12
+    const criticalPathRequired = opts.criticalPathRequired ?? false
+    const dependencyClause = dependencyAware
+      ? ` Be dependency-aware: flag missing cross-task dependencies, unmodelled ` +
+        `handoffs, and invalid sequencing (e.g. parallel tasks that share an ` +
+        `exclusive resource).`
+      : ` Dependency-awareness is disabled — check raw duration plausibility per ` + `task only.`
+    const criticalPathClause = criticalPathRequired
+      ? ` The plan MUST declare an explicit critical path; reject if missing.`
+      : ` Critical-path declaration is optional — note its absence as advisory ` +
+        `observation only.`
+    return {
+      name: opts.name ?? `timeline-realism-lookahead-${lookaheadWeeks}`,
+      persona:
+        `You are a timeline-realism reviewer. Scrutinize the artifact (plan, ` +
+        `roadmap, or timeline) for unrealistic sequencing, missing dependencies, ` +
+        `and no-slack assumptions over the next ${lookaheadWeeks} week` +
+        `${lookaheadWeeks === 1 ? '' : 's'} of forward planning.` +
+        dependencyClause +
+        criticalPathClause +
+        ` Flag risk candidates with the specific task, the sequencing concern, ` +
+        `and the slack / dependency evidence.`,
+      signOff: 'advisory',
+      config: {
+        $id: `persona:timeline-realism:lookahead-${lookaheadWeeks}`,
+        archetype: 'timeline-realism',
+        dependencyAware,
+        lookaheadWeeks,
+        criticalPathRequired,
         ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
