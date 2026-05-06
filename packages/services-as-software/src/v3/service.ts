@@ -2,10 +2,11 @@
  * ServiceInstance — read-only shape returned by `Service.define()` per v3 §5.
  *
  * Methods (`invoke`, `verify`, `publish`, `retire`) are declared as types only;
- * the concrete implementation ships in the next agent's `Service.define`
- * factory. The placeholder helper interfaces (`InvocationHandle`, `InvokeOpts`,
- * `VerifyOpts`, `PublishOpts`, `VerificationReport`, `MarketplaceListing`)
- * are minimal shells the next agents fill in.
+ * the concrete implementations ship in sibling modules:
+ *
+ *   - `invoke` / `InvocationHandle` / `InvokeOpts` — `./invoke/` (round 4)
+ *   - `verify` / `VerificationReport` — placeholder, round 5
+ *   - `publish` / `MarketplaceListing` — placeholder, round 5
  *
  * @packageDocumentation
  */
@@ -29,45 +30,20 @@ import type {
   DeliveryShape,
   OnboardingShape,
   OrderShape,
-  OversightPolicy,
   PortalShape,
-} from './service-spec.js'
+} from './shapes/types.js'
+import type { OversightPolicy } from './service-spec.js'
 import type { EvaluatorPanel } from './evaluator-panel.js'
+import type { InvocationHandle, InvokeOpts } from './invoke/index.js'
+
+// Re-export the real `invoke` types so existing `import { InvocationHandle,
+// InvokeOpts } from './service.js'` callers (notably `service/define.ts`)
+// keep working without churn.
+export type { InvocationHandle, InvokeOpts } from './invoke/index.js'
 
 // ============================================================================
 // Method-side placeholder types (filled by next agents)
 // ============================================================================
-
-/**
- * Options accepted by `service.invoke()`. Placeholder shape — the
- * Service.define agent fills in concrete fields (tenant, idempotency key,
- * tracing context, cost cap, abort signal).
- *
- * TODO(next-agent: Service.define): expand to the real options shape.
- */
-export interface InvokeOpts {
-  /** Caller-supplied idempotency key (de-dupe identical re-tries). */
-  idempotencyKey?: string
-  /** Logical tenant the invocation runs under. */
-  tenantId?: string
-  /** Abort signal for cooperative cancellation. */
-  signal?: AbortSignal
-}
-
-/**
- * Handle returned by `service.invoke()`. Placeholder — the runtime agent
- * fills in `result` (resolved Promise of TOut), `events` (AsyncIterable for
- * streaming), `cancel()` semantics per v3 (subscription-teardown vs.
- * workflow-cancel), and observability accessors.
- *
- * TODO(next-agent: Service.invoke): expand with `result`, `events`, `cancel`.
- */
-export interface InvocationHandle<TOut> {
-  /** Stable id for the invocation (used by polling + observability). */
-  readonly id: string
-  /** Promise that resolves with the typed output once the cascade completes. */
-  readonly result: Promise<TOut>
-}
 
 /**
  * Options accepted by `service.verify()`. Placeholder shape — the next agent
@@ -182,7 +158,7 @@ export interface ServiceInstance<TIn, TOut> {
 
   readonly lineage?: ServiceLineage
 
-  // ---- UI overrides (readonly; placeholder) ------------------------------
+  // ---- UI overrides (readonly; auto-derived per v3 §8 when omitted) ------
 
   readonly catalog?: CatalogShape
   readonly order?: OrderShape

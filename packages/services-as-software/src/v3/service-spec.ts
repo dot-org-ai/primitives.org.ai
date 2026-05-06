@@ -7,8 +7,11 @@
  *
  * Several fields are placeholder-typed pending parallel agent work:
  *   - `evaluators?` — `unknown` until the EvaluatorPanel agent ships its type.
- *   - `catalog? / order? / onboarding? / delivery? / portal?` — `unknown`
- *     until the UI shapes agent ships its types.
+ *
+ * The five UI override shapes (`catalog? / order? / onboarding? / delivery?
+ * / portal?`) reference the real value types shipped in `./shapes/` (per
+ * v3 §8); the sixth shape (`integrations`) is purely derived from
+ * `binding.toolPermissions` and is not overridable.
  *
  * All other fields reference real shipped types from `digital-tools`,
  * `autonomous-finance`, and the sibling v3 modules.
@@ -32,45 +35,19 @@ import type { Audience, Schema } from './types.js'
 import type { ServiceArchetypeRef } from './archetype/registry.js'
 import type { EvaluatorPanel } from './evaluator-panel.js'
 
-// ============================================================================
-// Placeholder types — real types ship in parallel-agent work
-// ============================================================================
+// Real UI shape value types live in `./shapes/types.ts` and are re-exported
+// here so existing consumers of `services-as-software/v3` import points stay
+// stable (CatalogShape / OrderShape / OnboardingShape / DeliveryShape /
+// PortalShape — IntegrationsShape is purely derived, not overridable here).
+import type {
+  CatalogShape,
+  DeliveryShape,
+  OnboardingShape,
+  OrderShape,
+  PortalShape,
+} from './shapes/types.js'
 
-/**
- * Placeholder for the catalog UI shape override. The UI shapes agent ships
- * the real `CatalogShape` value type.
- *
- * TODO(next-agent: UI shapes): replace `unknown` with `CatalogShape`.
- */
-export type CatalogShape = unknown
-
-/**
- * Placeholder for the order UI shape override.
- *
- * TODO(next-agent: UI shapes): replace `unknown` with `OrderShape`.
- */
-export type OrderShape = unknown
-
-/**
- * Placeholder for the onboarding UI shape override.
- *
- * TODO(next-agent: UI shapes): replace `unknown` with `OnboardingShape`.
- */
-export type OnboardingShape = unknown
-
-/**
- * Placeholder for the delivery UI shape override.
- *
- * TODO(next-agent: UI shapes): replace `unknown` with `DeliveryShape`.
- */
-export type DeliveryShape = unknown
-
-/**
- * Placeholder for the customer-portal UI shape override.
- *
- * TODO(next-agent: UI shapes): replace `unknown` with `PortalShape`.
- */
-export type PortalShape = unknown
+export type { CatalogShape, OrderShape, OnboardingShape, DeliveryShape, PortalShape }
 
 // ============================================================================
 // OversightPolicy on the Service itself (distinct from per-Function oversight)
@@ -162,37 +139,37 @@ export interface ServiceSpec<TIn, TOut> {
   /** Lineage of the Service (cell / ICP / hypothesis / studio / cascade run). */
   lineage?: ServiceLineage
 
-  // ---- UI overrides (placeholder until UI shapes agent ships) -------------
+  // ---- UI overrides (auto-derived per v3 §8 when omitted) ----------------
 
   /**
-   * Override for the auto-derived catalog UI shape. Placeholder until the
-   * UI shapes agent ships the real type.
-   *
-   * TODO(next-agent: UI shapes)
+   * Override for the auto-derived catalog UI shape (v3 §8).
+   * Defaults from `name` / `promise` / `audience` / `pricing.summary` /
+   * `archetype.heroTemplate` via {@link deriveCatalog}.
    */
   catalog?: CatalogShape
   /**
-   * Override for the auto-derived order UI shape. Placeholder.
-   *
-   * TODO(next-agent: UI shapes)
+   * Override for the auto-derived order UI shape (v3 §8).
+   * Defaults from `schema.input` (field count picks `flow`) +
+   * `pricing` + `audience` via {@link deriveOrder}.
    */
   order?: OrderShape
   /**
-   * Override for the auto-derived onboarding UI shape. Placeholder.
-   *
-   * TODO(next-agent: UI shapes)
+   * Override for the auto-derived onboarding UI shape (v3 §8).
+   * Defaults from `binding.toolPermissions` (one IntegrationRequirement per
+   * provider) + `audience` (KYC depth) via {@link deriveOnboarding}.
    */
   onboarding?: OnboardingShape
   /**
-   * Override for the auto-derived delivery UI shape. Placeholder.
-   *
-   * TODO(next-agent: UI shapes)
+   * Override for the auto-derived delivery UI shape (v3 §8).
+   * Defaults from `archetype.estimatedCost` (time proxy) +
+   * `binding.cascade.length` + oversight via {@link deriveDelivery}.
    */
   delivery?: DeliveryShape
   /**
-   * Override for the auto-derived customer-portal UI shape. Placeholder.
-   *
-   * TODO(next-agent: UI shapes)
+   * Override for the auto-derived customer-portal UI shape (v3 §8).
+   * Defaults to four columns (`state`/`createdAt`/`cost`/`duration`),
+   * receipts always enabled, dispute flow gated on `refundContract`
+   * presence, via {@link derivePortal}.
    */
   portal?: PortalShape
 }
