@@ -1,20 +1,32 @@
 /**
  * Personas — reusable persona factory library (v3 §9).
  *
- * Six factories that cover ~80% of the seed catalog's evaluator-slot needs
- * (per the Catalog HOW agent's persona-reuse analysis). Each factory mints
- * an {@link AgenticPersona} ready to drop into an
+ * Ten factories — six general-purpose evaluation axes plus four specialized
+ * domain factories that cover the regulator/safety surfaces Services in
+ * regulated verticals frequently need. Each factory mints an
+ * {@link AgenticPersona} ready to drop into an
  * {@link EvaluatorPanelSpec.personas} array.
  *
  * Custom personas remain first-class — construct an `AgenticPersona` literal
  * directly. The factories are sugar, not a moat.
  *
+ * General-purpose:
  *   - {@link Personas.pedantic} — strict rubric/style/format checker.
  *   - {@link Personas.skeptic}  — adversarial probe, looks for failure modes.
  *   - {@link Personas.accuracy} — fact-grounding against named sources.
  *   - {@link Personas.voice}    — brand-voice / tone / style alignment.
  *   - {@link Personas.coverage} — completeness floor (e.g. ≥ 95% rubric items).
  *   - {@link Personas.domain}   — pulls a named expert from `business.org.ai`.
+ *
+ * Specialized (regulator / safety / privacy surfaces):
+ *   - {@link Personas.regulatoryCompliance} — regulator-tier framework checks
+ *     (SEC / FINRA / FinCEN / HIPAA / GDPR / CCPA / SOX / PCI-DSS / custom).
+ *   - {@link Personas.accessibility}        — WCAG 2.1 AA/AAA review for any
+ *     human-consumed prose / UI / document output.
+ *   - {@link Personas.securityThreat}       — adversarial security review
+ *     (injection / exfiltration / privilege-escalation / PII leakage / etc).
+ *   - {@link Personas.dataPrivacy}          — privacy-impact review (GDPR /
+ *     CCPA / PIPEDA / general), PII-category-aware, minimization-checked.
  *
  * All factories default `signOff` to `'must-approve'`. Each factory mints a
  * default `name` of the form `'<archetype>-<domain>'` (e.g.
@@ -125,6 +137,150 @@ export interface DomainPersonaOpts {
    * The runtime resolves this to a domain-expert prompt + rubric lookup.
    */
   expertRef: string
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Known regulator IDs surfaced by {@link Personas.regulatoryCompliance}.
+ *
+ * `(string & {})` keeps autocomplete on the curated list while still
+ * accepting custom regulator slugs (e.g. `'iso-27001'`, `'mas-fsra'`) without
+ * forcing a library bump.
+ */
+export type RegulatoryFramework =
+  | 'sec'
+  | 'finra'
+  | 'fincen'
+  | 'hipaa'
+  | 'gdpr'
+  | 'ccpa'
+  | 'sox'
+  | 'pci-dss'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {})
+
+/**
+ * Options for {@link Personas.regulatoryCompliance}.
+ */
+export interface RegulatoryCompliancePersonaOpts {
+  /** Regulator / framework whose rules apply (e.g. `'sec'`, `'hipaa'`). */
+  regulator: RegulatoryFramework
+  /**
+   * Optional explicit rule-set IDs (e.g. `['SEC-17a-4', 'SEC-Reg-FD']`). When
+   * omitted, the persona defers to the regulator's default rule surface.
+   */
+  ruleSet?: string[]
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * regulator-tier checks are high-stakes — callers can downshift explicitly
+   * by passing `modelHint: 'sonnet'` (or any alias) when budget matters more
+   * than ceiling.
+   */
+  modelHint?: string
+}
+
+/**
+ * Surfaces an {@link Personas.accessibility} reviewer can audit.
+ */
+export type AccessibilitySurface = 'screen-reader' | 'keyboard-only' | 'low-vision' | 'cognitive'
+
+/**
+ * Options for {@link Personas.accessibility}.
+ */
+export interface AccessibilityPersonaOpts {
+  /** WCAG conformance level. Defaults to `'AA'` (WCAG 2.1 AA). */
+  level?: 'AA' | 'AAA'
+  /**
+   * Surfaces to audit. Defaults to all four
+   * (`screen-reader`, `keyboard-only`, `low-vision`, `cognitive`).
+   */
+  surfaces?: AccessibilitySurface[]
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Surfaces a {@link Personas.securityThreat} reviewer can audit.
+ */
+export type SecuritySurface =
+  | 'injection'
+  | 'data-exfiltration'
+  | 'privilege-escalation'
+  | 'pii-leakage'
+  | 'prompt-injection'
+  | 'denial-of-service'
+
+/**
+ * Options for {@link Personas.securityThreat}.
+ */
+export interface SecurityThreatPersonaOpts {
+  /**
+   * Threat surfaces to audit. Defaults to all six
+   * (`injection`, `data-exfiltration`, `privilege-escalation`, `pii-leakage`,
+   * `prompt-injection`, `denial-of-service`).
+   */
+  surfaces?: SecuritySurface[]
+  /**
+   * Severity gate.
+   *   - `'critical-only'` — flag only critical-severity findings.
+   *   - `'all'` (default) — flag every finding regardless of severity.
+   */
+  severity?: 'critical-only' | 'all'
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * adversarial-reasoning quality is dispositive for security review.
+   */
+  modelHint?: string
+}
+
+/**
+ * PII categories surfaced by {@link Personas.dataPrivacy}.
+ */
+export type PiiCategory =
+  | 'name'
+  | 'email'
+  | 'phone'
+  | 'ssn'
+  | 'health'
+  | 'financial'
+  | 'biometric'
+  | 'behavioral'
+
+/**
+ * Privacy frameworks surfaced by {@link Personas.dataPrivacy}.
+ */
+export type PrivacyFramework = 'gdpr' | 'ccpa' | 'pipeda' | 'general'
+
+/**
+ * Options for {@link Personas.dataPrivacy}.
+ */
+export interface DataPrivacyPersonaOpts {
+  /**
+   * Privacy framework whose obligations apply. Defaults to `'general'`
+   * (framework-agnostic baseline that overlaps most regimes).
+   */
+  framework?: PrivacyFramework
+  /**
+   * PII categories to scan for. Defaults to all eight
+   * (`name`, `email`, `phone`, `ssn`, `health`, `financial`, `biometric`,
+   * `behavioral`).
+   */
+  piiCategories?: PiiCategory[]
+  /**
+   * When `true` (default), the persona enforces data-minimization — flags
+   * unnecessary PII inclusion even when the included PII is otherwise
+   * lawful.
+   */
+  minimizationCheck?: boolean
   /** Override the default-minted `name`. */
   name?: string
   /** See {@link PedanticPersonaOpts.modelHint}. */
@@ -266,6 +422,204 @@ export const Personas = {
       config: {
         archetype: 'domain',
         expertRef: opts.expertRef,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Regulatory-compliance reviewer — scrutinizes the artifact against a named
+   * regulator-tier framework (SEC disclosure rules, HIPAA PHI handling, GDPR
+   * data-minimization, etc). Always `'must-approve'` — regulator-tier checks
+   * are load-bearing for any catalog Service in a regulated vertical.
+   *
+   * Defaults to `modelHint: 'opus'` (callers can downshift explicitly).
+   *
+   * `$id` namespace: `persona:regulatory-compliance:<regulator>`.
+   *
+   * @example
+   * ```ts
+   * Personas.regulatoryCompliance({ regulator: 'sec', ruleSet: ['SEC-Reg-FD'] })
+   * Personas.regulatoryCompliance({ regulator: 'hipaa' })
+   * Personas.regulatoryCompliance({ regulator: 'iso-27001' }) // custom OK
+   * ```
+   */
+  regulatoryCompliance(opts: RegulatoryCompliancePersonaOpts): AgenticPersona {
+    const ruleSet = opts.ruleSet ?? []
+    const ruleClause =
+      ruleSet.length > 0
+        ? ` Apply the following rule-set verbatim: ${ruleSet.join(', ')}.`
+        : ` Apply the regulator's default rule surface.`
+    return {
+      name: opts.name ?? `regulatory-compliance-${slug(opts.regulator)}`,
+      persona:
+        `You are a regulatory-compliance reviewer for the ${opts.regulator.toUpperCase()} ` +
+        `framework. Scrutinize the artifact for any violation of ${opts.regulator.toUpperCase()} ` +
+        `obligations (disclosure, handling, retention, redaction, consent, etc).` +
+        ruleClause +
+        ` Reject on any material violation; cite the specific rule when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:regulatory-compliance:${slug(opts.regulator)}`,
+        archetype: 'regulatory-compliance',
+        regulator: opts.regulator,
+        ruleSet,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Accessibility reviewer — WCAG 2.1 AA (default) or AAA review of any
+   * human-consumed prose / UI / document output. Reads for plain-language
+   * compliance, alt-text presence, semantic-heading structure, color-
+   * independence claims, keyboard-reachability, and cognitive-load surfaces.
+   *
+   * Always `'must-approve'` — for catalog Services whose output is consumed
+   * by humans, accessibility failures are dispositive.
+   *
+   * `$id` namespace: `persona:accessibility:wcag-<level>`.
+   *
+   * @example
+   * ```ts
+   * Personas.accessibility() // WCAG 2.1 AA, all surfaces
+   * Personas.accessibility({ level: 'AAA' })
+   * Personas.accessibility({ surfaces: ['screen-reader', 'cognitive'] })
+   * ```
+   */
+  accessibility(opts: AccessibilityPersonaOpts = {}): AgenticPersona {
+    const level: 'AA' | 'AAA' = opts.level ?? 'AA'
+    const surfaces: AccessibilitySurface[] = opts.surfaces ?? [
+      'screen-reader',
+      'keyboard-only',
+      'low-vision',
+      'cognitive',
+    ]
+    return {
+      name: opts.name ?? `accessibility-wcag-${slug(level)}`,
+      persona:
+        `You are an accessibility reviewer applying WCAG 2.1 ${level} criteria. ` +
+        `Audit the artifact across these surfaces: ${surfaces.join(', ')}. ` +
+        `Check for plain-language compliance, alt-text presence on non-text content, ` +
+        `semantic-heading structure, color-independence (no information conveyed by ` +
+        `color alone), and keyboard-only reachability where applicable. Reject on any ` +
+        `WCAG 2.1 ${level} violation; cite the specific success criterion when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:accessibility:wcag-${slug(level)}`,
+        archetype: 'accessibility',
+        level,
+        surfaces,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Security-threat reviewer — adversarial security review across configured
+   * surfaces. Hunts for leaked secrets, PII in logs, prompt-injection vectors,
+   * data-exfiltration patterns, privilege-escalation paths, and DoS-
+   * adjacent failure modes. Always `'must-approve'` — security failures are
+   * dispositive and override aggregate sign-off policies.
+   *
+   * Defaults to `modelHint: 'opus'` (strong adversarial reasoning).
+   *
+   * `$id` namespace: `persona:security-threat:<severity>`.
+   *
+   * @example
+   * ```ts
+   * Personas.securityThreat() // all surfaces, all severities
+   * Personas.securityThreat({ severity: 'critical-only' })
+   * Personas.securityThreat({ surfaces: ['prompt-injection', 'pii-leakage'] })
+   * ```
+   */
+  securityThreat(opts: SecurityThreatPersonaOpts = {}): AgenticPersona {
+    const surfaces: SecuritySurface[] = opts.surfaces ?? [
+      'injection',
+      'data-exfiltration',
+      'privilege-escalation',
+      'pii-leakage',
+      'prompt-injection',
+      'denial-of-service',
+    ]
+    const severity: 'critical-only' | 'all' = opts.severity ?? 'all'
+    const severityClause =
+      severity === 'critical-only'
+        ? ` Flag only critical-severity findings.`
+        : ` Flag every finding regardless of severity.`
+    return {
+      name: opts.name ?? `security-threat-${slug(severity)}`,
+      persona:
+        `You are an adversarial security reviewer. Audit the artifact for security-` +
+        `relevant content across these surfaces: ${surfaces.join(', ')}. ` +
+        `Look for leaked secrets / API keys, PII in log output, prompt-injection ` +
+        `vectors that could subvert downstream agents, exfiltration patterns, ` +
+        `privilege-escalation paths, and denial-of-service-adjacent failure modes.` +
+        severityClause +
+        ` Reject on any qualifying finding; cite the specific surface and the ` +
+        `evidence in the artifact when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:security-threat:${slug(severity)}`,
+        archetype: 'security-threat',
+        surfaces,
+        severity,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Data-privacy reviewer — privacy-impact review aligned to GDPR / CCPA /
+   * PIPEDA (or framework-agnostic `'general'` baseline). Checks for
+   * unnecessary PII inclusion, missing consent markers, retention-policy
+   * violations, and (when `minimizationCheck` is on) data-minimization
+   * compliance. Always `'must-approve'` — privacy failures are load-bearing
+   * for any Service touching customer data.
+   *
+   * `$id` namespace: `persona:data-privacy:<framework>`.
+   *
+   * @example
+   * ```ts
+   * Personas.dataPrivacy() // 'general', all PII categories, minimization on
+   * Personas.dataPrivacy({ framework: 'gdpr', minimizationCheck: true })
+   * Personas.dataPrivacy({ piiCategories: ['health', 'biometric'] })
+   * ```
+   */
+  dataPrivacy(opts: DataPrivacyPersonaOpts = {}): AgenticPersona {
+    const framework: PrivacyFramework = opts.framework ?? 'general'
+    const piiCategories: PiiCategory[] = opts.piiCategories ?? [
+      'name',
+      'email',
+      'phone',
+      'ssn',
+      'health',
+      'financial',
+      'biometric',
+      'behavioral',
+    ]
+    const minimizationCheck = opts.minimizationCheck ?? true
+    const minimizationClause = minimizationCheck
+      ? ` Enforce data-minimization: flag unnecessary PII inclusion even when ` +
+        `the included PII is otherwise lawful.`
+      : ` Data-minimization enforcement is disabled — flag only unlawful PII ` + `inclusion.`
+    return {
+      name: opts.name ?? `data-privacy-${slug(framework)}`,
+      persona:
+        `You are a data-privacy reviewer applying the ${framework.toUpperCase()} ` +
+        `framework. Scan the artifact for these PII categories: ` +
+        `${piiCategories.join(', ')}. Check for missing consent markers, ` +
+        `retention-policy violations, and lawful-basis gaps under ${framework.toUpperCase()}.` +
+        minimizationClause +
+        ` Reject on any qualifying finding; cite the PII category, the framework ` +
+        `obligation, and the evidence in the artifact when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:data-privacy:${slug(framework)}`,
+        archetype: 'data-privacy',
+        framework,
+        piiCategories,
+        minimizationCheck,
         ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
