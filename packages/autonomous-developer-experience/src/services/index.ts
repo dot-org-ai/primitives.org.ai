@@ -30,3 +30,15 @@ export type {
   SdkTargetLanguage,
   SdkRegistry,
 } from './sdk-generator.js'
+
+export {
+  migrationGuideWriter,
+  VersionPairInputSchema,
+  MigrationGuideOutputSchema,
+  BreakingChangeSeveritySchema,
+} from './migration-guide-writer.js'
+export type {
+  VersionPairInput,
+  MigrationGuideOutput,
+  BreakingChangeSeverity,
+} from './migration-guide-writer.js'

@@ -41,6 +41,15 @@ export interface PedanticPersonaOpts {
   rubric?: string[]
   /** Override the default-minted `name`. */
   name?: string
+  /**
+   * Optional model hint (e.g. `'opus'`, `'sonnet'`, `'haiku'`). Stored on
+   * `config.modelHint` and read by `EvaluatorPanel` when running in
+   * `parallel-multi-call` mode so each persona can pick its own model
+   * (e.g. `Personas.skeptic({ modelHint: 'opus' })` for high-stakes review).
+   * Honoured only in `parallel-multi-call`; ignored in `aggregate-single-call`
+   * (the single LLM call uses the panel-level model).
+   */
+  modelHint?: string
 }
 
 /**
@@ -56,6 +65,8 @@ export interface SkepticPersonaOpts {
   focus?: string[]
   /** Override the default-minted `name`. */
   name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
 }
 
 /**
@@ -71,6 +82,8 @@ export interface AccuracyPersonaOpts {
   sources?: string[]
   /** Override the default-minted `name`. */
   name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
 }
 
 /**
@@ -84,6 +97,8 @@ export interface VoicePersonaOpts {
   brandVoiceRef: string
   /** Override the default-minted `name`. */
   name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
 }
 
 /**
@@ -97,6 +112,8 @@ export interface CoveragePersonaOpts {
   minPercent: number
   /** Override the default-minted `name`. */
   name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
 }
 
 /**
@@ -110,6 +127,8 @@ export interface DomainPersonaOpts {
   expertRef: string
   /** Override the default-minted `name`. */
   name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
 }
 
 // ============================================================================
@@ -150,6 +169,7 @@ export const Personas = {
         archetype: 'pedantic',
         domain: opts.domain,
         rubric: opts.rubric ?? [],
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
   },
@@ -169,6 +189,7 @@ export const Personas = {
         archetype: 'skeptic',
         domain: opts.domain,
         focus: opts.focus ?? [],
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
   },
@@ -188,6 +209,7 @@ export const Personas = {
         archetype: 'accuracy',
         domain: opts.domain,
         sources: opts.sources ?? [],
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
   },
@@ -206,6 +228,7 @@ export const Personas = {
       config: {
         archetype: 'voice',
         brandVoiceRef: opts.brandVoiceRef,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
   },
@@ -224,6 +247,7 @@ export const Personas = {
       config: {
         archetype: 'coverage',
         minPercent: opts.minPercent,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
   },
@@ -242,6 +266,7 @@ export const Personas = {
       config: {
         archetype: 'domain',
         expertRef: opts.expertRef,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
   },

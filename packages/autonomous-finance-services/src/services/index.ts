@@ -31,3 +31,11 @@ export type { TreasuryDayInput, TreasuryPositionOutput } from './treasury.js'
 
 export { payroll, PayrollPeriodInputSchema, PayrollRunOutputSchema } from './payroll.js'
 export type { PayrollPeriodInput, PayrollRunOutput } from './payroll.js'
+
+export {
+  auditPrep,
+  AuditPeriodInputSchema,
+  AuditBinderOutputSchema,
+  SupportingDocTypeSchema,
+} from './audit-prep.js'
+export type { AuditPeriodInput, AuditBinderOutput, SupportingDocType } from './audit-prep.js'

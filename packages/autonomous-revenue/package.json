@@ -30,6 +30,10 @@
     "./renewal-workbench": {
       "types": "./dist/services/renewal-workbench.d.ts",
       "import": "./dist/services/renewal-workbench.js"
+    },
+    "./campaign-orchestrator": {
+      "types": "./dist/services/campaign-orchestrator.d.ts",
+      "import": "./dist/services/campaign-orchestrator.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

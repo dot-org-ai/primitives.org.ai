@@ -287,8 +287,10 @@ function buildPersonaPrompt(persona: AgenticPersona, target: unknown, round: num
 /**
  * Dispatch one persona → one verdict. Used by `parallel-multi-call`.
  *
- * Round-11 wiring: the model name (currently `'sonnet'` for every persona —
- * a per-persona `modelHint` is round-12 work) is threaded through to
+ * Reads `persona.config.modelHint` (when present) so each persona can pick
+ * its own model — e.g. `Personas.skeptic({ modelHint: 'opus' })` for
+ * high-stakes review. Falls back to `'sonnet'` when the persona declares no
+ * preference. The chosen model is threaded through to
  * {@link estimateCostFromUsage} so the cost is priced against the real rate
  * table rather than a hardcoded constant.
  */
@@ -298,10 +300,11 @@ async function runPersonaCall(
   round: number
 ): Promise<{ approval?: PanelApproval; rejection?: PanelRejection; costUsd: number }> {
   const prompt = buildPersonaPrompt(persona, target, round)
-  // Round-11: capture the model so the cost estimate is per-model rather
-  // than hardcoded Sonnet. Round-12 will read `persona.config.modelHint`
-  // (or similar) so each persona can pick its own model.
-  const model = 'sonnet'
+  // Per-persona modelHint, falling back to Sonnet when the persona declared
+  // no preference. The Personas factories store this on `config.modelHint`
+  // (round-12 fix); custom literal personas may set it directly.
+  const modelHint = persona.config['modelHint']
+  const model: string = typeof modelHint === 'string' ? modelHint : 'sonnet'
   const result = await generateObject({
     model,
     schema: VerdictSchema,
@@ -363,11 +366,11 @@ async function runAggregateCall(
     `Emit one verdict object per persona, keyed by persona name. Each value: { verdict: 'approve' | 'reject', rationale: string }.`,
   ].join('\n\n')
 
-  // Round-11: capture the model so the cost estimate is per-model rather
-  // than hardcoded Sonnet. The aggregate-call mode runs every persona under
-  // a single model — round-12 may allow heterogeneous models per persona,
-  // at which point the aggregate path will need to choose the most
-  // expensive (or sum across slots) for a conservative estimate.
+  // Aggregate mode runs every persona under a SINGLE LLM call — per-persona
+  // `modelHint` is intentionally NOT honoured here (you can't ask one model
+  // to roleplay another model's pricing). Use Service-level / panel-level
+  // modelHint for aggregate mode; per-persona modelHint is only honoured in
+  // 'parallel-multi-call' mode (see `runPersonaCall`).
   const model = 'sonnet'
   const result = await generateObject({
     model,

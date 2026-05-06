@@ -38,11 +38,19 @@
  * signature is unchanged from the round-7/8 surface so callers in
  * `cascade-walker.ts` and `evaluator-panel.ts` need no churn.
  *
- * TODO(round 12): non-Anthropic-non-OpenAI providers (Llama via Together,
- * DeepSeek, Mistral, Qwen, Grok, Perplexity sonar) are not in
- * `BudgetTracker`'s default pricing table — they will route through the
- * Sonnet fallback today. Round 12 will load `language-models/data/models.json`
- * pricing as `customPricing` so every catalogued model gets its real rate.
+ * **Language-models overlay (round-12 follow-up).** A lazy module-load reads
+ * `language-models/data/models.json` and overlays each catalogued model's
+ * `pricing.{prompt,completion}` (USD per token, parsed from the entry's
+ * string fields and rescaled to per-million) into the `customPricing` map
+ * passed to {@link BudgetTracker}. Result: Llama (via Together / Groq),
+ * DeepSeek, Mistral, Qwen, Grok, Perplexity Sonar — any model in the
+ * language-models catalog — get their real per-token rate instead of the
+ * Sonnet pessimistic fallback. The load is best-effort (try/catch); a
+ * failed load silently degrades to the previous round-11 alias-only behaviour.
+ *
+ * TODO(round 13): native BudgetTracker support for these models so we don't
+ * need the overlay (i.e. promote the language-models catalog into
+ * `ai-functions/src/budget.ts` `DEFAULT_MODEL_PRICING`).
  *
  * @packageDocumentation
  */
@@ -104,6 +112,85 @@ const ALIAS_PRICING: Record<string, ModelPricing> = {
   'anthropic/claude-haiku-4.5': HAIKU_PRICING,
 }
 
+// ============================================================================
+// Language-models catalog overlay (round-12 follow-up)
+// ============================================================================
+
+/**
+ * Minimal shape we read off each language-models catalog entry. Pricing
+ * fields are quoted strings (USD per token) — we parse them into
+ * {@link ModelPricing}'s per-million convention.
+ */
+interface CatalogEntry {
+  id: string
+  pricing?: {
+    prompt?: string
+    completion?: string
+  }
+}
+
+/**
+ * Lazy-loaded pricing overlay sourced from `language-models/data/models.json`.
+ * Each catalog entry's `pricing.prompt` / `pricing.completion` (USD per
+ * single token; quoted strings) is parsed and rescaled to per-million for
+ * {@link BudgetTracker}'s convention.
+ *
+ * Best-effort: a missing dep / parse failure / empty pricing entry silently
+ * degrades to the previous round-11 alias-only behaviour. Loaded once on
+ * first access; cached for the lifetime of the process.
+ *
+ * Round-13 follow-up: promote these into `ai-functions/src/budget.ts`'s
+ * `DEFAULT_MODEL_PRICING` so the overlay can go away.
+ */
+let _languageModelsOverlayCache: Record<string, ModelPricing> | null = null
+let _languageModelsOverlayKnownIds: Set<string> | null = null
+
+function loadLanguageModelsOverlay(): {
+  pricing: Record<string, ModelPricing>
+  knownIds: Set<string>
+} {
+  if (_languageModelsOverlayCache !== null && _languageModelsOverlayKnownIds !== null) {
+    return { pricing: _languageModelsOverlayCache, knownIds: _languageModelsOverlayKnownIds }
+  }
+  const pricing: Record<string, ModelPricing> = {}
+  const knownIds: Set<string> = new Set()
+  try {
+    // Lazy ESM-safe load. The require is wrapped in createRequire so the
+    // module-load error (when the dep is missing) is catchable. Parsing
+    // the JSON file directly avoids importing any of language-models'
+    // module-load side effects.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createRequire } = require('module') as typeof import('module')
+    const req = createRequire(import.meta.url)
+    const entries = req('language-models/data/models.json') as CatalogEntry[]
+    for (const entry of entries) {
+      if (!entry || typeof entry.id !== 'string') continue
+      knownIds.add(entry.id)
+      const promptRaw = entry.pricing?.prompt
+      const completionRaw = entry.pricing?.completion
+      if (typeof promptRaw !== 'string' || typeof completionRaw !== 'string') continue
+      const promptPerToken = Number(promptRaw)
+      const completionPerToken = Number(completionRaw)
+      // Skip non-finite, negative, or both-zero entries. A free model
+      // (prompt=0, completion=0) gets `{ in: 0, out: 0 }` so we don't
+      // accidentally emit Sonnet rates for it via the unknown-model path.
+      if (!Number.isFinite(promptPerToken) || !Number.isFinite(completionPerToken)) continue
+      if (promptPerToken < 0 || completionPerToken < 0) continue
+      pricing[entry.id] = {
+        inputPricePerMillion: promptPerToken * 1_000_000,
+        outputPricePerMillion: completionPerToken * 1_000_000,
+      }
+    }
+  } catch {
+    // Best-effort — language-models may not be installed (or models.json
+    // moved). Fall through to the alias-only overlay; unknown models will
+    // route through the Sonnet fallback warn.
+  }
+  _languageModelsOverlayCache = pricing
+  _languageModelsOverlayKnownIds = knownIds
+  return { pricing, knownIds }
+}
+
 /**
  * Models the BudgetTracker default pricing table already knows about
  * (verbatim from `ai-functions/src/budget.ts` DEFAULT_MODEL_PRICING). We
@@ -139,12 +226,15 @@ const BUDGET_TRACKER_KNOWN_MODELS: ReadonlySet<string> = new Set([
 const _warnedUnknownModels: Set<string> = new Set()
 
 /**
- * Whether we recognise `model` — either as an alias we've overlaid, or as a
- * key the BudgetTracker default pricing table already knows.
+ * Whether we recognise `model` — either as an alias we've overlaid, as a
+ * language-models catalog id (round-12 overlay), or as a key the
+ * BudgetTracker default pricing table already knows.
  */
 function isKnownModel(model: string): boolean {
   if (model in ALIAS_PRICING) return true
   if (BUDGET_TRACKER_KNOWN_MODELS.has(model)) return true
+  const { knownIds } = loadLanguageModelsOverlay()
+  if (knownIds.has(model)) return true
   return false
 }
 
@@ -205,8 +295,13 @@ export function estimateCostFromUsage(usage: unknown, model?: string): number {
   // under a synthetic key with Sonnet rates so the BudgetTracker still does
   // the math (and we get a single source of truth for the input/output
   // multiplication). Warn exactly once per unknown name.
+  //
+  // Round-12: merge the language-models catalog overlay first so Llama /
+  // DeepSeek / Mistral / Qwen / Grok / Perplexity Sonar route through their
+  // real catalog rate before the alias / unknown-model paths fire.
   const modelName = model ?? 'sonnet'
-  const customPricing = { ...ALIAS_PRICING }
+  const { pricing: catalogPricing } = loadLanguageModelsOverlay()
+  const customPricing = { ...catalogPricing, ...ALIAS_PRICING }
   let trackerModelKey = modelName
   if (!isKnownModel(modelName)) {
     warnUnknownModelOnce(modelName)

@@ -23,6 +23,7 @@ import type { ProofPredicate } from 'autonomous-finance'
 import type { ServiceInstance } from '../service.js'
 import type { VersionVector } from '../lineage.js'
 import { ServiceLifecycle } from './lifecycle.js'
+import { getMarketplaceRepo } from '../marketplace/persistence.js'
 
 // ============================================================================
 // Public option + report types
@@ -40,9 +41,14 @@ export interface VerifyOpts {
   /** Optional explicit fixtures; auto-synthesised when omitted. */
   fixtures?: VerifyFixture[]
   /**
-   * When `true`, verify-time events land on the canonical cascade-event log
-   * tagged with `cascadeEventTags` (per v3 §10). Today the bridge is a no-op
-   * placeholder — the report still records the intended emit.
+   * When `true`, verify-time {@link InvocationEvent}s emitted by the cascade
+   * walker fan out to the canonical SVO Action log tagged with
+   * `cascadeEventTags` (per v3 §10). Emission goes through the configured
+   * `MarketplaceRepo` if it exposes a `db.actions.create` surface (the
+   * `ai-database`-backed adapter does; the in-memory default does not — the
+   * report's `emittedEvents` array stays empty in that case). Emission
+   * failures are swallowed with a `console.warn` so verify never breaks on
+   * observability errors.
    */
   emitToCascadeEventLog?: boolean
   /** Tags applied to verify-time events for downstream filtering. */
@@ -92,7 +98,11 @@ export interface VerificationReport {
   readonly evaluatorPasses: VerificationEvaluatorPass[]
   readonly versionVector: VersionVector
   readonly verifiedAt: string
-  /** Cascade-event refs emitted when `emitToCascadeEventLog: true`. */
+  /**
+   * Cascade-event Action refs emitted when `emitToCascadeEventLog: true`.
+   * Empty when the configured `MarketplaceRepo` has no `db.actions.create`
+   * surface (in-memory default), or when every emission failed silently.
+   */
   readonly emittedEvents?: string[]
 }
 
@@ -154,20 +164,30 @@ function evaluatePredicate(
 
 /**
  * Walk a single fixture's invocation through the mock cascade and collect
- * verdicts.
+ * verdicts. When `collectEvents` is true, every {@link InvocationEvent} the
+ * cascade emits is buffered into the returned `events` array so the caller
+ * (`verifyService`) can fan them out to the SVO Action log when
+ * `opts.emitToCascadeEventLog === true`.
  */
 async function runFixture<TIn, TOut>(
   svc: ServiceInstance<TIn, TOut>,
-  fixture: VerifyFixture
-): Promise<{ passes: VerificationEvaluatorPass[]; failure?: VerificationFailure }> {
+  fixture: VerifyFixture,
+  collectEvents: boolean
+): Promise<{
+  passes: VerificationEvaluatorPass[]
+  failure?: VerificationFailure
+  events: InvocationEvent<TOut>[]
+}> {
   const handle = createInvocationHandle<TIn, TOut>(svc, fixture.input as TIn, {
     tenantRef: '__verify__',
   })
 
   const passes: VerificationEvaluatorPass[] = []
+  const events: InvocationEvent<TOut>[] = []
   let failure: VerificationFailure | undefined
 
   for await (const ev of handle.events as AsyncIterable<InvocationEvent<TOut>>) {
+    if (collectEvents) events.push(ev)
     if (ev.kind === 'evaluator-signoff' && ev.verdict === 'approve') {
       passes.push({ reviewer: ev.reviewer, rationale: ev.rationale })
     } else if (ev.kind === 'evaluator-signoff' && ev.verdict === 'reject') {
@@ -191,8 +211,61 @@ async function runFixture<TIn, TOut>(
     }
   }
 
-  if (failure) return { passes, failure }
-  return { passes }
+  if (failure) return { passes, failure, events }
+  return { passes, events }
+}
+
+// ============================================================================
+// SVO Action emission for verify-time events
+// ============================================================================
+
+/**
+ * Default actor identity stamped on cascade-event-log emissions. Mirrors
+ * the `role:`-prefixed convention used by `Service.publish` (publish.ts).
+ */
+const DEFAULT_VERIFY_ACTOR = 'role:verifier'
+
+/**
+ * Best-effort SVO Action emission for a single verify-time
+ * {@link InvocationEvent}.
+ *
+ * Mirrors the `emitPublishAction` pattern in `service/publish.ts`: duck-types
+ * the configured `MarketplaceRepo` for a `db.actions.create` surface (the
+ * `ai-database`-backed adapter exposes one; the in-memory default does not).
+ * Returns the minted Action `$id` on success, `undefined` when the repo has
+ * no Action sink or the create call rejects (failure must NOT break verify
+ * — emission is observability, not source of truth).
+ */
+async function emitVerifyEventAction(
+  svc: ServiceInstance<unknown, unknown>,
+  event: InvocationEvent<unknown>,
+  tags: string[]
+): Promise<string | undefined> {
+  const repo = getMarketplaceRepo()
+  // Duck-type check: ai-database adapter exposes a `db` field with an
+  // `actions.create` API. The in-memory adapter does not — skip silently.
+  const dbHolder = repo as unknown as {
+    db?: { actions?: { create(opts: unknown): Promise<{ $id?: string; id?: string } | unknown> } }
+  }
+  const create = dbHolder.db?.actions?.create
+  if (typeof create !== 'function') return undefined
+
+  try {
+    const { kind, ...payload } = event as { kind: string } & Record<string, unknown>
+    const result = await create.call(dbHolder.db!.actions, {
+      actor: DEFAULT_VERIFY_ACTOR,
+      action: 'verify-step',
+      object: svc.$id,
+      objectData: { event: kind, payload },
+      meta: { tags },
+    })
+    // Action providers vary in id field shape; accept either `$id` or `id`.
+    const ref = result as { $id?: string; id?: string } | undefined
+    return ref?.$id ?? ref?.id
+  } catch (err) {
+    console.warn(`[Service.verify] cascade-event-log emission failed for ${svc.$id}:`, err)
+    return undefined
+  }
 }
 
 // ============================================================================
@@ -232,14 +305,35 @@ export async function verifyService<TIn, TOut>(
 
   const evaluatorPasses: VerificationEvaluatorPass[] = []
   const failures: VerificationFailure[] = []
+  const collectedEvents: InvocationEvent<unknown>[] = []
 
+  const collectEvents = opts?.emitToCascadeEventLog === true
   for (const fixture of fixtures) {
-    const { passes, failure } = await runFixture(svc, fixture)
+    const { passes, failure, events } = await runFixture(svc, fixture, collectEvents)
     evaluatorPasses.push(...passes)
     if (failure) failures.push(failure)
+    if (collectEvents) collectedEvents.push(...(events as InvocationEvent<unknown>[]))
   }
 
   const passed = failures.length === 0
+
+  // When the caller asked for cascade-event-log emission AND the configured
+  // MarketplaceRepo exposes a `db.actions.create` surface (ai-database
+  // adapter), fan each collected InvocationEvent out to the SVO Action log
+  // tagged with `opts.cascadeEventTags`. The minted Action `$id`s are
+  // captured into `report.emittedEvents`. When no DB-backed repo is wired
+  // (in-memory default), this resolves to an empty array — same surface,
+  // no real emission. Emission failures are swallowed (observability, not
+  // source of truth).
+  let emittedEvents: string[] | undefined
+  if (collectEvents) {
+    emittedEvents = []
+    const tags = opts?.cascadeEventTags ?? []
+    for (const event of collectedEvents) {
+      const ref = await emitVerifyEventAction(svc as ServiceInstance<unknown, unknown>, event, tags)
+      if (ref !== undefined) emittedEvents.push(ref)
+    }
+  }
 
   // Build the report. The optional `emittedEvents` field is included only
   // when the caller asked for cascade-event-log emission.
@@ -252,11 +346,7 @@ export async function verifyService<TIn, TOut>(
     evaluatorPasses,
     versionVector: snapshotVersionVector(svc as ServiceInstance<unknown, unknown>),
     verifiedAt: new Date().toISOString(),
-    ...(opts?.emitToCascadeEventLog && {
-      // TODO(round 5): bridge to the canonical cascade-event log; for now we
-      // record the intended tags so downstream consumers see the surface.
-      emittedEvents: (opts.cascadeEventTags ?? []).map((tag) => `cascade-event:${tag}`),
-    }),
+    ...(emittedEvents !== undefined && { emittedEvents }),
   }
 
   if (passed) {

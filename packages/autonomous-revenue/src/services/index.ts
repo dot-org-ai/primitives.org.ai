@@ -33,3 +33,10 @@ export {
   RenewalBriefOutputSchema,
 } from './renewal-workbench.js'
 export type { UpcomingRenewalInput, RenewalBriefOutput } from './renewal-workbench.js'
+
+export {
+  campaignOrchestrator,
+  CampaignBriefInputSchema,
+  CampaignResultOutputSchema,
+} from './campaign-orchestrator.js'
+export type { CampaignBriefInput, CampaignResultOutput } from './campaign-orchestrator.js'

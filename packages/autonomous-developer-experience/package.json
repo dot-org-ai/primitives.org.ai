@@ -22,6 +22,10 @@
     "./sdk-generator": {
       "types": "./dist/services/sdk-generator.d.ts",
       "import": "./dist/services/sdk-generator.js"
+    },
+    "./migration-guide-writer": {
+      "types": "./dist/services/migration-guide-writer.d.ts",
+      "import": "./dist/services/migration-guide-writer.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

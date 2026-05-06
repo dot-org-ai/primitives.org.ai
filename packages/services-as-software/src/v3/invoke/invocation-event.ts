@@ -78,7 +78,11 @@ export interface ClarificationResponse {
  * - `cascade-progress`     — a cascade {@link FunctionRef} reports progress;
  *                            `pct` is `0..100`. Multiple events per Function.
  * - `cost-incurred`        — a cascade step booked a {@link Money} cost.
- *                            `functionRef` (when present) attributes it.
+ *                            `functionRef` (when present) attributes it to a
+ *                            cascade step; `model` (when present) attributes
+ *                            it to the LLM that incurred the cost so
+ *                            subscribers can break costs out per-model
+ *                            (round-12 follow-up).
  * - `preview-available`    — a partial {@link TOut} payload is ready for a
  *                            named slot (the customer-runtime can render
  *                            previews mid-cascade).
@@ -98,7 +102,7 @@ export interface ClarificationResponse {
 export type InvocationEvent<TOut> =
   | { kind: 'state-changed'; state: InvocationState; at: Date }
   | { kind: 'cascade-progress'; functionRef: string; pct: number }
-  | { kind: 'cost-incurred'; cost: Money; functionRef?: string }
+  | { kind: 'cost-incurred'; cost: Money; functionRef?: string; model?: string }
   | { kind: 'preview-available'; slot: string; payload: Partial<TOut> }
   | { kind: 'clarification-needed'; request: ClarificationRequest<TOut> }
   | {

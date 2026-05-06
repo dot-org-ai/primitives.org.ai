@@ -31,6 +31,7 @@
     "digital-objects": "workspace:*",
     "digital-tools": "workspace:*",
     "digital-workers": "workspace:*",
+    "language-models": "workspace:*",
     "zod": "^3.23.0"
   },
   "keywords": [

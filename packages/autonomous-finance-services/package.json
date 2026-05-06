@@ -38,6 +38,10 @@
     "./payroll": {
       "types": "./dist/services/payroll.d.ts",
       "import": "./dist/services/payroll.js"
+    },
+    "./audit-prep": {
+      "types": "./dist/services/audit-prep.d.ts",
+      "import": "./dist/services/audit-prep.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

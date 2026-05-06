@@ -141,7 +141,7 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
         const stepSchema: ZodTypeAny = isLast
           ? (service.schema.output as unknown as ZodTypeAny)
           : z.string()
-        const { value, costUsd } = await runGenerativeStep<TIn>({
+        const { value, costUsd, model } = await runGenerativeStep<TIn>({
           fn,
           service,
           input,
@@ -153,6 +153,7 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
           kind: 'cost-incurred',
           cost: { amount: usdToMicroCents(costUsd), currency: 'USD' } satisfies Money,
           functionRef: fn.name,
+          ...(model !== undefined && { model }),
         })
         // Emit a partial preview keyed by the Function's name so the
         // customer-runtime can render mid-cascade output.
@@ -169,7 +170,7 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
         const stepSchema: ZodTypeAny = isLast
           ? (service.schema.output as unknown as ZodTypeAny)
           : z.string()
-        const { value, costUsd } = await runAgenticStep<TIn>({
+        const { value, costUsd, model } = await runAgenticStep<TIn>({
           fn,
           service,
           input,
@@ -183,6 +184,7 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
           kind: 'cost-incurred',
           cost: { amount: usdToMicroCents(costUsd), currency: 'USD' } satisfies Money,
           functionRef: fn.name,
+          ...(model !== undefined && { model }),
         })
         // Emit a partial preview keyed by the Function's name so the
         // customer-runtime can render mid-cascade output.
@@ -333,7 +335,7 @@ async function runGenerativeStep<TIn>(opts: {
   input: TIn
   carry: unknown
   schema: ZodTypeAny
-}): Promise<{ value: unknown; costUsd: number }> {
+}): Promise<{ value: unknown; costUsd: number; model: string }> {
   const { fn, service, input, schema } = opts
   const prompt = [
     `Service: ${service.name}`,
@@ -353,7 +355,7 @@ async function runGenerativeStep<TIn>(opts: {
   // estimateCostFromUsage handles the duck-typing and (round-11) routes
   // through `ai-functions.BudgetTracker` for real per-model pricing.
   const costUsd = estimateCostFromUsage(result.usage, model)
-  return { value: result.object, costUsd }
+  return { value: result.object, costUsd, model }
 }
 
 /**
@@ -387,7 +389,7 @@ async function runAgenticStep<TIn>(opts: {
   schema: ZodTypeAny
   emit: (event: InvocationEvent<unknown>) => void
   stepProgressBase: number
-}): Promise<{ value: unknown; costUsd: number }> {
+}): Promise<{ value: unknown; costUsd: number; model: string }> {
   const { fn, service, input, carry, schema, emit, stepProgressBase } = opts
 
   // Round-7 cap. TODO(round 8): read from `fn` (e.g. `fn.iterationLimit`).
@@ -502,7 +504,7 @@ async function runAgenticStep<TIn>(opts: {
   }
 
   const costUsd = estimateCostFromUsage((result as { usage?: unknown }).usage, model)
-  return { value, costUsd }
+  return { value, costUsd, model }
 }
 
 // ============================================================================
