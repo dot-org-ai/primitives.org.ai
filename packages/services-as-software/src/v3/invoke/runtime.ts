@@ -1,16 +1,17 @@
 /**
  * createInvocationHandle — runtime factory that mints an
- * {@link InvocationHandle} and starts the mock cascade walker.
+ * {@link InvocationHandle} and starts the cascade walker.
  *
- * **This is intentionally a mock for now.** The walker emits the FSM
- * transitions, cascade-progress events, and a hard-coded evaluator-signoff
- * burst, then resolves the result with a `null` payload (cast to `TOut`).
- * It does NOT actually call LLMs, run agentic Functions, or persist state.
+ * Round-6 status: the walker now performs **real LLM dispatch for Generative
+ * FunctionRefs** via `ai-functions.generateObject` (see
+ * {@link ./cascade-walker.ts}). Code Functions execute their inline handlers.
+ * Agentic and Human Functions remain mocked pending round-7 work.
  *
- * The mock is enough to validate the typed surface end-to-end so the parallel
- * `Service.define` + UI-shapes agents can wire against a real handle today.
+ * The runtime keeps the FSM-transition emissions inline (so the state-machine
+ * narrative reads top-to-bottom in this file); per-step cascade events are
+ * emitted by `runCascade` against the same handle.
  *
- * TODO(round 4/5): replace mock cascade execution with the
+ * TODO(round 7+): replace the in-process walker with the
  *   `ai-workflows` `DurableExecutionAdapter` + CF Workflows backend per
  *   ADR-0004. The replacement walker:
  *     - enqueues the cascade as a durable workflow
@@ -24,6 +25,7 @@
  */
 
 import type { ServiceInstance } from '../service.js'
+import { runCascade } from './cascade-walker.js'
 import type { ClarificationResponse, InvocationEvent } from './invocation-event.js'
 import { InvocationHandleImpl, type InvocationHandle } from './handle.js'
 import type { InvokeOpts } from './invoke-opts.js'
@@ -52,29 +54,27 @@ function mintInvocationId(): string {
  * cascade walker. Returns synchronously so the caller can subscribe to
  * `handle.events` before the first event fires.
  *
- * The walker is a **mock** today (see file header); it advances the FSM
- * through the happy path and emits one synthetic event per cascade step.
+ * Generative cascade steps trigger real LLM calls via `ai-functions`; Code
+ * steps invoke their inline handlers; Agentic and Human steps are mocked.
  */
 export function createInvocationHandle<TIn, TOut>(
   svc: ServiceInstance<TIn, TOut>,
-  _input: TIn,
-  _opts?: InvokeOpts
+  input: TIn,
+  opts?: InvokeOpts
 ): InvocationHandle<TOut> {
   const handle = new InvocationHandleImpl<TOut>(mintInvocationId())
 
-  // TODO: replace mock cascade execution with ai-workflows
-  //   DurableExecutionAdapter (round 5 / production work).
-  // The mock kicks off on next-tick so the caller has a chance to attach a
-  // `for await` consumer before any events fire.
+  // Kick off on next-tick so the caller has a chance to attach a `for await`
+  // consumer before any events fire.
   queueMicrotask(() => {
-    void runMockCascade(svc, handle)
+    void driveInvocation(svc, input, handle, opts)
   })
 
   return handle
 }
 
 // ============================================================================
-// Mock cascade walker
+// FSM driver — wraps runCascade with state-changed emissions + buyer hooks
 // ============================================================================
 
 /**
@@ -90,31 +90,30 @@ function transition<TOut>(handle: InvocationHandleImpl<TOut>, to: InvocationStat
 }
 
 /**
- * Mock cascade walker — drives the handle through the FSM happy path,
- * emitting one `cascade-progress` per `binding.cascade` step and a synthetic
- * `evaluator-signoff` burst (one approve per persona). Resolves the handle's
- * result with `null as TOut`.
- *
- * **No real LLM dispatch happens here** — see file header for the production
- * replacement plan.
+ * Drive an invocation through the FSM happy path, delegating cascade
+ * execution to {@link runCascade} for the DELIVERING phase. Settles the
+ * handle's `result` Deferred via the terminal `'delivered'` / `'failed'`
+ * event.
  */
-async function runMockCascade<TIn, TOut>(
+async function driveInvocation<TIn, TOut>(
   svc: ServiceInstance<TIn, TOut>,
-  handle: InvocationHandleImpl<TOut>
+  input: TIn,
+  handle: InvocationHandleImpl<TOut>,
+  opts?: InvokeOpts
 ): Promise<void> {
-  // Wire the buyer-control hooks. The mock walker accepts cancel/dispute by
-  // emitting the corresponding terminal event; clarify is a noop today.
-  // TODO: replace with workflow-signal dispatch (round 4/5).
+  // Wire the buyer-control hooks. Cancel / dispute drive the FSM directly;
+  // clarify is a noop today (the in-memory walker has no reply mechanism).
+  // TODO(round 7): replace with workflow-signal dispatch.
   handle.onClarify = async (_response: ClarificationResponse): Promise<void> => {
     // Mock: would resume the workflow. For now: noop.
   }
-  handle.onCancel = async (_reason?: string): Promise<void> => {
+  handle.onCancel = async (reason?: string): Promise<void> => {
     if (canTransition(handle.state, 'CANCELLED')) {
       transition(handle, 'CANCELLED')
       handle.emit({
         kind: 'failed',
         reason: 'external-failure',
-        detail: _reason ?? 'caller cancelled',
+        detail: reason ?? 'caller cancelled',
       })
     }
   }
@@ -133,26 +132,17 @@ async function runMockCascade<TIn, TOut>(
     transition(handle, 'ACTIVE')
     transition(handle, 'DELIVERING')
 
-    // Walk the cascade; one event per FunctionRef. Human steps would suspend
-    // for clarification — the mock emits a `clarification-needed` event but
-    // does NOT actually park the workflow (the in-memory walker has no
-    // reply mechanism wired beyond the noop `onClarify` above).
-    for (const fn of svc.binding.cascade) {
-      handle.emit({ kind: 'cascade-progress', functionRef: fn.name, pct: 0 })
-      if (fn.kind === 'human') {
-        handle.emit({
-          kind: 'clarification-needed',
-          request: {
-            id: `clr:${fn.$id}`,
-            question: `(mock) human step '${fn.name}' would request input here`,
-          },
-        })
-        // TODO: real walker would transition NEEDS_CLARIFICATION + park.
-      }
-      handle.emit({ kind: 'cascade-progress', functionRef: fn.name, pct: 100 })
-    }
+    // Real cascade execution — generative steps dispatch to ai-functions.
+    const payload = await runCascade<TIn, TOut>({
+      service: svc,
+      input,
+      emit: (event) => handle.emit(event),
+      ...(opts?.tenantRef !== undefined ? { tenantRef: opts.tenantRef } : {}),
+    })
 
-    // Synthetic evaluator-panel burst — one approve per persona.
+    // Synthetic evaluator-panel burst — one approve per persona. Real panel
+    // dispatch + verdict aggregation lands in round 7+ alongside the panel
+    // implementation.
     if (svc.evaluators) {
       const personas: ReadonlyArray<{ name: string }> =
         (svc.evaluators as { personas?: ReadonlyArray<{ name: string }> }).personas ?? []
@@ -170,13 +160,10 @@ async function runMockCascade<TIn, TOut>(
     transition(handle, 'QUALITY_REVIEW')
     transition(handle, 'DELIVERED')
 
-    // Resolve the result with a null payload.
-    // TODO: real walker resolves with the cascade's typed output.
-    const mockPayload = null as unknown as TOut
-    const deliveredEvent: InvocationEvent<TOut> = { kind: 'delivered', payload: mockPayload }
+    const deliveredEvent: InvocationEvent<TOut> = { kind: 'delivered', payload }
     handle.emit(deliveredEvent)
   } catch (err) {
-    // Any thrown error during the mock walk → emit a typed failure.
+    // Any thrown error during cascade execution → emit a typed failure.
     const detail = err instanceof Error ? err.message : String(err)
     if (canTransition(handle.state, 'FAILED')) {
       handle.emit({ kind: 'state-changed', state: 'FAILED', at: new Date() })

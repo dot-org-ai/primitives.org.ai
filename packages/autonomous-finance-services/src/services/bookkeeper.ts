@@ -25,7 +25,7 @@ import type { RewardSignal } from 'digital-tools'
 
 import { EvaluatorPanel, Personas, Service, type ServiceInstance } from 'services-as-software/v3'
 
-import { AND, EvaluatorPass, HumanSign, SchemaMatch } from 'autonomous-finance'
+import { AND, EvaluatorPass, HumanSign, Pricing, SchemaMatch } from 'autonomous-finance'
 
 // ============================================================================
 // Schemas (Zod 3.24+ implements StandardSchemaV1 natively)
@@ -203,16 +203,15 @@ export const bookkeeper: ServiceInstance<TxIngest, ClosedBooks> = Service.define
     ),
     amount: { amount: 49900n, currency: 'USD' },
     // 5-day SLA — onTimeout escalates per refundContract.
-    expiresAt: 'P5D',
+    timeoutDays: 5,
     onTimeout: 'escalate',
   },
 
-  pricing: {
-    kind: 'subscription',
+  pricing: Pricing.subscription({
     plan: { id: 'monthly', amount: 49900n, currency: 'USD', interval: 'month' },
     metered: [{ event: 'transaction-categorized', amount: 1n }],
     sla: { metric: 'on-time', threshold: 'day-5' },
-  },
+  }),
 
   refundContract: 'sla-credit-on-late-close',
   authorityBoundary: 'cpa-attest',

@@ -16,8 +16,11 @@
  *   - {@link Personas.coverage} — completeness floor (e.g. ≥ 95% rubric items).
  *   - {@link Personas.domain}   — pulls a named expert from `business.org.ai`.
  *
- * All factories default `signOff` to `'must-approve'`. Pass-through `name`
- * convention is `'<archetype>-validator-<domain>'`.
+ * All factories default `signOff` to `'must-approve'`. Each factory mints a
+ * default `name` of the form `'<archetype>-<domain>'` (e.g.
+ * `'pedantic-validator-gaap'`). Callers may pass an explicit `name` to
+ * override — useful when the panel uses natural names like `'qa-reviewer'`
+ * instead of the minted convention.
  *
  * @packageDocumentation
  */
@@ -36,6 +39,8 @@ export interface PedanticPersonaOpts {
   domain: string
   /** Optional rubric items the validator should enforce verbatim. */
   rubric?: string[]
+  /** Override the default-minted `name`. */
+  name?: string
 }
 
 /**
@@ -49,6 +54,8 @@ export interface SkepticPersonaOpts {
    * skeptic's adversarial lens.
    */
   focus?: string[]
+  /** Override the default-minted `name`. */
+  name?: string
 }
 
 /**
@@ -62,6 +69,8 @@ export interface AccuracyPersonaOpts {
    * grounding evidence (e.g. `['kb://corp-policy', 'web://nasdaq.com/AAPL']`).
    */
   sources?: string[]
+  /** Override the default-minted `name`. */
+  name?: string
 }
 
 /**
@@ -73,6 +82,8 @@ export interface VoicePersonaOpts {
    * Resolution is deferred to the runtime.
    */
   brandVoiceRef: string
+  /** Override the default-minted `name`. */
+  name?: string
 }
 
 /**
@@ -84,6 +95,8 @@ export interface CoveragePersonaOpts {
    * covered (0–1). E.g. `0.95` = 95%.
    */
   minPercent: number
+  /** Override the default-minted `name`. */
+  name?: string
 }
 
 /**
@@ -95,6 +108,8 @@ export interface DomainPersonaOpts {
    * The runtime resolves this to a domain-expert prompt + rubric lookup.
    */
   expertRef: string
+  /** Override the default-minted `name`. */
+  name?: string
 }
 
 // ============================================================================
@@ -126,7 +141,7 @@ export const Personas = {
    */
   pedantic(opts: PedanticPersonaOpts): AgenticPersona {
     return {
-      name: `pedantic-validator-${slug(opts.domain)}`,
+      name: opts.name ?? `pedantic-validator-${slug(opts.domain)}`,
       persona:
         `You are a pedantic validator for the ${opts.domain} domain. ` +
         `Apply the rubric strictly; cite each item by index when rejecting.`,
@@ -145,7 +160,7 @@ export const Personas = {
    */
   skeptic(opts: SkepticPersonaOpts): AgenticPersona {
     return {
-      name: `skeptic-${slug(opts.domain)}`,
+      name: opts.name ?? `skeptic-${slug(opts.domain)}`,
       persona:
         `You are an adversarial skeptic auditing the ${opts.domain} domain. ` +
         `Probe for failure modes; assume the artifact is wrong until proven otherwise.`,
@@ -164,7 +179,7 @@ export const Personas = {
    */
   accuracy(opts: AccuracyPersonaOpts): AgenticPersona {
     return {
-      name: `accuracy-reviewer-${slug(opts.domain)}`,
+      name: opts.name ?? `accuracy-reviewer-${slug(opts.domain)}`,
       persona:
         `You are an accuracy reviewer for the ${opts.domain} domain. ` +
         `Ground every load-bearing claim against the provided sources; reject unsupported claims.`,
@@ -183,7 +198,7 @@ export const Personas = {
    */
   voice(opts: VoicePersonaOpts): AgenticPersona {
     return {
-      name: `voice-and-style-${slug(opts.brandVoiceRef)}`,
+      name: opts.name ?? `voice-and-style-${slug(opts.brandVoiceRef)}`,
       persona:
         `You review the artifact for alignment with the brand voice referenced by ${opts.brandVoiceRef}. ` +
         `Reject deviations in tone, register, or vocabulary.`,
@@ -201,7 +216,7 @@ export const Personas = {
    */
   coverage(opts: CoveragePersonaOpts): AgenticPersona {
     return {
-      name: `coverage-pedant-${Math.round(opts.minPercent * 100)}`,
+      name: opts.name ?? `coverage-pedant-${Math.round(opts.minPercent * 100)}`,
       persona:
         `You are a coverage pedant. Reject the artifact unless it addresses at least ` +
         `${Math.round(opts.minPercent * 100)}% of the required rubric items / sections.`,
@@ -219,7 +234,7 @@ export const Personas = {
    */
   domain(opts: DomainPersonaOpts): AgenticPersona {
     return {
-      name: `domain-expert-${slug(opts.expertRef)}`,
+      name: opts.name ?? `domain-expert-${slug(opts.expertRef)}`,
       persona:
         `You are a domain expert as defined by ${opts.expertRef} in business.org.ai. ` +
         `Apply the expectations and norms of that role when reviewing.`,

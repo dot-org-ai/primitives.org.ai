@@ -28,6 +28,39 @@ export interface PerInvocationTier {
   overage?: bigint
 }
 
+/**
+ * A single metered-billing line item. `description` is genuinely optional —
+ * callers may omit it from inline literals AND from the {@link Pricing}
+ * factory calls (`Pricing.subscription` / `Pricing.composite`).
+ */
+export interface MeteredEntry {
+  event: string
+  amount: bigint
+  description?: string
+}
+
+/**
+ * Optional one-time base charge on a {@link Pricing.composite} plan. `description`
+ * is optional under `exactOptionalPropertyTypes`.
+ */
+export interface CompositeBase {
+  id: string
+  amount: bigint
+  description?: string
+}
+
+/**
+ * Recurring plan portion of a {@link Pricing.subscription}. Shared between the
+ * `Pricing` discriminated union and the {@link Pricing.subscription} factory
+ * so the two shapes never drift.
+ */
+export interface SubscriptionPlan {
+  id: string
+  amount: bigint
+  currency: Currency
+  interval: 'day' | 'week' | 'month' | 'quarter' | 'year'
+}
+
 export type Pricing =
   | {
       kind: 'outcome'
@@ -36,13 +69,8 @@ export type Pricing =
     }
   | {
       kind: 'subscription'
-      plan: {
-        id: string
-        amount: bigint
-        currency: Currency
-        interval: 'day' | 'week' | 'month' | 'quarter' | 'year'
-      }
-      metered?: { event: string; amount: bigint; description?: string }[]
+      plan: SubscriptionPlan
+      metered?: MeteredEntry[]
       sla?: SLATarget
     }
   | {
@@ -51,8 +79,8 @@ export type Pricing =
     }
   | {
       kind: 'composite'
-      base: { id: string; amount: bigint; description?: string }
-      metered: { event: string; amount: bigint; description?: string }[]
+      base: CompositeBase
+      metered: MeteredEntry[]
     }
 
 export const Pricing = {
@@ -64,13 +92,8 @@ export const Pricing = {
   },
 
   subscription(opts: {
-    plan: {
-      id: string
-      amount: bigint
-      currency: Currency
-      interval: 'day' | 'week' | 'month' | 'quarter' | 'year'
-    }
-    metered?: { event: string; amount: bigint; description?: string }[]
+    plan: SubscriptionPlan
+    metered?: MeteredEntry[]
     sla?: SLATarget
   }): Pricing {
     const result: Extract<Pricing, { kind: 'subscription' }> = {
@@ -86,10 +109,7 @@ export const Pricing = {
     return { kind: 'per-invocation', tiers: opts.tiers }
   },
 
-  composite(opts: {
-    base: { id: string; amount: bigint; description?: string }
-    metered: { event: string; amount: bigint; description?: string }[]
-  }): Pricing {
+  composite(opts: { base: CompositeBase; metered: MeteredEntry[] }): Pricing {
     return { kind: 'composite', base: opts.base, metered: opts.metered }
   },
 }

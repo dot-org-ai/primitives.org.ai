@@ -16,7 +16,7 @@
  *   - `schema.input/output`  → caller-provided override or `unknownSchema`
  *   - `binding.cascade`      → `[Code({ name, handler: fn })]`
  *   - `binding.toolPermissions` → `[]`
- *   - `binding.clarificationPolicy` → `{ enabled: false, ... }`
+ *   - `binding.clarificationPolicy` → `{ enabled: false }`
  *
  * @packageDocumentation
  */
@@ -107,11 +107,7 @@ export function fromFunction<TIn, TOut>(
       // erases the typed handler-shape into the canonical union for storage.
       cascade: [codeStep as unknown as FunctionRef],
       toolPermissions: [],
-      clarificationPolicy: {
-        enabled: false,
-        maxRoundTrips: 0,
-        escalateTo: '',
-      },
+      clarificationPolicy: { enabled: false },
     },
   })
 }

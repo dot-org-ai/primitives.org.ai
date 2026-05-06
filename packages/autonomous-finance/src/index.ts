@@ -48,7 +48,13 @@ export {
 } from './proof-predicate.js'
 
 // Outcome contract + proof of result
-export type { OutcomeContract, ProofOfResult } from './outcome-contract.js'
+export type {
+  OutcomeContract,
+  OutcomeContractBase,
+  OutcomeContractWithExpiresAt,
+  OutcomeContractWithTimeoutDays,
+  ProofOfResult,
+} from './outcome-contract.js'
 
 // SLA policy
 export type { SLAPolicy, SLATarget } from './sla.js'
@@ -62,7 +68,13 @@ export type { AuthorityBoundaryRef } from './authority.js'
 export { AuthorityBoundaries } from './authority.js'
 
 // Pricing factories — type + value merged on the same name (Pricing.outcome(...), etc.)
-export type { OutcomeTier, PerInvocationTier } from './pricing.js'
+export type {
+  OutcomeTier,
+  PerInvocationTier,
+  MeteredEntry,
+  CompositeBase,
+  SubscriptionPlan,
+} from './pricing.js'
 export { Pricing, money } from './pricing.js'
 export type { Pricing as PricingValue } from './pricing.js'
 

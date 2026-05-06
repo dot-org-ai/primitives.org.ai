@@ -148,10 +148,18 @@ export interface AgenticFunctionRef extends BaseFunctionRef {
    */
   toolPermissions?: string[]
   /**
-   * Maximum concurrent invocations of this Function — used by the runtime
-   * to bound cost on bursty workloads.
+   * Concurrency policy for this Function:
+   *
+   *   - `number`     — hard cap on concurrent invocations (caller picks N).
+   *   - `'serial'`   — one invocation at a time (semantic alias for `1`).
+   *   - `'fan-out'`  — semantic "fan out as wide as upstream emits"; the
+   *                    cascade compiler chooses N at runtime based on the
+   *                    upstream step's emitted batch size and ambient
+   *                    cost-budget policy.
+   *
+   * Used by the runtime to bound cost on bursty workloads.
    */
-  concurrency?: number
+  concurrency?: number | 'serial' | 'fan-out'
   /** Persona reference (typically into the `ai-evaluate` persona library). */
   persona?: PersonaRef
   /**

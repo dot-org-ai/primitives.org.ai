@@ -142,11 +142,7 @@ export const supportTriage: ServiceInstance<Ticket, Triaged> = Service.define<Ti
     toolPermissions: ['crm.contacts', 'crm.accounts', 'kb.search', 'router.queues'],
     // High-volume design: clarification disabled to keep latency tight; the
     // confidence-trigger handles the only real escape hatch.
-    clarificationPolicy: {
-      enabled: false,
-      maxRoundTrips: 0,
-      escalateTo: 'human-agent',
-    },
+    clarificationPolicy: { enabled: false },
     triggers: [
       {
         when: 'classify.confidence < 0.7',

@@ -30,7 +30,8 @@
     "autonomous-finance": "workspace:*",
     "digital-objects": "workspace:*",
     "digital-tools": "workspace:*",
-    "digital-workers": "workspace:*"
+    "digital-workers": "workspace:*",
+    "zod": "^3.23.0"
   },
   "keywords": [
     "services",

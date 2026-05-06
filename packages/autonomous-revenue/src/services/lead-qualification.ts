@@ -169,11 +169,7 @@ export const leadQualification: ServiceInstance<InboundLead, QualifiedLead> = Se
       'salesforce.opportunities',
       'apollo.contacts',
     ],
-    clarificationPolicy: {
-      enabled: false,
-      maxRoundTrips: 0,
-      escalateTo: 'sdr-review',
-    },
+    clarificationPolicy: { enabled: false },
     triggers: [
       {
         when: 'enrichment.company.revenue > 10_000_000_000n',

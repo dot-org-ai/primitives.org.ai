@@ -77,21 +77,40 @@ export type ClarificationTrigger =
  * Policy controlling when (and how often) a Service may pause an invocation
  * to request clarification from the caller.
  *
- * `maxRoundTrips` caps the dialogue depth before falling through to
- * `escalateTo` (typically a human reviewer or panel); `triggers` declares
+ * Discriminated on `enabled`:
+ *   - `{ enabled: false }` — clarification is disabled; no other fields needed.
+ *   - `{ enabled: true; maxRoundTrips; escalateTo; triggers? }` — full shape.
+ *
+ * When enabled, `maxRoundTrips` caps the dialogue depth before falling through
+ * to `escalateTo` (typically a human reviewer or panel); `triggers` declares
  * which mid-cascade signals are allowed to start a clarification — schema
  * validation failures and evaluator uncertainty are the two common ones, plus
  * an explicit programmatic request from the binding (`binding-explicit`).
  */
-export interface ClarificationPolicy {
-  enabled: boolean
-  /** Hard cap on clarification round-trips before escalation. */
-  maxRoundTrips: number
-  /** Worker / role / panel ref to escalate to once `maxRoundTrips` exceeded. */
-  escalateTo: string
-  /** Signals that may start a clarification round; defaults to all three. */
-  triggers?: ClarificationTrigger[]
-}
+export type ClarificationPolicy =
+  | {
+      enabled: false
+      /**
+       * Optional hard cap retained on the disabled variant for symmetry; the
+       * runtime ignores it when `enabled === false`.
+       */
+      maxRoundTrips?: number
+      /**
+       * Optional escalation target retained on the disabled variant for
+       * symmetry; the runtime ignores it when `enabled === false`.
+       */
+      escalateTo?: string
+      triggers?: ClarificationTrigger[]
+    }
+  | {
+      enabled: true
+      /** Hard cap on clarification round-trips before escalation. */
+      maxRoundTrips: number
+      /** Worker / role / panel ref to escalate to once `maxRoundTrips` exceeded. */
+      escalateTo: string
+      /** Signals that may start a clarification round; defaults to all three. */
+      triggers?: ClarificationTrigger[]
+    }
 
 // ============================================================================
 // ServiceBinding

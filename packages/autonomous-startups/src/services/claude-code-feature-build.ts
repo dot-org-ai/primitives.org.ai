@@ -133,10 +133,9 @@ export const claudeCodeFeatureBuild: ServiceInstance<FeatureBuildInput, FeatureB
           mode: 'supervised',
           oversight: { mode: 'supervised' },
           // `dev` fans out N parallel sub-tasks emitted by `dispatch`.
-          // The substrate `concurrency` knob is `number`; pick a sane
-          // upper bound here. TODO: thread a true `'fan-out'` mode through
-          // AgenticFunctionRef once the cascade compiler supports it.
-          concurrency: 4,
+          // The cascade compiler chooses N at runtime based on the upstream
+          // dispatch batch size + ambient cost budget.
+          concurrency: 'fan-out',
         }),
       ],
       toolPermissions: ['github.repos', 'github.pulls', 'github.actions'],
@@ -150,22 +149,24 @@ export const claudeCodeFeatureBuild: ServiceInstance<FeatureBuildInput, FeatureB
     evaluators: EvaluatorPanel.define({
       $id: 'panel:claude-code-review',
       personas: [
-        {
-          ...Personas.skeptic({ domain: 'qa', focus: ['tests', 'edge-cases'] }),
+        Personas.skeptic({
+          domain: 'qa',
+          focus: ['tests', 'edge-cases'],
           name: 'qa-reviewer',
-        },
-        {
-          ...Personas.domain({ expertRef: 'occupations.org.ai/SoftwareArchitects' }),
+        }),
+        Personas.domain({
+          expertRef: 'occupations.org.ai/SoftwareArchitects',
           name: 'arch-reviewer',
-        },
-        {
-          ...Personas.skeptic({ domain: 'security', focus: ['secrets', 'sast', 'auth'] }),
+        }),
+        Personas.skeptic({
+          domain: 'security',
+          focus: ['secrets', 'sast', 'auth'],
           name: 'security-reviewer',
-        },
-        {
-          ...Personas.accuracy({ domain: 'product-acceptance' }),
+        }),
+        Personas.accuracy({
+          domain: 'product-acceptance',
           name: 'product-reviewer',
-        },
+        }),
       ],
       signOffPolicy: 'all-approve',
       iterationPolicy: { maxRounds: 5, onMaxRoundsExceeded: 'escalate' },

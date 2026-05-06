@@ -127,11 +127,7 @@ export const apiDocsWriter: ServiceInstance<RepoIntake, PublishedDocs> = Service
       Code({ name: 'publish', reward: kr_thumbsUp, handler: () => undefined }),
     ],
     toolPermissions: ['github.repos', 'github.pages'],
-    clarificationPolicy: {
-      enabled: false,
-      maxRoundTrips: 0,
-      escalateTo: 'none',
-    },
+    clarificationPolicy: { enabled: false },
   },
 
   evaluators: EvaluatorPanel.define({
