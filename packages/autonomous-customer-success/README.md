@@ -35,6 +35,13 @@ Concrete `Service.define({...})` calls for customer-success work that the agenti
   // typed as ServiceInstance<UsageTrendWebhook, ExpansionOutreachOutput>
   ```
 
+- **`health-score-narrator`** — customer-health weekly digest. Trigger: weekly cron + customer accounts in CS book. Cascade: `fetch-engagement-product-and-support-signals (Code) → synthesize-per-account-health-narrative-and-flags (Generative) → rank-by-risk-and-emit-digest (Code)`. EvaluatorPanel of 3 personas (signal-quality-reviewer + early-warning-precision-checker + cs-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass)`. Pricing: `Pricing.subscription` ($299/mo per CS-team). Service-level reward = `at-risk-account-detected-before-renewal-cycle`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/customer-success-managers/health-score-narrator`.
+
+  ```ts
+  import { healthScoreNarrator } from 'autonomous-customer-success/health-score-narrator'
+  // typed as ServiceInstance<WeeklyDigestInput, HealthDigestOutput>
+  ```
+
 ## Why a separate package
 
 Each catalog package owns one functional area (finance, customer-success, revenue, developer-experience). Each ships independently, has its own release cadence, and depends only on the primitive substrate (services-as-software + autonomous-finance + business-as-code). No cross-domain coupling.

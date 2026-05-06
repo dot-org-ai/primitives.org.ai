@@ -38,6 +38,10 @@
     "./release-readiness-checklist": {
       "types": "./dist/services/release-readiness-checklist.d.ts",
       "import": "./dist/services/release-readiness-checklist.js"
+    },
+    "./incident-postmortem-author": {
+      "types": "./dist/services/incident-postmortem-author.d.ts",
+      "import": "./dist/services/incident-postmortem-author.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

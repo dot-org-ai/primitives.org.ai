@@ -29,6 +29,13 @@ Concrete `Service.define({...})` calls for revenue-generating work that the agen
   // typed as ServiceInstance<ClosedOpportunity, WinLossReport>
   ```
 
+- **`account-research-brief`** — pre-meeting account research for AE/SE teams. Trigger: meeting scheduled with prospect or customer (≥ Director-level attendee). Cascade: `fetch-account-and-opportunity-history (Code) → research-news-hiring-launches-exec-changes (Agentic, supervised) → synthesize-talking-points-and-buying-signals (Generative) → emit-research-brief-pdf (Code)`. EvaluatorPanel of 3 personas (actionability-reviewer + recency-checker + sales-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass)`. Pricing: `Pricing.perInvocation` 3-tier by deal-size band (small-deal / medium-deal / large-deal). Service-level reward = `meeting-progression-rate-improvement`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/sales-representatives/account-research-brief`.
+
+  ```ts
+  import { accountResearchBrief } from 'autonomous-revenue/account-research-brief'
+  // typed as ServiceInstance<MeetingScheduledInput, AccountResearchBriefOutput>
+  ```
+
 ## Why a separate package
 
 See `autonomous-customer-success/README.md` — same rationale: one functional area per package, independent release cadence, depends only on primitive substrate.

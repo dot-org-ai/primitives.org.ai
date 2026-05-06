@@ -62,3 +62,11 @@ export {
   type UsageTrendWebhook,
   type ExpansionOutreachOutput,
 } from './expansion-opportunity-detector.js'
+
+export {
+  healthScoreNarrator,
+  WeeklyDigestInputSchema,
+  HealthDigestOutputSchema,
+  type WeeklyDigestInput,
+  type HealthDigestOutput,
+} from './health-score-narrator.js'

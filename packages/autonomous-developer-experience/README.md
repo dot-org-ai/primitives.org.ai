@@ -17,6 +17,12 @@ Concrete `Service.define({...})` calls for developer-facing work that the agenti
 - **`tutorial-author`** — feature doc → end-to-end tutorial with runnable code.
 - **`example-suite-builder`** — repo + examples directory → maintained example apps with CI.
 - **`release-readiness-checklist`** — pre-release gate Service triggered when a PR is labelled `release-candidate`. Cascade: `fetch-pr-diff-issues-tests (Code) → check-release-notes-completeness (Generative) → check-breaking-changes-documented (Generative) → maintainer-sign-off-on-release-blockers (Human) → emit-readiness-report-and-set-pr-status-check (Code)`. EvaluatorPanel of 3 personas (check-coverage + breaking-changes-flagged + maintainer-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(maintainer))`. Pricing: `Pricing.perInvocation` 3-tier by changed-LOC (small-PR / medium-PR / large-PR). Service-level reward = `post-release-incident-rate-improvement`. Archetype: `quality-gate`. Lineage: `business.org.ai/cells/software-developers/release-readiness-gate`.
+- **`incident-postmortem-author`** — post-incident retrospective authoring. Trigger: incident resolved + postmortem-due. Cascade: `fetch-incident-timeline-slack-and-monitoring (Code) → synthesize-narrative-with-rca-candidates (Generative) → draft-action-items-with-owners (Generative) → ic-and-engineering-leader-review (Human) → publish-postmortem-and-create-action-item-issues (Code)`. EvaluatorPanel of 3 personas (rca-quality-reviewer + action-actionability-checker + ic-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(ic))`. Pricing: `Pricing.outcome` across SEV3 / SEV2 / SEV1+ tiers ($199 / $799 / $2,499). Service-level reward = `time-to-postmortem-published-improvement`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/software-developers/incident-postmortem-author`.
+
+  ```ts
+  import { incidentPostmortemAuthor } from 'autonomous-developer-experience/incident-postmortem-author'
+  // typed as ServiceInstance<IncidentResolvedInput, PostmortemOutput>
+  ```
 
 ## Why a separate package
 

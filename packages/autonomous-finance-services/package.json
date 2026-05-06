@@ -50,6 +50,10 @@
     "./cash-runway-projector": {
       "types": "./dist/services/cash-runway-projector.d.ts",
       "import": "./dist/services/cash-runway-projector.js"
+    },
+    "./board-deck-financials-pack": {
+      "types": "./dist/services/board-deck-financials-pack.d.ts",
+      "import": "./dist/services/board-deck-financials-pack.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

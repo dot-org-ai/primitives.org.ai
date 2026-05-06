@@ -38,6 +38,10 @@
     "./expansion-opportunity-detector": {
       "types": "./dist/services/expansion-opportunity-detector.d.ts",
       "import": "./dist/services/expansion-opportunity-detector.js"
+    },
+    "./health-score-narrator": {
+      "types": "./dist/services/health-score-narrator.d.ts",
+      "import": "./dist/services/health-score-narrator.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

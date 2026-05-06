@@ -47,3 +47,10 @@ export {
   WinLossReportSchema,
 } from './win-loss-analyzer.js'
 export type { ClosedOpportunity, WinLossReport } from './win-loss-analyzer.js'
+
+export {
+  accountResearchBrief,
+  MeetingScheduledInputSchema,
+  AccountResearchBriefOutputSchema,
+} from './account-research-brief.js'
+export type { MeetingScheduledInput, AccountResearchBriefOutput } from './account-research-brief.js'

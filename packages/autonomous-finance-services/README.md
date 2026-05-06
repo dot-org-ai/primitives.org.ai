@@ -18,6 +18,12 @@ Concrete `Service.define({...})` calls for CFO-shop work — the autonomous fina
 - **`audit-prep`** — period selected → supporting docs + sampling + audit binder assembled.
 - **`expense-policy-enforcer`** — corporate-card / expense-management adjudication. Cascade: `extract-line-items (Code) → classify-against-policy (Generative) → out-of-policy-escalation (Human, conditional via trigger) → emit-approval-or-reject (Code)`. EvaluatorPanel of 2 personas (policy-clause-checker + fraud-checker) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(when: out-of-policy))`. Pricing: `Pricing.perInvocation` across starter / growth / scale tiers. Service-level reward = `rejected-claim-rate-aligned-with-policy`. Lineage: `occupations.org.ai/AccountantsAndAuditors` × `processes.org.ai/ExpenseClaimAdjudication`.
 - **`cash-runway-projector`** — finance team's monthly runway forecast. Cascade: `fetch-cash-balances (Code) → extract-burn-rate (Code) → synthesize-runway-narrative-with-scenarios (Generative) → emit-projection-deck (Code)`. EvaluatorPanel of 3 personas (scenario-realism-reviewer + ledger-tie-out-checker + cfo-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(cfo))`. Pricing: `Pricing.subscription` ($799/mo finance-team subscription). Service-level reward = `cfo-quarterly-confidence-score` (qualitative, NPS-style monthly survey). Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/financial-managers/cash-runway-projection`.
+- **`board-deck-financials-pack`** — board-meeting financial-section authoring. Trigger: monthly book-close + scheduled board meeting. Cascade: `fetch-financials-and-kpi-snapshot (Code) → narrative-author-with-variance-explanations (Generative) → forward-looking-risks-and-asks (Generative) → cfo-and-ceo-review (Human) → render-final-deck-pages (Code)`. EvaluatorPanel of 3 personas (narrative-coherence-reviewer + variance-tieout-checker + cfo-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch, EvaluatorPass, HumanSign(cfo))`. Pricing: `Pricing.subscription` ($1,499/mo board-cycle subscription). Service-level reward = `board-prep-cycle-time-reduction`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/financial-managers/board-deck-financials-pack`.
+
+  ```ts
+  import { boardDeckFinancialsPack } from 'autonomous-finance-services/board-deck-financials-pack'
+  // typed as ServiceInstance<BoardCycleInput, BoardDeckFinancialsOutput>
+  ```
 
 ## Why a separate package (not subpath of `autonomous-finance`)
 

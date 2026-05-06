@@ -53,3 +53,10 @@ export {
   RunwayProjectionOutputSchema,
 } from './cash-runway-projector.js'
 export type { CashSnapshotInput, RunwayProjectionOutput } from './cash-runway-projector.js'
+
+export {
+  boardDeckFinancialsPack,
+  BoardCycleInputSchema,
+  BoardDeckFinancialsOutputSchema,
+} from './board-deck-financials-pack.js'
+export type { BoardCycleInput, BoardDeckFinancialsOutput } from './board-deck-financials-pack.js'

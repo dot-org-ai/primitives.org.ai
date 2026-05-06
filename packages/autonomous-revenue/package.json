@@ -38,6 +38,10 @@
     "./win-loss-analyzer": {
       "types": "./dist/services/win-loss-analyzer.d.ts",
       "import": "./dist/services/win-loss-analyzer.js"
+    },
+    "./account-research-brief": {
+      "types": "./dist/services/account-research-brief.d.ts",
+      "import": "./dist/services/account-research-brief.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
