@@ -1,0 +1,9 @@
+{
+  "name": "autonomous-startups",
+  "version": "0.0.0",
+  "description": "Meta-primitive for generating and operating autonomous startups across every business model — Services-as-Software, Headless SaaS, API-aaS, DaaS, IaaS, PaaS, Marketplace, Directory, and others. Stub / deferred — see README.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-startups#readme"
+}

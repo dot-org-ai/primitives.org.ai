@@ -1,0 +1,9 @@
+{
+  "name": "autonomous-revenue",
+  "version": "0.0.0",
+  "description": "Catalog package — revenue / sales Services-as-Software defined on the primitive substrate. Initial: lead-qualification (BANT/MEDDIC + Clearbit + LinkedIn enrichment). Future: meeting-prep, proposal-generator, contract-redliner, renewal-workbench, campaign-orchestrator. Stub — see README.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-revenue#readme"
+}

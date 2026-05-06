@@ -1,0 +1,9 @@
+{
+  "name": "autonomous-developer-experience",
+  "version": "0.0.0",
+  "description": "Catalog package — developer-experience Services-as-Software defined on the primitive substrate. Initial: api-docs-writer (AST extract → typed reference docs published to GitHub Pages). Future: changelog-generator, sdk-generator, migration-guide-writer, tutorial-author, example-suite-builder. Stub — see README.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-developer-experience#readme"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "autonomous-customer-success",
+  "version": "0.0.0",
+  "description": "Catalog package — customer-success Services-as-Software defined on the primitive substrate. Initial: support-triage. Future: nps-followup, onboarding-runbook, churn-rescue, account-review. Stub — see README.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-customer-success#readme"
+}
