@@ -248,12 +248,37 @@ export type SimpleFieldType =
 
 /**
  * Extended field definition with options like required, default, etc.
+ *
+ * `stratum` classifies the mutation/composition rule for the field
+ * (orthogonal to Frame, which classifies the role a Thing plays in an
+ * Action). When unspecified, runtime providers treat the field as
+ * `'expression'` (forgiving: always mutable).
+ *
+ * `variants` is required iff `stratum === 'composition'`; runtime
+ * providers reject direct assignment to composition fields and require
+ * mutation via `pickComposition(thingRef, fieldName, variantIdx)`.
  */
 export interface ExtendedFieldDefinition {
   type: PrimitiveType | 'object' | 'array'
   required?: boolean
   default?: unknown
+  stratum?: TokenStratum
+  variants?: unknown[]
 }
+
+/**
+ * TokenStratum - Field-level mutation/composition classification.
+ *
+ * Orthogonal to Frame (which classifies role in an Action). Strata:
+ * - `frozen`      set once at creation; never mutates; identity-bearing
+ * - `negotiable`  intentionally null; downstream stage may fill ONCE
+ * - `expression`  free-form mutable content (default; prose, copy)
+ * - `composition` bandit-eligible variants picked at render-time
+ *
+ * Runtime providers enforce mutation rules; see `pickComposition` for
+ * the legitimate mutation path for `composition` fields.
+ */
+export type TokenStratum = 'frozen' | 'negotiable' | 'expression' | 'composition'
 
 export type PrimitiveType =
   | 'string'
@@ -345,6 +370,12 @@ export interface DigitalObjectsProvider {
   performMany<T>(
     actions: Array<{ verb: string; subject?: string; object?: string; data?: T }>
   ): Promise<Action<T>[]>
+
+  // Token strata (L0 — orthogonal to Frame)
+  // Optional for backward compatibility; MemoryProvider implements them.
+  stratumOf?(nounRef: NounRef, fieldName: string): TokenStratum
+  compositionFields?(nounRef: NounRef): { field: string; variants: unknown[] }[]
+  pickComposition?(thingRef: ThingRef, fieldName: string, variantIdx: number): Promise<void>
 
   // Lifecycle
   close?(): Promise<void>

@@ -127,6 +127,46 @@ export {
 } from './verb-registration.js'
 export type { VerbRegistrationProvider } from './verb-registration.js'
 
+// FunctionRef discriminated union (v3 §6) — the Four Functions promoted to
+// a typed primitive. Additive alongside the legacy `Tool` interface; no
+// existing tools are migrated.
+export type {
+  RewardSignal,
+  PersonaRef,
+  SignOffMode,
+  OversightPolicy,
+  BaseFunctionRef,
+  CodeFunctionRef,
+  GenerativeFunctionRef,
+  AgenticFunctionRef,
+  HumanFunctionRef,
+  HumanRationale,
+  HumanExpirationPolicy,
+  HumanChannel,
+  FunctionRef,
+  FunctionKind,
+} from './function-ref.js'
+
+// Track-record + autonomy ladder primitives (shared with digital-workers
+// once that package re-exports them).
+export type {
+  AgentMode,
+  TrendDirection,
+  TrackRecord,
+  PromotionRule,
+  PromotionPolicy,
+} from './track-record.js'
+
+// Sugar factories — top-level named exports per v3 §6 import style:
+//   import { Code, Generative, Agentic, Human } from 'digital-tools'
+export type {
+  CodeFunctionSpec,
+  GenerativeFunctionSpec,
+  AgenticFunctionSpec,
+  HumanFunctionSpec,
+} from './function-sugar.js'
+export { Code, Generative, Agentic, Human } from './function-sugar.js'
+
 // Export pre-built tools
 export {
   // Web tools

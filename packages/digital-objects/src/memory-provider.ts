@@ -17,6 +17,11 @@ import type {
   ActionOptions,
   ValidationOptions,
   Direction,
+  FieldDefinition,
+  ExtendedFieldDefinition,
+  TokenStratum,
+  NounRef,
+  ThingRef,
 } from './types.js'
 import {
   DEFAULT_LIMIT,
@@ -27,7 +32,7 @@ import {
 } from './types.js'
 import { deriveNoun, deriveVerb } from './linguistic.js'
 import { validateData } from './schema-validation.js'
-import { NotFoundError, ValidationError } from './errors.js'
+import { NotFoundError, ValidationError, TokenStratumViolation } from './errors.js'
 
 /**
  * Calculate effective limit with safety bounds
@@ -83,6 +88,36 @@ function validateWhereField(field: string): void {
       },
     ])
   }
+}
+
+/**
+ * Type guard for ExtendedFieldDefinition (object form, not the string sugar).
+ */
+function isExtendedFieldDefinition(def: FieldDefinition): def is ExtendedFieldDefinition {
+  return typeof def === 'object' && def !== null && 'type' in def
+}
+
+/**
+ * Resolve the effective TokenStratum for a field. Defaults to 'expression'
+ * when unspecified (forgiving default per design §6).
+ */
+function resolveStratum(def: FieldDefinition | undefined): TokenStratum {
+  if (def && isExtendedFieldDefinition(def) && def.stratum) {
+    return def.stratum
+  }
+  return 'expression'
+}
+
+/**
+ * Internal sentinel marking a value as set by `pickComposition()`,
+ * bypassing the composition-direct-assignment guard in `update()`.
+ */
+const COMPOSITION_PICK = Symbol('digital-objects.composition-pick')
+
+interface CompositionPickPatch {
+  [COMPOSITION_PICK]: true
+  field: string
+  value: unknown
 }
 
 export class MemoryProvider implements DigitalObjectsProvider {
@@ -265,8 +300,56 @@ export class MemoryProvider implements DigitalObjectsProvider {
       throw new NotFoundError('Thing', id)
     }
 
+    // ── Token strata enforcement ──────────────────────────────────────
+    // Detect the internal pickComposition() patch (bypasses the
+    // composition-direct-assignment guard); otherwise enforce strata
+    // against every field present in the patch.
+    const pickPatch = data as unknown as Partial<CompositionPickPatch>
+    const isCompositionPick = pickPatch && pickPatch[COMPOSITION_PICK] === true
+
+    let effectivePatch: Partial<T> = data
+    if (isCompositionPick) {
+      const fieldName = pickPatch.field as string
+      effectivePatch = { [fieldName]: pickPatch.value } as Partial<T>
+    } else {
+      const nounDef = this.nouns.get(existing.noun)
+      const schema = nounDef?.schema
+      if (schema) {
+        const existingData = existing.data as Record<string, unknown>
+        const patch = data as Record<string, unknown>
+        for (const field of Object.keys(patch)) {
+          const def = schema[field]
+          const stratum = resolveStratum(def)
+          if (stratum === 'frozen') {
+            throw new TokenStratumViolation(
+              `Field '${field}' is frozen and cannot be updated`,
+              field,
+              'frozen'
+            )
+          }
+          if (stratum === 'composition') {
+            throw new TokenStratumViolation(
+              `Field '${field}' is a composition; use pickComposition() instead of direct assignment`,
+              field,
+              'composition'
+            )
+          }
+          if (stratum === 'negotiable') {
+            const current = existingData[field]
+            if (current !== null && current !== undefined) {
+              throw new TokenStratumViolation(
+                `Field '${field}' is negotiable and already filled; cannot be re-filled`,
+                field,
+                'negotiable'
+              )
+            }
+          }
+        }
+      }
+    }
+
     // Merge data for validation
-    const mergedData = { ...existing.data, ...data } as T
+    const mergedData = { ...existing.data, ...effectivePatch } as T
 
     // Validate merged data against noun schema if validation is enabled
     if (options?.validate) {
@@ -460,6 +543,83 @@ export class MemoryProvider implements DigitalObjectsProvider {
       )
     }
     return Promise.all(actions.map((a) => this.perform(a.verb, a.subject, a.object, a.data)))
+  }
+
+  // ==================== Token Strata ====================
+
+  /**
+   * Resolve the TokenStratum for a single field on a Noun. Returns
+   * `'expression'` (the forgiving default) when the Noun, schema, or
+   * field is missing, or when the field has no explicit stratum set.
+   */
+  stratumOf(nounRef: NounRef, fieldName: string): TokenStratum {
+    const noun = this.nouns.get(nounRef)
+    const def = noun?.schema?.[fieldName]
+    return resolveStratum(def)
+  }
+
+  /**
+   * List all `composition` fields declared on a Noun, with their variant
+   * arrays. Returns `[]` if the Noun has no schema or no composition
+   * fields.
+   */
+  compositionFields(nounRef: NounRef): { field: string; variants: unknown[] }[] {
+    const noun = this.nouns.get(nounRef)
+    const schema = noun?.schema
+    if (!schema) return []
+    const out: { field: string; variants: unknown[] }[] = []
+    for (const [field, def] of Object.entries(schema)) {
+      if (isExtendedFieldDefinition(def) && def.stratum === 'composition') {
+        out.push({ field, variants: def.variants ?? [] })
+      }
+    }
+    return out
+  }
+
+  /**
+   * Mutate a `composition` field on a Thing by picking variant index.
+   * The legitimate mutation path for composition fields — bypasses the
+   * direct-assignment guard in `update()`.
+   *
+   * Throws:
+   * - `NotFoundError` if the Thing or its Noun is missing
+   * - `TokenStratumViolation` if the field is not a composition
+   * - `ValidationError` if `variantIdx` is out of range
+   */
+  async pickComposition(thingRef: ThingRef, fieldName: string, variantIdx: number): Promise<void> {
+    const existing = this.things.get(thingRef)
+    if (!existing) {
+      throw new NotFoundError('Thing', thingRef)
+    }
+    const noun = this.nouns.get(existing.noun)
+    const def = noun?.schema?.[fieldName]
+    if (!def || !isExtendedFieldDefinition(def) || def.stratum !== 'composition') {
+      throw new TokenStratumViolation(
+        `Field '${fieldName}' is not a composition; pickComposition() requires a composition field`,
+        fieldName,
+        resolveStratum(def)
+      )
+    }
+    const variants = def.variants ?? []
+    if (!Number.isInteger(variantIdx) || variantIdx < 0 || variantIdx >= variants.length) {
+      throw new ValidationError(
+        `variantIdx ${variantIdx} out of range for field '${fieldName}' (${variants.length} variants)`,
+        [
+          {
+            field: fieldName,
+            message: `variantIdx must be an integer in [0, ${variants.length})`,
+          },
+        ]
+      )
+    }
+    const value = variants[variantIdx]
+    // Internal sentinel patch — bypasses the composition guard in update()
+    const patch: CompositionPickPatch = {
+      [COMPOSITION_PICK]: true,
+      field: fieldName,
+      value,
+    }
+    await this.update(thingRef, patch as unknown as Partial<Record<string, unknown>>)
   }
 
   // ==================== Lifecycle ====================

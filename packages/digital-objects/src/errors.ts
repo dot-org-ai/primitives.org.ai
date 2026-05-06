@@ -66,6 +66,25 @@ export class NetworkError extends DigitalObjectsError {
 }
 
 /**
+ * Thrown when a mutation violates a field's TokenStratum.
+ *
+ * Examples:
+ * - Updating a `frozen` field after creation
+ * - Re-filling a `negotiable` field that already holds a value
+ * - Direct assignment to a `composition` field (must use pickComposition)
+ */
+export class TokenStratumViolation extends DigitalObjectsError {
+  constructor(
+    message: string,
+    public field: string,
+    public stratum: 'frozen' | 'negotiable' | 'expression' | 'composition'
+  ) {
+    super(message, 'TOKEN_STRATUM_VIOLATION', 409)
+    this.name = 'TokenStratumViolation'
+  }
+}
+
+/**
  * Convert an error to an HTTP-safe JSON response body
  */
 export function errorToResponse(error: unknown): { body: object; status: number } {
@@ -75,6 +94,9 @@ export function errorToResponse(error: unknown): { body: object; status: number 
         error: error.code,
         message: error.message,
         ...(error instanceof ValidationError ? { errors: error.errors } : {}),
+        ...(error instanceof TokenStratumViolation
+          ? { field: error.field, stratum: error.stratum }
+          : {}),
       },
       status: error.statusCode,
     }

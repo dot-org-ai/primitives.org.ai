@@ -24,6 +24,8 @@ export type {
   Action,
   ActionStatusType,
   FieldDefinition,
+  ExtendedFieldDefinition,
+  SimpleFieldType,
   PrimitiveType,
   ListOptions,
   ActionOptions,
@@ -36,6 +38,8 @@ export type {
   NounRef,
   ThingRef,
   ActionRef,
+  // Token strata (L0 — orthogonal to Frame)
+  TokenStratum,
 } from './types.js'
 
 // Validation utilities and constants
@@ -97,8 +101,13 @@ export {
   NotFoundError,
   ValidationError,
   ConflictError,
+  TokenStratumViolation,
   errorToResponse,
 } from './errors.js'
+
+// Token strata sugar factories
+export { Frozen, Negotiable, Expression, Composition } from './token-strata.js'
+export type { StratumFieldType, StratumOpts } from './token-strata.js'
 
 // Schema Validation
 export { validateOnly, validateData } from './schema-validation.js'

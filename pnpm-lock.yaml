@@ -357,6 +357,16 @@ importers:
         specifier: ^3.105.0
         version: 3.114.17(@cloudflare/workers-types@4.20251202.0)
 
+  packages/autonomous-customer-success: {}
+
+  packages/autonomous-developer-experience: {}
+
+  packages/autonomous-finance: {}
+
+  packages/autonomous-revenue: {}
+
+  packages/autonomous-startups: {}
+
   packages/business-as-code:
     dependencies:
       ai-database:
@@ -470,6 +480,9 @@ importers:
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions
+      autonomous-finance:
+        specifier: workspace:*
+        version: link:../autonomous-finance
       digital-objects:
         specifier: workspace:*
         version: link:../digital-objects

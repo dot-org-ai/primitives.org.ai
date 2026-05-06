@@ -236,6 +236,8 @@ predicate: AND(
 
 ## 9. `EvaluatorPanel` — modes + reusable persona library (UPDATED)
 
+> **Package placement DEFERRED.** Earlier drafts placed `EvaluatorPanel` + the persona library in `ai-evaluate`. That is wrong: `ai-evaluate` is the **JS sandbox-execution surface used by AI agents** (Cloudflare worker_loaders / Miniflare), not a multi-persona-reviewer primitive. Don't touch it. `EvaluatorPanel`'s home is open: candidates are `services-as-software` (tight coupling; lands inline) or a new dedicated package (e.g. `ai-reviewers` / `agent-panels`). Decide when SaS implementation begins.
+
 ```ts
 export interface EvaluatorPanelSpec {
   personas: AgenticFunctionRef[]
@@ -248,14 +250,13 @@ export interface EvaluatorPanelSpec {
 - **`parallel-multi-call`** (default): each persona makes its own LLM call; runs in parallel; produces N independent verdicts.
 - **`aggregate-single-call`** (cost-shortcut): all personas' rubrics merged into one structured-output prompt; one LLM call returns a multi-axis verdict. Used when migrating sb's Stage 9 single-call rubric (Migration HOW risk #2).
 
-### Reusable persona library
+### Reusable persona library (whatever package we land it in)
 
-`ai-evaluate` ships these as named exports (covers ~80% of seed catalog needs):
+Six factory functions cover ~80 % of seed catalog needs:
 
 ```ts
-import { Personas } from 'ai-evaluate'
+import { Personas } from '<TBD — not ai-evaluate>'
 
-// Each is a factory: domain-specific knobs filled in by caller.
 Personas.pedantic   ({ domain: 'gaap-validation', rubric: [...] })
 Personas.skeptic    ({ domain: 'security', focus: ['secrets', 'sast', 'auth'] })
 Personas.accuracy   ({ domain: 'fact-grounding', sources: [...] })
