@@ -25,7 +25,8 @@
  */
 
 import type { ServiceInstance } from '../service.js'
-import { runCascade } from './cascade-walker.js'
+import { CascadeAlreadyFailedError, runCascade } from './cascade-walker.js'
+import { ClarificationInbox } from './clarification-inbox.js'
 import type { ClarificationResponse, InvocationEvent } from './invocation-event.js'
 import { InvocationHandleImpl, type InvocationHandle } from './handle.js'
 import type { InvokeOpts } from './invoke-opts.js'
@@ -101,11 +102,20 @@ async function driveInvocation<TIn, TOut>(
   handle: InvocationHandleImpl<TOut>,
   opts?: InvokeOpts
 ): Promise<void> {
+  // Per-invocation rendezvous shared between the cascade walker (registers
+  // pending clarification request ids) and `handle.clarify(...)` (delivers
+  // the matching response). Lives for the lifetime of this invocation.
+  const inbox = new ClarificationInbox()
+
   // Wire the buyer-control hooks. Cancel / dispute drive the FSM directly;
-  // clarify is a noop today (the in-memory walker has no reply mechanism).
-  // TODO(round 7): replace with workflow-signal dispatch.
-  handle.onClarify = async (_response: ClarificationResponse): Promise<void> => {
-    // Mock: would resume the workflow. For now: noop.
+  // `clarify` delivers into the per-invocation inbox so a paused human-step
+  // walker can resume.
+  // TODO(round 9): replace the in-memory inbox with workflow-signal dispatch.
+  handle.onClarify = async (response: ClarificationResponse): Promise<void> => {
+    // Unmatched delivery (no pending request, already resolved/timed out)
+    // is silently dropped — the caller's `handle.clarify(...)` resolves
+    // either way.
+    inbox.deliver(response)
   }
   handle.onCancel = async (reason?: string): Promise<void> => {
     if (canTransition(handle.state, 'CANCELLED')) {
@@ -132,11 +142,14 @@ async function driveInvocation<TIn, TOut>(
     transition(handle, 'ACTIVE')
     transition(handle, 'DELIVERING')
 
-    // Real cascade execution — generative steps dispatch to ai-functions.
+    // Real cascade execution — generative steps dispatch to ai-functions;
+    // human steps park on the shared `inbox` until `handle.clarify(...)`
+    // delivers the matching response.
     const payload = await runCascade<TIn, TOut>({
       service: svc,
       input,
       emit: (event) => handle.emit(event),
+      inbox,
       ...(opts?.tenantRef !== undefined ? { tenantRef: opts.tenantRef } : {}),
     })
 
@@ -163,7 +176,15 @@ async function driveInvocation<TIn, TOut>(
     const deliveredEvent: InvocationEvent<TOut> = { kind: 'delivered', payload }
     handle.emit(deliveredEvent)
   } catch (err) {
-    // Any thrown error during cascade execution → emit a typed failure.
+    // Cascade walker has already emitted a typed `'failed'` event (e.g.
+    // human-step dwell-timeout); just transition the FSM and stop.
+    if (err instanceof CascadeAlreadyFailedError) {
+      if (canTransition(handle.state, 'FAILED')) {
+        handle.emit({ kind: 'state-changed', state: 'FAILED', at: new Date() })
+      }
+      return
+    }
+    // Any other thrown error during cascade execution → emit a typed failure.
     const detail = err instanceof Error ? err.message : String(err)
     if (canTransition(handle.state, 'FAILED')) {
       handle.emit({ kind: 'state-changed', state: 'FAILED', at: new Date() })

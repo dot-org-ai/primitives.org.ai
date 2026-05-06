@@ -85,6 +85,11 @@ export interface ClarificationResponse {
  * - `clarification-needed` — the cascade has paused; the runtime is awaiting
  *                            `handle.clarify(...)`.
  * - `evaluator-signoff`    — an EvaluatorPanel persona returned a verdict.
+ *                            `'approve'` and `'reject'` are load-bearing;
+ *                            `'advisory'` denotes an informational sign-off
+ *                            that does not block downstream cascade steps
+ *                            (e.g. supervised-mode agentic Functions whose UI
+ *                            gate has not yet been implemented).
  * - `delivered`            — terminal-success event carrying the final
  *                            `TOut`; the handle's `result` resolves with it.
  * - `failed`               — terminal-failure event; the handle's `result`
@@ -99,7 +104,7 @@ export type InvocationEvent<TOut> =
   | {
       kind: 'evaluator-signoff'
       reviewer: string
-      verdict: 'approve' | 'reject'
+      verdict: 'approve' | 'reject' | 'advisory'
       rationale: string
     }
   | { kind: 'delivered'; payload: TOut }

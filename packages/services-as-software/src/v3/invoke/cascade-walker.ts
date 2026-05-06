@@ -3,25 +3,30 @@
  * `binding.cascade` step-by-step, emitting {@link InvocationEvent}s as work
  * progresses.
  *
- * Round-7 status: **Generative AND Agentic branches are real LLM dispatch.**
+ * Round-8 status: **all four Function kinds dispatch for real.**
  *   - Generative: `ai-functions.generateObject` (round 6).
  *   - Agentic:    `ai-functions.generateText` with the tool-use loop
  *                 (`tools` + `maxSteps`) — round 7. Tools are looked up in
  *                 the `digital-tools` registry by `toolPermissions` name.
- *
- * The Code branch invokes the inline handler (or stubs an ActionRef
- * indirection); the Human branch is still mocked, with comments marking it
- * as round-8 work (HITL channels + workflow-signal park/resume).
+ *                 `modelHint` is honoured on the FunctionRef (round 8).
+ *   - Code:       inline handler (or stubs an ActionRef indirection).
+ *   - Human:      real clarification gating via {@link ClarificationInbox}
+ *                 — emits `clarification-needed`, awaits the matching
+ *                 {@link ClarificationResponse} from the handle (round 8),
+ *                 carries the response payload forward as the next step's
+ *                 `carry`. Dwell capped at 30s in the in-memory walker; ADR-
+ *                 0008 caps production at 30 days.
  *
  * The walker is decoupled from the FSM transitions in `runtime.ts`: the
  * caller (`runtime.ts`) emits `state-changed` events around the call, and
  * this module emits the per-step `cascade-progress`, `cost-incurred`,
- * `preview-available`, and `clarification-needed` events.
+ * `preview-available`, `clarification-needed`, and `evaluator-signoff`
+ * events.
  *
  * **Cost capture is wire-only.** A `cost-incurred` event is emitted with a
  * {@link Money} amount derived from the LLM response (when available);
  * downstream ledger persistence (autonomous-finance Repo writes) lands in
- * round 8+.
+ * round 9+.
  *
  * @packageDocumentation
  */
@@ -34,6 +39,12 @@ import type { ActionRef } from 'digital-objects'
 import { getTool, type AnyTool, type FunctionRef, type ToolParameter } from 'digital-tools'
 
 import type { ServiceInstance } from '../service.js'
+import {
+  ClarificationInbox,
+  ClarificationTimeoutError,
+  MOCK_CLARIFICATION_DWELL_MS,
+} from './clarification-inbox.js'
+import { estimateCostFromUsage } from './cost-estimate.js'
 import type { InvocationEvent } from './invocation-event.js'
 
 // ============================================================================
@@ -46,12 +57,18 @@ import type { InvocationEvent } from './invocation-event.js'
  * `emit` is the producer-side hook into the {@link InvocationHandle}'s
  * subscriber fan-out — the runtime in `runtime.ts` passes `handle.emit`
  * directly. `tenantRef` is forwarded for downstream attribution but is not
- * yet consumed (round 7+ will use it for ledger writes).
+ * yet consumed (round 9+ will use it for ledger writes).
+ *
+ * `inbox` is the per-invocation {@link ClarificationInbox} the runtime
+ * shares between this walker and the {@link InvocationHandleImpl}'s
+ * `clarify(...)` method — Human FunctionRef steps `register` a request id
+ * here and `await` the matching response.
  */
 export interface RunCascadeOpts<TIn, TOut> {
   service: ServiceInstance<TIn, TOut>
   input: TIn
   emit: (event: InvocationEvent<TOut>) => void
+  inbox: ClarificationInbox
   tenantRef?: string
 }
 
@@ -60,7 +77,7 @@ export interface RunCascadeOpts<TIn, TOut> {
  * {@link FunctionRef} to its concrete runtime, and return the typed final
  * output.
  *
- * Round-7 dispatch matrix:
+ * Round-8 dispatch matrix:
  *
  *   - `code`        — calls the inline `handler` (or stubs through an
  *                     {@link ActionRef}); zero-cost emission.
@@ -71,16 +88,24 @@ export interface RunCascadeOpts<TIn, TOut> {
  *   - `agentic`     — real `ai-functions.generateText` tool-use loop;
  *                     resolves `toolPermissions` against the `digital-tools`
  *                     registry and dispatches with `maxSteps: 10`.
- *                     `mode: 'supervised'` additionally emits an advisory
- *                     `evaluator-signoff` event (real supervision UI lands
- *                     in round 8).
- *   - `human`       — STILL MOCK; round 8 will wire HITL channels +
- *                     workflow-signal park/resume.
+ *                     Honours `fn.modelHint` (round 8). `mode: 'supervised'`
+ *                     additionally emits an `evaluator-signoff` event with
+ *                     `verdict: 'advisory'` (UI gate lands round 9).
+ *   - `human`       — emits `clarification-needed` and pauses on the
+ *                     {@link ClarificationInbox} until the buyer calls
+ *                     `handle.clarify(response)`. The response payload
+ *                     becomes the next step's `carry`. `mode: 'autonomous'`
+ *                     human steps (rare — declared via `oversight.mode`)
+ *                     skip the prompt and emit an advisory sign-off
+ *                     instead, leaving `carry` unchanged. Dwell capped at
+ *                     30s per ADR-0008 (mock walker tunable).
  *
- * Errors throw; `runtime.ts` catches and emits the typed `'failed'` event.
+ * Errors throw; `runtime.ts` catches and emits the typed `'failed'` event,
+ * with the exception of {@link ClarificationTimeoutError}, which the walker
+ * itself converts to a typed `'failed'` event with `reason: 'timeout'`.
  */
 export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Promise<TOut> {
-  const { service, input, emit } = opts
+  const { service, input, emit, inbox } = opts
   const cascade = service.binding.cascade
 
   // Find the index of the LAST generative step — only this step receives the
@@ -167,32 +192,84 @@ export async function runCascade<TIn, TOut>(opts: RunCascadeOpts<TIn, TOut>): Pr
           payload: isLast ? (value as Partial<TOut>) : ({} as Partial<TOut>),
         })
         // Supervised mode: emit an advisory sign-off event after the loop
-        // completes. The InvocationEvent union locks `verdict` to
-        // 'approve' | 'reject' (no `'advisory'` member yet — round 8 widens
-        // the union and adds the supervision UI). For now we mark the
-        // rationale string so consumers can detect advisory verdicts.
+        // completes. Round 8 widened the InvocationEvent union to include
+        // `'advisory'` directly; the real supervision UI gate lands round 9.
         if (fn.mode === 'supervised') {
           emit({
             kind: 'evaluator-signoff',
             reviewer: fn.persona ?? fn.name,
-            verdict: 'approve',
-            rationale: '(advisory) supervised-mode auto-approve — UI gate lands round 8',
+            verdict: 'advisory',
+            rationale: 'supervised-mode auto-advisory — UI gate lands round 9',
           })
         }
         break
       }
 
       case 'human': {
-        // TODO(round 7): real walker transitions NEEDS_CLARIFICATION + parks
-        // the workflow on a HumanChannel dispatch. Until then: emit the
-        // request and continue (the in-memory walker has no reply mechanism).
+        // Autonomous-mode human step (rare, but legal per the FunctionRef
+        // shape — `oversight.mode === 'autonomous'`): skip the clarification
+        // prompt entirely, emit an advisory sign-off so observers know the
+        // step ran, and continue with `carry` unchanged. The semantics
+        // mirror agentic supervised-mode: informational only, not load-
+        // bearing.
+        if (fn.oversight?.mode === 'autonomous') {
+          emit({
+            kind: 'evaluator-signoff',
+            reviewer: fn.name,
+            verdict: 'advisory',
+            rationale: 'human step in autonomous mode — clarification skipped',
+          })
+          emit({
+            kind: 'cost-incurred',
+            cost: { amount: 0n, currency: 'USD' } satisfies Money,
+            functionRef: fn.name,
+          })
+          break
+        }
+
+        // Standard path: emit a `clarification-needed` event, register a
+        // pending request id with the inbox, and `await` the matching
+        // `ClarificationResponse` delivered via `handle.clarify(response)`.
+        // The response payload becomes the next step's `carry` value.
+        const requestId = `clr:${fn.$id}:${i}`
+        const question =
+          fn.description ?? `Human step '${fn.name}' requires clarification to proceed.`
         emit({
           kind: 'clarification-needed',
-          request: {
-            id: `clr:${fn.$id}`,
-            question: `(mock) human step '${fn.name}' would request input here`,
-          },
+          request: { id: requestId, question },
         })
+        try {
+          const response = await inbox.register(requestId, MOCK_CLARIFICATION_DWELL_MS)
+          // Use the typed payload when present; fall back to `choice` for
+          // picker-style responses; preserve `carry` as a last resort so the
+          // cascade can still progress on a no-op acknowledgement.
+          if (response.payload !== undefined) {
+            current = response.payload
+          } else if (response.choice !== undefined) {
+            current = response.choice
+          }
+          // else: keep `current` unchanged — the buyer acknowledged without
+          // supplying new data.
+        } catch (err) {
+          if (err instanceof ClarificationTimeoutError) {
+            // Convert the dwell-timeout sentinel into a typed `'failed'`
+            // event and stop the cascade. `runtime.ts` would also catch the
+            // throw and emit a generic external-failure; doing it inline
+            // gives us the precise `reason: 'timeout'` discriminator.
+            inbox.forget(requestId)
+            emit({
+              kind: 'failed',
+              reason: 'timeout',
+              detail: err.message,
+            })
+            // Re-throw a simple error so `runtime.ts`'s try/catch settles
+            // the result Deferred via its existing path. Use a sentinel
+            // that runtime.ts can recognise to suppress the duplicate
+            // `'failed'` emission.
+            throw new CascadeAlreadyFailedError(err.message)
+          }
+          throw err
+        }
         emit({
           kind: 'cost-incurred',
           cost: { amount: 0n, currency: 'USD' } satisfies Money,
@@ -372,10 +449,11 @@ async function runAgenticStep<TIn>(opts: {
       `the schema, return plain text describing it.`,
   ].join('\n\n')
 
-  // AgenticFunctionRef does not yet declare a `modelHint` (the field lives on
-  // GenerativeFunctionRef only). Default to 'sonnet' for now; round 8 will
-  // either add `modelHint` to AgenticFunctionRef or route via ModelPolicy.
-  const model = 'sonnet'
+  // Round 8: AgenticFunctionRef now declares `modelHint`, mirroring
+  // GenerativeFunctionRef. Honour the hint when present; default to
+  // 'sonnet'. Round 9 will route through ModelPolicy for cost/availability/
+  // track-record-aware selection.
+  const model = fn.modelHint ?? 'sonnet'
 
   // Track per-iteration progress. `onStepFinish` fires once per model step
   // (one model call + tool execution). We use it to emit cascade-progress
@@ -467,25 +545,6 @@ function safeStringify(v: unknown): string {
 }
 
 /**
- * Naïve cost estimator from the AI SDK's `usage` shape. Round 6 uses a flat
- * $3-input / $15-output per-million-tokens for Sonnet-class models when
- * inputTokens/outputTokens are present; otherwise falls back to a $0.001
- * per-call placeholder. Round 7 will route through `ai-functions.budget`.
- */
-function estimateCostFromUsage(usage: unknown, _model: string): number {
-  if (usage && typeof usage === 'object') {
-    const u = usage as { inputTokens?: number; outputTokens?: number }
-    const inT = typeof u.inputTokens === 'number' ? u.inputTokens : 0
-    const outT = typeof u.outputTokens === 'number' ? u.outputTokens : 0
-    if (inT > 0 || outT > 0) {
-      // Sonnet-class default: $3/M input, $15/M output.
-      return (inT * 3) / 1_000_000 + (outT * 15) / 1_000_000
-    }
-  }
-  return 0.001
-}
-
-/**
  * Convert a USD-denominated dollar float to a `bigint` micro-cent count
  * (1e-6 of a cent). Stays in {@link Money}'s smallest-unit convention while
  * preserving sub-cent precision for cheap LLM calls.
@@ -493,4 +552,21 @@ function estimateCostFromUsage(usage: unknown, _model: string): number {
 function usdToMicroCents(usd: number): bigint {
   // 1 USD = 100 cents = 100_000_000 micro-cents.
   return BigInt(Math.round(usd * 100_000_000))
+}
+
+// ============================================================================
+// Sentinel error
+// ============================================================================
+
+/**
+ * Sentinel thrown by the cascade walker after it has already emitted a
+ * typed `'failed'` event (currently only the human-step dwell-timeout path).
+ * The runtime in `runtime.ts` recognises this and skips the generic
+ * external-failure emission so the consumer sees exactly one failure event.
+ */
+export class CascadeAlreadyFailedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CascadeAlreadyFailedError'
+  }
 }

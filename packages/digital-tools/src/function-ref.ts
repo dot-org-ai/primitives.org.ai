@@ -142,9 +142,21 @@ export interface AgenticFunctionRef extends BaseFunctionRef {
    */
   mode: AgentMode
   /**
-   * Tool-permission scope strings (e.g. `'github.repos'`, `'fs.read'`).
-   * Compared against the parent Service's `binding.toolPermissions` at
-   * cascade-compile time.
+   * Optional preferred model spec (e.g. `'claude-opus-4'`, `'sonnet'`).
+   * Mirrors {@link GenerativeFunctionRef.modelHint}; the runtime is free to
+   * substitute based on cost/availability/track-record policy. The
+   * `services-as-software` cascade walker forwards this to
+   * `ai-functions.generateText` for the agentic tool-use loop.
+   */
+  modelHint?: string
+  /**
+   * Tool ids registered with `digital-tools.defineTool`. Each id resolves to
+   * exactly one {@link Tool} via the global registry. Scope-style strings
+   * (e.g. `'github.repos'`) are accepted but treated as literal tool ids,
+   * not permission scopes — the runtime does not expand `'github.repos'`
+   * into the set of github repo tools. True scope→tools resolution
+   * (capability-based permission expansion) is round-9+ work; until then,
+   * list each concrete tool id explicitly.
    */
   toolPermissions?: string[]
   /**

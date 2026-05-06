@@ -35,6 +35,8 @@
 import { generateObject } from 'ai-functions'
 import { z } from 'zod'
 
+import { estimateCostFromUsage } from './invoke/cost-estimate.js'
+
 // ============================================================================
 // Persona shape
 // ============================================================================
@@ -263,25 +265,6 @@ const HARD_MAX_ROUNDS = 5
  */
 function safeStringify(v: unknown): string {
   return JSON.stringify(v, (_k, val) => (typeof val === 'bigint' ? val.toString() : val))
-}
-
-/**
- * Naïve cost estimator from the AI SDK's `usage` shape. Round 7 uses a flat
- * Sonnet-class default ($3/M input, $15/M output) when token counts are
- * present; otherwise falls back to a $0.001 per-call placeholder. Mirrors
- * the round-6 `cascade-walker` heuristic — round 8 will route both through
- * `ai-functions.budget`.
- */
-function estimateCostFromUsage(usage: unknown): number {
-  if (usage && typeof usage === 'object') {
-    const u = usage as { inputTokens?: number; outputTokens?: number }
-    const inT = typeof u.inputTokens === 'number' ? u.inputTokens : 0
-    const outT = typeof u.outputTokens === 'number' ? u.outputTokens : 0
-    if (inT > 0 || outT > 0) {
-      return (inT * 3) / 1_000_000 + (outT * 15) / 1_000_000
-    }
-  }
-  return 0.001
 }
 
 /**

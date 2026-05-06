@@ -14,6 +14,22 @@
     "./bookkeeper": {
       "types": "./dist/services/bookkeeper.d.ts",
       "import": "./dist/services/bookkeeper.js"
+    },
+    "./controller": {
+      "types": "./dist/services/controller.d.ts",
+      "import": "./dist/services/controller.js"
+    },
+    "./ap": {
+      "types": "./dist/services/ap.d.ts",
+      "import": "./dist/services/ap.js"
+    },
+    "./ar": {
+      "types": "./dist/services/ar.d.ts",
+      "import": "./dist/services/ar.js"
+    },
+    "./tax": {
+      "types": "./dist/services/tax.d.ts",
+      "import": "./dist/services/tax.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
