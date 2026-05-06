@@ -394,10 +394,13 @@ export {
 // Composable middleware primitives
 export {
   cacheMiddleware,
+  embeddingCacheMiddleware,
   budgetMiddleware,
   traceMiddleware,
   type CacheMiddlewareOptions,
   type CacheMiddlewareStore,
+  type EmbedCacheMiddlewareOptions,
+  type EmbedCacheMiddlewareStore,
   type BudgetMiddlewareOptions,
   type PricingOverlay,
   type TraceEvent,
