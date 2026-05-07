@@ -1,7 +1,7 @@
 /**
  * Personas — reusable persona factory library (v3 §9).
  *
- * Twenty-six factories — six general-purpose evaluation axes plus twenty
+ * Thirty factories — six general-purpose evaluation axes plus twenty-four
  * specialized domain factories that cover the regulator / safety / realism /
  * production-axes surfaces Services in production verticals frequently need.
  * Each factory mints an {@link AgenticPersona} ready to drop into an
@@ -68,12 +68,27 @@
  *   - {@link Personas.handoffReadiness}     — downstream-handoff readiness
  *     check for specs / runbooks / transition docs (advisory).
  *
- * Most factories default `signOff` to `'must-approve'`. Five realism /
- * readiness / commercial / handoff factories (`budgetRealism`,
- * `timelineRealism`, `localizationReady`, `commercialFit`, `handoffReadiness`)
- * default to `'advisory'` — they are load-bearing inputs for Services that
- * propose work, ship globally, pitch commercially, or hand off to downstream
- * teams, but their verdicts are guidance, not gates.
+ * Specialized (contract / actionability / decision-bias / success-criteria surfaces):
+ *   - {@link Personas.contractualClarity}   — contract-language ambiguity
+ *     check (defined terms, who/when/how clauses, remedies, recital/body
+ *     conflicts) for MSAs / SOWs / NDAs / employment / sales-order drafts.
+ *   - {@link Personas.actionVerb}           — actionability + active-voice
+ *     check for runbooks / SOPs / tutorials / API docs / specs (vague verbs,
+ *     passive constructions, missing exact commands, fuzzy step boundaries).
+ *   - {@link Personas.anchoring}            — anchor / decision-bias check for
+ *     decision-recommendation Services (anchoring, availability, confirmation,
+ *     survivorship, recency, authority, sunk-cost) — advisory.
+ *   - {@link Personas.successCriteria}      — success-criteria specificity
+ *     check for OKRs / project plans / strategic objectives (measurable,
+ *     time-bound, attestable, falsifiable).
+ *
+ * Most factories default `signOff` to `'must-approve'`. Six realism /
+ * readiness / commercial / handoff / decision-bias factories (`budgetRealism`,
+ * `timelineRealism`, `localizationReady`, `commercialFit`, `handoffReadiness`,
+ * `anchoring`) default to `'advisory'` — they are load-bearing inputs for
+ * Services that propose work, ship globally, pitch commercially, hand off to
+ * downstream teams, or recommend decisions, but their verdicts are guidance,
+ * not gates.
  * Each factory mints a default `name` of the form
  * `'<archetype>-<discriminator>'` (e.g. `'pedantic-validator-gaap'`). Callers
  * may pass an explicit `name` to override — useful when the panel uses
@@ -1005,6 +1020,168 @@ export interface HandoffReadinessPersonaOpts {
   modelHint?: string
 }
 
+/**
+ * Contract types surfaced by {@link Personas.contractualClarity}. `(string & {})`
+ * keeps autocomplete on the curated list while still accepting arbitrary
+ * contract-type slugs (e.g. `'reseller-agreement'`, `'data-processing-agreement'`)
+ * without a library bump.
+ */
+export type ContractType =
+  | 'msa'
+  | 'sow'
+  | 'nda'
+  | 'employment'
+  | 'sales-order'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {})
+
+/**
+ * Ambiguity-tolerance tier surfaced by {@link Personas.contractualClarity}.
+ * Calibrates how forgiving the reviewer is about prose that is technically
+ * ambiguous but commercially conventional.
+ *
+ *   - `'strict'`   — flag every ambiguous defined term, every undefined
+ *     who/when/how clause, every missing remedy.
+ *   - `'moderate'` — flag only material ambiguities; tolerate conventional
+ *     boilerplate that is ambiguous in form but not in industry practice.
+ */
+export type ContractualAmbiguityTolerance = 'strict' | 'moderate'
+
+/**
+ * Options for {@link Personas.contractualClarity}.
+ */
+export interface ContractualClarityPersonaOpts {
+  /**
+   * Contract type the persona is scrutinizing. Defaults to `'msa'`. Affects
+   * the prompt language so the LLM applies contract-appropriate clarity norms
+   * (e.g. NDAs demand defined-term discipline; SOWs demand acceptance-criteria
+   * discipline; employment agreements demand triggers / remedies discipline).
+   */
+  contractType?: ContractType
+  /**
+   * Ambiguity tolerance. Defaults to `'strict'` — every ambiguous defined term
+   * and every undefined who / when / how clause is flagged. Loosen to
+   * `'moderate'` when the artifact's editorial standard tolerates conventional
+   * boilerplate that is ambiguous in form but not in industry practice.
+   */
+  ambiguityTolerance?: ContractualAmbiguityTolerance
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * contract-language ambiguity scrutiny across long agreements benefits from
+   * strong deductive ability and a high context window.
+   */
+  modelHint?: string
+}
+
+/**
+ * Artifact types surfaced by {@link Personas.actionVerb}. The persona
+ * calibrates which actionability norms to apply based on the artifact —
+ * runbooks demand exact commands; tutorials demand stepwise scaffolding;
+ * API docs demand precise verb / endpoint pairing; specs demand unambiguous
+ * MUST / SHOULD / MAY language.
+ */
+export type ActionVerbArtifactType = 'runbook' | 'sop' | 'tutorial' | 'api-doc' | 'spec'
+
+/**
+ * Options for {@link Personas.actionVerb}.
+ */
+export interface ActionVerbPersonaOpts {
+  /**
+   * Artifact type the persona is scrutinizing. Defaults to `'runbook'`.
+   * Affects the prompt language so the LLM applies artifact-appropriate
+   * actionability norms.
+   */
+  artifactType?: ActionVerbArtifactType
+  /**
+   * When `true` (default), the persona requires exact, copy-pasteable command
+   * lines wherever a step instructs the operator to run something. Reject on
+   * vague paraphrase (`"run the migration"`) when an exact invocation is
+   * available. When `false`, command precision is advisory.
+   */
+  commandPrecisionRequired?: boolean
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Decision-bias types surfaced by {@link Personas.anchoring}. Each entry is
+ * a recognisable failure mode in decision-recommendation prose.
+ */
+export type DecisionBiasType =
+  | 'anchoring'
+  | 'availability'
+  | 'confirmation'
+  | 'survivorship'
+  | 'recency'
+  | 'authority'
+  | 'sunk-cost'
+
+/**
+ * Options for {@link Personas.anchoring}.
+ */
+export interface AnchoringPersonaOpts {
+  /**
+   * Bias types the persona scrutinizes. Defaults to all seven (`anchoring`,
+   * `availability`, `confirmation`, `survivorship`, `recency`, `authority`,
+   * `sunk-cost`). Narrow the list to focus the persona on a subset (e.g.
+   * `['anchoring', 'confirmation']` for a single-source recommendation
+   * memo).
+   */
+  biasTypes?: DecisionBiasType[]
+  /**
+   * Severity gate.
+   *   - `'critical-only'` — flag only critical-severity bias contamination
+   *     (recommendations whose conclusion materially flips when the bias is
+   *     removed).
+   *   - `'all'` (default) — flag every bias-tinged passage regardless of
+   *     whether the conclusion would flip.
+   */
+  severityThreshold?: 'critical-only' | 'all'
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * bias-pattern recognition across long decision-recommendation write-ups
+   * benefits from strong deductive ability and a high context window.
+   */
+  modelHint?: string
+}
+
+/**
+ * Success-criteria specificity types surfaced by
+ * {@link Personas.successCriteria}. Each entry is a property that a stated
+ * success criterion must satisfy to count as a real, gradeable target.
+ */
+export type SuccessCriteriaType = 'measurable' | 'time-bound' | 'attestable' | 'falsifiable'
+
+/**
+ * Options for {@link Personas.successCriteria}.
+ */
+export interface SuccessCriteriaPersonaOpts {
+  /**
+   * Specificity-property types every stated success criterion must satisfy.
+   * Defaults to all four (`measurable`, `time-bound`, `attestable`,
+   * `falsifiable`). Narrow the list to relax the bar (e.g. `['measurable',
+   * 'time-bound']` for an early-stage strategic objective where attestability
+   * and falsifiability are not yet feasible).
+   */
+  criteriaTypes?: SuccessCriteriaType[]
+  /**
+   * Minimum success criteria per stated objective / goal / OKR. Defaults to
+   * `2`. Raise for strategic plans where multi-criteria measurement is part of
+   * the editorial standard; lower (to `1`) for lightweight project briefs.
+   */
+  minCriteriaPerObjective?: number
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
 // ============================================================================
 // Factories
 // ============================================================================
@@ -1024,8 +1201,8 @@ function slug(s: string): string {
 }
 
 /**
- * `Personas` namespace — twenty-two factory functions
- * (six general-purpose + sixteen specialized).
+ * `Personas` namespace — thirty factory functions
+ * (six general-purpose + twenty-four specialized).
  */
 export const Personas = {
   /**
@@ -2285,6 +2462,257 @@ export const Personas = {
         archetype: 'handoff-readiness',
         handoffSurfaces,
         contextDensity,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Contractual-clarity reviewer — contract-language ambiguity check for
+   * Services producing contract drafts, redlines, and negotiation memos.
+   * Scrutinizes the artifact for ambiguous defined terms, undefined who /
+   * when / how clauses, missing remedies, conflicts between recital and body,
+   * and vague triggers (e.g. "promptly", "reasonable efforts", "as needed").
+   * Always `'must-approve'` — for catalog Services producing contract output,
+   * ambiguity failures are dispositive (a clause whose obligor is undefined is
+   * dispositive even when the commercial intent is clear in context).
+   *
+   * Defaults to `modelHint: 'opus'` because contract-language ambiguity
+   * scrutiny across long agreements benefits from strong deductive ability and
+   * a high context window.
+   *
+   * `$id` namespace: `persona:contractual-clarity:<contractType>-<tolerance>`.
+   *
+   * @example
+   * ```ts
+   * Personas.contractualClarity() // 'msa', 'strict' tolerance
+   * Personas.contractualClarity({ contractType: 'sow' })
+   * Personas.contractualClarity({ contractType: 'nda', ambiguityTolerance: 'moderate' })
+   * ```
+   */
+  contractualClarity(opts: ContractualClarityPersonaOpts = {}): AgenticPersona {
+    const contractType: ContractType = opts.contractType ?? 'msa'
+    const ambiguityTolerance: ContractualAmbiguityTolerance = opts.ambiguityTolerance ?? 'strict'
+    const toleranceClause =
+      ambiguityTolerance === 'strict'
+        ? ` Apply STRICT ambiguity tolerance — flag every ambiguous defined ` +
+          `term, every undefined who / when / how clause, every missing remedy, ` +
+          `and every vague trigger ("promptly", "reasonable efforts", "as ` +
+          `needed", "from time to time"). No conventional-boilerplate exception.`
+        : ` Apply MODERATE ambiguity tolerance — flag material ambiguities; ` +
+          `tolerate conventional boilerplate that is ambiguous in form but not ` +
+          `in industry practice. Still reject undefined obligors / obligees, ` +
+          `missing remedies, and recital / body conflicts.`
+    return {
+      name: opts.name ?? `contractual-clarity-${slug(contractType)}-${slug(ambiguityTolerance)}`,
+      persona:
+        `You are a contractual-clarity reviewer for ${contractType.toUpperCase()} ` +
+        `agreements. Scrutinize the artifact (draft, redline, negotiation memo) ` +
+        `for contract-language ambiguity. Look for defined terms used before / ` +
+        `without definition, defined terms whose definition contradicts their ` +
+        `usage, undefined who-clauses (obligor / obligee unclear), undefined ` +
+        `when-clauses (no trigger / no deadline), undefined how-clauses (no ` +
+        `procedure / no notice mechanism), missing remedies (breach without ` +
+        `consequence), conflicts between the recital block and the operative ` +
+        `body, and vague timing triggers.` +
+        toleranceClause +
+        ` Reject on any qualifying finding; cite the specific clause, the ` +
+        `ambiguity type, and the recommended unambiguous form when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:contractual-clarity:${slug(contractType)}-${slug(ambiguityTolerance)}`,
+        archetype: 'contractual-clarity',
+        contractType,
+        ambiguityTolerance,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Action-verb / actionability reviewer — actionability + active-voice
+   * check for Services producing operational runbooks, SOPs, tutorials, API
+   * docs, and specs. Scrutinizes prose for vague verbs (`handle`, `manage`,
+   * `process`, `deal with`), passive constructions (`is configured by`, `gets
+   * triggered`), missing exact commands, and fuzzy step boundaries (steps
+   * that bundle multiple actions or skip prerequisites). Always
+   * `'must-approve'` — for catalog Services producing step-by-step
+   * operational artifacts, actionability failures are dispositive (a runbook
+   * whose recovery step says "restore the database" without an exact command
+   * is dispositive in an outage).
+   *
+   * `$id` namespace: `persona:action-verb:<artifactType>`.
+   *
+   * @example
+   * ```ts
+   * Personas.actionVerb() // 'runbook', command precision required
+   * Personas.actionVerb({ artifactType: 'sop' })
+   * Personas.actionVerb({ artifactType: 'tutorial', commandPrecisionRequired: false })
+   * ```
+   */
+  actionVerb(opts: ActionVerbPersonaOpts = {}): AgenticPersona {
+    const artifactType: ActionVerbArtifactType = opts.artifactType ?? 'runbook'
+    const commandPrecisionRequired = opts.commandPrecisionRequired ?? true
+    const commandClause = commandPrecisionRequired
+      ? ` Every step that instructs the operator to run something MUST include ` +
+        `an exact, copy-pasteable command line (or a precise click / API-call ` +
+        `equivalent for non-CLI surfaces). Reject vague paraphrase (e.g. "run ` +
+        `the migration", "deploy the service", "trigger a rollback") when an ` +
+        `exact invocation is available.`
+      : ` Command-precision is advisory — note vague paraphrase as advisory ` +
+        `observation only, but still reject vague action verbs and passive ` +
+        `constructions.`
+    return {
+      name: opts.name ?? `action-verb-${slug(artifactType)}`,
+      persona:
+        `You are an action-verb / actionability reviewer for ${artifactType.toUpperCase()} ` +
+        `artifacts. Scrutinize the prose for vague verbs ("handle", "manage", ` +
+        `"process", "deal with", "address", "ensure"), passive constructions ` +
+        `("is configured by", "gets triggered", "should be performed"), and ` +
+        `fuzzy step boundaries (steps that bundle multiple actions, skip ` +
+        `prerequisites, or leave the operator guessing where one step ends and ` +
+        `the next begins). Active voice with a concrete verb + concrete object ` +
+        `is the bar.` +
+        commandClause +
+        ` Reject on any qualifying finding; cite the specific step, the ` +
+        `actionability defect, and the recommended active-voice rewrite when ` +
+        `rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:action-verb:${slug(artifactType)}`,
+        archetype: 'action-verb',
+        artifactType,
+        commandPrecisionRequired,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Anchoring / decision-bias reviewer — bias-contamination check for
+   * Services producing decision recommendations (investment recs, hire /
+   * no-hire memos, build / buy analyses, vendor selections, strategic
+   * pivots). Scrutinizes the recommendation for anchoring on a single source
+   * or initial frame, availability bias (over-weighting recent or
+   * memorable evidence), confirmation bias (counter-evidence ignored or
+   * minimised), survivorship bias (drawing inferences only from successful
+   * cases), recency bias, authority bias (deferring to a single voice), and
+   * sunk-cost reasoning. Defaults to `'advisory'` sign-off — load-bearing
+   * for decision-recommendation Services, but the verdict is guidance rather
+   * than a gate (the human reviewer makes the decision call).
+   *
+   * Defaults to `modelHint: 'opus'` because bias-pattern recognition across
+   * long decision-recommendation write-ups benefits from strong deductive
+   * ability and a high context window.
+   *
+   * `$id` namespace: `persona:anchoring:<severity>`.
+   *
+   * @example
+   * ```ts
+   * Personas.anchoring() // all bias types, all severities
+   * Personas.anchoring({ severityThreshold: 'critical-only' })
+   * Personas.anchoring({ biasTypes: ['anchoring', 'confirmation'] })
+   * ```
+   */
+  anchoring(opts: AnchoringPersonaOpts = {}): AgenticPersona {
+    const biasTypes: DecisionBiasType[] = opts.biasTypes ?? [
+      'anchoring',
+      'availability',
+      'confirmation',
+      'survivorship',
+      'recency',
+      'authority',
+      'sunk-cost',
+    ]
+    const severityThreshold: 'critical-only' | 'all' = opts.severityThreshold ?? 'all'
+    const severityClause =
+      severityThreshold === 'critical-only'
+        ? ` Flag only critical-severity bias contamination — passages whose ` +
+          `bias materially flips the recommendation if the bias is removed.`
+        : ` Flag every bias-tinged passage regardless of whether the ` +
+          `recommendation would flip.`
+    return {
+      name: opts.name ?? `anchoring-${slug(severityThreshold)}`,
+      persona:
+        `You are a decision-bias reviewer auditing a decision recommendation ` +
+        `(investment rec, hire / no-hire memo, build / buy analysis, vendor ` +
+        `selection, strategic pivot, etc) for bias contamination. Bias types ` +
+        `to scrutinize: ${biasTypes.join(', ')}. Look for anchoring on a ` +
+        `single initial frame or estimate, availability bias (over-weighting ` +
+        `recent or memorable evidence), confirmation bias (counter-evidence ` +
+        `ignored, dismissed, or minimised), survivorship bias (drawing ` +
+        `inferences only from successful cases while ignoring the failures), ` +
+        `recency bias, authority bias (deferring to a single voice without ` +
+        `independent verification), and sunk-cost reasoning ("we have already ` +
+        `invested X, therefore we must continue").` +
+        severityClause +
+        ` Flag findings with the specific bias type, the affected passage, ` +
+        `and the recommended remediation (counter-evidence to consider, ` +
+        `alternative frame, sensitivity check).`,
+      signOff: 'advisory',
+      config: {
+        $id: `persona:anchoring:${slug(severityThreshold)}`,
+        archetype: 'anchoring',
+        biasTypes,
+        severityThreshold,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Success-criteria reviewer — success-criteria specificity check for
+   * Services producing OKRs, project plans, strategic objectives, and goal
+   * statements. Scrutinizes each stated objective for vague success criteria —
+   * non-measurable goals ("improve customer satisfaction"), time-unbounded
+   * objectives ("eventually launch internationally"), unattestable claims
+   * ("be the best in the market"), and unfalsifiable assertions ("create
+   * value for stakeholders"). Always `'must-approve'` — for catalog Services
+   * producing planning / OKR artifacts, vague-success-criteria failures are
+   * dispositive (an OKR with no measurable / time-bound criteria is
+   * dispositive because it cannot be graded).
+   *
+   * `$id` namespace: `persona:success-criteria:min-<n>`.
+   *
+   * @example
+   * ```ts
+   * Personas.successCriteria() // all four criteria types, min 2 per objective
+   * Personas.successCriteria({ minCriteriaPerObjective: 3 })
+   * Personas.successCriteria({ criteriaTypes: ['measurable', 'time-bound'] })
+   * ```
+   */
+  successCriteria(opts: SuccessCriteriaPersonaOpts = {}): AgenticPersona {
+    const criteriaTypes: SuccessCriteriaType[] = opts.criteriaTypes ?? [
+      'measurable',
+      'time-bound',
+      'attestable',
+      'falsifiable',
+    ]
+    const minCriteriaPerObjective = opts.minCriteriaPerObjective ?? 2
+    return {
+      name: opts.name ?? `success-criteria-min-${minCriteriaPerObjective}`,
+      persona:
+        `You are a success-criteria specificity reviewer. Scrutinize the ` +
+        `artifact (OKR set, project plan, strategic objective, goal statement) ` +
+        `for vague success criteria. Required specificity properties for every ` +
+        `stated criterion: ${criteriaTypes.join(', ')}. Each criterion MUST be ` +
+        `measurable (a quantity / threshold a grader can compute), time-bound ` +
+        `(a deadline / window a grader can check), attestable (someone can ` +
+        `attest it was met based on observable evidence), and falsifiable ` +
+        `(there exists a clear state-of-the-world that would render it ` +
+        `unmet). Each stated objective / goal / OKR MUST carry at least ` +
+        `${minCriteriaPerObjective} criterion${minCriteriaPerObjective === 1 ? '' : 'a'} ` +
+        `that satisfy the required properties. Reject any objective falling ` +
+        `below the cap, and reject any criterion that is non-measurable, ` +
+        `time-unbounded, unattestable, or unfalsifiable. Cite the specific ` +
+        `objective, the missing properties, and the recommended explicit form ` +
+        `when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:success-criteria:min-${minCriteriaPerObjective}`,
+        archetype: 'success-criteria',
+        criteriaTypes,
+        minCriteriaPerObjective,
         ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
