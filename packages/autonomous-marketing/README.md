@@ -1,6 +1,6 @@
 # autonomous-marketing
 
-> **Status: shipped (proof-of-life).** `campaign-brief-generator`, `seo-content-pillar-author`, and `paid-ad-creative-iterator` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** Six Services — `campaign-brief-generator`, `seo-content-pillar-author`, `paid-ad-creative-iterator`, `brand-voice-monitor`, `content-localization-orchestrator`, and `campaign-attribution-auditor` — are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: marketing Services-as-Software, defined on the primitive substrate.
 
@@ -29,6 +29,27 @@ Concrete `Service.define({...})` calls for marketing work that the agentic econo
   ```ts
   import { paidAdCreativeIterator } from 'autonomous-marketing/paid-ad-creative-iterator'
   // typed as ServiceInstance<AdPerfTriggerInput, AdVariantSetOutput>
+  ```
+
+- **`brand-voice-monitor`** — weekly cron OR ad-hoc audit request → brand-manager-signed cross-channel brand-voice audit report. Trigger: weekly cron OR ad-hoc audit request. Cascade: `fetch-published-content-across-channels (Code) → extract-tone-and-voice-signals-and-score-against-style-guide (Generative) → flag-deviations-and-suggest-edits (Generative) → brand-manager-review-and-sign (Human, approval rationale) → emit-audit-report-and-per-asset-recommendations (Code)`. EvaluatorPanel of 4 personas (brand-safety-reviewer with `riskTolerance: 'low'` + voice-and-style-reviewer + deviation-precision-checker + brand-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(brand-manager))`. Pricing: `Pricing.subscription` — $799/mo per brand. Service-level reward = `brand-voice-consistency-score-improvement`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/marketing-managers/brand-voice-monitor`.
+
+  ```ts
+  import { brandVoiceMonitor } from 'autonomous-marketing/brand-voice-monitor'
+  // typed as ServiceInstance<BrandAuditTriggerInput, BrandAuditReportOutput>
+  ```
+
+- **`content-localization-orchestrator`** — content-piece-tagged-for-localisation webhook → per-locale-reviewer-attested localised bundle published to per-locale targets. Trigger: content piece tagged for localisation. Cascade: `fetch-source-content-and-per-locale-style-guides (Code) → per-locale-adaptation-copy-numerals-cultural-references-rtl (Generative) → market-fit-review-and-sensitivity-flags (Generative) → per-locale-reviewer-attestation (Human, trust rationale — cultural-context expertise lives in-region) → emit-localized-bundle-and-publish-targets (Code)`. EvaluatorPanel of 4 personas (localization-readiness-reviewer + brand-safety-reviewer with `toneRange: 'formal'` + factual-accuracy-reviewer with `minCitationsPerClaim: 1` + localization-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(per-locale-reviewer))`. Pricing: `Pricing.outcome` 3-tier short-copy / medium-asset / long-form ($99 / $499 / $1,999 per locale). Service-level reward = `localized-content-engagement-vs-source-baseline`. Archetype: `content-generation`. Lineage: `business.org.ai/cells/marketing-managers/content-localization-orchestrator`.
+
+  ```ts
+  import { contentLocalizationOrchestrator } from 'autonomous-marketing/content-localization-orchestrator'
+  // typed as ServiceInstance<LocalizationRequestInput, LocalizedBundleOutput>
+  ```
+
+- **`campaign-attribution-auditor`** — monthly cron + campaign-reporting-cycle trigger → growth-lead-signed multi-touch-attribution + ROI audit reconciled against platform self-reports. Trigger: monthly cron + campaign reporting cycle. Cascade: `fetch-campaign-touchpoints-conversion-events-spend-and-click-stream (Code) → model-multi-touch-attribution-and-reconcile-with-platform-self-reports (Generative) → synthesize-roi-narrative-and-flag-attribution-anomalies (Generative) → growth-lead-review-and-sign (Human, approval rationale) → emit-attribution-report-and-finance-export (Code)`. EvaluatorPanel of 4 personas (attribution-factual-accuracy-reviewer with `minCitationsPerClaim: 2` + budget-realism-reviewer with `budgetType: 'cost'` + attribution-model-soundness-checker + growth-analytics-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(growth-lead))`. Pricing: `Pricing.percentOf` — 0.75% of `campaign-spend-audited` (rateBasisPoints: 75), capped at $25k per audit. Service-level reward = `attribution-confidence-score-and-platform-self-report-reconciliation-rate`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/marketing-managers/campaign-attribution-auditor`.
+
+  ```ts
+  import { campaignAttributionAuditor } from 'autonomous-marketing/campaign-attribution-auditor'
+  // typed as ServiceInstance<AttributionAuditTriggerInput, AttributionAuditReportOutput>
   ```
 
 ## Why a separate package

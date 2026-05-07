@@ -1,7 +1,7 @@
 {
   "name": "autonomous-marketing",
   "version": "0.0.1",
-  "description": "Catalog package — marketing Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: campaign-brief-generator, seo-content-pillar-author, paid-ad-creative-iterator. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-revenue / autonomous-developer-experience / autonomous-startups.",
+  "description": "Catalog package — marketing Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Six Services: campaign-brief-generator, seo-content-pillar-author, paid-ad-creative-iterator, brand-voice-monitor, content-localization-orchestrator, campaign-attribution-auditor. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-revenue / autonomous-developer-experience / autonomous-startups.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./paid-ad-creative-iterator": {
       "types": "./dist/services/paid-ad-creative-iterator.d.ts",
       "import": "./dist/services/paid-ad-creative-iterator.js"
+    },
+    "./brand-voice-monitor": {
+      "types": "./dist/services/brand-voice-monitor.d.ts",
+      "import": "./dist/services/brand-voice-monitor.js"
+    },
+    "./content-localization-orchestrator": {
+      "types": "./dist/services/content-localization-orchestrator.d.ts",
+      "import": "./dist/services/content-localization-orchestrator.js"
+    },
+    "./campaign-attribution-auditor": {
+      "types": "./dist/services/campaign-attribution-auditor.d.ts",
+      "import": "./dist/services/campaign-attribution-auditor.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
