@@ -42,3 +42,24 @@ export {
   RuntimeUnitOutputSchema,
 } from './runtime-unit-emitter.js'
 export type { RuntimeUnitInput, RuntimeUnitOutput } from './runtime-unit-emitter.js'
+
+export {
+  pricingArchitect,
+  PricingArchitectInputSchema,
+  PricingArchitectOutputSchema,
+} from './pricing-architect.js'
+export type { PricingArchitectInput, PricingArchitectOutput } from './pricing-architect.js'
+
+export {
+  pitchDeckBuilder,
+  PitchDeckBuilderInputSchema,
+  PitchDeckBuilderOutputSchema,
+} from './pitch-deck-builder.js'
+export type { PitchDeckBuilderInput, PitchDeckBuilderOutput } from './pitch-deck-builder.js'
+
+export {
+  gtmExperimentRunner,
+  GtmExperimentInputSchema,
+  GtmExperimentOutputSchema,
+} from './gtm-experiment-runner.js'
+export type { GtmExperimentInput, GtmExperimentOutput } from './gtm-experiment-runner.js'

@@ -26,6 +26,18 @@
     "./runtime-unit-emitter": {
       "types": "./dist/services/runtime-unit-emitter.d.ts",
       "import": "./dist/services/runtime-unit-emitter.js"
+    },
+    "./pricing-architect": {
+      "types": "./dist/services/pricing-architect.d.ts",
+      "import": "./dist/services/pricing-architect.js"
+    },
+    "./pitch-deck-builder": {
+      "types": "./dist/services/pitch-deck-builder.d.ts",
+      "import": "./dist/services/pitch-deck-builder.js"
+    },
+    "./gtm-experiment-runner": {
+      "types": "./dist/services/gtm-experiment-runner.d.ts",
+      "import": "./dist/services/gtm-experiment-runner.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
