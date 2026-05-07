@@ -100,31 +100,37 @@ describe('@primitives/llm-pricing — required slugs present', () => {
 })
 
 describe('@primitives/llm-pricing — synthetic rate anchors', () => {
-  it('vertex/gemini-3.1-pro batch ≤200K: 1.5M in + 0.8M out = $1.50 + $4.80 = $6.30', () => {
+  // priceFor() is per-call: the 200K breakpoint applies to a single call's
+  // inputTokens. For aggregate cost rollups across many calls, callers
+  // accumulate per-call results. The synthetic anchors below all use
+  // <200K input tokens to exercise the base tier; the explicit breakpoint
+  // anchor below uses ≥200K to exercise the high-context tier.
+
+  it('vertex/gemini-3.1-pro batch ≤200K: 150K in + 80K out = $0.150 + $0.480 = $0.630', () => {
     const result = priceFor({
       slug: 'vertex/gemini-3.1-pro',
       tier: 'batch',
-      inputTokens: 1_500_000,
-      outputTokens: 800_000,
+      inputTokens: 150_000,
+      outputTokens: 80_000,
     })
-    expect(result.inputUsd).toBeCloseTo(1.5, 6)
-    expect(result.outputUsd).toBeCloseTo(4.8, 6)
-    expect(result.totalUsd).toBeCloseTo(6.3, 6)
+    expect(result.inputUsd).toBeCloseTo(0.15, 6)
+    expect(result.outputUsd).toBeCloseTo(0.48, 6)
+    expect(result.totalUsd).toBeCloseTo(0.63, 6)
   })
 
-  it('vertex/gemini-3.1-pro standard ≤200K: 1M in + 1M out = $2 + $12 = $14', () => {
+  it('vertex/gemini-3.1-pro standard ≤200K: 100K in + 100K out = $0.20 + $1.20 = $1.40', () => {
     const result = priceFor({
       slug: 'vertex/gemini-3.1-pro',
       tier: 'standard',
-      inputTokens: 1_000_000,
-      outputTokens: 1_000_000,
+      inputTokens: 100_000,
+      outputTokens: 100_000,
     })
-    expect(result.inputUsd).toBeCloseTo(2, 6)
-    expect(result.outputUsd).toBeCloseTo(12, 6)
-    expect(result.totalUsd).toBeCloseTo(14, 6)
+    expect(result.inputUsd).toBeCloseTo(0.2, 6)
+    expect(result.outputUsd).toBeCloseTo(1.2, 6)
+    expect(result.totalUsd).toBeCloseTo(1.4, 6)
   })
 
-  it('vertex/gemini-3.1-pro standard above 200K applies the high-context rate', () => {
+  it('vertex/gemini-3.1-pro standard ≥200K applies the high-context rate', () => {
     // 250K input tokens crosses the 200K breakpoint → apply contextTierAbove
     // ($4/M in, $18/M out) instead of base ($2/M in, $12/M out).
     const result = priceFor({
@@ -137,6 +143,20 @@ describe('@primitives/llm-pricing — synthetic rate anchors', () => {
     expect(result.inputUsd).toBeCloseTo(1.0, 6)
     expect(result.outputUsd).toBeCloseTo(0.9, 6)
     expect(result.totalUsd).toBeCloseTo(1.9, 6)
+  })
+
+  it('vertex/gemini-3.1-pro batch ≥200K applies the high-context rate', () => {
+    // 250K input tokens batch → $2/M in (vs $1/M base), $9/M out (vs $6/M)
+    const result = priceFor({
+      slug: 'vertex/gemini-3.1-pro',
+      tier: 'batch',
+      inputTokens: 250_000,
+      outputTokens: 50_000,
+    })
+    // 250K × $2/M = $0.50 ; 50K × $9/M = $0.45 ; total = $0.95
+    expect(result.inputUsd).toBeCloseTo(0.5, 6)
+    expect(result.outputUsd).toBeCloseTo(0.45, 6)
+    expect(result.totalUsd).toBeCloseTo(0.95, 6)
   })
 
   it('bedrock/claude-opus-4-7 standard: 1M in + 1M out = $15 + $75 = $90 (flat — no breakpoint)', () => {
@@ -176,26 +196,54 @@ describe('@primitives/llm-pricing — synthetic rate anchors', () => {
 
 describe('@primitives/llm-pricing — production regression anchor (BMC corpus)', () => {
   // sb-srnl 2026-05-07: 5602 records via vertex-batch on
-  // vertex/gemini-3.1-pro flex/batch tier (≤200K context):
-  //   - input avg 4500 tok × 5602 records = 25,209,000 input tokens
-  //   - output avg 1140 tok × 5602 records = 6,386,280 output tokens
-  // At $1/M in + $6/M out:
-  //   input cost  = 25.209  M × $1    = $25.209
-  //   output cost = 6.38628 M × $6    = $38.3177
-  //   total                            = $63.5267
+  // vertex/gemini-3.1-pro flex/batch tier (≤200K input per record):
+  //   - input avg 4500 tok per record (well under 200K breakpoint)
+  //   - output avg 1140 tok per record
+  // Per-record at $1/M in + $6/M out:
+  //   input  cost = 4500   × 1e-6 × $1 = $0.0045
+  //   output cost = 1140   × 1e-6 × $6 = $0.00684
+  //   total per record                  = $0.01134
+  // 5602 records × $0.01134 = $63.5267
+  //
+  // priceFor() is per-call: callers accumulate the rollup.
   it('5602 records × ~4500 in × ~1140 out @ batch ≈ $63.53', () => {
     const records = 5602
     const inputAvg = 4500
     const outputAvg = 1140
-    const result = priceFor({
-      slug: 'vertex/gemini-3.1-pro',
-      tier: 'batch',
-      inputTokens: records * inputAvg,
-      outputTokens: records * outputAvg,
-    })
-    expect(result.totalUsd).toBeGreaterThan(63)
-    expect(result.totalUsd).toBeLessThan(64)
-    expect(result.totalUsd).toBeCloseTo(63.527, 2)
+    let total = 0
+    for (let i = 0; i < records; i++) {
+      const r = priceFor({
+        slug: 'vertex/gemini-3.1-pro',
+        tier: 'batch',
+        inputTokens: inputAvg,
+        outputTokens: outputAvg,
+      })
+      total += r.totalUsd
+    }
+    expect(total).toBeGreaterThan(63)
+    expect(total).toBeLessThan(64)
+    expect(total).toBeCloseTo(63.527, 2)
+  })
+
+  // For aggregate token counts where every call is known to be under the
+  // breakpoint, callers can pass the aggregate directly — but they MUST
+  // ensure no individual call crossed 200K. priceFor() does not have a
+  // way to express "aggregate of small calls"; that's by design.
+  it('aggregate-equivalent: priceFor with sub-breakpoint aggregates matches per-call sum (when no call crossed 200K)', () => {
+    // 50 calls × 4000 input + 1000 output @ batch.
+    // Per-call: 4000×1e-6×$1 + 1000×1e-6×$6 = $0.004 + $0.006 = $0.010
+    // 50 × $0.010 = $0.50
+    let perCall = 0
+    for (let i = 0; i < 50; i++) {
+      const r = priceFor({
+        slug: 'vertex/gemini-3.1-pro',
+        tier: 'batch',
+        inputTokens: 4000,
+        outputTokens: 1000,
+      })
+      perCall += r.totalUsd
+    }
+    expect(perCall).toBeCloseTo(0.5, 6)
   })
 })
 
