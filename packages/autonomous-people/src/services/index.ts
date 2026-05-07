@@ -1,8 +1,9 @@
 /**
  * Catalog barrel — autonomous-people Services.
  *
- * Ships three Services (`hiringLoopCoordinator`, `performanceReviewNarrator`,
- * `orgDesignImpactModeler`).
+ * Ships six Services (`hiringLoopCoordinator`, `performanceReviewNarrator`,
+ * `orgDesignImpactModeler`, `compensationBandAnalyst`,
+ * `candidateExperienceEvaluator`, `talentPipelineQualityMonitor`).
  *
  * Per v3 §12, catalog Services are module-evaluated TypeScript that yield a
  * typed `ServiceInstance<TIn, TOut>` value, exported as a named binding so
@@ -34,3 +35,27 @@ export {
   type OrgChangeProposalInput,
   type OrgChangeImpactOutput,
 } from './org-design-impact-modeler.js'
+
+export {
+  compensationBandAnalyst,
+  CompBandTriggerInputSchema,
+  OfferRecommendationOutputSchema,
+  type CompBandTriggerInput,
+  type OfferRecommendationOutput,
+} from './compensation-band-analyst.js'
+
+export {
+  candidateExperienceEvaluator,
+  CandidateFeedbackTriggerInputSchema,
+  CandidateFeedbackReportOutputSchema,
+  type CandidateFeedbackTriggerInput,
+  type CandidateFeedbackReportOutput,
+} from './candidate-experience-evaluator.js'
+
+export {
+  talentPipelineQualityMonitor,
+  PipelineMonitorTriggerInputSchema,
+  PipelineHealthReportOutputSchema,
+  type PipelineMonitorTriggerInput,
+  type PipelineHealthReportOutput,
+} from './talent-pipeline-quality-monitor.js'

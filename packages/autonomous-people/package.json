@@ -1,7 +1,7 @@
 {
   "name": "autonomous-people",
   "version": "0.0.1",
-  "description": "Catalog package — people / HR Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: hiring-loop-coordinator, performance-review-narrator, org-design-impact-modeler. Sibling to autonomous-operations / autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-legal.",
+  "description": "Catalog package — people / HR Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Ships six Services: hiring-loop-coordinator, performance-review-narrator, org-design-impact-modeler, compensation-band-analyst, candidate-experience-evaluator, talent-pipeline-quality-monitor. Sibling to autonomous-operations / autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-legal.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./org-design-impact-modeler": {
       "types": "./dist/services/org-design-impact-modeler.d.ts",
       "import": "./dist/services/org-design-impact-modeler.js"
+    },
+    "./compensation-band-analyst": {
+      "types": "./dist/services/compensation-band-analyst.d.ts",
+      "import": "./dist/services/compensation-band-analyst.js"
+    },
+    "./candidate-experience-evaluator": {
+      "types": "./dist/services/candidate-experience-evaluator.d.ts",
+      "import": "./dist/services/candidate-experience-evaluator.js"
+    },
+    "./talent-pipeline-quality-monitor": {
+      "types": "./dist/services/talent-pipeline-quality-monitor.d.ts",
+      "import": "./dist/services/talent-pipeline-quality-monitor.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

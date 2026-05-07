@@ -1,12 +1,12 @@
 # autonomous-people
 
-> **Status: shipped (proof-of-life).** `hiring-loop-coordinator`, `performance-review-narrator`, and `org-design-impact-modeler` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** Six Services — `hiring-loop-coordinator`, `performance-review-narrator`, `org-design-impact-modeler`, `compensation-band-analyst`, `candidate-experience-evaluator`, `talent-pipeline-quality-monitor` — implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: people / HR Services-as-Software, defined on the primitive substrate.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for people / HR work — interview-loop coordination, quarterly performance-review packet authoring, org-design impact analysis — that the agentic economy can deliver as software. Sibling of `autonomous-operations`, `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-legal`. Ninth catalog package; advances v3 §15's "catalog Services" leg into the people vertical.
+Concrete `Service.define({...})` calls for people / HR work — interview-loop coordination, quarterly performance-review packet authoring, org-design impact analysis, comp-band benchmarking + offer-letter advising, post-loop candidate-experience synthesis, and pipeline-quality / DEI monitoring — that the agentic economy can deliver as software. Sibling of `autonomous-operations`, `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-legal`. Ninth catalog package; advances v3 §15's "catalog Services" leg into the people vertical.
 
 ## Shipped Services
 
@@ -29,6 +29,27 @@ Concrete `Service.define({...})` calls for people / HR work — interview-loop c
   ```ts
   import { orgDesignImpactModeler } from 'autonomous-people/org-design-impact-modeler'
   // typed as ServiceInstance<OrgChangeProposalInput, OrgChangeImpactOutput>
+  ```
+
+- **`compensation-band-analyst`** — new-offer-assembly OR quarterly-comp-band-review trigger → CHRO-or-comp-committee-signed offer recommendation (position-on-band + parity-checks + flexibility room + rationale + audit trail). Trigger: a new offer is being assembled OR a quarterly comp-band review fires. Cascade: `fetch-role-spec-market-data-internal-comp-band-and-subject-context (Code) → synthesize-position-on-band-and-parity-checks-against-current-team (Generative) → draft-offer-recommendation-with-rationale-and-flexibility-room (Generative) → chro-or-comp-committee-review (Human, approval rationale) → emit-offer-recommendation-and-audit-trail (Code)`. EvaluatorPanel of 5 personas (`Personas.factualAccuracy({ citationRequired: true, sourceTypes: ['industry-standard', 'first-party'] })` market-data-recency-checker + `Personas.regulatoryCompliance({ regulator: 'sox' })` sox-controls-reviewer + parity-coverage-checker + flexibility-rationale-reviewer + people-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(CHRO))`. Pricing: `Pricing.perInvocation` 3-tier — IC / senior-IC / leadership ($299 / $999 / $4,999) — keyed on the role band. Service-level reward = `offer-acceptance-rate-and-comp-equity-score`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/human-resources-managers/compensation-band-analyst`.
+
+  ```ts
+  import { compensationBandAnalyst } from 'autonomous-people/compensation-band-analyst'
+  // typed as ServiceInstance<CompBandTriggerInput, OfferRecommendationOutput>
+  ```
+
+- **`candidate-experience-evaluator`** — post-loop-survey OR weekly-cron trigger → head-of-talent-signed candidate-experience report (themes + friction-points + scored-vs-internal-bar + actionable recommendations queued for the loop process). Trigger: candidate post-loop survey received OR weekly cron over the prior week's loops. Cascade: `fetch-survey-responses-interviewer-debrief-notes-and-outcome-data (Code) → extract-themes-flag-friction-points-and-score-vs-internal-bar (Generative) → draft-actionable-recommendations-for-recruiting-team (Generative) → head-of-talent-review (Human, approval rationale) → emit-feedback-report-and-queue-actions-for-loop-process (Code)`. EvaluatorPanel of 5 personas (`Personas.factualAccuracy({ minCitationsPerClaim: 2 })` theme-coherence-checker + `Personas.brandSafety({ toneRange: 'formal' })` tone-fairness-checker + actionability-reviewer + signal-clarity-checker + people-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(head-of-talent))`. Pricing: `Pricing.subscription` $499/mo per talent-team. Service-level reward = `candidate-NPS-and-offer-accept-rate`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/human-resources-managers/candidate-experience-evaluator`.
+
+  ```ts
+  import { candidateExperienceEvaluator } from 'autonomous-people/candidate-experience-evaluator'
+  // typed as ServiceInstance<CandidateFeedbackTriggerInput, CandidateFeedbackReportOutput>
+  ```
+
+- **`talent-pipeline-quality-monitor`** — weekly-cron + sourcing-rotation trigger → head-of-talent + people-leadership-signed pipeline-health report (anomalies + drop-off patterns + sourcing-mix drift + prioritised recommendations + mitigation options). Trigger: weekly cron + sourcing rotations. Cascade: `fetch-pipeline-funnel-source-mix-dei-signals-and-benchmark-data (Code) → detect-anomalies-drop-off-patterns-and-sourcing-mix-drift (Generative) → synthesize-recommendations-with-priority-and-mitigation-options (Generative) → head-of-talent-and-people-leadership-review (Human, approval rationale) → emit-pipeline-health-report (Code)`. EvaluatorPanel of 5 personas (`Personas.regulatoryCompliance({ regulator: 'sox' })` sox-controls-reviewer + `Personas.dataPrivacy({ framework: 'general' })` data-privacy-reviewer + `Personas.factualAccuracy({ minCitationsPerClaim: 2 })` anomaly-precision-checker + recommendation-actionability-reviewer + people-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(head-of-talent))`. Pricing: `Pricing.subscription` $799/mo per people-team + metered overage at $99 per `pipeline-anomaly-flagged` event above the baseline. Service-level reward = `time-to-fill-and-pipeline-diversity-score`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/human-resources-managers/talent-pipeline-quality-monitor`.
+
+  ```ts
+  import { talentPipelineQualityMonitor } from 'autonomous-people/talent-pipeline-quality-monitor'
+  // typed as ServiceInstance<PipelineMonitorTriggerInput, PipelineHealthReportOutput>
   ```
 
 ## Why a separate package
