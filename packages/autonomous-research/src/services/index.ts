@@ -1,8 +1,9 @@
 /**
  * Catalog barrel — autonomous-research Services.
  *
- * Ships three Services (`literatureReviewSynthesizer`, `experimentProtocolAuthor`,
- * `manuscriptPreSubmissionReviewer`).
+ * Ships six Services (`literatureReviewSynthesizer`, `experimentProtocolAuthor`,
+ * `manuscriptPreSubmissionReviewer`, `grantApplicationAuthor`,
+ * `dataAnalysisPlanAuthor`, `peerReviewCoordinator`).
  *
  * Per v3 §12, catalog Services are module-evaluated TypeScript that yield a
  * typed `ServiceInstance<TIn, TOut>` value, exported as a named binding so
@@ -34,3 +35,27 @@ export {
   type ManuscriptReviewInput,
   type ManuscriptReviewOutput,
 } from './manuscript-pre-submission-reviewer.js'
+
+export {
+  grantApplicationAuthor,
+  GrantApplicationInputSchema,
+  GrantApplicationOutputSchema,
+  type GrantApplicationInput,
+  type GrantApplicationOutput,
+} from './grant-application-author.js'
+
+export {
+  dataAnalysisPlanAuthor,
+  DataAnalysisPlanInputSchema,
+  DataAnalysisPlanOutputSchema,
+  type DataAnalysisPlanInput,
+  type DataAnalysisPlanOutput,
+} from './data-analysis-plan-author.js'
+
+export {
+  peerReviewCoordinator,
+  PeerReviewCoordinatorInputSchema,
+  PeerReviewCoordinatorOutputSchema,
+  type PeerReviewCoordinatorInput,
+  type PeerReviewCoordinatorOutput,
+} from './peer-review-coordinator.js'

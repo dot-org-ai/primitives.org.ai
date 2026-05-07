@@ -1,7 +1,7 @@
 {
   "name": "autonomous-research",
   "version": "0.0.1",
-  "description": "Catalog package — R&D / scientific-research Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: literature-review-synthesizer, experiment-protocol-author, manuscript-pre-submission-reviewer. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product / autonomous-supplychain / autonomous-security.",
+  "description": "Catalog package — R&D / scientific-research Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Ships: literature-review-synthesizer, experiment-protocol-author, manuscript-pre-submission-reviewer, grant-application-author, data-analysis-plan-author, peer-review-coordinator. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product / autonomous-supplychain / autonomous-security.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./manuscript-pre-submission-reviewer": {
       "types": "./dist/services/manuscript-pre-submission-reviewer.d.ts",
       "import": "./dist/services/manuscript-pre-submission-reviewer.js"
+    },
+    "./grant-application-author": {
+      "types": "./dist/services/grant-application-author.d.ts",
+      "import": "./dist/services/grant-application-author.js"
+    },
+    "./data-analysis-plan-author": {
+      "types": "./dist/services/data-analysis-plan-author.d.ts",
+      "import": "./dist/services/data-analysis-plan-author.js"
+    },
+    "./peer-review-coordinator": {
+      "types": "./dist/services/peer-review-coordinator.d.ts",
+      "import": "./dist/services/peer-review-coordinator.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

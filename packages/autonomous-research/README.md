@@ -1,12 +1,12 @@
 # autonomous-research
 
-> **Status: shipped (proof-of-life).** `literature-review-synthesizer`, `experiment-protocol-author`, and `manuscript-pre-submission-reviewer` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** `literature-review-synthesizer`, `experiment-protocol-author`, `manuscript-pre-submission-reviewer`, `grant-application-author`, `data-analysis-plan-author`, and `peer-review-coordinator` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: R&D / scientific-research Services-as-Software, defined on the primitive substrate. Distinct from `autonomous-data` (data-engineering / analytics) — this package focuses on the research-team vertical: literature review synthesis, experiment protocol drafting, and manuscript pre-submission review.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for in-house R&D / scientific-research work — multi-source literature review with citation graph + recommended-reading priorities, hypothesis-grade experiment-protocol authoring with power analysis + IRB readiness, and pre-submission manuscript review with novelty + statistical-rigor + clarity passes — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`, `autonomous-supplychain`, `autonomous-security`. Fourteenth catalog package; advances v3 §15's "catalog Services" leg into the R&D / scientific-research vertical.
+Concrete `Service.define({...})` calls for in-house R&D / scientific-research work — multi-source literature review with citation graph + recommended-reading priorities, hypothesis-grade experiment-protocol authoring with power analysis + IRB readiness, pre-submission manuscript review with novelty + statistical-rigor + clarity passes, NIH/NSF/DARPA-style grant application authoring, statistical-analysis-plan + OSF pre-registration authoring, and academic peer-review queue management — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`, `autonomous-supplychain`, `autonomous-security`. Fourteenth catalog package; advances v3 §15's "catalog Services" leg into the R&D / scientific-research vertical.
 
 ## Shipped Services
 
@@ -29,6 +29,27 @@ Concrete `Service.define({...})` calls for in-house R&D / scientific-research wo
   ```ts
   import { manuscriptPreSubmissionReviewer } from 'autonomous-research/manuscript-pre-submission-reviewer'
   // typed as ServiceInstance<ManuscriptReviewInput, ManuscriptReviewOutput>
+  ```
+
+- **`grant-application-author`** — research grant proposal authoring (NIH / NSF / DARPA / private foundation). Trigger: PI greenlights a grant submission + funding-call deadline. Cascade: `fetch-funding-call-spec-pi-bio-lab-cv-prior-funded-grants-and-supporting-data (Code) → synthesize-aims-and-significance-and-approach-sections-with-evidence-grounding (Generative) → draft-budget-with-justifications-biosketch-and-facilities (Generative) → pi-and-sponsored-research-officer-review-and-sign (Human, regulatory rationale) → emit-submission-package-and-agency-format-checklist (Code)`. EvaluatorPanel of 4 personas (specific-aim-clarity-and-citation-grounding (peer-reviewed + primary) + significance-novelty-and-scope-clarity (project-brief) + budget-justification-completeness (all axes) + approach-rigor-and-reproducibility-checker) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(principal-investigator) + HumanSign(sponsored-research-officer))`. Pricing: `Pricing.outcome` 3-tier — small-grant / standard-r01 / multi-PI-or-large ($999 / $4,999 / $19,999) — keyed on grant-scale band. Service-level reward = `grant-success-rate-improvement`. Archetype: `content-generation`. Lineage: `business.org.ai/cells/research-leads/grant-application-author`.
+
+  ```ts
+  import { grantApplicationAuthor } from 'autonomous-research/grant-application-author'
+  // typed as ServiceInstance<GrantApplicationInput, GrantApplicationOutput>
+  ```
+
+- **`data-analysis-plan-author`** — statistical analysis plan + reproducibility package authoring. Trigger: data-collection complete OR pre-registered analysis plan due. Cascade: `fetch-data-schema-research-questions-study-design-and-irb-protocol (Code) → draft-analysis-plan-primary-and-secondary-and-sensitivity-analyses-with-multiplicity-and-missing-data-handling (Generative) → emit-pre-registered-protocol-code-skeleton-and-reproducibility-checklist (Generative) → pi-and-biostatistician-review (Human, premium rationale) → emit-dap-doc-osf-pre-registration-and-analysis-template (Code)`. EvaluatorPanel of 4 personas (sensitivity-and-edge-case-coverage (min 6) + methodology-citation-grounding (peer-reviewed) + power-analysis-and-multiplicity-checker + reproducibility-completeness-checker) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(principal-investigator))`. Pricing: `Pricing.outcome` 3-tier — descriptive / inferential / multi-cohort-or-causal ($199 / $999 / $2,999) — keyed on analysis-tier band. Service-level reward = `pre-registration-adherence-and-replication-fidelity`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/research-leads/data-analysis-plan-author`.
+
+  ```ts
+  import { dataAnalysisPlanAuthor } from 'autonomous-research/data-analysis-plan-author'
+  // typed as ServiceInstance<DataAnalysisPlanInput, DataAnalysisPlanOutput>
+  ```
+
+- **`peer-review-coordinator`** — academic peer-review queue management. Trigger: editor assigns reviewer slot OR weekly cron over the journal's incoming queue. Cascade: `fetch-incoming-manuscripts-reviewer-pool-availability-topic-expertise-graph-and-recent-coi-data (Code) → match-manuscripts-to-3-recommended-reviewers-with-coi-checks-and-availability (Generative) → draft-review-invitation-with-deadline-and-topic-context (Generative) → editor-approves-and-sends-invitations (Human, approval rationale) → emit-invitation-batch-assignment-tracker-and-reminder-cadence (Code)`. EvaluatorPanel of 4 personas (topic-match-precision-and-evidence-grounding (min 1 citation) + editorial-brand-safety (low risk-tolerance) + coi-coverage-and-availability-realism-checker + reviewer-availability-realism-checker) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(editor))`. Pricing: `Pricing.subscription` $999 / month per editorial-board with metered overage at $49 per `manuscript-routed`. Service-level reward = `time-to-first-review-and-reviewer-acceptance-rate`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/research-leads/peer-review-coordinator`.
+
+  ```ts
+  import { peerReviewCoordinator } from 'autonomous-research/peer-review-coordinator'
+  // typed as ServiceInstance<PeerReviewCoordinatorInput, PeerReviewCoordinatorOutput>
   ```
 
 ## Why a separate package
