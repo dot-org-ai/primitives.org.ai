@@ -1,0 +1,41 @@
+{
+  "name": "autonomous-security",
+  "version": "0.0.1",
+  "description": "Catalog package — security-ops Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: vuln-triager, access-review-coordinator, phishing-simulation-orchestrator. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product / autonomous-supplychain.",
+  "private": true,
+  "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./vuln-triager": {
+      "types": "./dist/services/vuln-triager.d.ts",
+      "import": "./dist/services/vuln-triager.js"
+    },
+    "./access-review-coordinator": {
+      "types": "./dist/services/access-review-coordinator.d.ts",
+      "import": "./dist/services/access-review-coordinator.js"
+    },
+    "./phishing-simulation-orchestrator": {
+      "types": "./dist/services/phishing-simulation-orchestrator.d.ts",
+      "import": "./dist/services/phishing-simulation-orchestrator.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-security#readme"
+}
