@@ -1,12 +1,12 @@
 # autonomous-product
 
-> **Status: shipped (proof-of-life).** `prd-author`, `customer-feedback-synthesizer`, and `roadmap-tradeoff-evaluator` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** `prd-author`, `customer-feedback-synthesizer`, `roadmap-tradeoff-evaluator`, `release-experiment-designer`, `feature-deprecation-coordinator`, and `jobs-to-be-done-clusterer` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: product-management Services-as-Software, defined on the primitive substrate.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for product-management work — Product Requirements Document drafting, multi-source customer-feedback synthesis, quarterly-roadmap tradeoff modeling — that the agentic economy can deliver as software. Sibling of `autonomous-operations`, `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-legal`, `autonomous-people`. Eleventh catalog package (paired with `autonomous-data` shipping in parallel); advances v3 §15's "catalog Services" leg into the product-management vertical.
+Concrete `Service.define({...})` calls for product-management work — Product Requirements Document drafting, multi-source customer-feedback synthesis, quarterly-roadmap tradeoff modeling, A/B-test experiment-design + analysis-plan authoring, feature-sunset coordination, jobs-to-be-done discovery clustering — that the agentic economy can deliver as software. Sibling of `autonomous-operations`, `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-legal`, `autonomous-people`. Eleventh catalog package (paired with `autonomous-data` shipping in parallel); advances v3 §15's "catalog Services" leg into the product-management vertical.
 
 ## Shipped Services
 
@@ -29,6 +29,27 @@ Concrete `Service.define({...})` calls for product-management work — Product R
   ```ts
   import { roadmapTradeoffEvaluator } from 'autonomous-product/roadmap-tradeoff-evaluator'
   // typed as ServiceInstance<RoadmapPlanningInput, RoadmapDecisionOutput>
+  ```
+
+- **`release-experiment-designer`** — feature-ready-to-launch + experiment hypothesis defined → data-PM-and-eng-lead-reviewed A/B-test spec (hypothesis + variants + sample-size + duration + guardrails) + paired analysis plan (primary + secondary metrics + segmentation + stopping rules) registered with the experimentation platform. Trigger: feature is ready-to-launch and the team has defined an experiment hypothesis. Cascade: `fetch-feature-context-traffic-baseline-and-segment-availability (Code) → design-experiment-hypothesis-variants-sample-size-duration-and-guardrails (Generative) → draft-analysis-plan-primary-and-secondary-metrics-segmentation-and-stopping-rules (Generative) → data-pm-and-eng-lead-review (Human, approval rationale) → emit-experiment-spec-and-register-with-experimentation-platform (Code)`. EvaluatorPanel of 6 personas (power-analysis-soundness-checker + guardrail-coverage-checker + analysis-plan-clarity-reviewer + `Personas.edgeCaseCoverage({ minEdgeCasesPerScenario: 4 })` + `Personas.timelineRealism({ dependencyAware: true })` + product-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(data-pm))`. Pricing: `Pricing.outcome` 3-tier — feature-toggle / multi-variant / multi-segment ($499 / $1,999 / $4,999) keyed on experiment complexity. Service-level reward = `experiment-decision-actionability-and-time-to-decision`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/product-managers/release-experiment-designer`.
+
+  ```ts
+  import { releaseExperimentDesigner } from 'autonomous-product/release-experiment-designer'
+  // typed as ServiceInstance<ExperimentDesignInput, ExperimentSpecOutput>
+  ```
+
+- **`feature-deprecation-coordinator`** — feature flagged for sunset + deprecation date proposed → VP-Product-and-customer-success-lead-reviewed deprecation runbook (timeline + customer-comms strategy + migration paths + grandfathering rules) + drafted customer notifications + scheduled comms. Trigger: feature flagged for sunset + deprecation date proposed. Cascade: `fetch-feature-usage-dependent-features-and-customer-segment-impact (Code) → synthesize-deprecation-plan-timeline-comms-strategy-migration-paths-and-grandfathering-rules (Generative) → draft-customer-notifications-and-internal-runbook (Generative) → vp-product-and-customer-success-lead-review (Human, approval rationale) → emit-deprecation-runbook-and-schedule-comms (Code)`. EvaluatorPanel of 6 personas (impact-completeness-checker + comms-clarity-checker + migration-path-coverage-reviewer + `Personas.regressionRisk({ changeType: 'process' })` + `Personas.brandSafety({ riskTolerance: 'low' })` + product-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(vp-product))`. Pricing: `Pricing.subscription` ($699/mo product-team subscription) + metered overage ($199 per emitted deprecation runbook). Service-level reward = `deprecation-induced-churn-rate-vs-baseline`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/product-managers/feature-deprecation-coordinator`.
+
+  ```ts
+  import { featureDeprecationCoordinator } from 'autonomous-product/feature-deprecation-coordinator'
+  // typed as ServiceInstance<DeprecationCoordinationInput, DeprecationRunbookOutput>
+  ```
+
+- **`jobs-to-be-done-clusterer`** — customer-discovery interview round complete (≥ 12 transcripts) → product-strategy-lead-reviewed JTBD doc (clustered customer jobs + frequency + importance + prioritization recommendations + product-implication options) with a citation-traceable evidence trail. Trigger: customer-discovery interview round complete with ≥ 12 transcripts. Cascade: `fetch-interview-transcripts-and-transcripts-from-prior-rounds (Code) → supervised-extract-jobs-from-quotes-and-cluster-similar-jobs (Agentic, supervised) → synthesize-JTBD-statements-with-frequency-and-importance (Generative) → draft-prioritization-recommendations-and-product-implication-options (Generative) → product-strategy-lead-review (Human, premium rationale) → emit-JTBD-doc-and-linked-evidence-trail (Code)`. EvaluatorPanel of 6 personas (clustering-precision-checker + jtbd-clarity-checker + evidence-traceability-reviewer + `Personas.factualAccuracy({ citationRequired: true, minCitationsPerClaim: 3 })` + `Personas.scopeClarity({ artifactType: 'project-brief' })` + product-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(product-strategy-lead))`. Pricing: `Pricing.outcome` 3-tier — small-round / standard-round / enterprise-round ($999 / $2,999 / $9,999) keyed on round size. Service-level reward = `feature-conversion-rate-on-JTBD-aligned-features`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/product-managers/jobs-to-be-done-clusterer`.
+
+  ```ts
+  import { jobsToBeDoneClusterer } from 'autonomous-product/jobs-to-be-done-clusterer'
+  // typed as ServiceInstance<JobsToBeDoneInput, JobsToBeDoneOutput>
   ```
 
 ## Why a separate package

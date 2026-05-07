@@ -1,7 +1,7 @@
 {
   "name": "autonomous-product",
   "version": "0.0.1",
-  "description": "Catalog package — product-management Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: prd-author, customer-feedback-synthesizer, roadmap-tradeoff-evaluator. Sibling to autonomous-operations / autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-legal / autonomous-people.",
+  "description": "Catalog package — product-management Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: prd-author, customer-feedback-synthesizer, roadmap-tradeoff-evaluator, release-experiment-designer, feature-deprecation-coordinator, jobs-to-be-done-clusterer. Sibling to autonomous-operations / autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-legal / autonomous-people.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./roadmap-tradeoff-evaluator": {
       "types": "./dist/services/roadmap-tradeoff-evaluator.d.ts",
       "import": "./dist/services/roadmap-tradeoff-evaluator.js"
+    },
+    "./release-experiment-designer": {
+      "types": "./dist/services/release-experiment-designer.d.ts",
+      "import": "./dist/services/release-experiment-designer.js"
+    },
+    "./feature-deprecation-coordinator": {
+      "types": "./dist/services/feature-deprecation-coordinator.d.ts",
+      "import": "./dist/services/feature-deprecation-coordinator.js"
+    },
+    "./jobs-to-be-done-clusterer": {
+      "types": "./dist/services/jobs-to-be-done-clusterer.d.ts",
+      "import": "./dist/services/jobs-to-be-done-clusterer.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
