@@ -1,12 +1,12 @@
 # autonomous-security
 
-> **Status: shipped (proof-of-life).** `vuln-triager`, `access-review-coordinator`, and `phishing-simulation-orchestrator` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** Six Services — `vuln-triager`, `access-review-coordinator`, `phishing-simulation-orchestrator`, `incident-response-orchestrator`, `threat-model-author`, `compliance-audit-prepper` — are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
-Catalog package: security-ops Services-as-Software, defined on the primitive substrate. Distinct from `autonomous-operations` (infra-ops / SRE) — this package focuses on the security-team vertical: vulnerability disclosure triage, user-access review, and security-awareness phishing simulation.
+Catalog package: security-ops Services-as-Software, defined on the primitive substrate. Distinct from `autonomous-operations` (infra-ops / SRE) — this package focuses on the security-team vertical: vulnerability disclosure triage, user-access review, security-awareness phishing simulation, security-incident response coordination, threat modeling for new systems, and pre-audit evidence prep.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for in-house security-ops work — CVE / pen-test / bug-bounty triage with reachability analysis, quarterly user-access review (UAR) with per-manager attestation loop, and security-awareness phishing simulation with role-targeted templates — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`, `autonomous-supplychain`. Thirteenth catalog package; advances v3 §15's "catalog Services" leg into the security-ops vertical.
+Concrete `Service.define({...})` calls for in-house security-ops work — CVE / pen-test / bug-bounty triage with reachability analysis, quarterly user-access review (UAR) with per-manager attestation loop, security-awareness phishing simulation with role-targeted templates, SEV2+ incident-response coordination with CISO + GC sign-off, STRIDE/PASTA threat modeling for new systems / features, and pre-audit evidence prep + auditor question-bank — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`, `autonomous-supplychain`. Thirteenth catalog package; advances v3 §15's "catalog Services" leg into the security-ops vertical.
 
 ## Shipped Services
 
@@ -31,6 +31,27 @@ Concrete `Service.define({...})` calls for in-house security-ops work — CVE / 
   // typed as ServiceInstance<PhishingSimulationInput, PhishingSimulationOutput>
   ```
 
+- **`incident-response-orchestrator`** — security-incident response coordination. Trigger: security-incident SEV2+ declared. Cascade: `fetch-current-detection-asset-context-and-breach-history (Code) → synthesize-initial-impact-assessment-likely-blast-radius-and-IOC-correlation (Generative) → supervised-coordinate-evidence-collection-containment-recommendations-and-comms-strategy (Agentic, supervised) → CISO-and-GC-review-and-approve-actions (Human, regulatory rationale) → emit-incident-timeline-post-update-and-regulatory-notification-prep (Code)`. EvaluatorPanel of 6 personas (impact-assessment-soundness-checker + containment-actionability-reviewer + comms-clarity-checker + regulatory-compliance (gdpr) + data-privacy (full PII surface) + brand-safety (low-risk-tolerance)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(CISO) + HumanSign(GC))`. Pricing: `Pricing.outcome` 3-tier — SEV2 / SEV1 / breach-with-disclosure ($4,999 / $19,999 / $99,999) — keyed on declared incident severity. Service-level reward = `time-to-containment-and-time-to-disclosure-readiness`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/security-leads/incident-response-orchestrator`.
+
+  ```ts
+  import { incidentResponseOrchestrator } from 'autonomous-security/incident-response-orchestrator'
+  // typed as ServiceInstance<IncidentResponseInput, IncidentResponseOutput>
+  ```
+
+- **`threat-model-author`** — threat modeling for new systems / features. Trigger: new service / feature pre-launch + threat-model required. Cascade: `fetch-system-design-dataflow-dependency-graph-auth-model-and-prior-threat-models (Code) → STRIDE-or-PASTA-analysis-enumerate-threats-by-component-and-likelihood-and-impact-scoring (Generative) → draft-mitigations-risk-acceptance-recommendations-and-monitoring-watchpoints (Generative) → security-architect-and-service-owner-review (Human, premium rationale) → emit-threat-model-doc-and-linked-mitigation-tickets (Code)`. EvaluatorPanel of 5 personas (threat-enumeration-completeness-checker + scoring-soundness-checker + mitigation-actionability-reviewer + security-threat (5-surface) + edge-case-coverage (≥5 cases per scenario)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(security-architect))`. Pricing: `Pricing.perInvocation` 3-tier — small-feature / service / cross-system-platform ($499 / $1,999 / $7,999) — keyed on modeling scope. Service-level reward = `post-launch-incident-rate-on-modeled-systems`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/security-leads/threat-model-author`.
+
+  ```ts
+  import { threatModelAuthor } from 'autonomous-security/threat-model-author'
+  // typed as ServiceInstance<ThreatModelInput, ThreatModelOutput>
+  ```
+
+- **`compliance-audit-prepper`** — pre-audit evidence prep + auditor question-bank. Trigger: external audit scheduled (SOC2 / ISO / PCI / HIPAA). Cascade: `fetch-control-status-evidence-trail-prior-audit-findings-and-auditor-questionnaire (Code) → synthesize-evidence-mapping-per-control-flag-gaps-and-draft-control-narratives (Generative) → prepare-auditor-question-bank-escalation-paths-and-privileged-info-handling (Generative) → GC-compliance-officer-and-CISO-review (Human, regulatory rationale) → emit-audit-prep-pack-and-auditor-portal-staging (Code)`. EvaluatorPanel of 5 personas (control-coverage-checker + evidence-completeness-checker + gap-remediation-feasibility-reviewer + regulatory-compliance (sox) + factual-accuracy (citation-required, first-party + industry-standard sources)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(compliance-officer))`. Pricing: `Pricing.outcome` 3-tier — SOC2 Type 1 / SOC2 Type 2 or ISO / multi-framework ($9,999 / $49,999 / $199,999) — keyed on audit framework depth. Service-level reward = `audit-finding-count-reduction-and-cycle-time-improvement`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/security-leads/compliance-audit-prepper`.
+
+  ```ts
+  import { complianceAuditPrepper } from 'autonomous-security/compliance-audit-prepper'
+  // typed as ServiceInstance<ComplianceAuditPrepInput, ComplianceAuditPrepOutput>
+  ```
+
 ## Why a separate package
 
 See `autonomous-customer-success/README.md` — same rationale: one functional area per package, independent release cadence, depends only on primitive substrate. Distinct from `autonomous-operations` (which covers SRE / infra-ops / on-call / capacity) — security-ops is a peer vertical with its own buyer (CISO / security-lead) and its own regulatory + compliance posture.
@@ -45,7 +66,7 @@ Shipped:
 
 Deferred / placeholder until:
 
-- **`business-as-code`** `$.Reward` + `$.KeyResult` ladder (time-to-triage-and-remediation → MTTR-on-vulns / orphaned-grant-rate / phish-click-rate terminal hill) — current `kr:*` references are placeholder strings
+- **`business-as-code`** `$.Reward` + `$.KeyResult` ladder (time-to-triage-and-remediation → MTTR-on-vulns / orphaned-grant-rate / phish-click-rate / time-to-containment-and-disclosure-readiness / post-launch-incident-rate / audit-finding-count-and-cycle-time terminal hills) — current `kr:*` references are placeholder strings
 - **`Service.invoke`** real cascade execution — today the cascade compiles but invocation handles return stub events
 
 ## References

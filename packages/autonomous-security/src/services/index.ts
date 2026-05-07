@@ -1,8 +1,9 @@
 /**
  * Catalog barrel — autonomous-security Services.
  *
- * Ships three Services (`vulnTriager`, `accessReviewCoordinator`,
- * `phishingSimulationOrchestrator`).
+ * Ships six Services (`vulnTriager`, `accessReviewCoordinator`,
+ * `phishingSimulationOrchestrator`, `incidentResponseOrchestrator`,
+ * `threatModelAuthor`, `complianceAuditPrepper`).
  *
  * Per v3 §12, catalog Services are module-evaluated TypeScript that yield a
  * typed `ServiceInstance<TIn, TOut>` value, exported as a named binding so
@@ -34,3 +35,27 @@ export {
   type PhishingSimulationInput,
   type PhishingSimulationOutput,
 } from './phishing-simulation-orchestrator.js'
+
+export {
+  incidentResponseOrchestrator,
+  IncidentResponseInputSchema,
+  IncidentResponseOutputSchema,
+  type IncidentResponseInput,
+  type IncidentResponseOutput,
+} from './incident-response-orchestrator.js'
+
+export {
+  threatModelAuthor,
+  ThreatModelInputSchema,
+  ThreatModelOutputSchema,
+  type ThreatModelInput,
+  type ThreatModelOutput,
+} from './threat-model-author.js'
+
+export {
+  complianceAuditPrepper,
+  ComplianceAuditPrepInputSchema,
+  ComplianceAuditPrepOutputSchema,
+  type ComplianceAuditPrepInput,
+  type ComplianceAuditPrepOutput,
+} from './compliance-audit-prepper.js'
