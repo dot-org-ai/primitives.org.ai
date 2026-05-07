@@ -1,0 +1,41 @@
+{
+  "name": "autonomous-product",
+  "version": "0.0.1",
+  "description": "Catalog package — product-management Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: prd-author, customer-feedback-synthesizer, roadmap-tradeoff-evaluator. Sibling to autonomous-operations / autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-legal / autonomous-people.",
+  "private": true,
+  "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./prd-author": {
+      "types": "./dist/services/prd-author.d.ts",
+      "import": "./dist/services/prd-author.js"
+    },
+    "./customer-feedback-synthesizer": {
+      "types": "./dist/services/customer-feedback-synthesizer.d.ts",
+      "import": "./dist/services/customer-feedback-synthesizer.js"
+    },
+    "./roadmap-tradeoff-evaluator": {
+      "types": "./dist/services/roadmap-tradeoff-evaluator.d.ts",
+      "import": "./dist/services/roadmap-tradeoff-evaluator.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-product#readme"
+}
