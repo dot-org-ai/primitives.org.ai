@@ -1,7 +1,7 @@
 /**
  * Personas — reusable persona factory library (v3 §9).
  *
- * Twenty-two factories — six general-purpose evaluation axes plus sixteen
+ * Twenty-six factories — six general-purpose evaluation axes plus twenty
  * specialized domain factories that cover the regulator / safety / realism /
  * production-axes surfaces Services in production verticals frequently need.
  * Each factory mints an {@link AgenticPersona} ready to drop into an
@@ -58,11 +58,22 @@
  *   - {@link Personas.commercialFit}        — go-to-market / commercial fit
  *     review for proposals, pitches, business cases (advisory).
  *
- * Most factories default `signOff` to `'must-approve'`. Four realism /
- * readiness / commercial factories (`budgetRealism`, `timelineRealism`,
- * `localizationReady`, `commercialFit`) default to `'advisory'` — they are
- * load-bearing inputs for Services that propose work, ship globally, or pitch
- * commercially, but their verdicts are guidance, not gates.
+ * Specialized (executive-readiness / traceability / assumption / handoff surfaces):
+ *   - {@link Personas.executiveSummary}     — C-level executive-summary
+ *     readiness (leads-with-conclusion, length-discipline, action items).
+ *   - {@link Personas.evidenceTraceability} — every load-bearing claim must
+ *     trace to a specific source artifact (logs, screenshots, recordings).
+ *   - {@link Personas.assumptionExplicitness} — assumption-list rigor for
+ *     forecasts / business cases / strategy (sensitivity-analysis aware).
+ *   - {@link Personas.handoffReadiness}     — downstream-handoff readiness
+ *     check for specs / runbooks / transition docs (advisory).
+ *
+ * Most factories default `signOff` to `'must-approve'`. Five realism /
+ * readiness / commercial / handoff factories (`budgetRealism`,
+ * `timelineRealism`, `localizationReady`, `commercialFit`, `handoffReadiness`)
+ * default to `'advisory'` — they are load-bearing inputs for Services that
+ * propose work, ship globally, pitch commercially, or hand off to downstream
+ * teams, but their verdicts are guidance, not gates.
  * Each factory mints a default `name` of the form
  * `'<archetype>-<discriminator>'` (e.g. `'pedantic-validator-gaap'`). Callers
  * may pass an explicit `name` to override — useful when the panel uses
@@ -837,6 +848,157 @@ export interface CommercialFitPersonaOpts {
    * specific external audience.
    */
   audienceForPitch?: CommercialFitAudience
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Audience-level surfaced by {@link Personas.executiveSummary}. Calibrates
+ * the executive-readiness lens — `'C-suite'` (CEO / COO / CFO / CRO),
+ * `'VP'`, `'Director'`, or a `'Board'` audience.
+ */
+export type ExecutiveSummaryAudienceLevel = 'C-suite' | 'VP' | 'Director' | 'Board'
+
+/**
+ * Options for {@link Personas.executiveSummary}.
+ */
+export interface ExecutiveSummaryPersonaOpts {
+  /**
+   * Audience level for the briefing. Defaults to `'C-suite'` — the strictest
+   * bar for length-discipline and lead-with-conclusion expectations.
+   */
+  audienceLevel?: ExecutiveSummaryAudienceLevel
+  /**
+   * Maximum word count the artifact may use. Defaults to `250` — the
+   * conventional upper bound for an executive summary.
+   */
+  lengthCap?: number
+  /**
+   * When `true` (default), the persona requires explicit action items
+   * (decisions requested, owners, dates). Reject on absence.
+   */
+  mustIncludeActionItems?: boolean
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Source-artifact types surfaced by {@link Personas.evidenceTraceability}.
+ * Each entry is a specific artifact category that a load-bearing claim can
+ * cite back to (an exfiltration log line, a UI screenshot, an interview
+ * recording, a document section, a structured trace).
+ */
+export type EvidenceSourceType =
+  | 'first-party'
+  | 'log-trace'
+  | 'screenshot'
+  | 'recording'
+  | 'document-citation'
+
+/**
+ * Options for {@link Personas.evidenceTraceability}.
+ */
+export interface EvidenceTraceabilityPersonaOpts {
+  /**
+   * Minimum fraction of load-bearing claims that must be traceable to a
+   * specific source artifact (0–1). Defaults to `0.95` — the audit-grade
+   * floor for forensic / RCA / regulatory-grade reports.
+   */
+  traceabilityFloor?: number
+  /**
+   * Acceptable source-artifact types. Defaults to all five (`first-party`,
+   * `log-trace`, `screenshot`, `recording`, `document-citation`). Narrow the
+   * list to disallow source types that are unacceptable for the artifact
+   * (e.g. excluding `first-party` for an external audit).
+   */
+  sourceTypes?: EvidenceSourceType[]
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * traceability scrutiny across long evidence corpora benefits from a
+   * high-context-window model.
+   */
+  modelHint?: string
+}
+
+/**
+ * Assumption levels surfaced by {@link Personas.assumptionExplicitness}.
+ * Each entry is a category of assumption that forecasts, plans, and
+ * proposals routinely bury (business / technical / market / operational).
+ */
+export type AssumptionLevel = 'business' | 'technical' | 'market' | 'operational'
+
+/**
+ * Options for {@link Personas.assumptionExplicitness}.
+ */
+export interface AssumptionExplicitnessPersonaOpts {
+  /**
+   * Assumption levels the persona scrutinizes. Defaults to all four
+   * (`business`, `technical`, `market`, `operational`). Narrow the list when
+   * the artifact only carries a subset (e.g. `['technical']` for a
+   * pure-engineering forecast).
+   */
+  assumptionLevels?: AssumptionLevel[]
+  /**
+   * When `true` (default), the persona requires an explicit sensitivity
+   * analysis (how the forecast / plan changes under varied assumptions).
+   * Reject on absence.
+   */
+  sensitivityAnalysisRequired?: boolean
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Downstream handoff surfaces surfaced by {@link Personas.handoffReadiness}.
+ * `(string & {})` keeps autocomplete on the curated list while still
+ * accepting arbitrary team slugs (e.g. `'security'`, `'support'`) without a
+ * library bump.
+ */
+export type HandoffSurface =
+  | 'engineering'
+  | 'sales'
+  | 'cs'
+  | 'finance'
+  | 'legal'
+  | 'ops'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {})
+
+/**
+ * Context-density tier surfaced by {@link Personas.handoffReadiness}.
+ * Calibrates how thoroughly the artifact must brief the downstream team.
+ *
+ *   - `'minimal'`       — terse handoff; assumes downstream context familiarity.
+ *   - `'standard'`      — conventional handoff with task + owner + context.
+ *   - `'comprehensive'` — exhaustive handoff suitable for cold transitions.
+ */
+export type HandoffContextDensity = 'minimal' | 'standard' | 'comprehensive'
+
+/**
+ * Options for {@link Personas.handoffReadiness}.
+ */
+export interface HandoffReadinessPersonaOpts {
+  /**
+   * Downstream teams the handoff targets. Defaults to `[]` (universal — the
+   * persona applies a team-agnostic baseline that flags any handoff defect
+   * regardless of target). Narrow when the artifact is bound for a specific
+   * team (e.g. `['engineering', 'ops']` for a runbook).
+   */
+  handoffSurfaces?: HandoffSurface[]
+  /**
+   * Context-density tier the artifact should match. Defaults to `'standard'`.
+   * Affects the prompt language so the LLM applies density-appropriate
+   * actionability norms.
+   */
+  contextDensity?: HandoffContextDensity
   /** Override the default-minted `name`. */
   name?: string
   /** See {@link PedanticPersonaOpts.modelHint}. */
@@ -1881,6 +2043,248 @@ export const Personas = {
         archetype: 'commercial-fit',
         dimensions,
         audienceForPitch,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Executive-summary readiness reviewer — C-level executive-summary review
+   * for briefings, memos, and prose intended for senior leadership audiences.
+   * Scrutinizes the artifact for leads-with-conclusion structure, length-
+   * discipline against the configured cap, action-item presence, and no-
+   * burying-the-lede patterns. Always `'must-approve'` — for catalog
+   * Services producing exec-level briefings, executive-readiness failures
+   * are dispositive (a 1,000-word memo with the conclusion in paragraph
+   * seven is dispositive even when factually correct).
+   *
+   * `$id` namespace: `persona:executive-summary:<audienceLevel>`.
+   *
+   * @example
+   * ```ts
+   * Personas.executiveSummary() // 'C-suite', 250-word cap, action items required
+   * Personas.executiveSummary({ audienceLevel: 'Board' })
+   * Personas.executiveSummary({ lengthCap: 500, mustIncludeActionItems: false })
+   * ```
+   */
+  executiveSummary(opts: ExecutiveSummaryPersonaOpts = {}): AgenticPersona {
+    const audienceLevel: ExecutiveSummaryAudienceLevel = opts.audienceLevel ?? 'C-suite'
+    const lengthCap = opts.lengthCap ?? 250
+    const mustIncludeActionItems = opts.mustIncludeActionItems ?? true
+    const actionItemsClause = mustIncludeActionItems
+      ? ` The artifact MUST include explicit action items (decisions requested, ` +
+        `owners, and dates / deadlines where applicable). Reject if missing.`
+      : ` Action-item enumeration is optional — note its absence as advisory ` + `observation only.`
+    return {
+      name: opts.name ?? `executive-summary-${slug(audienceLevel)}`,
+      persona:
+        `You are an executive-summary readiness reviewer for a ${audienceLevel} ` +
+        `audience. Scrutinize the artifact for executive-readiness failures: ` +
+        `does it lead with the conclusion (no burying the lede)? Does it stay ` +
+        `within ${lengthCap} word${lengthCap === 1 ? '' : 's'}? Does the ` +
+        `structure respect the audience's time (one-glance scannability, ` +
+        `bottom-line-up-front)? Reject any artifact that buries the conclusion ` +
+        `past the first paragraph, exceeds the ${lengthCap}-word cap without ` +
+        `justification, or substitutes narrative for decision-ready synthesis.` +
+        actionItemsClause +
+        ` Cite the specific defect and the affected paragraph / section when ` +
+        `rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:executive-summary:${slug(audienceLevel)}`,
+        archetype: 'executive-summary',
+        audienceLevel,
+        lengthCap,
+        mustIncludeActionItems,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Evidence-traceability reviewer — audit-grade traceability check for
+   * forensic analyses, RCAs, regulatory reports, and incident write-ups.
+   * Scrutinizes the artifact for load-bearing claims that lack a specific
+   * source-artifact pointer (a log line, a screenshot, an interview
+   * recording timestamp, a document section). Always `'must-approve'` —
+   * for catalog Services producing audit-grade output, untraceable claims
+   * are dispositive (an RCA whose root-cause statement isn't linkable to a
+   * specific log trace is dispositive even when the conclusion is correct).
+   *
+   * Defaults to `modelHint: 'opus'` because traceability scrutiny across
+   * long evidence corpora benefits from strong deductive ability and a high
+   * context window.
+   *
+   * `$id` namespace: `persona:evidence-traceability:floor-<n>`.
+   *
+   * @example
+   * ```ts
+   * Personas.evidenceTraceability() // 0.95 floor, all source types
+   * Personas.evidenceTraceability({ traceabilityFloor: 1.0 })
+   * Personas.evidenceTraceability({ sourceTypes: ['log-trace', 'screenshot'] })
+   * ```
+   */
+  evidenceTraceability(opts: EvidenceTraceabilityPersonaOpts = {}): AgenticPersona {
+    const traceabilityFloor = opts.traceabilityFloor ?? 0.95
+    const sourceTypes: EvidenceSourceType[] = opts.sourceTypes ?? [
+      'first-party',
+      'log-trace',
+      'screenshot',
+      'recording',
+      'document-citation',
+    ]
+    const floorPct = Math.round(traceabilityFloor * 100)
+    return {
+      name: opts.name ?? `evidence-traceability-floor-${floorPct}`,
+      persona:
+        `You are an evidence-traceability reviewer. Scrutinize the artifact ` +
+        `(forensic analysis, RCA, audit report, incident write-up) for load-` +
+        `bearing claims that lack a specific source-artifact pointer. ` +
+        `Acceptable source artifact types: ${sourceTypes.join(', ')}. Each ` +
+        `acceptable pointer must be specific (a log-line offset, a screenshot ` +
+        `image reference, a recording timestamp, a document section / page, ` +
+        `a structured trace ID) — generic gestures at "the data" or "the ` +
+        `system" do not qualify. At least ${floorPct}% of load-bearing ` +
+        `claims must be traceable to a specific acceptable source. Reject ` +
+        `the artifact if it falls below the floor; cite the specific claims ` +
+        `that lack pointers, the count gap, and the available source types ` +
+        `the claim should cite when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:evidence-traceability:floor-${floorPct}`,
+        archetype: 'evidence-traceability',
+        traceabilityFloor,
+        sourceTypes,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Assumption-explicitness reviewer — assumption-list rigor check for
+   * forecasts, business cases, strategy documents, and proposals.
+   * Scrutinizes the artifact for buried assumptions, missing sensitivity
+   * analyses, and single-scenario thinking. Always `'must-approve'` — for
+   * catalog Services producing forecasts / business cases / strategy docs,
+   * implicit-assumption failures are dispositive (a five-year revenue
+   * forecast with no stated growth-rate assumption is dispositive even when
+   * the headline number is plausible).
+   *
+   * `$id` namespace: `persona:assumption-explicitness:<sensitivity>`.
+   *
+   * @example
+   * ```ts
+   * Personas.assumptionExplicitness() // all four levels, sensitivity required
+   * Personas.assumptionExplicitness({ assumptionLevels: ['business', 'market'] })
+   * Personas.assumptionExplicitness({ sensitivityAnalysisRequired: false })
+   * ```
+   */
+  assumptionExplicitness(opts: AssumptionExplicitnessPersonaOpts = {}): AgenticPersona {
+    const assumptionLevels: AssumptionLevel[] = opts.assumptionLevels ?? [
+      'business',
+      'technical',
+      'market',
+      'operational',
+    ]
+    const sensitivityAnalysisRequired = opts.sensitivityAnalysisRequired ?? true
+    const sensitivityClause = sensitivityAnalysisRequired
+      ? ` The artifact MUST include an explicit sensitivity analysis showing ` +
+        `how the forecast / plan / case changes under varied assumptions ` +
+        `(best case / base case / worst case, or equivalent). Reject if ` +
+        `missing or single-scenario.`
+      : ` Sensitivity-analysis declaration is optional — note its absence as ` +
+        `advisory observation only.`
+    const sensitivityDiscriminator = sensitivityAnalysisRequired ? 'required' : 'optional'
+    return {
+      name: opts.name ?? `assumption-explicitness-${sensitivityDiscriminator}`,
+      persona:
+        `You are an assumption-explicitness reviewer. Scrutinize the artifact ` +
+        `(forecast, business case, strategy document, proposal) for buried ` +
+        `assumptions across these levels: ${assumptionLevels.join(', ')}. ` +
+        `Look for unstated growth rates, unstated adoption curves, unstated ` +
+        `pricing-power assumptions, unstated technical-feasibility assumptions, ` +
+        `unstated market-condition assumptions, and unstated operational-` +
+        `capacity assumptions. Every load-bearing assumption MUST be surfaced ` +
+        `as an explicit, named, value-bound assumption (e.g. "assumes 20% YoY ` +
+        `growth", "assumes 99.9% uptime", "assumes 30-day sales cycle"). ` +
+        `Reject any buried / implicit assumption.` +
+        sensitivityClause +
+        ` Cite the specific buried assumption, the affected claim, and the ` +
+        `recommended explicit form when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:assumption-explicitness:${sensitivityDiscriminator}`,
+        archetype: 'assumption-explicitness',
+        assumptionLevels,
+        sensitivityAnalysisRequired,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Handoff-readiness reviewer — downstream-handoff readiness check for
+   * specs, runbooks, transition documents, and any artifact whose value is
+   * realized when a downstream team picks it up and acts. Scrutinizes the
+   * artifact for downstream-team-actionability: enough context to act
+   * without back-and-forth, jargon level matched to the audience, no
+   * orphan-references (links / IDs the downstream team cannot resolve), and
+   * clear ownership / next-action assignment. Defaults to `'advisory'`
+   * sign-off — load-bearing for handoff Services, but the verdict is
+   * guidance rather than a gate (the human reviewer makes the handoff call).
+   *
+   * `$id` namespace: `persona:handoff-readiness:<surfaces>-<density>`.
+   *
+   * @example
+   * ```ts
+   * Personas.handoffReadiness() // universal, 'standard' density
+   * Personas.handoffReadiness({ handoffSurfaces: ['engineering', 'ops'] })
+   * Personas.handoffReadiness({ contextDensity: 'comprehensive' })
+   * ```
+   */
+  handoffReadiness(opts: HandoffReadinessPersonaOpts = {}): AgenticPersona {
+    const handoffSurfaces: HandoffSurface[] = opts.handoffSurfaces ?? []
+    const contextDensity: HandoffContextDensity = opts.contextDensity ?? 'standard'
+    const surfacesDiscriminator =
+      handoffSurfaces.length === 0 ? 'universal' : handoffSurfaces.map(slug).join('-')
+    const surfacesClause =
+      handoffSurfaces.length === 0
+        ? ` No specific downstream teams supplied — apply a universal baseline ` +
+          `that flags any handoff defect regardless of target team.`
+        : ` Downstream teams: ${handoffSurfaces.join(', ')}. Calibrate ` +
+          `jargon level and operational vocabulary to those teams when ` +
+          `assessing actionability.`
+    const densityClause =
+      contextDensity === 'minimal'
+        ? ` Apply MINIMAL context-density expectations — terse handoff is ` +
+          `acceptable; flag only context gaps that would block downstream action.`
+        : contextDensity === 'comprehensive'
+        ? ` Apply COMPREHENSIVE context-density expectations — exhaustive ` +
+          `briefing suitable for cold transitions; flag any missing background, ` +
+          `decision history, or operational nuance.`
+        : ` Apply STANDARD context-density expectations — conventional handoff ` +
+          `with task + owner + context; flag missing operational context, ` +
+          `unstated dependencies, or under-specified next actions.`
+    return {
+      name: opts.name ?? `handoff-readiness-${surfacesDiscriminator}-${slug(contextDensity)}`,
+      persona:
+        `You are a handoff-readiness reviewer. Scrutinize the artifact (spec, ` +
+        `runbook, transition document, brief) for downstream-team-actionability. ` +
+        `Check that the downstream team has enough context to act without back-` +
+        `and-forth, that jargon level matches the audience, that there are no ` +
+        `orphan-references (links, ticket IDs, or system names the downstream ` +
+        `team cannot resolve), and that ownership / next-action assignment is ` +
+        `unambiguous.` +
+        surfacesClause +
+        densityClause +
+        ` Flag findings with the specific defect, the affected section, and ` +
+        `the recommended remediation.`,
+      signOff: 'advisory',
+      config: {
+        $id: `persona:handoff-readiness:${surfacesDiscriminator}-${slug(contextDensity)}`,
+        archetype: 'handoff-readiness',
+        handoffSurfaces,
+        contextDensity,
         ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
