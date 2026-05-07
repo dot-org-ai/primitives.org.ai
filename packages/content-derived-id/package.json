@@ -1,0 +1,48 @@
+{
+  "name": "@primitives/content-derived-id",
+  "version": "0.1.0",
+  "description": "Canonical sha256-prefix-12 content-derived IDs across icps, services-builder, startup-builder. Locks `{type}_{12hex}` format with key-sorted JSON canonicalization. Includes FNV-1a → sha256 migration helper.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./derive": {
+      "import": "./dist/derive.js",
+      "types": "./dist/derive.d.ts"
+    },
+    "./canonical-json": {
+      "import": "./dist/canonical-json.js",
+      "types": "./dist/canonical-json.d.ts"
+    },
+    "./migrate": {
+      "import": "./dist/migrate.js",
+      "types": "./dist/migrate.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "content-addressed",
+    "content-derived",
+    "id",
+    "sha256",
+    "canonical-json",
+    "fnv1a",
+    "migration",
+    "primitives"
+  ],
+  "license": "MIT"
+}
