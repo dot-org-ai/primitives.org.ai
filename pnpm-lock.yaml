@@ -531,6 +531,21 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/autonomous-supplychain:
+    dependencies:
+      autonomous-finance:
+        specifier: workspace:*
+        version: link:../autonomous-finance
+      digital-tools:
+        specifier: workspace:*
+        version: link:../digital-tools
+      services-as-software:
+        specifier: workspace:*
+        version: link:../services-as-software
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
   packages/business-as-code:
     dependencies:
       ai-database:
