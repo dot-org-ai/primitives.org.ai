@@ -1,7 +1,7 @@
 {
   "name": "autonomous-data",
   "version": "0.0.1",
-  "description": "Catalog package — data-engineering / analytics Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: dbt-model-author, data-quality-incident-triager, metrics-catalog-curator. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal.",
+  "description": "Catalog package — data-engineering / analytics Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Ships: dbt-model-author, data-quality-incident-triager, metrics-catalog-curator, pipeline-incident-investigator, schema-evolution-planner, ml-model-monitor. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./metrics-catalog-curator": {
       "types": "./dist/services/metrics-catalog-curator.d.ts",
       "import": "./dist/services/metrics-catalog-curator.js"
+    },
+    "./pipeline-incident-investigator": {
+      "types": "./dist/services/pipeline-incident-investigator.d.ts",
+      "import": "./dist/services/pipeline-incident-investigator.js"
+    },
+    "./schema-evolution-planner": {
+      "types": "./dist/services/schema-evolution-planner.d.ts",
+      "import": "./dist/services/schema-evolution-planner.js"
+    },
+    "./ml-model-monitor": {
+      "types": "./dist/services/ml-model-monitor.d.ts",
+      "import": "./dist/services/ml-model-monitor.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

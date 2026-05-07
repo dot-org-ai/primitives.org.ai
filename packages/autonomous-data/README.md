@@ -1,12 +1,12 @@
 # autonomous-data
 
-> **Status: shipped (proof-of-life).** `dbt-model-author`, `data-quality-incident-triager`, and `metrics-catalog-curator` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** `dbt-model-author`, `data-quality-incident-triager`, `metrics-catalog-curator`, `pipeline-incident-investigator`, `schema-evolution-planner`, and `ml-model-monitor` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: data-engineering / analytics Services-as-Software, defined on the primitive substrate.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for in-house data-engineering and analytics work — dbt-model authoring with lineage-aware refactor, data-quality incident triage + RCA, and metrics-layer drift detection + curation — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`. Tenth catalog package; advances v3 §15's "catalog Services" leg into the data / analytics vertical.
+Concrete `Service.define({...})` calls for in-house data-engineering and analytics work — dbt-model authoring with lineage-aware refactor, data-quality incident triage + RCA, metrics-layer drift detection + curation, pipeline-incident investigation + backfill recommendation, source-schema-change impact analysis + migration planning, and production ML-model drift monitoring — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`. Tenth catalog package; advances v3 §15's "catalog Services" leg into the data / analytics vertical.
 
 ## Shipped Services
 
@@ -29,6 +29,27 @@ Concrete `Service.define({...})` calls for in-house data-engineering and analyti
   ```ts
   import { metricsCatalogCurator } from 'autonomous-data/metrics-catalog-curator'
   // typed as ServiceInstance<MetricsCatalogReviewInput, MetricsCatalogCurationOutput>
+  ```
+
+- **`pipeline-incident-investigator`** — data-pipeline failure investigation + RCA + backfill recommendation. Trigger: Airflow / Dagster / dbt-cloud / Fivetran / Singer task-failure alert. Cascade: `fetch-pipeline-graph-and-recent-runs-and-upstream-dependency-status (Code) → classify-failure-mode (Generative) → supervised-investigate-source-system-and-recent-deploys-and-correlated-pipelines (Agentic, supervised) → draft-RCA-with-mitigation-plan-and-backfill-recommendation (Generative) → data-platform-lead-review (Human, approval rationale) → emit-incident-doc-and-create-tracking-ticket (Code)`. EvaluatorPanel of 3 personas (regressionRisk(config) + factualAccuracy(min 2 citations) + data-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(data-platform-lead))`. Pricing: `Pricing.perInvocation` 3-tier — P3 / P2 / P1 ($149 / $599 / $2,499) — keyed on declared SLA-impact tier. Service-level reward = `pipeline-incident-mean-time-to-resolution-improvement`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/data-platform/pipeline-incident-investigator`.
+
+  ```ts
+  import { pipelineIncidentInvestigator } from 'autonomous-data/pipeline-incident-investigator'
+  // typed as ServiceInstance<PipelineIncidentAlertInput, PipelineIncidentRcaOutput>
+  ```
+
+- **`schema-evolution-planner`** — source-schema-change impact analysis + migration plan. Trigger: source-system schema change announced OR new-field request from a stakeholder. Cascade: `fetch-current-schema-graph-and-dependent-models-and-dashboards-and-migration-policy (Code) → impact-analysis-breaking-vs-additive-and-downstream-blast-radius (Generative) → draft-migration-plan-schema-fanout-and-backfill-strategy-and-dual-write-window (Generative) → data-platform-lead-and-analytics-lead-review (Human, approval rationale) → emit-migration-runbook-and-create-blocked-on-source-tickets (Code)`. EvaluatorPanel of 3 personas (regressionRisk(schema, blast-radius + rollback required) + scopeClarity(project-brief) + data-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(data-platform-lead))`. Pricing: `Pricing.outcome` 3-tier — additive / breaking-narrow / breaking-wide ($199 / $799 / $2,999) — keyed on declared change shape. Service-level reward = `schema-migration-cycle-time-and-downstream-breakage-rate-reduction`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/data-platform/schema-evolution-planner`.
+
+  ```ts
+  import { schemaEvolutionPlanner } from 'autonomous-data/schema-evolution-planner'
+  // typed as ServiceInstance<SchemaEvolutionPlanInput, SchemaEvolutionPlanOutput>
+  ```
+
+- **`ml-model-monitor`** — production ML-model performance + drift monitor. Trigger: weekly cron + monitoring-data ingest event. Cascade: `fetch-prediction-distribution-and-feature-distribution-stats-and-outcome-data (Code) → detect-drift-feature-and-label-and-prediction-and-flag-anomalies-and-propose-thresholds (Generative) → synthesize-recommended-actions-rebaseline-retrain-rollback-or-human-loop (Generative) → ml-platform-lead-review-on-action (Human, approval rationale) → emit-monitoring-report-and-register-actions (Code)`. EvaluatorPanel of 3 personas (factualAccuracy(min 2 citations) + dataPrivacy(general) + data-domain (DataScientists)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(ml-platform-lead))`. Pricing: `Pricing.subscription` $1,299/mo per ml-team subscription with metered overage at $199 per drift-incident flagged. Service-level reward = `production-model-incident-rate-reduction`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/ml-platform/ml-model-monitor`.
+
+  ```ts
+  import { mlModelMonitor } from 'autonomous-data/ml-model-monitor'
+  // typed as ServiceInstance<MlModelMonitorInput, MlModelMonitorOutput>
   ```
 
 ## Why a separate package
