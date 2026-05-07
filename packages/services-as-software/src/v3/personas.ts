@@ -1,10 +1,10 @@
 /**
  * Personas — reusable persona factory library (v3 §9).
  *
- * Fourteen factories — six general-purpose evaluation axes plus eight
- * specialized domain factories that cover the regulator/safety/realism
- * surfaces Services in production verticals frequently need. Each factory
- * mints an {@link AgenticPersona} ready to drop into an
+ * Eighteen factories — six general-purpose evaluation axes plus twelve
+ * specialized domain factories that cover the regulator / safety / realism /
+ * production-axes surfaces Services in production verticals frequently need.
+ * Each factory mints an {@link AgenticPersona} ready to drop into an
  * {@link EvaluatorPanelSpec.personas} array.
  *
  * Custom personas remain first-class — construct an `AgenticPersona` literal
@@ -38,13 +38,24 @@
  *   - {@link Personas.timelineRealism}      — schedule + sequencing realism
  *     check for roadmaps and timelines (advisory).
  *
- * Most factories default `signOff` to `'must-approve'`. The two realism
- * factories (`budgetRealism`, `timelineRealism`) default to `'advisory'` —
- * they are load-bearing inputs for Services that propose work, but their
- * verdicts are guidance, not gates. Each factory mints a default `name` of
- * the form `'<archetype>-<discriminator>'` (e.g. `'pedantic-validator-gaap'`).
- * Callers may pass an explicit `name` to override — useful when the panel
- * uses natural names like `'qa-reviewer'` instead of the minted convention.
+ * Specialized (production-evaluation execution surfaces):
+ *   - {@link Personas.scopeClarity}         — scope-clarity / scope-creep
+ *     review for PRDs, SOWs, project briefs, and epics.
+ *   - {@link Personas.edgeCaseCoverage}     — edge-case enumeration check for
+ *     test plans, acceptance criteria, and API contracts.
+ *   - {@link Personas.regressionRisk}       — change-impact / regression-risk
+ *     assessment for code, schema, config, policy, and process changes.
+ *   - {@link Personas.localizationReady}    — i18n / l10n readiness review for
+ *     prose / UI / document output bound for global audiences (advisory).
+ *
+ * Most factories default `signOff` to `'must-approve'`. The three realism /
+ * readiness factories (`budgetRealism`, `timelineRealism`, `localizationReady`)
+ * default to `'advisory'` — they are load-bearing inputs for Services that
+ * propose work or ship globally, but their verdicts are guidance, not gates.
+ * Each factory mints a default `name` of the form
+ * `'<archetype>-<discriminator>'` (e.g. `'pedantic-validator-gaap'`). Callers
+ * may pass an explicit `name` to override — useful when the panel uses
+ * natural names like `'qa-reviewer'` instead of the minted convention.
  *
  * @packageDocumentation
  */
@@ -457,6 +468,172 @@ export interface TimelineRealismPersonaOpts {
   modelHint?: string
 }
 
+/**
+ * Artifact types surfaced by {@link Personas.scopeClarity}. `(string & {})`
+ * keeps autocomplete on the curated artifact list while still accepting
+ * arbitrary artifact slugs (e.g. `'rfp'`, `'design-doc'`) without a library
+ * bump.
+ */
+export type ScopeArtifactType =
+  | 'prd'
+  | 'sow'
+  | 'project-brief'
+  | 'epic'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {})
+
+/**
+ * Options for {@link Personas.scopeClarity}.
+ */
+export interface ScopeClarityPersonaOpts {
+  /**
+   * Artifact type the persona is scrutinizing. Defaults to `'prd'`. Affects
+   * the prompt language so the LLM applies artifact-appropriate scope norms
+   * (e.g. SOWs typically demand contract-grade boundary statements; epics
+   * demand exit-criteria-grade boundary statements).
+   */
+  artifactType?: ScopeArtifactType
+  /**
+   * When `true` (default), the persona requires an explicit scope-boundary
+   * statement (what is in scope; what bounds the work). Reject on absence.
+   */
+  scopeBoundaryRequired?: boolean
+  /**
+   * When `true` (default), the persona requires an explicit out-of-scope
+   * section enumerating what the artifact is NOT committing to. Reject on
+   * absence.
+   */
+  outOfScopeListRequired?: boolean
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Edge-case domains surfaced by {@link Personas.edgeCaseCoverage}.
+ */
+export type EdgeCaseDomain =
+  | 'empty-input'
+  | 'malformed-input'
+  | 'extreme-volume'
+  | 'concurrent-modification'
+  | 'partial-failure'
+  | 'time-zone'
+  | 'localization'
+
+/**
+ * Options for {@link Personas.edgeCaseCoverage}.
+ */
+export interface EdgeCaseCoveragePersonaOpts {
+  /**
+   * Edge-case domains the persona enumerates against. Defaults to all seven
+   * (`empty-input`, `malformed-input`, `extreme-volume`,
+   * `concurrent-modification`, `partial-failure`, `time-zone`,
+   * `localization`). Narrow the list to focus the persona on a subset.
+   */
+  domains?: EdgeCaseDomain[]
+  /**
+   * Minimum edge cases enumerated per primary scenario / behaviour / endpoint.
+   * Defaults to `3`. Raise for high-stakes domains where exhaustive coverage
+   * is part of the editorial standard.
+   */
+  minEdgeCasesPerScenario?: number
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * thorough edge-case enumeration benefits from a high-context-window model
+   * that can simultaneously hold the full spec / scenario list while
+   * enumerating its corners.
+   */
+  modelHint?: string
+}
+
+/**
+ * Change types surfaced by {@link Personas.regressionRisk}. `(string & {})`
+ * keeps autocomplete on the curated list while still accepting arbitrary
+ * change-type slugs (e.g. `'feature-flag'`, `'experiment'`) without a
+ * library bump.
+ */
+export type RegressionChangeType =
+  | 'code'
+  | 'config'
+  | 'schema'
+  | 'policy'
+  | 'process'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {})
+
+/**
+ * Options for {@link Personas.regressionRisk}.
+ */
+export interface RegressionRiskPersonaOpts {
+  /**
+   * Change type the persona is assessing. Defaults to `'code'`. Affects the
+   * prompt language so the LLM applies change-appropriate blast-radius norms
+   * (e.g. schema migrations carry data-shape blast radius; policy changes
+   * carry operational-behaviour blast radius).
+   */
+  changeType?: RegressionChangeType
+  /**
+   * When `true` (default), the persona requires an explicit blast-radius
+   * analysis (which systems / consumers / workflows are affected). Reject on
+   * absence.
+   */
+  blastRadiusRequired?: boolean
+  /**
+   * When `true` (default), the persona requires an explicit rollback plan
+   * (how the change is reversed if it regresses production). Reject on
+   * absence.
+   */
+  rollbackPlanRequired?: boolean
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * regression reasoning across system boundaries benefits from strong
+   * deductive ability and a high context window.
+   */
+  modelHint?: string
+}
+
+/**
+ * Surfaces a {@link Personas.localizationReady} reviewer can audit.
+ */
+export type LocalizationSurface =
+  | 'prose'
+  | 'numerals'
+  | 'date-time'
+  | 'currency'
+  | 'rtl'
+  | 'plurals'
+  | 'cultural-references'
+
+/**
+ * Options for {@link Personas.localizationReady}.
+ */
+export interface LocalizationReadyPersonaOpts {
+  /**
+   * Target locales the artifact is intended to support
+   * (e.g. `['en-US', 'fr-FR', 'ja-JP', 'ar-SA']`). Defaults to `[]`
+   * (universal — the persona applies a locale-agnostic baseline that flags
+   * any hard-coded locale assumption regardless of target).
+   */
+  targetLocales?: string[]
+  /**
+   * Surfaces to audit. Defaults to all seven (`prose`, `numerals`,
+   * `date-time`, `currency`, `rtl`, `plurals`, `cultural-references`).
+   * Narrow the list to focus the persona on a subset (e.g. `['rtl']` for an
+   * Arabic-launch audit).
+   */
+  checkSurfaces?: LocalizationSurface[]
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
 // ============================================================================
 // Factories
 // ============================================================================
@@ -476,8 +653,8 @@ function slug(s: string): string {
 }
 
 /**
- * `Personas` namespace — fourteen factory functions
- * (six general-purpose + eight specialized).
+ * `Personas` namespace — eighteen factory functions
+ * (six general-purpose + twelve specialized).
  */
 export const Personas = {
   /**
@@ -1016,6 +1193,229 @@ export const Personas = {
         dependencyAware,
         lookaheadWeeks,
         criticalPathRequired,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Scope-clarity reviewer — scrutinizes scoped-work artifacts (PRDs, SOWs,
+   * project briefs, epics) for unclear scope statements, ambiguous deliverable
+   * boundaries, and missing out-of-scope sections. Always `'must-approve'` —
+   * scope ambiguity is the single largest source of downstream scope creep,
+   * which makes it dispositive for any catalog Service producing a scoped-work
+   * artifact.
+   *
+   * `$id` namespace: `persona:scope-clarity:<artifactType>`.
+   *
+   * @example
+   * ```ts
+   * Personas.scopeClarity() // 'prd', boundary required, out-of-scope required
+   * Personas.scopeClarity({ artifactType: 'sow' })
+   * Personas.scopeClarity({ outOfScopeListRequired: false })
+   * ```
+   */
+  scopeClarity(opts: ScopeClarityPersonaOpts = {}): AgenticPersona {
+    const artifactType: ScopeArtifactType = opts.artifactType ?? 'prd'
+    const scopeBoundaryRequired = opts.scopeBoundaryRequired ?? true
+    const outOfScopeListRequired = opts.outOfScopeListRequired ?? true
+    const boundaryClause = scopeBoundaryRequired
+      ? ` The artifact MUST declare an explicit scope boundary (what is in ` +
+        `scope; what bounds the work). Reject if missing or ambiguous.`
+      : ` Scope-boundary declaration is optional — note its absence as ` +
+        `advisory observation only.`
+    const outOfScopeClause = outOfScopeListRequired
+      ? ` The artifact MUST include an explicit out-of-scope section enumerating ` +
+        `what is NOT being committed to. Reject if missing.`
+      : ` Out-of-scope enumeration is optional — note its absence as advisory ` +
+        `observation only.`
+    return {
+      name: opts.name ?? `scope-clarity-${slug(artifactType)}`,
+      persona:
+        `You are a scope-clarity reviewer for ${artifactType.toUpperCase()} ` +
+        `artifacts. Scrutinize the artifact for unclear scope statements, ` +
+        `ambiguous deliverable boundaries, and unstated assumptions that would ` +
+        `invite downstream scope creep.` +
+        boundaryClause +
+        outOfScopeClause +
+        ` Reject on any qualifying finding; cite the specific section and the ` +
+        `ambiguity when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:scope-clarity:${slug(artifactType)}`,
+        archetype: 'scope-clarity',
+        artifactType,
+        scopeBoundaryRequired,
+        outOfScopeListRequired,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Edge-case-coverage reviewer — scrutinizes test plans, acceptance criteria,
+   * and API contracts for missing edge-case enumeration across configured
+   * domains. Always `'must-approve'` — under-enumerated edge cases are the
+   * single largest source of post-ship regressions in test-plan / contract
+   * artifacts, which makes them dispositive.
+   *
+   * Defaults to `modelHint: 'opus'` because thorough edge-case enumeration
+   * benefits from a high-context-window model that can simultaneously hold the
+   * full spec / scenario list while enumerating its corners.
+   *
+   * `$id` namespace: `persona:edge-case-coverage:min-<n>`.
+   *
+   * @example
+   * ```ts
+   * Personas.edgeCaseCoverage() // all domains, min 3 per scenario
+   * Personas.edgeCaseCoverage({ minEdgeCasesPerScenario: 5 })
+   * Personas.edgeCaseCoverage({ domains: ['empty-input', 'partial-failure'] })
+   * ```
+   */
+  edgeCaseCoverage(opts: EdgeCaseCoveragePersonaOpts = {}): AgenticPersona {
+    const domains: EdgeCaseDomain[] = opts.domains ?? [
+      'empty-input',
+      'malformed-input',
+      'extreme-volume',
+      'concurrent-modification',
+      'partial-failure',
+      'time-zone',
+      'localization',
+    ]
+    const minEdgeCasesPerScenario = opts.minEdgeCasesPerScenario ?? 3
+    return {
+      name: opts.name ?? `edge-case-coverage-min-${minEdgeCasesPerScenario}`,
+      persona:
+        `You are an edge-case-coverage reviewer. Scrutinize the artifact ` +
+        `(test plan, acceptance criteria, API contract, design doc) for missing ` +
+        `edge-case enumeration. Required edge-case domains: ${domains.join(', ')}. ` +
+        `Each primary scenario / behaviour / endpoint MUST enumerate at least ` +
+        `${minEdgeCasesPerScenario} edge case` +
+        `${minEdgeCasesPerScenario === 1 ? '' : 's'} drawn from the required ` +
+        `domains. Reject any scenario falling below the cap; cite the scenario, ` +
+        `the missing domains, and the count gap when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:edge-case-coverage:min-${minEdgeCasesPerScenario}`,
+        archetype: 'edge-case-coverage',
+        domains,
+        minEdgeCasesPerScenario,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Regression-risk reviewer — scrutinizes change proposals (PRs, schema
+   * migrations, config changes, policy changes, process changes) for
+   * unaccounted regression risk, missing blast-radius analysis, and missing
+   * rollback steps. Always `'must-approve'` — change proposals shipping
+   * without blast-radius / rollback discipline are dispositive on any
+   * production-grade Service.
+   *
+   * Defaults to `modelHint: 'opus'` because regression reasoning across system
+   * boundaries benefits from strong deductive ability and a high context
+   * window.
+   *
+   * `$id` namespace: `persona:regression-risk:<changeType>`.
+   *
+   * @example
+   * ```ts
+   * Personas.regressionRisk() // 'code', blast-radius + rollback required
+   * Personas.regressionRisk({ changeType: 'schema' })
+   * Personas.regressionRisk({ rollbackPlanRequired: false })
+   * ```
+   */
+  regressionRisk(opts: RegressionRiskPersonaOpts = {}): AgenticPersona {
+    const changeType: RegressionChangeType = opts.changeType ?? 'code'
+    const blastRadiusRequired = opts.blastRadiusRequired ?? true
+    const rollbackPlanRequired = opts.rollbackPlanRequired ?? true
+    const blastRadiusClause = blastRadiusRequired
+      ? ` The proposal MUST include an explicit blast-radius analysis ` +
+        `enumerating which systems / consumers / workflows are affected. ` +
+        `Reject if missing or under-scoped.`
+      : ` Blast-radius analysis is optional — note its absence as advisory ` + `observation only.`
+    const rollbackClause = rollbackPlanRequired
+      ? ` The proposal MUST include an explicit rollback plan documenting how ` +
+        `the change is reversed if it regresses production. Reject if missing.`
+      : ` Rollback-plan declaration is optional — note its absence as advisory ` +
+        `observation only.`
+    return {
+      name: opts.name ?? `regression-risk-${slug(changeType)}`,
+      persona:
+        `You are a regression-risk reviewer for ${changeType.toUpperCase()} ` +
+        `changes. Scrutinize the change proposal for unaccounted regression ` +
+        `risk: hidden coupling, untested call sites, schema-shape breakage, ` +
+        `policy / process side-effects, and ordering / migration hazards.` +
+        blastRadiusClause +
+        rollbackClause +
+        ` Reject on any qualifying finding; cite the specific risk, the ` +
+        `affected surface, and the missing mitigation when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:regression-risk:${slug(changeType)}`,
+        archetype: 'regression-risk',
+        changeType,
+        blastRadiusRequired,
+        rollbackPlanRequired,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Localization-readiness reviewer — i18n / l10n review of prose, UI, and
+   * document output for hard-coded locale assumptions, missing pluralization
+   * rules, untranslatable cultural references, and RTL-hostile layout
+   * assumptions. Defaults to `'advisory'` sign-off — informational for
+   * single-locale Services, load-bearing for global-product Services where
+   * localization defects ship to real users.
+   *
+   * `$id` namespace: `persona:localization-ready:<locales>`.
+   *
+   * @example
+   * ```ts
+   * Personas.localizationReady() // universal baseline, all surfaces
+   * Personas.localizationReady({ targetLocales: ['en-US', 'ja-JP', 'ar-SA'] })
+   * Personas.localizationReady({ checkSurfaces: ['rtl', 'plurals'] })
+   * ```
+   */
+  localizationReady(opts: LocalizationReadyPersonaOpts = {}): AgenticPersona {
+    const targetLocales: string[] = opts.targetLocales ?? []
+    const checkSurfaces: LocalizationSurface[] = opts.checkSurfaces ?? [
+      'prose',
+      'numerals',
+      'date-time',
+      'currency',
+      'rtl',
+      'plurals',
+      'cultural-references',
+    ]
+    const localesDiscriminator =
+      targetLocales.length === 0 ? 'universal' : targetLocales.map(slug).join('-')
+    const localesClause =
+      targetLocales.length === 0
+        ? ` No specific target locales supplied — apply a universal baseline ` +
+          `that flags any hard-coded locale assumption regardless of target.`
+        : ` Target locales: ${targetLocales.join(', ')}. Apply each locale's ` +
+          `conventions when assessing the surfaces below.`
+    return {
+      name: opts.name ?? `localization-ready-${localesDiscriminator}`,
+      persona:
+        `You are a localization-readiness reviewer. Scrutinize the artifact ` +
+        `(prose, UI copy, document output) for hard-coded locale assumptions, ` +
+        `missing pluralization rules, untranslatable cultural references, and ` +
+        `RTL-hostile layout assumptions. Surfaces to audit: ` +
+        `${checkSurfaces.join(', ')}.` +
+        localesClause +
+        ` Flag findings with the specific surface, the locale-affected phrasing ` +
+        `or pattern, and the recommended remediation.`,
+      signOff: 'advisory',
+      config: {
+        $id: `persona:localization-ready:${localesDiscriminator}`,
+        archetype: 'localization-ready',
+        targetLocales,
+        checkSurfaces,
         ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
