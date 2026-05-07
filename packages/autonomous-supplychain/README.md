@@ -1,12 +1,12 @@
 # autonomous-supplychain
 
-> **Status: shipped (proof-of-life).** `vendor-onboarding-runbook`, `purchase-order-router`, and `inventory-reorder-planner` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** `vendor-onboarding-runbook`, `purchase-order-router`, `inventory-reorder-planner`, `supplier-risk-monitor`, `freight-cost-optimizer`, and `customs-compliance-filer` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: procurement / supply-chain Services-as-Software, defined on the primitive substrate.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for in-house procurement and supply-chain work — net-new vendor due-diligence + onboarding, PO routing + approval orchestration, and multi-SKU reorder optimization — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`. Twelfth catalog package; advances v3 §15's "catalog Services" leg into the procurement / supply-chain vertical.
+Concrete `Service.define({...})` calls for in-house procurement and supply-chain work — net-new vendor due-diligence + onboarding, PO routing + approval orchestration, multi-SKU reorder optimization, ongoing supplier-risk surveillance, multi-leg freight routing + carrier selection, and cross-border customs declaration + HS-code classification — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`. Twelfth catalog package; advances v3 §15's "catalog Services" leg into the procurement / supply-chain vertical.
 
 ## Shipped Services
 
@@ -29,6 +29,27 @@ Concrete `Service.define({...})` calls for in-house procurement and supply-chain
   ```ts
   import { inventoryReorderPlanner } from 'autonomous-supplychain/inventory-reorder-planner'
   // typed as ServiceInstance<InventoryReorderCycleInput, InventoryReorderPlanOutput>
+  ```
+
+- **`supplier-risk-monitor`** — ongoing supplier-risk surveillance. Trigger: weekly cron + supplier-portfolio. Cascade: `fetch-supplier-list-recent-public-news-esg-data-financial-distress-and-delivery-perf (Code) → supervised-cross-check-public-news-sanctions-list-and-concentrated-dependency-flags (Agentic, supervised) → synthesize-per-supplier-risk-narrative-and-recommend-actions (Generative) → procurement-lead-and-risk-officer-review (Human, regulatory rationale) → emit-risk-dashboard-update-and-escalation-tickets (Code)`. EvaluatorPanel of 4 personas (signal-precision-checker + recommendation-actionability-reviewer + sox-regulatoryCompliance + factual-accuracy(government + industry-standard)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(risk-officer))`. Pricing: `Pricing.subscription` $1,499/mo per supply-chain-org + metered overage on `supplier-risk-escalation` events ($199 each). Service-level reward = `supplier-disruption-incident-rate-reduction`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/supply-chain/supplier-risk-monitor`.
+
+  ```ts
+  import { supplierRiskMonitor } from 'autonomous-supplychain/supplier-risk-monitor'
+  // typed as ServiceInstance<SupplierRiskCycleInput, SupplierRiskReportOutput>
+  ```
+
+- **`freight-cost-optimizer`** — multi-leg freight routing + carrier selection. Trigger: shipment-batch ready OR weekly route-optimization cycle. Cascade: `fetch-shipment-batch-carrier-rates-transit-time-history-fuel-surcharge-volatility-and-customs-context (Code) → synthesize-routing-options-with-cost-time-tradeoffs-and-reliability-scoring (Generative) → draft-recommendation-with-second-best-and-rationale (Generative) → operations-manager-review-on-cost-threshold (Human, approval rationale) → emit-routing-plan-and-carrier-bookings (Code)`. EvaluatorPanel of 5 personas (cost-optimization-soundness-checker + reliability-scoring-reviewer + tradeoff-transparency-reviewer + budgetRealism + timelineRealism) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(operations-manager))`. Pricing: `Pricing.percentOf` — 2.5% (250 bps) of the realised `freight-spend-routed`, capped at $40k per cycle. Service-level reward = `landed-cost-per-unit-improvement`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/supply-chain/freight-cost-optimizer`.
+
+  ```ts
+  import { freightCostOptimizer } from 'autonomous-supplychain/freight-cost-optimizer'
+  // typed as ServiceInstance<FreightOptimizationCycleInput, FreightRoutingPlanOutput>
+  ```
+
+- **`customs-compliance-filer`** — cross-border customs declaration + HS-code classification. Trigger: shipment crossing border OR new product line entering market. Cascade: `fetch-shipment-manifest-product-attributes-trade-agreements-and-prior-filings (Code) → classify-HS-codes-with-rationale-rate-of-duty-calc-and-free-trade-eligibility-check (Generative) → draft-customs-declaration-and-supporting-documentation-checklist (Generative) → customs-broker-or-trade-compliance-officer-review-and-attest (Human, regulatory rationale) → emit-declaration-package-and-broker-handoff (Code)`. EvaluatorPanel of 5 personas (hs-code-accuracy-checker + duty-calculation-precision-reviewer + documentation-completeness-reviewer + fincen-regulatoryCompliance + factual-accuracy(government)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(trade-compliance-officer))`. Pricing: `Pricing.outcome` 3-tier — simple-shipment / multi-line / restricted-goods ($199 / $799 / $2,999) — keyed on declared shipment-complexity band. Service-level reward = `customs-rejection-rate-and-amendment-rate-reduction`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/supply-chain/customs-compliance-filer`.
+
+  ```ts
+  import { customsComplianceFiler } from 'autonomous-supplychain/customs-compliance-filer'
+  // typed as ServiceInstance<CustomsFilingInput, CustomsDeclarationOutput>
   ```
 
 ## Why a separate package

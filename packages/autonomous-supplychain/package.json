@@ -1,7 +1,7 @@
 {
   "name": "autonomous-supplychain",
   "version": "0.0.1",
-  "description": "Catalog package — procurement / supply-chain Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: vendor-onboarding-runbook, purchase-order-router, inventory-reorder-planner. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product.",
+  "description": "Catalog package — procurement / supply-chain Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Ships: vendor-onboarding-runbook, purchase-order-router, inventory-reorder-planner, supplier-risk-monitor, freight-cost-optimizer, customs-compliance-filer. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./inventory-reorder-planner": {
       "types": "./dist/services/inventory-reorder-planner.d.ts",
       "import": "./dist/services/inventory-reorder-planner.js"
+    },
+    "./supplier-risk-monitor": {
+      "types": "./dist/services/supplier-risk-monitor.d.ts",
+      "import": "./dist/services/supplier-risk-monitor.js"
+    },
+    "./freight-cost-optimizer": {
+      "types": "./dist/services/freight-cost-optimizer.d.ts",
+      "import": "./dist/services/freight-cost-optimizer.js"
+    },
+    "./customs-compliance-filer": {
+      "types": "./dist/services/customs-compliance-filer.d.ts",
+      "import": "./dist/services/customs-compliance-filer.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
