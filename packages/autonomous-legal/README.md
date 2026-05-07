@@ -1,12 +1,12 @@
 # autonomous-legal
 
-> **Status: shipped (proof-of-life).** `contract-reviewer`, `policy-impact-analyzer`, and `ip-disclosure-triage` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** Six Services — `contract-reviewer`, `policy-impact-analyzer`, `ip-disclosure-triage`, `litigation-discovery-prep`, `compliance-attestation-author`, `regulatory-filing-drafter` — are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: legal Services-as-Software, defined on the primitive substrate.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for in-house legal work — incoming contract review, policy-change impact analysis, IP disclosure triage — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`. Eighth catalog package; advances v3 §15's "catalog Services" leg into the legal vertical.
+Concrete `Service.define({...})` calls for in-house legal work — incoming contract review, policy-change impact analysis, IP disclosure triage, litigation discovery prep, periodic compliance attestation, and regulatory filings — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`. Eighth catalog package; advances v3 §15's "catalog Services" leg into the legal vertical.
 
 ## Shipped Services
 
@@ -29,6 +29,27 @@ Concrete `Service.define({...})` calls for in-house legal work — incoming cont
   ```ts
   import { ipDisclosureTriage } from 'autonomous-legal/ip-disclosure-triage'
   // typed as ServiceInstance<DisclosureIntakeInput, DisclosureTriageOutput>
+  ```
+
+- **`litigation-discovery-prep`** — discovery request received against an active matter (or pre-trial deadline approaching) → litigation-counsel-attested production set + privilege log + redaction package + audit trail. Trigger: discovery request received OR pre-trial deadline approaching. Cascade: `fetch-document-corpus-and-custodian-list-and-matter-context-and-privilege-policy (Code) → per-document-classification (Generative) → draft-privilege-log-entries-and-redaction-rationale (Generative) → litigation-counsel-review-and-attest (Human, regulatory rationale) → emit-production-set-and-privilege-log-and-audit-trail (Code)`. EvaluatorPanel of 4 personas (privilege-classification-accuracy-checker + redaction-completeness-reviewer + GDPR `regulatoryCompliance` + `dataPrivacy` over name / email / phone / health / financial) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(litigation-counsel))`. Pricing: `Pricing.outcome` 3-tier — small-corpus / medium-corpus / large-corpus ($1,999 / $9,999 / $49,999). Service-level reward = `per-doc-review-cost-reduction-and-privilege-log-defensibility`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/litigation-counsel/litigation-discovery-prep`.
+
+  ```ts
+  import { litigationDiscoveryPrep } from 'autonomous-legal/litigation-discovery-prep'
+  // typed as ServiceInstance<DiscoveryRequestInput, DiscoveryProductionOutput>
+  ```
+
+- **`compliance-attestation-author`** — quarterly attestation cycle (or auditor evidence request) → GC + compliance-officer-signed attestation packet (SOC2 / ISO27001 / HIPAA / PCI-DSS / CMMC) with control inventory + evidence citations + deviation flags + remediation plan. Trigger: quarterly attestation cycle OR auditor evidence request. Cascade: `fetch-control-status-and-evidence-trail-and-prior-attestations (Code) → synthesize-control-narrative-with-evidence-citations-and-flag-gaps (Generative) → draft-attestation-statement-and-control-deviations-and-remediation-plan (Generative) → gc-and-compliance-officer-review-and-sign (Human, regulatory rationale) → emit-attestation-packet-and-audit-trail (Code)`. EvaluatorPanel of 5 personas (evidence-completeness-checker + control-coverage-reviewer + attestation-defensibility-reviewer + SOX `regulatoryCompliance` + `factualAccuracy` over first-party / industry-standard) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(compliance-officer))`. Pricing: `Pricing.subscription` $1,999/mo per company with metered overage at $999 per attestation-cycle-completed. Service-level reward = `audit-cycle-time-and-finding-remediation-rate`. Archetype: `quality-review`. Lineage: `business.org.ai/cells/compliance-officer/compliance-attestation-author`.
+
+  ```ts
+  import { complianceAttestationAuthor } from 'autonomous-legal/compliance-attestation-author'
+  // typed as ServiceInstance<AttestationCycleInput, AttestationPacketOutput>
+  ```
+
+- **`regulatory-filing-drafter`** — filing deadline approaching (or new filing requirement triggered) → GC + CFO co-signed regulatory-filing draft (Form D / 10-Q section / 10-K / S-1 / 8-K / FINRA / Form ADV) with per-section citations, internal consistency + materiality QA, and a submission-readiness checklist. Trigger: filing deadline approaching OR new filing requirement triggered. Cascade: `fetch-financial-data-and-corporate-structure-and-prior-filings-and-regulatory-template (Code) → draft-filing-sections-with-citations-to-source-data (Generative) → internal-consistency-check-and-completeness-check-and-materiality-disclosure-pass (Generative) → gc-and-cfo-review-and-sign (Human, regulatory rationale) → emit-filing-package-and-submission-readiness-checklist (Code)`. EvaluatorPanel of 5 personas (citation-density-checker + materiality-coverage-reviewer + style-guide-conformance-checker + SEC `regulatoryCompliance` + `factualAccuracy` over first-party / government) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(GC) + HumanSign(CFO))` — dual-signer requirement reflects Section 10(b) + Section 18 personal-liability exposure. Pricing: `Pricing.outcome` 3-tier — form-d / 10-q-section / 10-k-or-s-1 ($999 / $4,999 / $19,999). Service-level reward = `filing-on-time-rate-and-amendment-rate-reduction`. Archetype: `content-generation`. Lineage: `business.org.ai/cells/general-counsel/regulatory-filing-drafter`.
+
+  ```ts
+  import { regulatoryFilingDrafter } from 'autonomous-legal/regulatory-filing-drafter'
+  // typed as ServiceInstance<FilingDraftInput, FilingDraftOutput>
   ```
 
 ## Why a separate package

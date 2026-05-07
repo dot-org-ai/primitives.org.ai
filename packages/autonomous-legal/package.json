@@ -1,7 +1,7 @@
 {
   "name": "autonomous-legal",
   "version": "0.0.1",
-  "description": "Catalog package — legal Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: contract-reviewer, policy-impact-analyzer, ip-disclosure-triage. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations.",
+  "description": "Catalog package — legal Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Six Services: contract-reviewer, policy-impact-analyzer, ip-disclosure-triage, litigation-discovery-prep, compliance-attestation-author, regulatory-filing-drafter. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./ip-disclosure-triage": {
       "types": "./dist/services/ip-disclosure-triage.d.ts",
       "import": "./dist/services/ip-disclosure-triage.js"
+    },
+    "./litigation-discovery-prep": {
+      "types": "./dist/services/litigation-discovery-prep.d.ts",
+      "import": "./dist/services/litigation-discovery-prep.js"
+    },
+    "./compliance-attestation-author": {
+      "types": "./dist/services/compliance-attestation-author.d.ts",
+      "import": "./dist/services/compliance-attestation-author.js"
+    },
+    "./regulatory-filing-drafter": {
+      "types": "./dist/services/regulatory-filing-drafter.d.ts",
+      "import": "./dist/services/regulatory-filing-drafter.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],

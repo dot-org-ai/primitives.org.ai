@@ -1,8 +1,9 @@
 /**
  * Catalog barrel — autonomous-legal Services.
  *
- * Ships three Services (`contractReviewer`, `policyImpactAnalyzer`,
- * `ipDisclosureTriage`).
+ * Ships six Services (`contractReviewer`, `policyImpactAnalyzer`,
+ * `ipDisclosureTriage`, `litigationDiscoveryPrep`,
+ * `complianceAttestationAuthor`, `regulatoryFilingDrafter`).
  *
  * Per v3 §12, catalog Services are module-evaluated TypeScript that yield a
  * typed `ServiceInstance<TIn, TOut>` value, exported as a named binding so
@@ -34,3 +35,27 @@ export {
   type DisclosureIntakeInput,
   type DisclosureTriageOutput,
 } from './ip-disclosure-triage.js'
+
+export {
+  litigationDiscoveryPrep,
+  DiscoveryRequestInputSchema,
+  DiscoveryProductionOutputSchema,
+  type DiscoveryRequestInput,
+  type DiscoveryProductionOutput,
+} from './litigation-discovery-prep.js'
+
+export {
+  complianceAttestationAuthor,
+  AttestationCycleInputSchema,
+  AttestationPacketOutputSchema,
+  type AttestationCycleInput,
+  type AttestationPacketOutput,
+} from './compliance-attestation-author.js'
+
+export {
+  regulatoryFilingDrafter,
+  FilingDraftInputSchema,
+  FilingDraftOutputSchema,
+  type FilingDraftInput,
+  type FilingDraftOutput,
+} from './regulatory-filing-drafter.js'
