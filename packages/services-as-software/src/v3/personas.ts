@@ -1,7 +1,7 @@
 /**
  * Personas — reusable persona factory library (v3 §9).
  *
- * Eighteen factories — six general-purpose evaluation axes plus twelve
+ * Twenty-two factories — six general-purpose evaluation axes plus sixteen
  * specialized domain factories that cover the regulator / safety / realism /
  * production-axes surfaces Services in production verticals frequently need.
  * Each factory mints an {@link AgenticPersona} ready to drop into an
@@ -48,10 +48,21 @@
  *   - {@link Personas.localizationReady}    — i18n / l10n readiness review for
  *     prose / UI / document output bound for global audiences (advisory).
  *
- * Most factories default `signOff` to `'must-approve'`. The three realism /
- * readiness factories (`budgetRealism`, `timelineRealism`, `localizationReady`)
- * default to `'advisory'` — they are load-bearing inputs for Services that
- * propose work or ship globally, but their verdicts are guidance, not gates.
+ * Specialized (human-impact / cross-cell / statistical / commercial surfaces):
+ *   - {@link Personas.empathy}              — empathy + tone-fit review for
+ *     human-impacting outputs (HR notes, customer comms, patient comms).
+ *   - {@link Personas.dataIntegrity}        — internal data-consistency check
+ *     across cells (numerical tie-out, date-consistency, reference-integrity).
+ *   - {@link Personas.statisticalRigor}     — statistical-soundness check
+ *     (sample-size, multiple-comparisons, p-value-misuse, survivorship-bias).
+ *   - {@link Personas.commercialFit}        — go-to-market / commercial fit
+ *     review for proposals, pitches, business cases (advisory).
+ *
+ * Most factories default `signOff` to `'must-approve'`. Four realism /
+ * readiness / commercial factories (`budgetRealism`, `timelineRealism`,
+ * `localizationReady`, `commercialFit`) default to `'advisory'` — they are
+ * load-bearing inputs for Services that propose work, ship globally, or pitch
+ * commercially, but their verdicts are guidance, not gates.
  * Each factory mints a default `name` of the form
  * `'<archetype>-<discriminator>'` (e.g. `'pedantic-validator-gaap'`). Callers
  * may pass an explicit `name` to override — useful when the panel uses
@@ -634,6 +645,204 @@ export interface LocalizationReadyPersonaOpts {
   modelHint?: string
 }
 
+/**
+ * Audience types surfaced by {@link Personas.empathy}. `(string & {})` keeps
+ * autocomplete on the curated list while still accepting arbitrary audience
+ * slugs (e.g. `'investor'`, `'volunteer'`) without a library bump.
+ */
+export type EmpathyAudienceType =
+  | 'employee'
+  | 'customer'
+  | 'patient'
+  | 'student'
+  | 'public'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {})
+
+/**
+ * Sentiment target surfaced by {@link Personas.empathy}. The persona uses
+ * this to anchor what tone the artifact should feel like to the audience.
+ */
+export type EmpathySentimentTarget = 'neutral' | 'reassuring' | 'celebratory' | 'apologetic'
+
+/**
+ * Tone anti-patterns the {@link Personas.empathy} reviewer scans for and
+ * rejects when present. Each entry is a recognisable prose failure mode that
+ * undermines tone-fit for human audiences.
+ */
+export type EmpathyAvoidPattern =
+  | 'corporate-jargon'
+  | 'condescending'
+  | 'passive-aggressive'
+  | 'overly-formal'
+  | 'overly-casual'
+
+/**
+ * Options for {@link Personas.empathy}.
+ */
+export interface EmpathyPersonaOpts {
+  /**
+   * Audience for the artifact. Defaults to `'public'` (general external
+   * audience). Affects the prompt language so the LLM applies audience-
+   * appropriate tone norms (e.g. patient communications demand medical-grade
+   * compassion; layoff letters demand respect-grade directness).
+   */
+  audienceType?: EmpathyAudienceType
+  /**
+   * Sentiment register the artifact should land on. Defaults to `'neutral'`.
+   */
+  sentimentTarget?: EmpathySentimentTarget
+  /**
+   * Tone anti-patterns to flag. Defaults to all five (`corporate-jargon`,
+   * `condescending`, `passive-aggressive`, `overly-formal`, `overly-casual`).
+   * Narrow the list when an audience-appropriate register intentionally bends
+   * one of these (e.g. a celebratory product launch may permit `overly-casual`).
+   */
+  avoidPatterns?: EmpathyAvoidPattern[]
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
+/**
+ * Cross-cell consistency surfaces surfaced by {@link Personas.dataIntegrity}.
+ */
+export type DataIntegritySurface =
+  | 'numerical-tieout'
+  | 'date-consistency'
+  | 'reference-integrity'
+  | 'name-consistency'
+  | 'unit-consistency'
+
+/**
+ * Tolerance level surfaced by {@link Personas.dataIntegrity}. Calibrates how
+ * forgiving the reviewer is about minor discrepancies (rounding, casing,
+ * abbreviations).
+ */
+export type DataIntegrityTolerance = 'strict' | 'moderate' | 'loose'
+
+/**
+ * Options for {@link Personas.dataIntegrity}.
+ */
+export interface DataIntegrityPersonaOpts {
+  /**
+   * Cross-cell consistency surfaces to audit. Defaults to all five
+   * (`numerical-tieout`, `date-consistency`, `reference-integrity`,
+   * `name-consistency`, `unit-consistency`). Narrow the list when the
+   * artifact only carries a subset (e.g. a project plan with no numbers may
+   * skip `numerical-tieout`).
+   */
+  checkSurfaces?: DataIntegritySurface[]
+  /**
+   * Tolerance level for minor discrepancies. Defaults to `'strict'` — every
+   * mismatch is flagged. Loosen when the artifact's editorial standard
+   * permits e.g. rounding-driven micro-deltas or casing variants.
+   */
+  toleranceLevel?: DataIntegrityTolerance
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * cross-cell consistency checks span the full artifact — a high-context-
+   * window model is the right default for spotting tie-out gaps that span
+   * tens of pages.
+   */
+  modelHint?: string
+}
+
+/**
+ * Statistical-rigor surfaces surfaced by {@link Personas.statisticalRigor}.
+ * Each entry is a recognisable failure mode in applied-statistics writing.
+ */
+export type StatisticalRigorSurface =
+  | 'sample-size'
+  | 'multiple-comparisons'
+  | 'effect-size'
+  | 'confidence-interval'
+  | 'p-value-misuse'
+  | 'survivorship-bias'
+  | 'simpsons-paradox'
+
+/**
+ * Statistical-rigor tier surfaced by {@link Personas.statisticalRigor}. The
+ * persona calibrates which conventions to enforce (frequentist orthodoxy,
+ * Bayesian credibility intervals, or a mixed regime that accepts either).
+ */
+export type StatisticalRigorTier = 'frequentist' | 'bayesian' | 'mixed'
+
+/**
+ * Options for {@link Personas.statisticalRigor}.
+ */
+export interface StatisticalRigorPersonaOpts {
+  /**
+   * Statistical-rigor surfaces to audit. Defaults to all seven
+   * (`sample-size`, `multiple-comparisons`, `effect-size`,
+   * `confidence-interval`, `p-value-misuse`, `survivorship-bias`,
+   * `simpsons-paradox`).
+   */
+  checkSurfaces?: StatisticalRigorSurface[]
+  /**
+   * Statistical regime to apply. Defaults to `'mixed'` (accepts either
+   * frequentist or Bayesian conventions). Narrow to `'frequentist'` for
+   * journals / regulators that demand p-value + CI orthodoxy; narrow to
+   * `'bayesian'` for analyses that should report posterior densities and
+   * credibility intervals instead.
+   */
+  rigorTier?: StatisticalRigorTier
+  /** Override the default-minted `name`. */
+  name?: string
+  /**
+   * See {@link PedanticPersonaOpts.modelHint}. Defaults to `'opus'` because
+   * statistical reasoning across long analytical write-ups benefits from
+   * strong deductive ability and a high context window.
+   */
+  modelHint?: string
+}
+
+/**
+ * Commercial-fit dimensions surfaced by {@link Personas.commercialFit}.
+ */
+export type CommercialFitDimension =
+  | 'pricing-realism'
+  | 'icp-fit'
+  | 'channel-fit'
+  | 'total-addressable-market'
+  | 'competitive-positioning'
+  | 'unit-economics'
+
+/**
+ * Audience for the pitch surfaced by {@link Personas.commercialFit}. The
+ * persona calibrates which dimensions to emphasise based on what the audience
+ * weighs most heavily (investors weigh TAM + unit-economics; customers weigh
+ * ICP-fit + pricing-realism; partners weigh channel-fit + competitive
+ * positioning).
+ */
+export type CommercialFitAudience = 'investor' | 'partner' | 'customer' | 'internal-stakeholder'
+
+/**
+ * Options for {@link Personas.commercialFit}.
+ */
+export interface CommercialFitPersonaOpts {
+  /**
+   * Commercial-fit dimensions to audit. Defaults to all six
+   * (`pricing-realism`, `icp-fit`, `channel-fit`,
+   * `total-addressable-market`, `competitive-positioning`, `unit-economics`).
+   */
+  dimensions?: CommercialFitDimension[]
+  /**
+   * Audience for the pitch / proposal / business case. Defaults to
+   * `'internal-stakeholder'` — broadly applicable baseline. Calibrate to
+   * `'investor'` / `'partner'` / `'customer'` when the artifact targets a
+   * specific external audience.
+   */
+  audienceForPitch?: CommercialFitAudience
+  /** Override the default-minted `name`. */
+  name?: string
+  /** See {@link PedanticPersonaOpts.modelHint}. */
+  modelHint?: string
+}
+
 // ============================================================================
 // Factories
 // ============================================================================
@@ -653,8 +862,8 @@ function slug(s: string): string {
 }
 
 /**
- * `Personas` namespace — eighteen factory functions
- * (six general-purpose + twelve specialized).
+ * `Personas` namespace — twenty-two factory functions
+ * (six general-purpose + sixteen specialized).
  */
 export const Personas = {
   /**
@@ -1416,6 +1625,262 @@ export const Personas = {
         archetype: 'localization-ready',
         targetLocales,
         checkSurfaces,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Empathy reviewer — empathy + tone-fit review for human-impacting outputs
+   * (HR notes, customer comms, patient communications, layoff letters,
+   * student feedback). Scrutinizes the artifact for tone-fit, condescension,
+   * corporate jargon, and emotional appropriateness against the audience and
+   * the target sentiment register. Always `'must-approve'` — for catalog
+   * Services producing human-facing communication, tone failures are
+   * dispositive (a tone-deaf layoff letter is dispositive even when factually
+   * correct).
+   *
+   * `$id` namespace: `persona:empathy:<audienceType>-<sentimentTarget>`.
+   *
+   * @example
+   * ```ts
+   * Personas.empathy() // 'public' audience, 'neutral' sentiment, all anti-patterns
+   * Personas.empathy({ audienceType: 'patient', sentimentTarget: 'reassuring' })
+   * Personas.empathy({ avoidPatterns: ['corporate-jargon', 'condescending'] })
+   * ```
+   */
+  empathy(opts: EmpathyPersonaOpts = {}): AgenticPersona {
+    const audienceType: EmpathyAudienceType = opts.audienceType ?? 'public'
+    const sentimentTarget: EmpathySentimentTarget = opts.sentimentTarget ?? 'neutral'
+    const avoidPatterns: EmpathyAvoidPattern[] = opts.avoidPatterns ?? [
+      'corporate-jargon',
+      'condescending',
+      'passive-aggressive',
+      'overly-formal',
+      'overly-casual',
+    ]
+    return {
+      name: opts.name ?? `empathy-${slug(audienceType)}-${slug(sentimentTarget)}`,
+      persona:
+        `You are an empathy + tone-fit reviewer. The artifact is human-facing ` +
+        `communication for a ${audienceType} audience, and the target sentiment ` +
+        `register is ${sentimentTarget}. Scrutinize the artifact for tone-fit, ` +
+        `emotional appropriateness, and audience-respecting language. Flag and ` +
+        `reject any of these tone anti-patterns when present: ` +
+        `${avoidPatterns.join(', ')}. Cite the specific phrasing, the anti-` +
+        `pattern, and a remediation suggestion when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:empathy:${slug(audienceType)}-${slug(sentimentTarget)}`,
+        archetype: 'empathy',
+        audienceType,
+        sentimentTarget,
+        avoidPatterns,
+        ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
+      },
+    }
+  },
+
+  /**
+   * Data-integrity reviewer — internal data-consistency check across cells.
+   * Scrutinizes the artifact for cross-cell numerical mismatches, date
+   * inconsistencies, broken references, name / title drift, and mixed units
+   * (USD vs EUR, ms vs s, kg vs lb). Always `'must-approve'` — for catalog
+   * Services producing financial documents, project plans, contracts, and
+   * other artifacts where numbers / dates / refs need to tie out, internal
+   * consistency failures are dispositive (a financial doc whose totals don't
+   * tie out is dispositive even when individually correct).
+   *
+   * Defaults to `modelHint: 'opus'` because cross-cell consistency checks
+   * span the full artifact — a high-context-window model is the right default
+   * for spotting tie-out gaps that span tens of pages.
+   *
+   * `$id` namespace: `persona:data-integrity:<toleranceLevel>`.
+   *
+   * @example
+   * ```ts
+   * Personas.dataIntegrity() // all surfaces, strict tolerance
+   * Personas.dataIntegrity({ toleranceLevel: 'moderate' })
+   * Personas.dataIntegrity({ checkSurfaces: ['numerical-tieout', 'date-consistency'] })
+   * ```
+   */
+  dataIntegrity(opts: DataIntegrityPersonaOpts = {}): AgenticPersona {
+    const checkSurfaces: DataIntegritySurface[] = opts.checkSurfaces ?? [
+      'numerical-tieout',
+      'date-consistency',
+      'reference-integrity',
+      'name-consistency',
+      'unit-consistency',
+    ]
+    const toleranceLevel: DataIntegrityTolerance = opts.toleranceLevel ?? 'strict'
+    const toleranceClause =
+      toleranceLevel === 'strict'
+        ? ` Apply STRICT tolerance — flag every mismatch regardless of magnitude.`
+        : toleranceLevel === 'moderate'
+        ? ` Apply MODERATE tolerance — flag material mismatches; ignore ` +
+          `rounding-driven micro-deltas and trivial casing / abbreviation variants.`
+        : ` Apply LOOSE tolerance — flag only mismatches that materially change ` +
+          `the artifact's meaning or load-bearing figures.`
+    return {
+      name: opts.name ?? `data-integrity-${slug(toleranceLevel)}`,
+      persona:
+        `You are a data-integrity reviewer. Scrutinize the artifact for cross-` +
+        `cell consistency across these surfaces: ${checkSurfaces.join(', ')}. ` +
+        `Look for numerical tie-out gaps (totals that don't sum, percentages ` +
+        `that don't add to 100, restated figures that disagree), date ` +
+        `inconsistencies (mismatched timeline references, contradictory ` +
+        `effective dates), broken references (orphaned section / figure / ` +
+        `appendix pointers), name / title drift (the same person, product, or ` +
+        `entity referenced under varying spellings), and mixed units (USD vs ` +
+        `EUR, ms vs s, kg vs lb without explicit conversion).` +
+        toleranceClause +
+        ` Reject on any qualifying finding; cite the specific cells, the ` +
+        `mismatch, and the affected surface when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:data-integrity:${slug(toleranceLevel)}`,
+        archetype: 'data-integrity',
+        checkSurfaces,
+        toleranceLevel,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Statistical-rigor reviewer — statistical-soundness check for analytical
+   * reports, A/B test analyses, research papers, and market studies.
+   * Scrutinizes statistical claims for under-powered samples, naked p-values,
+   * missing confidence intervals, multiple-comparisons-without-correction,
+   * survivorship bias, and ecological-fallacy patterns. Always
+   * `'must-approve'` — for catalog Services producing statistical claims,
+   * methodological failures are dispositive (an analysis with naked p-values
+   * is dispositive even when the headline number is correct).
+   *
+   * Defaults to `modelHint: 'opus'` because statistical reasoning across long
+   * analytical write-ups benefits from strong deductive ability and a high
+   * context window.
+   *
+   * `$id` namespace: `persona:statistical-rigor:<rigorTier>`.
+   *
+   * @example
+   * ```ts
+   * Personas.statisticalRigor() // all surfaces, mixed regime
+   * Personas.statisticalRigor({ rigorTier: 'frequentist' })
+   * Personas.statisticalRigor({ checkSurfaces: ['sample-size', 'p-value-misuse'] })
+   * ```
+   */
+  statisticalRigor(opts: StatisticalRigorPersonaOpts = {}): AgenticPersona {
+    const checkSurfaces: StatisticalRigorSurface[] = opts.checkSurfaces ?? [
+      'sample-size',
+      'multiple-comparisons',
+      'effect-size',
+      'confidence-interval',
+      'p-value-misuse',
+      'survivorship-bias',
+      'simpsons-paradox',
+    ]
+    const rigorTier: StatisticalRigorTier = opts.rigorTier ?? 'mixed'
+    const rigorClause =
+      rigorTier === 'frequentist'
+        ? ` Apply FREQUENTIST conventions — require explicit p-values, ` +
+          `confidence intervals, and multiple-comparisons corrections where ` +
+          `applicable; reject Bayesian-only reporting.`
+        : rigorTier === 'bayesian'
+        ? ` Apply BAYESIAN conventions — require posterior densities, ` +
+          `credibility intervals, and explicit priors where applicable; reject ` +
+          `frequentist-only reporting.`
+        : ` Apply a MIXED regime — accept either frequentist (p-values + CIs) ` +
+          `or Bayesian (posteriors + credibility intervals) reporting, but reject ` +
+          `partial / hybrid claims that mix vocabulary without methodological ` +
+          `coherence.`
+    return {
+      name: opts.name ?? `statistical-rigor-${slug(rigorTier)}`,
+      persona:
+        `You are a statistical-rigor reviewer. Scrutinize the artifact ` +
+        `(analytical report, A/B test analysis, research paper, market study) ` +
+        `for statistical-soundness failures across these surfaces: ` +
+        `${checkSurfaces.join(', ')}. Look for under-powered samples, naked ` +
+        `p-values without effect sizes, missing confidence / credibility ` +
+        `intervals, multiple-comparisons reported without correction, ` +
+        `survivorship-bias-driven conclusions, ecological-fallacy patterns, ` +
+        `and Simpson's-paradox-vulnerable subgroup analyses.` +
+        rigorClause +
+        ` Reject on any qualifying finding; cite the specific claim, the ` +
+        `methodological failure, and the affected surface when rejecting.`,
+      signOff: 'must-approve',
+      config: {
+        $id: `persona:statistical-rigor:${slug(rigorTier)}`,
+        archetype: 'statistical-rigor',
+        checkSurfaces,
+        rigorTier,
+        modelHint: opts.modelHint ?? 'opus',
+      },
+    }
+  },
+
+  /**
+   * Commercial-fit reviewer — go-to-market / commercial fit review for
+   * proposals, pitches, and business cases. Scrutinizes the artifact for
+   * ICP-fit, pricing realism, channel feasibility, TAM defensibility, unit-
+   * economics rigor, and competitive positioning. Defaults to `'advisory'`
+   * sign-off — load-bearing for any go-to-market Service (proposal, pitch,
+   * business case) but the verdict is guidance rather than a gate (the human
+   * reviewer makes the commercial call).
+   *
+   * `$id` namespace: `persona:commercial-fit:<audienceForPitch>`.
+   *
+   * @example
+   * ```ts
+   * Personas.commercialFit() // all dimensions, internal-stakeholder audience
+   * Personas.commercialFit({ audienceForPitch: 'investor' })
+   * Personas.commercialFit({ dimensions: ['pricing-realism', 'unit-economics'] })
+   * ```
+   */
+  commercialFit(opts: CommercialFitPersonaOpts = {}): AgenticPersona {
+    const dimensions: CommercialFitDimension[] = opts.dimensions ?? [
+      'pricing-realism',
+      'icp-fit',
+      'channel-fit',
+      'total-addressable-market',
+      'competitive-positioning',
+      'unit-economics',
+    ]
+    const audienceForPitch: CommercialFitAudience = opts.audienceForPitch ?? 'internal-stakeholder'
+    const audienceClause =
+      audienceForPitch === 'investor'
+        ? ` The pitch targets an INVESTOR audience — emphasise TAM defensibility, ` +
+          `unit-economics rigor, and competitive moat when assessing.`
+        : audienceForPitch === 'partner'
+        ? ` The pitch targets a PARTNER audience — emphasise channel-fit, ` +
+          `competitive positioning, and mutual-incentive alignment when assessing.`
+        : audienceForPitch === 'customer'
+        ? ` The pitch targets a CUSTOMER audience — emphasise ICP-fit and ` +
+          `pricing-realism when assessing.`
+        : ` The pitch targets an INTERNAL-STAKEHOLDER audience — apply a ` +
+          `balanced commercial-fit lens across all configured dimensions.`
+    return {
+      name: opts.name ?? `commercial-fit-${slug(audienceForPitch)}`,
+      persona:
+        `You are a commercial-fit reviewer. Scrutinize the artifact (proposal, ` +
+        `pitch, business case) for go-to-market viability across these ` +
+        `dimensions: ${dimensions.join(', ')}. Look for ICP-fit weaknesses ` +
+        `(target customer is mis-specified or too broad), pricing-realism ` +
+        `failures (price points unmoored from willingness-to-pay or ` +
+        `competitive benchmarks), channel-fit gaps (the proposed sales / ` +
+        `distribution motion is implausible), TAM defensibility issues ` +
+        `(market sizing is hand-waved or inflated), competitive positioning ` +
+        `gaps (no defensible differentiation), and unit-economics failures ` +
+        `(CAC / LTV / payback / margin do not pencil out).` +
+        audienceClause +
+        ` Flag findings with the specific dimension, the asserted claim, and ` +
+        `the basis for the commercial concern.`,
+      signOff: 'advisory',
+      config: {
+        $id: `persona:commercial-fit:${slug(audienceForPitch)}`,
+        archetype: 'commercial-fit',
+        dimensions,
+        audienceForPitch,
         ...(opts.modelHint !== undefined && { modelHint: opts.modelHint }),
       },
     }
