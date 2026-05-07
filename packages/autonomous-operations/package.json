@@ -1,7 +1,7 @@
 {
   "name": "autonomous-operations",
   "version": "0.0.1",
-  "description": "Catalog package — operations Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: incident-commander, oncall-handoff-narrator, capacity-planner. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups.",
+  "description": "Catalog package — operations Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Six Services: incident-commander, oncall-handoff-narrator, capacity-planner, slo-budget-tracker, change-window-coordinator, runbook-author. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -22,6 +22,18 @@
     "./capacity-planner": {
       "types": "./dist/services/capacity-planner.d.ts",
       "import": "./dist/services/capacity-planner.js"
+    },
+    "./slo-budget-tracker": {
+      "types": "./dist/services/slo-budget-tracker.d.ts",
+      "import": "./dist/services/slo-budget-tracker.js"
+    },
+    "./change-window-coordinator": {
+      "types": "./dist/services/change-window-coordinator.d.ts",
+      "import": "./dist/services/change-window-coordinator.js"
+    },
+    "./runbook-author": {
+      "types": "./dist/services/runbook-author.d.ts",
+      "import": "./dist/services/runbook-author.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
