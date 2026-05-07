@@ -1,0 +1,41 @@
+{
+  "name": "autonomous-events",
+  "version": "0.0.1",
+  "description": "Catalog package — events-vertical Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Three Services: event-program-curator, partnership-deal-orchestrator, event-attendee-engagement-monitor. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product / autonomous-supplychain / autonomous-research / autonomous-security.",
+  "private": true,
+  "type": "module",
+  "main": "dist/services/index.js",
+  "types": "dist/services/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.js"
+    },
+    "./event-program-curator": {
+      "types": "./dist/services/event-program-curator.d.ts",
+      "import": "./dist/services/event-program-curator.js"
+    },
+    "./partnership-deal-orchestrator": {
+      "types": "./dist/services/partnership-deal-orchestrator.d.ts",
+      "import": "./dist/services/partnership-deal-orchestrator.js"
+    },
+    "./event-attendee-engagement-monitor": {
+      "types": "./dist/services/event-attendee-engagement-monitor.d.ts",
+      "import": "./dist/services/event-attendee-engagement-monitor.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "services-as-software": "workspace:*",
+    "autonomous-finance": "workspace:*",
+    "digital-tools": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-events#readme"
+}
