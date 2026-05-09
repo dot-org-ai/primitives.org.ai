@@ -1,6 +1,6 @@
 # autonomous-marketing
 
-> **Status: shipped (proof-of-life).** Six Services — `campaign-brief-generator`, `seo-content-pillar-author`, `paid-ad-creative-iterator`, `brand-voice-monitor`, `content-localization-orchestrator`, and `campaign-attribution-auditor` — are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** Nine Services — `campaign-brief-generator`, `seo-content-pillar-author`, `paid-ad-creative-iterator`, `brand-voice-monitor`, `content-localization-orchestrator`, `campaign-attribution-auditor`, `email-nurture-sequencer`, `competitor-positioning-monitor`, and `webinar-funnel-orchestrator` — are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: marketing Services-as-Software, defined on the primitive substrate.
 
@@ -50,6 +50,27 @@ Concrete `Service.define({...})` calls for marketing work that the agentic econo
   ```ts
   import { campaignAttributionAuditor } from 'autonomous-marketing/campaign-attribution-auditor'
   // typed as ServiceInstance<AttributionAuditTriggerInput, AttributionAuditReportOutput>
+  ```
+
+- **`email-nurture-sequencer`** — lead segment + nurture goal declaration → content-marketer-approved 5–12-touch email sequence staged into the ESP. Trigger: lead segment + nurture goal defined (e.g. trial-to-paid, dormant-reactivation). Cascade: `fetch-segment-product-context-prior-touchpoints-and-brand-voice (Code) → synthesize-nurture-arc-with-cadence-and-per-touch-objective (Generative) → draft-each-email-subject-preview-body-cta-and-ab-alternates (Generative) → content-marketer-review-and-approve (Human, approval rationale) → emit-sequence-config-and-esp-staging (Code)`. EvaluatorPanel of 4 personas (empathy-and-tone-reviewer with `audienceType: 'customer'` + `sentimentTarget: 'reassuring'` + brand-safety-reviewer with `riskTolerance: 'medium'` + handoff-readiness-reviewer with `contextDensity: 'standard'` + lifecycle-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(content-marketer))`. Pricing: `Pricing.outcome` 3-tier short-sequence / standard / multi-segment-or-localized ($499 / $1,999 / $5,999). Service-level reward = `nurture-conversion-rate-vs-baseline`. Archetype: `content-generation`. Lineage: `business.org.ai/cells/marketing-managers/email-nurture-sequencer`.
+
+  ```ts
+  import { emailNurtureSequencer } from 'autonomous-marketing/email-nurture-sequencer'
+  // typed as ServiceInstance<NurtureBriefInput, NurtureSequenceOutput>
+  ```
+
+- **`competitor-positioning-monitor`** — weekly cron + competitor-set defined → PMM-lead-signed weekly competitive-positioning brief + tracker update. Trigger: weekly cron + competitor-set defined. Cascade: `fetch-competitor-product-pages-recent-positioning-changes-and-funding-news (Code) → supervised-extract-messaging-frames-pricing-changes-persona-shifts-and-new-features (Agentic, supervised) → synthesize-positioning-deltas-threat-vectors-and-recommendations (Generative) → pmm-lead-review (Human, approval rationale) → emit-positioning-brief-and-tracker-update (Code)`. EvaluatorPanel of 4 personas (factual-accuracy-reviewer with `citationRequired: true` + `sourceTypes: ['first-party', 'industry-standard']` + commercial-fit-reviewer with `audienceForPitch: 'internal-stakeholder'` + threat-prioritisation-checker + pmm-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(PMM-lead))`. Pricing: `Pricing.subscription` — $899/mo per PMM-team + metered overage `[{ event: 'major-positioning-change-detected', amount: $99 }]`. Service-level reward = `competitive-win-rate-improvement`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/marketing-managers/competitor-positioning-monitor`.
+
+  ```ts
+  import { competitorPositioningMonitor } from 'autonomous-marketing/competitor-positioning-monitor'
+  // typed as ServiceInstance<CompetitorMonitorTriggerInput, CompetitorPositioningBriefOutput>
+  ```
+
+- **`webinar-funnel-orchestrator`** — webinar planned + audience hypothesis defined → growth-marketer-launched webinar funnel asset bundle + tracking config. Trigger: webinar planned + audience hypothesis defined. Cascade: `fetch-audience-segments-topic-fit-speaker-pool-and-prior-webinar-perf (Code) → draft-webinar-thesis-abstract-speaker-bios-and-landing-copy (Generative) → synthesize-promo-sequence-pre-event-emails-ads-and-organic-social (Generative) → growth-marketer-review-and-launch (Human, approval rationale) → emit-asset-bundle-and-tracking-config (Code)`. EvaluatorPanel of 4 personas (brand-safety-reviewer with `riskTolerance: 'medium'` + scope-clarity-reviewer with `artifactType: 'project-brief'` + funnel-realism-checker + demand-gen-domain) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(growth-marketer))`. Pricing: `Pricing.outcome` 3-tier micro / standard / flagship ($999 / $2,999 / $9,999). Service-level reward = `webinar-attended-rate-and-MQL-yield`. Archetype: `content-generation`. Lineage: `business.org.ai/cells/marketing-managers/webinar-funnel-orchestrator`.
+
+  ```ts
+  import { webinarFunnelOrchestrator } from 'autonomous-marketing/webinar-funnel-orchestrator'
+  // typed as ServiceInstance<WebinarPlanInput, WebinarFunnelOutput>
   ```
 
 ## Why a separate package
