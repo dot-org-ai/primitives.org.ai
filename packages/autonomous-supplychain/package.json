@@ -1,7 +1,7 @@
 {
   "name": "autonomous-supplychain",
   "version": "0.0.1",
-  "description": "Catalog package — procurement / supply-chain Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Ships: vendor-onboarding-runbook, purchase-order-router, inventory-reorder-planner, supplier-risk-monitor, freight-cost-optimizer, customs-compliance-filer. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product.",
+  "description": "Catalog package — procurement / supply-chain Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Ships: vendor-onboarding-runbook, purchase-order-router, inventory-reorder-planner, supplier-risk-monitor, freight-cost-optimizer, customs-compliance-filer, demand-forecast-synthesizer, manufacturing-quality-incident-investigator, supplier-contract-renewal-orchestrator. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -34,6 +34,18 @@
     "./customs-compliance-filer": {
       "types": "./dist/services/customs-compliance-filer.d.ts",
       "import": "./dist/services/customs-compliance-filer.js"
+    },
+    "./demand-forecast-synthesizer": {
+      "types": "./dist/services/demand-forecast-synthesizer.d.ts",
+      "import": "./dist/services/demand-forecast-synthesizer.js"
+    },
+    "./manufacturing-quality-incident-investigator": {
+      "types": "./dist/services/manufacturing-quality-incident-investigator.d.ts",
+      "import": "./dist/services/manufacturing-quality-incident-investigator.js"
+    },
+    "./supplier-contract-renewal-orchestrator": {
+      "types": "./dist/services/supplier-contract-renewal-orchestrator.d.ts",
+      "import": "./dist/services/supplier-contract-renewal-orchestrator.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
