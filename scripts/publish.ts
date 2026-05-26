@@ -2,8 +2,14 @@
 /**
  * Smart publish script that:
  * 1. Replaces workspace:* with actual versions
- * 2. Uses npm publish with web auth (TouchID)
- * 3. Restores original package.json files
+ * 2. Auto-logs in to npm if the existing token is missing or expired
+ * 3. Uses npm publish with web auth (TouchID / WebAuthn)
+ * 4. Works both interactively AND from a non-TTY caller (an agent, a CI runner) —
+ *    when stdin isn't a TTY, npm refuses to prompt; we wrap the call in `expect`
+ *    so npm sees a PTY and we auto-press Enter on its "Press ENTER to open in
+ *    the browser…" prompt. The browser opens, you authorize once per OTP, and
+ *    the publish proceeds.
+ * 5. Restores original package.json files
  */
 
 import { execSync, spawnSync } from 'node:child_process'
@@ -68,6 +74,113 @@ function isPublished(name: string, version: string): boolean {
   }
 }
 
+/**
+ * `true` if both stdin and stdout are real TTYs — meaning the user is running
+ * the script in a terminal and can respond to prompts directly. `false` means
+ * we're being invoked by an agent / CI / pipe; npm will refuse to prompt and
+ * we need to wrap with `expect` to provide a PTY.
+ */
+function isInteractive(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY)
+}
+
+/** `true` if `expect` (the Tcl tool, ships with macOS) is on PATH. */
+function hasExpect(): boolean {
+  return spawnSync('which', ['expect'], { stdio: 'pipe' }).status === 0
+}
+
+/**
+ * Tcl program that drives an interactive npm command on our behalf:
+ *  - spawns the command with a PTY (so npm thinks it's interactive)
+ *  - sends Enter when npm prompts "Press ENTER to open in the browser…"
+ *  - waits up to 10 minutes for the user to authorize in the browser
+ *  - inherits stdout so all npm output streams through
+ */
+function expectScript(spawnLine: string): string {
+  return [
+    'set timeout 600',
+    'log_user 1',
+    spawnLine,
+    'expect {',
+    '  -re {Press \\[Enter\\] to open in the browser} { send "\\r"; exp_continue }',
+    '  -re {Press ENTER to open}                      { send "\\r"; exp_continue }',
+    '  -re {to open in the browser}                   { send "\\r"; exp_continue }',
+    '  timeout                                         { puts stderr "*** timeout ***"; exit 2 }',
+    '  eof',
+    '}',
+    'catch wait result',
+    'exit [lindex $result 3]',
+  ].join('\n')
+}
+
+/**
+ * Run `npm <args>` in `cwd`, auto-handling the WebAuthn prompt.
+ *
+ * - TTY mode (a human in a terminal): inherit stdio — npm shows its prompts
+ *   directly to the user, who presses Enter and authorizes in the browser
+ *   themselves. Same as before this script grew an auto-auth path.
+ * - Non-TTY mode (agent / pipe): wrap with `expect` so npm sees a PTY and we
+ *   auto-feed Enter on "Press ENTER to open in the browser…". The browser
+ *   opens via npm's own `open` call; the human authorizes once; publish
+ *   proceeds. If `expect` isn't on PATH we fall back to inherit-stdio with a
+ *   loud warning — the call will likely fail in non-TTY mode but at least
+ *   the reason is visible.
+ *
+ * Returns the process exit code.
+ */
+function runNpmWithAutoAuth(args: string[], cwd: string): number {
+  if (isInteractive()) {
+    const result = spawnSync('npm', args, { cwd, stdio: 'inherit' })
+    return result.status ?? 1
+  }
+  if (!hasExpect()) {
+    console.warn(
+      '[publish] non-TTY caller and `expect` not on PATH — npm prompts will fail. ' +
+        'Install expect (macOS ships it; on Linux: `apt install expect`).',
+    )
+    const result = spawnSync('npm', args, { cwd, stdio: 'inherit' })
+    return result.status ?? 1
+  }
+  const spawnLine = ['spawn', 'npm', ...args].map(quoteForTcl).join(' ')
+  const result = spawnSync('expect', ['-c', expectScript(spawnLine)], {
+    cwd,
+    stdio: 'inherit',
+  })
+  return result.status ?? 1
+}
+
+/** Minimal Tcl quoting: leave alphanum/safe punctuation alone, brace-wrap the rest. */
+function quoteForTcl(s: string): string {
+  if (/^[A-Za-z0-9._/@:=-]+$/.test(s)) return s
+  if (!/[{}\\]/.test(s)) return `{${s}}`
+  return `"${s.replace(/[\\$\[\]"]/g, (c) => `\\${c}`)}"`
+}
+
+/**
+ * Make sure we're logged in before the publish loop kicks off. `npm whoami`
+ * exits non-zero with `E401` if the cached token is missing / expired; in that
+ * case we trigger `npm login --auth-type=web` which prints a CLI URL and (with
+ * Enter — auto-sent in non-TTY mode) opens it in the browser. After the user
+ * authorizes there, the token is saved to ~/.npmrc and the publish loop reuses
+ * it.
+ */
+function ensureLoggedIn(): void {
+  const whoami = spawnSync('npm', ['whoami'], { stdio: 'pipe' })
+  if (whoami.status === 0) {
+    console.log(`✅ npm logged in as ${whoami.stdout.toString().trim()}`)
+    return
+  }
+  console.log('🔑 npm not logged in — opening browser for web auth...')
+  const code = runNpmWithAutoAuth(
+    ['login', '--auth-type=web', '--registry=https://registry.npmjs.org/'],
+    process.cwd(),
+  )
+  if (code !== 0) {
+    console.error('❌ npm login failed')
+    process.exit(code || 1)
+  }
+}
+
 function replaceWorkspaceProtocol(
   deps: Record<string, string> | undefined,
   versionMap: Map<string, string>
@@ -126,6 +239,10 @@ async function main() {
     return
   }
 
+  // Verify login BEFORE replacing any package.json files — if auth is broken
+  // we want to bail before mutating the workspace.
+  ensureLoggedIn()
+
   // Save original package.json contents and replace workspace:*
   console.log('\nPreparing packages for publish...')
 
@@ -145,12 +262,8 @@ async function main() {
   let failed = false
   for (const { dir, name, version } of toPublish) {
     console.log(`\n📤 Publishing ${name}@${version}...`)
-    const result = spawnSync('npm', ['publish', '--access', 'public'], {
-      cwd: dir,
-      stdio: 'inherit',
-    })
-
-    if (result.status !== 0) {
+    const status = runNpmWithAutoAuth(['publish', '--access', 'public'], dir)
+    if (status !== 0) {
       console.error(`❌ Failed to publish ${name}@${version}`)
       failed = true
       break
