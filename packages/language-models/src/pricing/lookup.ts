@@ -1,5 +1,5 @@
 /**
- * @primitives/llm-pricing — lookup helpers.
+ * language-models / pricing — lookup helpers.
  *
  * The single source of truth for cost computation across the Phase-2
  * three-repo cascade. Throws on unknown slug/tier (per BYOK_GATEWAY_LIES
@@ -7,7 +7,7 @@
  * silent downgrade).
  */
 
-import { PRICING_TABLE } from './pricing.js'
+import { PRICING_TABLE } from './table.js'
 import type {
   HasPricingArgs,
   ModelPricing,

@@ -832,8 +832,6 @@ importers:
 
   packages/language-models: {}
 
-  packages/llm-pricing: {}
-
   packages/org.ai:
     dependencies:
       '@org.ai/types':

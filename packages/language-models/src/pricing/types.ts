@@ -1,5 +1,5 @@
 /**
- * @primitives/llm-pricing — type definitions for the canonical pricing table.
+ * language-models / pricing — type definitions for the canonical pricing table.
  *
  * Schema design notes (sb-ncer 2026-05-07):
  *

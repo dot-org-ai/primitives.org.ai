@@ -1,5 +1,5 @@
 /**
- * @primitives/llm-pricing — canonical model pricing table.
+ * language-models / pricing — canonical model pricing table.
  *
  * All rates are USD per 1,000,000 tokens (per1M form, NOT per1k). Sourced
  * from public list prices on 2026-05-07. Where prior repo tables disagree,

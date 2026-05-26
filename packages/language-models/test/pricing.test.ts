@@ -1,9 +1,5 @@
 /**
- * @primitives/llm-pricing — canonical pricing table tests
- *
- * RED+GREEN per DERISK.md §1: this file lands first as RED (lookup,
- * pricing, types modules don't exist yet); GREEN follows by adding the
- * src/ implementation.
+ * language-models / pricing — canonical pricing table tests
  *
  * Regression anchors come from real production runs in startup-builder:
  *
@@ -19,9 +15,9 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { priceFor, PRICING_TABLE, listSlugs, hasPricing } from '../src/index.js'
+import { priceFor, PRICING_TABLE, listSlugs, hasPricing } from '../src/pricing/index.js'
 
-describe('@primitives/llm-pricing — table integrity', () => {
+describe('language-models/pricing — table integrity', () => {
   it('exports a non-empty PRICING_TABLE', () => {
     expect(PRICING_TABLE.length).toBeGreaterThan(10)
   })
@@ -65,7 +61,7 @@ describe('@primitives/llm-pricing — table integrity', () => {
   })
 })
 
-describe('@primitives/llm-pricing — required slugs present', () => {
+describe('language-models/pricing — required slugs present', () => {
   // Every slug below must have at least one row. These are the canonical
   // slugs used across startup-builder + icps + services-builder today.
   const REQUIRED_SLUGS = [
@@ -99,7 +95,7 @@ describe('@primitives/llm-pricing — required slugs present', () => {
   })
 })
 
-describe('@primitives/llm-pricing — synthetic rate anchors', () => {
+describe('language-models/pricing — synthetic rate anchors', () => {
   // priceFor() is per-call: the 200K breakpoint applies to a single call's
   // inputTokens. For aggregate cost rollups across many calls, callers
   // accumulate per-call results. The synthetic anchors below all use
@@ -194,7 +190,7 @@ describe('@primitives/llm-pricing — synthetic rate anchors', () => {
   })
 })
 
-describe('@primitives/llm-pricing — production regression anchor (BMC corpus)', () => {
+describe('language-models/pricing — production regression anchor (BMC corpus)', () => {
   // sb-srnl 2026-05-07: 5602 records via vertex-batch on
   // vertex/gemini-3.1-pro flex/batch tier (≤200K input per record):
   //   - input avg 4500 tok per record (well under 200K breakpoint)
@@ -247,7 +243,7 @@ describe('@primitives/llm-pricing — production regression anchor (BMC corpus)'
   })
 })
 
-describe('@primitives/llm-pricing — error paths', () => {
+describe('language-models/pricing — error paths', () => {
   it('throws on unknown slug (not silent zero)', () => {
     expect(() =>
       priceFor({

@@ -40,3 +40,23 @@ export {
   type ErrorCategoryName,
   type ErrorMapping,
 } from './policy.js'
+
+// =============================================================================
+// Pricing (consolidated from former @primitives/llm-pricing — see
+// `./pricing/` for the source. Also re-exported under the subpath
+// `language-models/pricing` for surgical imports.)
+// =============================================================================
+export {
+  PRICING_TABLE,
+  priceFor,
+  listSlugs,
+  hasPricing,
+  rowsForSlug,
+  type ModelPricing,
+  type PricingTier,
+  type Provider,
+  type RateBlock,
+  type PriceForArgs,
+  type PriceForResult,
+  type HasPricingArgs,
+} from './pricing/index.js'
