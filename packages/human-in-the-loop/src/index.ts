@@ -382,6 +382,72 @@ export type {
 
 export type { ChannelAdapter, ChannelKind, Subscription, IdentityRef } from './types.js'
 
+// ============================================================================
+// Request Lifecycle (#74) — pure state machine for Human Function requests
+// ============================================================================
+
+export {
+  // Transitions
+  claim,
+  startProgress,
+  release,
+  resolve,
+  timeout,
+  escalate,
+  cancel,
+  // Queries
+  forAssignee,
+  sortByPriorityThenSLA,
+  timeToDeadline,
+  isBreached,
+} from './request-lifecycle.js'
+
+export type {
+  RequestKind,
+  LifecycleStatus,
+  LifecyclePriority,
+  ArtifactRef,
+  CascadeRef,
+  Resolution,
+  LifecycleItem,
+  ClaimInput,
+  StartProgressInput,
+  ReleaseInput,
+  ResolveInput,
+  TimeoutInput,
+  EscalateInput,
+  CancelInput,
+} from './request-lifecycle.js'
+
+// ============================================================================
+// Escalation Engine (#75) — pure SLA evaluation and escalation routing
+// ============================================================================
+
+export {
+  // Core engine
+  evaluateEscalation,
+  // Batch evaluation helper
+  batchEvaluate,
+  // Item construction helper
+  buildEscalatedItem,
+  // Policy factory
+  buildVantageLadder,
+  // Fixture policies (canonical Vantage ladder IC→Team→Business→Studio)
+  FIXTURE_IC,
+  FIXTURE_TEAM,
+  FIXTURE_BUSINESS,
+  FIXTURE_STUDIO,
+  FIXTURE_POLICIES,
+  getFixturePolicy,
+} from './escalation-engine.js'
+
+export type {
+  AssigneeRef,
+  EscalationLevel,
+  EscalationPolicy as LifecycleEscalationPolicy,
+  EscalationDecision,
+} from './escalation-engine.js'
+
 // Export human-in-the-loop specific types
 export type {
   // Status and enums
