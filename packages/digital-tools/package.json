@@ -38,7 +38,7 @@
   "dependencies": {
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
-    "autonomous-finance": "workspace:*",
+    "business-as-code": "workspace:*",
     "digital-objects": "workspace:*",
     "id.org.ai": "^0.3.0",
     "rpc.do": "^0.1.0",

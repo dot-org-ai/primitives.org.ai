@@ -49,6 +49,22 @@ Packages follow strict layer rules -- each layer may only import from layers bel
 - **Testing (parallel):** `ai-evaluate`, `ai-experiments`, `ai-props`
 - **Umbrella:** `ai-primitives` (new primary), `org.ai` (legacy with subpath exports)
 
+> **Layering exception — economic substrate (`business-as-code/finance`).** The
+> outcome-contract economic substrate (Money/Cost/Pricing/OutcomeContract/
+> ProofPredicate/SLAPolicy/RefundContract/AuthorityBoundary + FinanceProvider/
+> Merchant ports) lives in `business-as-code` (Layer 5) under the `./finance`
+> subpath but is conceptually **foundational** (Layer 0): finance is the core of
+> the default OKRs (Revenue/Growth/Profit), and `services-as-software` (L5) and
+> `digital-tools` (L4) **consume** it. This means `digital-tools` (L4) imports
+> `business-as-code` (L5) — a lower-layer-imports-higher-layer inversion that is
+> intentional and acyclic (`business-as-code`'s dep closure contains neither
+> `digital-tools` nor `services-as-software`). The substrate is self-contained
+> (no internal workspace deps), so this introduces no dependency cycle.
+> `autonomous-finance` is now a thin re-export shim over `business-as-code/finance`
+> kept for the `autonomous-*` catalog packages until their ownership is decided.
+> **This inversion awaits owner sign-off:** if it must be resolved, the substrate
+> can move to a dedicated Layer 0 foundation module instead of `business-as-code`.
+
 ### Package Naming
 
 Only two packages are scoped: `@org.ai/types` and `@org.ai/config`. All other packages are **unscoped** (e.g., `ai-functions`, `digital-workers`, `autonomous-agents`). Never reference packages as `@org.ai/ai-functions` or `@primitives/types` -- those are incorrect.

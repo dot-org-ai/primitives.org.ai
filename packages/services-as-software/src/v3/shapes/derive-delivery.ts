@@ -11,7 +11,7 @@
 
 import { archetypes } from '../archetype/registry.js'
 import type { ServiceInstance } from '../service.js'
-import type { Money } from 'autonomous-finance'
+import type { Money } from 'business-as-code/finance'
 import type { DeliveryShape, Duration, HITLTouchpoint, ProgressIndicator } from './types.js'
 
 // ============================================================================

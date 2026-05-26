@@ -23,7 +23,7 @@
  * @packageDocumentation
  */
 
-import type { ProofPredicate } from 'autonomous-finance'
+import type { ProofPredicate } from 'business-as-code/finance'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 
 import type { PanelVerdict } from '../evaluator-panel.js'

@@ -1,110 +1,16 @@
 /**
- * autonomous-finance — financial nervous system for the agentic economy.
+ * autonomous-finance — re-export SHIM.
  *
- * Substrate types only at this scaffold stage. Provider adapters (Stripe,
- * Tempo, x402, Privy, Lightspark) and catalog Services (bookkeeper,
- * controller, AP, AR, tax, treasury, payroll) ship in subsequent passes.
+ * The outcome-contract economic substrate now lives in `business-as-code`
+ * (subpath `business-as-code/finance`), the source of truth for the economic
+ * primitives of the agentic economy. This package re-exports that surface
+ * unchanged so existing importers keep compiling.
+ *
+ * New code should import from `business-as-code/finance` directly. This shim
+ * remains until the owner question for the `autonomous-*` catalog packages
+ * (which still import it) is resolved.
  *
  * @packageDocumentation
  */
 
-// Money + Cost + Budget + spend-control
-export type {
-  FiatCurrency,
-  StablecoinCurrency,
-  CryptoCurrency,
-  Currency,
-  Money,
-  Cost,
-  Budget,
-  BudgetScope,
-  SpendControl,
-  CostModel,
-} from './types.js'
-
-// Account + transfer
-export type { Account, AccountSpec, TransferOpts, TransferResult } from './account.js'
-
-// Card (Issuing)
-export type { Card, CardSpec } from './card.js'
-
-// Ledger
-export type { LedgerEntry, LedgerLine } from './ledger.js'
-
-// Identity (cross-provider)
-export type { AgentIdentity, AgentMerchant } from './identity.js'
-
-// ProofPredicate union + factories
-export type { ProofPredicate } from './proof-predicate.js'
-export {
-  SchemaMatch,
-  EvaluatorPass,
-  HumanSign,
-  External,
-  LoadBearingPass,
-  OverallFloor,
-  UnmetRequirementsPass,
-  AND,
-  OR,
-} from './proof-predicate.js'
-
-// Outcome contract + proof of result
-export type {
-  OutcomeContract,
-  OutcomeContractBase,
-  OutcomeContractWithExpiresAt,
-  OutcomeContractWithTimeoutDays,
-  OutcomeContractWithTiers,
-  ProofOfResult,
-} from './outcome-contract.js'
-export { resolveOutcomeAmount } from './outcome-contract.js'
-
-// SLA policy
-export type { SLAPolicy, SLATarget } from './sla.js'
-
-// Refund contract + catalog
-export type { RefundContractRef } from './refund.js'
-export { RefundContracts } from './refund.js'
-
-// Authority boundary + catalog
-export type { AuthorityBoundaryRef } from './authority.js'
-export { AuthorityBoundaries } from './authority.js'
-
-// Pricing factories — type + value merged on the same name (Pricing.outcome(...), etc.)
-export type {
-  OutcomeTier,
-  PerInvocationTier,
-  MeteredEntry,
-  CompositeBase,
-  SubscriptionPlan,
-  PercentOfBasis,
-} from './pricing.js'
-export { Pricing, money } from './pricing.js'
-export type { Pricing as PricingValue } from './pricing.js'
-
-// Provider port + capabilities
-export type {
-  FinanceProvider,
-  ProviderCapabilities,
-  ProviderRail,
-  ChargeOpts,
-  ChargeResult,
-  RefundResult,
-  EscrowHandle,
-  ReleaseResult,
-  SubscribeOpts,
-  Subscription,
-  MeterEvent,
-} from './port.js'
-
-// Merchant / Connect provisioning (product-line + hosted checkout + payout)
-export type {
-  MerchantCapable,
-  PriceInterval,
-  ProvisionProductOpts,
-  ProvisionedProduct,
-  CheckoutOpts,
-  CheckoutSession,
-  PayoutOpts,
-  PayoutResult,
-} from './merchant.js'
+export * from 'business-as-code/finance'

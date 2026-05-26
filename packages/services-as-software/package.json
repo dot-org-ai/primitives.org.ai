@@ -27,7 +27,7 @@
     "@standard-schema/spec": "^1.0.0",
     "ai-database": "workspace:*",
     "ai-functions": "workspace:*",
-    "autonomous-finance": "workspace:*",
+    "business-as-code": "workspace:*",
     "digital-objects": "workspace:*",
     "digital-tools": "workspace:*",
     "digital-workers": "workspace:*",

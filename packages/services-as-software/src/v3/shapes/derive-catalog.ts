@@ -10,7 +10,7 @@
 
 import { archetypes } from '../archetype/registry.js'
 import type { ServiceInstance } from '../service.js'
-import type { Pricing } from 'autonomous-finance'
+import type { Pricing } from 'business-as-code/finance'
 import type { CatalogHero, CatalogShape, PricingSummary } from './types.js'
 
 // ============================================================================

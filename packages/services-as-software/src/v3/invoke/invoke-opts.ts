@@ -12,7 +12,7 @@
  * @packageDocumentation
  */
 
-import type { Money } from 'autonomous-finance'
+import type { Money } from 'business-as-code/finance'
 
 // ============================================================================
 // WorkerRef — loose for now

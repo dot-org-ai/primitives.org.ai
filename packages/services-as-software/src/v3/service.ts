@@ -17,7 +17,7 @@ import type {
   OutcomeContract,
   Pricing,
   RefundContractRef,
-} from 'autonomous-finance'
+} from 'business-as-code/finance'
 import type { RewardSignal } from 'digital-tools'
 
 import type { ServiceBinding } from './binding.js'

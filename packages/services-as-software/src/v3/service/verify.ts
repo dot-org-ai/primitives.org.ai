@@ -20,7 +20,7 @@
 
 import { createInvocationHandle } from '../invoke/runtime.js'
 import type { InvocationEvent } from '../invoke/invocation-event.js'
-import type { ProofPredicate } from 'autonomous-finance'
+import type { ProofPredicate } from 'business-as-code/finance'
 
 import type { ServiceInstance } from '../service.js'
 import type { VersionVector } from '../lineage.js'

@@ -1,7 +1,7 @@
 {
   "name": "autonomous-finance",
   "version": "0.0.1",
-  "description": "Financial nervous system for the agentic economy — typed primitives (Money/Cost/Card/Account/Ledger/OutcomeContract/SLAPolicy) + provider adapters (Stripe, Tempo, x402, Privy, Lightspark) + canonical catalog of finance Services (bookkeeper, controller, AP, AR, tax, treasury, payroll). See README.",
+  "description": "Re-export shim for the outcome-contract economic substrate — the source of truth now lives in business-as-code (subpath business-as-code/finance). This package re-exports Money/Cost/Card/Account/Ledger/Pricing/OutcomeContract/ProofPredicate/SLAPolicy/RefundContract/AuthorityBoundary + FinanceProvider/Merchant ports so existing importers keep compiling. Prefer importing from business-as-code/finance directly.",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "zod": "^3.23.0"
+    "business-as-code": "workspace:*"
   },
   "license": "MIT",
   "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-finance#readme"

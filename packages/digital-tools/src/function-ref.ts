@@ -26,7 +26,7 @@
  */
 
 import type { ActionRef } from 'digital-objects'
-import type { CostModel } from 'autonomous-finance'
+import type { CostModel } from 'business-as-code/finance'
 import type { AgentMode, PromotionPolicy, TrackRecord } from './track-record.js'
 
 // ============================================================================

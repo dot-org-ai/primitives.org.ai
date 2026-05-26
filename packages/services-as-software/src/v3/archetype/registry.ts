@@ -14,7 +14,7 @@
  */
 
 import type { AgentMode, PersonaRef } from 'digital-tools'
-import type { Money } from 'autonomous-finance'
+import type { Money } from 'business-as-code/finance'
 
 // ============================================================================
 // Archetype scalars

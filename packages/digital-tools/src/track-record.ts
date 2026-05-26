@@ -14,7 +14,7 @@
  * @packageDocumentation
  */
 
-import type { Money } from 'autonomous-finance'
+import type { Money } from 'business-as-code/finance'
 
 /**
  * Operating mode of an agentic Function (or Worker).

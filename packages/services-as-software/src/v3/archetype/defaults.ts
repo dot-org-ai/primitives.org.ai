@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-import type { Money } from 'autonomous-finance'
+import type { Money } from 'business-as-code/finance'
 import type { ServiceArchetypeSpec } from './registry.js'
 
 // ============================================================================

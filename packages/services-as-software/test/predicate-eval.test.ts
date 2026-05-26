@@ -17,7 +17,7 @@ import {
   LoadBearingPass,
   OverallFloor,
   UnmetRequirementsPass,
-} from 'autonomous-finance'
+} from 'business-as-code/finance'
 import {
   evaluatePredicate,
   registerVerifier,

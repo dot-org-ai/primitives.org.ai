@@ -15,7 +15,7 @@
  * @packageDocumentation
  */
 
-import type { Money } from 'autonomous-finance'
+import type { Money } from 'business-as-code/finance'
 
 import type { Schema } from '../types.js'
 import type { InvocationState } from './invocation-state.js'

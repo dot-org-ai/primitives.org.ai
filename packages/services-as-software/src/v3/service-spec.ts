@@ -26,7 +26,7 @@ import type {
   OutcomeContract,
   Pricing,
   RefundContractRef,
-} from 'autonomous-finance'
+} from 'business-as-code/finance'
 
 import type { ServiceBinding } from './binding.js'
 import type { OutputContract } from './output-contract.js'

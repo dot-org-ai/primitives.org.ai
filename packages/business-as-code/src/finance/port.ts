@@ -3,8 +3,8 @@
  * Privy, Lightspark). Every method is optional and gated by ProviderCapabilities;
  * adapters declare which capabilities they support.
  *
- * Adapters live in autonomous-finance/adapters/* (forthcoming) — none ship
- * with the substrate.
+ * Adapter implementations are forthcoming and ship outside the substrate —
+ * none are bundled here.
  */
 
 import type { Currency, Money, Cost } from './types.js'

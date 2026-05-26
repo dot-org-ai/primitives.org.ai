@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./finance": {
+      "import": "./dist/finance/index.js",
+      "types": "./dist/finance/index.d.ts"
     }
   },
   "scripts": {

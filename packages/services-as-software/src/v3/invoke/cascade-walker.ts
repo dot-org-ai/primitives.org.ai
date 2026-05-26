@@ -34,7 +34,7 @@
 import { generateObject, generateText } from 'ai-functions'
 import { z, type ZodTypeAny } from 'zod'
 
-import type { Money } from 'autonomous-finance'
+import type { Money } from 'business-as-code/finance'
 import type { ActionRef } from 'digital-objects'
 import { getTool, type AnyTool, type FunctionRef, type ToolParameter } from 'digital-tools'
 

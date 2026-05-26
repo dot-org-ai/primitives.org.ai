@@ -18,7 +18,7 @@ import { z } from 'zod'
 import { Code } from 'digital-tools'
 import type { FunctionRef } from 'digital-tools'
 
-import { Pricing } from 'autonomous-finance'
+import { Pricing } from 'business-as-code/finance'
 
 import {
   Service,
