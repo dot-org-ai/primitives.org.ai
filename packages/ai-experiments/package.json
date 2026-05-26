@@ -1,6 +1,6 @@
 {
   "name": "ai-experiments",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Runtime A/B testing for AI variants in production - traffic splitting, decision strategies, and ClickHouse-backed outcome tracking",
   "type": "module",
   "main": "dist/index.js",

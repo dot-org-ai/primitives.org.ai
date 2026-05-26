@@ -1,6 +1,6 @@
 {
   "name": "autonomous-agents",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Primitives for building and orchestrating autonomous AI agents",
   "type": "module",
   "main": "dist/index.js",

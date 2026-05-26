@@ -1,5 +1,16 @@
 # human-in-the-loop
 
+## 2.4.0
+
+### Patch Changes
+
+- Updated dependencies [4d58f5f]
+- Updated dependencies [d30c2e8]
+  - ai-functions@2.4.0
+  - business-as-code@2.4.0
+  - digital-tasks@2.4.0
+  - digital-workers@2.4.0
+
 ## 2.3.0
 
 ### Patch Changes

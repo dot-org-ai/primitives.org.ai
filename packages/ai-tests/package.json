@@ -1,6 +1,6 @@
 {
   "name": "ai-tests",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Dev-time test assertions for AI behavior - expect, should, assert, describe, it via RPC",
   "type": "module",
   "main": "dist/index.js",
