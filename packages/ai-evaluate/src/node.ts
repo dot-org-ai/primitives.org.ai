@@ -11,9 +11,10 @@ import type {
   WorkerLoader,
   SandboxEnv,
   FetchConfig,
+  WorkerCode,
 } from './types.js'
 import { generateWorkerCode, generateDevWorkerCode } from './worker-template/index.js'
-import { isDomainAllowed, normalizeImports } from './shared.js'
+import { COMPATIBILITY_DATE, isDomainAllowed, normalizeImports } from './shared.js'
 
 /**
  * Check if code contains JSX syntax that needs transformation
@@ -108,17 +109,22 @@ async function evaluateWithWorkerLoader(
   })
   const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-  const worker = loader.get(id, async () => ({
-    mainModule: 'worker.js',
-    modules: {
-      'worker.js': workerCode,
-    },
-    compatibilityDate: '2026-01-01',
-    globalOutbound: options.fetch === null ? null : undefined,
-    bindings: {
-      TEST: testService,
-    },
-  }))
+  const worker = loader.get(
+    id,
+    async (): Promise<WorkerCode> => ({
+      mainModule: 'worker.js',
+      modules: {
+        'worker.js': workerCode,
+      },
+      compatibilityDate: COMPATIBILITY_DATE,
+      globalOutbound: options.fetch === null ? null : undefined,
+      // Cloudflare Dynamic Workers' loader-factory field is `env`, not `bindings`.
+      // The loaded worker reads `env.TEST` (see worker-template/core.ts).
+      env: {
+        TEST: testService,
+      },
+    })
+  )
 
   const entrypoint = worker.getEntrypoint()
   const response = await entrypoint.fetch(new Request('http://sandbox/execute'))
@@ -196,7 +202,7 @@ async function evaluateWithMiniflare(
   const mf = new Miniflare({
     modules: true,
     script: workerCode,
-    compatibilityDate: '2026-01-01',
+    compatibilityDate: COMPATIBILITY_DATE,
     // Configure outbound service based on fetch mode
     ...(outboundService && { outboundService }),
   })

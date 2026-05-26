@@ -9,7 +9,13 @@
  * - TEST binding (ai-tests service) - optional, only needed for test assertions
  */
 
-import type { EvaluateOptions, EvaluateResult, WorkerLoader, SandboxEnv } from './types.js'
+import type {
+  EvaluateOptions,
+  EvaluateResult,
+  WorkerLoader,
+  SandboxEnv,
+  WorkerCode,
+} from './types.js'
 import { generateWorkerCode } from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
 import { COMPATIBILITY_DATE, normalizeImport, extractPackageName } from './shared.js'
@@ -240,16 +246,19 @@ async function evaluateSimple(
 
   const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-  const worker = loader.get(id, async () => ({
-    mainModule: 'worker.js',
-    modules: {
-      'worker.js': workerCode,
-      ...externalModules,
-    },
-    compatibilityDate: COMPATIBILITY_DATE,
-    // Block network if fetch is false or null
-    globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
-  }))
+  const worker = loader.get(
+    id,
+    async (): Promise<WorkerCode> => ({
+      mainModule: 'worker.js',
+      modules: {
+        'worker.js': workerCode,
+        ...externalModules,
+      },
+      compatibilityDate: COMPATIBILITY_DATE,
+      // Block network if fetch is false or null
+      globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
+    })
+  )
 
   // Get the entrypoint and call fetch
   const entrypoint = worker.getEntrypoint()
@@ -281,20 +290,25 @@ async function evaluateWithWorkerLoader(
   })
   const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-  const worker = loader.get(id, async () => ({
-    mainModule: 'worker.js',
-    modules: {
-      'worker.js': workerCode,
-      // Include capnweb as a module so the worker can import it
-      'capnweb.js': CAPNWEB_SOURCE,
-    },
-    compatibilityDate: COMPATIBILITY_DATE,
-    // Block network if fetch is false or null
-    globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
-    bindings: {
-      TEST: testService,
-    },
-  }))
+  const worker = loader.get(
+    id,
+    async (): Promise<WorkerCode> => ({
+      mainModule: 'worker.js',
+      modules: {
+        'worker.js': workerCode,
+        // Include capnweb as a module so the worker can import it
+        'capnweb.js': CAPNWEB_SOURCE,
+      },
+      compatibilityDate: COMPATIBILITY_DATE,
+      // Block network if fetch is false or null
+      globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
+      // Cloudflare Dynamic Workers' loader-factory field is `env`, not `bindings`.
+      // The loaded worker reads `env.TEST` (see worker-template/core.ts).
+      env: {
+        TEST: testService,
+      },
+    })
+  )
 
   // Get the entrypoint and call fetch (required by Cloudflare worker_loaders API)
   const entrypoint = worker.getEntrypoint()
