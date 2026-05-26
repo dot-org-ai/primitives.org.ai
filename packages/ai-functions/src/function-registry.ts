@@ -113,7 +113,13 @@ function convertValueToJSONSchema(value: unknown): JSONSchema {
  * Fill template with values
  */
 export function fillTemplate(template: string, args: Record<string, unknown>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(args[key] ?? ''))
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const v = args[key] ?? ''
+    if (typeof v === 'object' && v !== null) {
+      return JSON.stringify(v)
+    }
+    return String(v)
+  })
 }
 
 // ============================================================================
