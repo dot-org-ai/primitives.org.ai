@@ -30,6 +30,7 @@ export {
   resetGlobalRegistry,
   convertArgsToJSONSchema,
   fillTemplate,
+  generateCode,
 } from './function-registry.js'
 
 // ============================================================================

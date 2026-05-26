@@ -270,6 +270,7 @@ describe('defineFunction', () => {
       name: 'implement',
       args: { spec: 'Function specification' },
       language: 'typescript',
+      handler: () => 'ok',
     })
 
     expect(fn.definition.type).toBe('code')
@@ -342,11 +343,75 @@ describe('define helpers', () => {
     const fn = define.code({
       name: 'generate',
       args: { prompt: 'Code generation prompt' },
-      language: 'python',
+      language: 'typescript',
+      handler: () => 'ok',
     })
 
     expect(functions.has('generate')).toBe(true)
     expect(fn.definition.type).toBe('code')
+  })
+})
+
+// Code is the DETERMINISTIC kind — no gateway required. These tests assert the
+// post-split contract: `type: 'code'` runs a handler (or inline body), never a
+// model, at call time. (Code-authoring moved to generateCode().)
+describe('code function execution (deterministic)', () => {
+  beforeEach(() => {
+    resetGlobalRegistry()
+  })
+
+  it('runs the supplied handler with no LLM call', async () => {
+    const calculateTax = defineFunction<number, { amount: number; rate: number }>({
+      type: 'code',
+      name: 'calculateTax',
+      args: { amount: 'Amount (number)', rate: 'Rate (number)' },
+      handler: ({ amount, rate }) => amount * rate,
+    })
+
+    const result = await calculateTax.call({ amount: 100, rate: 0.2 })
+    expect(result).toBe(20)
+    // Determinism: same input → same output, every time
+    expect(await calculateTax.call({ amount: 100, rate: 0.2 })).toBe(20)
+  })
+
+  it('awaits an async handler', async () => {
+    const fn = defineFunction<string, { name: string }>({
+      type: 'code',
+      name: 'greetAsync',
+      args: { name: 'Name' },
+      handler: async ({ name }) => `hi ${name}`,
+    })
+    expect(await fn.call({ name: 'world' })).toBe('hi world')
+  })
+
+  it('evaluates an inline code body deterministically', async () => {
+    const fn = defineFunction<number, { items: number[] }>({
+      type: 'code',
+      name: 'sum',
+      args: { items: ['Numbers'] },
+      language: 'typescript',
+      code: 'return args.items.reduce((a, b) => a + b, 0)',
+    })
+    expect(await fn.call({ items: [1, 2, 3, 4] })).toBe(10)
+  })
+
+  it('throws (does not call a model) when no handler or code is provided', async () => {
+    const fn = defineFunction({
+      type: 'code',
+      name: 'noImpl',
+      args: { spec: 'spec' },
+      language: 'typescript',
+    })
+    await expect(fn.call({ spec: 'x' })).rejects.toThrow(/no handler or inline code/i)
+  })
+
+  it('define.code runs the handler', async () => {
+    const fn = define.code<number, { a: number; b: number }>({
+      name: 'add',
+      args: { a: 'a (number)', b: 'b (number)' },
+      handler: ({ a, b }) => a + b,
+    })
+    expect(await fn.call({ a: 2, b: 3 })).toBe(5)
   })
 })
 

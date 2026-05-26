@@ -62,9 +62,13 @@ export interface StoredFunctionDefinition {
   args: unknown
   returnType?: unknown
   // Type-specific fields
+  /** Inline deterministic code body for a `code` function (handlers are not persistable). */
+  code?: string
   language?: string
   instructions?: string
+  /** @deprecated Legacy code-authoring fields; retained only for back-compat reads. */
   includeTests?: boolean
+  /** @deprecated Legacy code-authoring fields; retained only for back-compat reads. */
   includeExamples?: boolean
   output?: string
   system?: string
@@ -130,12 +134,14 @@ function definitionToData(definition: FunctionDefinition): StoredFunctionDefinit
   switch (definition.type) {
     case 'code': {
       const codeDef = definition as CodeFunctionDefinition
+      // A `handler` is a live function reference and cannot be persisted; only
+      // an inline `code` body round-trips. Definitions stored with a handler
+      // (no `code`) must be re-supplied with their handler when reloaded.
       return {
         ...base,
+        ...(codeDef.code !== undefined && { code: codeDef.code }),
         ...(codeDef.language !== undefined && { language: codeDef.language }),
         ...(codeDef.instructions !== undefined && { instructions: codeDef.instructions }),
-        ...(codeDef.includeTests !== undefined && { includeTests: codeDef.includeTests }),
-        ...(codeDef.includeExamples !== undefined && { includeExamples: codeDef.includeExamples }),
       }
     }
     case 'generative': {
@@ -190,15 +196,12 @@ function dataToDefinition(data: StoredFunctionDefinition): FunctionDefinition {
         (def as { description: string }).description = data.description
       if (data.returnType !== undefined)
         (def as { returnType: unknown }).returnType = data.returnType
+      if (data.code !== undefined) (def as { code: string }).code = data.code
       if (data.language !== undefined)
         (def as { language: CodeFunctionDefinition['language'] }).language =
           data.language as CodeFunctionDefinition['language']
       if (data.instructions !== undefined)
         (def as { instructions: string }).instructions = data.instructions
-      if (data.includeTests !== undefined)
-        (def as { includeTests: boolean }).includeTests = data.includeTests
-      if (data.includeExamples !== undefined)
-        (def as { includeExamples: boolean }).includeExamples = data.includeExamples
       return def
     }
     case 'generative': {

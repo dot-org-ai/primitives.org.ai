@@ -4,6 +4,17 @@
 
 ### Minor Changes
 
+- Make `kind: 'code'` deterministic. A `CodeFunctionDefinition` now carries a
+  deterministic `handler: (input) => output` (or an inline `code` string body)
+  and `executeCodeFunction` runs it with **no model in the call path** — the
+  documented "Code = deterministic" contract. The previous call-time code
+  *generation* behavior is preserved but moved to an explicit opt-in path: the
+  new `generateCode()` export (+ `CodeGenerationDefinition` type). `define.code`
+  now defines a handler; auto-define authors a body once at define time and
+  carries it as inline `code`. `Generative` / `Agentic` / `Human` semantics are
+  unchanged; the `generate('code', prompt)` primitive is unchanged.
+  `CodeFunctionDefinition` drops `includeTests` / `includeExamples` (relocated
+  to `CodeGenerationDefinition`).
 - Deepen `language-models` with per-model resilience and tier policy data
   (aip-70mk). The `ModelPolicy` MDXLD type (`$type: 'ModelPolicy'`) and
   `policyFor()` derivation layer now live in `language-models`. The runtime

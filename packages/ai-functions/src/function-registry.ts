@@ -13,6 +13,7 @@ import type {
   FunctionDefinition,
   DefinedFunction,
   CodeFunctionDefinition,
+  CodeGenerationDefinition,
   GenerativeFunctionDefinition,
   AgenticFunctionDefinition,
   HumanFunctionDefinition,
@@ -120,21 +121,114 @@ export function fillTemplate(template: string, args: Record<string, unknown>): s
 // ============================================================================
 
 /**
- * Execute a code function - generates code based on specification
+ * Execute a **deterministic** code function.
  *
- * Returns just the generated code string. For access to additional metadata
- * like tests, examples, and documentation, use the full CodeFunctionResult type
- * by defining a custom function.
+ * `Code` is the deterministic kind: no model is consulted at call time. This
+ * invokes the definition's `handler` (canonical) or, if only an inline `code`
+ * body was supplied, deterministically compiles and runs it. The result is
+ * returned directly.
+ *
+ * This is a deliberate change from the previous behavior, where `type: 'code'`
+ * LLM-generated source at call time. That code-*authoring* behavior now lives
+ * in {@link generateCode} (and the `generate('code', …)` primitive), so that
+ * `Code` can carry the "deterministic handler" contract consumers depend on
+ * (ADR-0033). See the package README migration note.
+ *
+ * @throws if neither `handler` nor `code` is provided, or if an inline `code`
+ *   body is in a non-evaluable language.
  */
-async function executeCodeFunction<TInput>(
-  definition: CodeFunctionDefinition<unknown, TInput>,
+async function executeCodeFunction<TOutput, TInput>(
+  definition: CodeFunctionDefinition<TOutput, TInput>,
   args: TInput
-): Promise<string> {
-  const { name, description, language = 'typescript', instructions } = definition
-  const model =
-    'model' in definition ? (definition as { model?: string }).model ?? 'sonnet' : 'sonnet'
+): Promise<TOutput> {
+  const { handler, code, language = 'typescript', name } = definition
 
-  const argsDescription = JSON.stringify(args, null, 2)
+  if (typeof handler === 'function') {
+    return await handler(args)
+  }
+
+  if (typeof code === 'string' && code.length > 0) {
+    return await runInlineCode<TOutput, TInput>(code, args, language, name)
+  }
+
+  throw new Error(
+    `Code function '${name}' has no handler or inline code. ` +
+      `'code' functions are deterministic and require a handler: (input) => output ` +
+      `(or an inline 'code' body). To have a model *author* code instead, use ` +
+      `generateCode() or define a 'generative' function.`
+  )
+}
+
+/**
+ * Deterministically compile and run an inline `code` body for a Code function.
+ *
+ * The body is treated as a function whose single parameter is the parsed
+ * `args` object and whose `return` value is the result. Only the
+ * JS/TS-compatible languages can be evaluated in-process; other languages are
+ * carried as metadata for an external runtime and are rejected here.
+ *
+ * No model is involved — this is a pure `new Function(...)` compile of the
+ * supplied source, so the same body always produces the same behavior.
+ */
+async function runInlineCode<TOutput, TInput>(
+  code: string,
+  args: TInput,
+  language: string,
+  name: string
+): Promise<TOutput> {
+  if (language !== 'typescript' && language !== 'javascript') {
+    throw new Error(
+      `Code function '${name}' has an inline 'code' body in language '${language}', ` +
+        `which cannot be evaluated in-process. Pass a 'handler' instead, or run it ` +
+        `in an external deterministic runtime.`
+    )
+  }
+
+  const body = /\breturn\b/.test(code) ? code : `return (${code})`
+  let fn: (input: TInput) => TOutput | Promise<TOutput>
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    fn = new Function('args', `"use strict";\n${body}`) as (
+      input: TInput
+    ) => TOutput | Promise<TOutput>
+  } catch (e) {
+    throw new Error(
+      `Code function '${name}' has an invalid inline 'code' body: ${(e as Error).message}`
+    )
+  }
+  return await fn(args)
+}
+
+/**
+ * Author code with a model — the explicit, opt-in code-*generation* path.
+ *
+ * This is the behavior `type: 'code'` used to have implicitly at call time.
+ * It has been split out so that `Code` functions can be deterministic. Calling
+ * this **does** consult a model and returns the generated source as a string;
+ * it does not produce a deterministic, repeatable handler.
+ *
+ * @param definition - The code-authoring spec ({@link CodeGenerationDefinition})
+ * @param args - Concrete inputs / refinements for the requested code
+ * @returns The generated source code as a string
+ *
+ * @example
+ * ```ts
+ * import { generateCode } from 'ai-functions'
+ *
+ * const src = await generateCode(
+ *   { name: 'calculateTax', args: { amount: '(number)', rate: '(number)' }, language: 'typescript' },
+ *   { amount: 100, rate: 0.2 }
+ * )
+ * ```
+ */
+export async function generateCode<TInput>(
+  definition: CodeGenerationDefinition<TInput>,
+  args?: TInput
+): Promise<string> {
+  const { name, description, language = 'typescript', instructions, returnType, model = 'sonnet' } =
+    definition
+
+  const argsDescription = JSON.stringify(args ?? definition.args, null, 2)
 
   const result = await generateObject({
     model,
@@ -147,7 +241,7 @@ async function executeCodeFunction<TInput>(
 Name: ${name}
 Description: ${description || 'No description provided'}
 Arguments: ${argsDescription}
-Return Type: ${JSON.stringify(definition.returnType)}
+Return Type: ${JSON.stringify(returnType)}
 
 ${instructions ? `Additional Instructions: ${instructions}` : ''}
 
@@ -158,9 +252,7 @@ Requirements:
 - Return ONLY the code without markdown formatting`,
   })
 
-  const obj = result.object as { code: string }
-  // Return just the code string
-  return obj.code
+  return (result.object as { code: string }).code
 }
 
 /**

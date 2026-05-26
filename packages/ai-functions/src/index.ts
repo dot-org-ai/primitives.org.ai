@@ -46,6 +46,7 @@ export type {
   BaseFunctionDefinition,
   CodeFunctionDefinition,
   CodeFunctionResult,
+  CodeGenerationDefinition,
   GenerativeFunctionDefinition,
   GenerativeFunctionResult,
   AgenticFunctionDefinition,
@@ -165,6 +166,7 @@ export {
   createDefinedFunction,
   convertArgsToJSONSchema,
   fillTemplate,
+  generateCode,
 } from './ai.js'
 
 // Also export 'ai' primitive as 'aiPrompt' for convenience

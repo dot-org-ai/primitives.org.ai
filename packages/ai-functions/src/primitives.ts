@@ -50,7 +50,12 @@ import type {
   HumanChannel,
   HumanFunctionDefinition,
 } from './types.js'
-import { createDefinedFunction, defineFunction, functions } from './function-registry.js'
+import {
+  createDefinedFunction,
+  defineFunction,
+  functions,
+  generateCode,
+} from './function-registry.js'
 
 // ============================================================================
 // Types
@@ -765,14 +770,14 @@ async function analyzeFunction(
     system: `You are an expert at designing AI functions. Analyze the function name and arguments to determine the best function type.
 
 Function Types:
-- "code": For generating executable code (calculations, algorithms, data transformations)
-- "generative": For generating content (text, summaries, translations, creative writing, structured data)
+- "code": A DETERMINISTIC algorithm with no model at run time — a pure calculation, data transformation, or rule that always produces the same output for the same input (e.g. tax math, parsing, formatting). A self-contained TypeScript body can be written for it once.
+- "generative": For generating content (text, summaries, translations, creative writing, structured data) — needs a model on every call
 - "agentic": For complex tasks requiring multiple steps, research, or tool use (research, planning, multi-step workflows)
 - "human": For tasks requiring human judgment, approval, or input (approvals, reviews, decisions)
 
 Guidelines:
 - Most functions should be "generative" - they generate content or structured data
-- Use "code" only when actual executable code needs to be generated
+- Use "code" ONLY when the task is a deterministic algorithm expressible as a self-contained function body (no model, no external state). If it needs a model at run time, it is "generative", not "code".
 - Use "agentic" when the task requires research, multiple steps, or external tool use
 - Use "human" when human judgment/approval is essential`,
     prompt: `Analyze this function call and determine how to define it:
@@ -813,14 +818,30 @@ Determine:
   }
 
   switch (analysis.type) {
-    case 'code':
+    case 'code': {
+      // `Code` is deterministic — it cannot be a call-time model invocation.
+      // Author a self-contained TS body ONCE here (at define time), then carry
+      // it as an inline `code` body so every subsequent call is deterministic.
+      const authored = await generateCode(
+        {
+          name,
+          description: analysis.description,
+          args: baseDefinition.args,
+          returnType: baseDefinition.returnType,
+          language: 'typescript',
+          instructions: `${analysis.instructions ?? ''}\n\nWrite the body of a single function that receives a parameter named \`args\` (an object with the keys above) and \`return\`s the result. Do not include the function signature, imports, or surrounding declarations — only the statements that go inside the function body.`.trim(),
+        },
+        args
+      )
       definition = {
         ...baseDefinition,
         type: 'code' as const,
         language: 'typescript' as const,
         instructions: analysis.instructions,
+        code: authored,
       }
       break
+    }
 
     case 'agentic':
       definition = {
@@ -952,7 +973,10 @@ async function autoDefineImpl(
  */
 export const define = Object.assign(autoDefineImpl, {
   /**
-   * Define a code generation function
+   * Define a **deterministic** code function (a handler — no LLM at call time).
+   *
+   * Supply a `handler` (canonical) or an inline `code` body. To have a model
+   * *author* code instead, use {@link generateCode} or `define.generative`.
    */
   code: <TOutput, TInput>(
     definition: Omit<CodeFunctionDefinition<TOutput, TInput>, 'type'>
