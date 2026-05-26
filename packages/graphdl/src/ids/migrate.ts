@@ -23,9 +23,9 @@
  *     this migration helper — they're already on sha256, just with a
  *     different shape. A separate `studio-format → primitives-format`
  *     codec can be added if/when the studio adopts this package.
- *   - services-builder hasn't picked yet (this is why the package is P0
- *     URGENT). Once they consume `@primitives/content-derived-id` from
- *     day one, no migration is ever needed on their side.
+ *   - services-builder hasn't picked yet. Once they consume the canonical
+ *     id helpers (`@graphdl/core/ids`) from day one, no migration is ever
+ *     needed on their side.
  */
 
 import { deriveContentId, type DeriveOpts } from './derive.js'

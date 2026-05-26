@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { canonicalize, deriveContentHash, deriveContentId } from '../src/index.js'
-import { migrateFromFnv1a, migrateFromFnv1aBatch } from '../src/migrate.js'
+import { canonicalize, deriveContentHash, deriveContentId } from '../src/ids/index.js'
+import { migrateFromFnv1a, migrateFromFnv1aBatch } from '../src/ids/migrate.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // canonicalize

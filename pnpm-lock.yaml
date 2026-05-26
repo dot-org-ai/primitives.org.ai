@@ -636,8 +636,6 @@ importers:
         specifier: ^8.17.0
         version: 8.48.1(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
 
-  packages/content-derived-id: {}
-
   packages/digital-objects:
     dependencies:
       rpc.do:

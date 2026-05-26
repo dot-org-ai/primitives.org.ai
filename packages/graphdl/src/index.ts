@@ -149,3 +149,20 @@ export {
 // =============================================================================
 
 export { validateGraph, validateEntity } from './validate.js'
+
+// =============================================================================
+// Content-derived IDs (consolidated from former @primitives/content-derived-id
+// — see `./ids/` for the source. Also re-exported under the subpath
+// `@graphdl/core/ids` for surgical imports.)
+// =============================================================================
+
+export {
+  deriveContentId,
+  deriveContentHash,
+  canonicalize,
+  migrateFromFnv1a,
+  migrateFromFnv1aBatch,
+  type DeriveOpts,
+  type Prefix,
+  type MigrateResult,
+} from './ids/index.js'
