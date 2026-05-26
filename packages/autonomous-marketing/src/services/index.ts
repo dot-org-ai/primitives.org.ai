@@ -1,9 +1,11 @@
 /**
  * Catalog barrel — autonomous-marketing Services.
  *
- * Ships six Services (`campaignBriefGenerator`, `seoContentPillarAuthor`,
+ * Ships nine Services (`campaignBriefGenerator`, `seoContentPillarAuthor`,
  * `paidAdCreativeIterator`, `brandVoiceMonitor`,
- * `contentLocalizationOrchestrator`, `campaignAttributionAuditor`).
+ * `contentLocalizationOrchestrator`, `campaignAttributionAuditor`,
+ * `emailNurtureSequencer`, `competitorPositioningMonitor`,
+ * `webinarFunnelOrchestrator`).
  *
  * Per v3 §12, catalog Services are module-evaluated TypeScript that yield a
  * typed `ServiceInstance<TIn, TOut>` value, exported as a named binding so
@@ -59,3 +61,27 @@ export {
   type AttributionAuditTriggerInput,
   type AttributionAuditReportOutput,
 } from './campaign-attribution-auditor.js'
+
+export {
+  emailNurtureSequencer,
+  NurtureBriefInputSchema,
+  NurtureSequenceOutputSchema,
+  type NurtureBriefInput,
+  type NurtureSequenceOutput,
+} from './email-nurture-sequencer.js'
+
+export {
+  competitorPositioningMonitor,
+  CompetitorMonitorTriggerInputSchema,
+  CompetitorPositioningBriefOutputSchema,
+  type CompetitorMonitorTriggerInput,
+  type CompetitorPositioningBriefOutput,
+} from './competitor-positioning-monitor.js'
+
+export {
+  webinarFunnelOrchestrator,
+  WebinarPlanInputSchema,
+  WebinarFunnelOutputSchema,
+  type WebinarPlanInput,
+  type WebinarFunnelOutput,
+} from './webinar-funnel-orchestrator.js'

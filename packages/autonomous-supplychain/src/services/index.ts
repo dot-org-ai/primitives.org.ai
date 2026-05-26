@@ -1,9 +1,11 @@
 /**
  * Catalog barrel — autonomous-supplychain Services.
  *
- * Ships six Services (`vendorOnboardingRunbook`, `purchaseOrderRouter`,
+ * Ships nine Services (`vendorOnboardingRunbook`, `purchaseOrderRouter`,
  * `inventoryReorderPlanner`, `supplierRiskMonitor`, `freightCostOptimizer`,
- * `customsComplianceFiler`).
+ * `customsComplianceFiler`, `demandForecastSynthesizer`,
+ * `manufacturingQualityIncidentInvestigator`,
+ * `supplierContractRenewalOrchestrator`).
  *
  * Per v3 §12, catalog Services are module-evaluated TypeScript that yield a
  * typed `ServiceInstance<TIn, TOut>` value, exported as a named binding so
@@ -59,3 +61,27 @@ export {
   type CustomsFilingInput,
   type CustomsDeclarationOutput,
 } from './customs-compliance-filer.js'
+
+export {
+  demandForecastSynthesizer,
+  DemandForecastCycleInputSchema,
+  DemandForecastReportOutputSchema,
+  type DemandForecastCycleInput,
+  type DemandForecastReportOutput,
+} from './demand-forecast-synthesizer.js'
+
+export {
+  manufacturingQualityIncidentInvestigator,
+  QualityIncidentInputSchema,
+  QualityIncidentRcaOutputSchema,
+  type QualityIncidentInput,
+  type QualityIncidentRcaOutput,
+} from './manufacturing-quality-incident-investigator.js'
+
+export {
+  supplierContractRenewalOrchestrator,
+  ContractRenewalCycleInputSchema,
+  ContractRenewalPackageOutputSchema,
+  type ContractRenewalCycleInput,
+  type ContractRenewalPackageOutput,
+} from './supplier-contract-renewal-orchestrator.js'

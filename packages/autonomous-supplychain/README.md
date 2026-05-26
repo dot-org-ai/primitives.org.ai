@@ -1,12 +1,12 @@
 # autonomous-supplychain
 
-> **Status: shipped (proof-of-life).** `vendor-onboarding-runbook`, `purchase-order-router`, `inventory-reorder-planner`, `supplier-risk-monitor`, `freight-cost-optimizer`, and `customs-compliance-filer` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
+> **Status: shipped (proof-of-life).** `vendor-onboarding-runbook`, `purchase-order-router`, `inventory-reorder-planner`, `supplier-risk-monitor`, `freight-cost-optimizer`, `customs-compliance-filer`, `demand-forecast-synthesizer`, `manufacturing-quality-incident-investigator`, and `supplier-contract-renewal-orchestrator` are implemented against `services-as-software/v3` + the `autonomous-finance` substrate.
 
 Catalog package: procurement / supply-chain Services-as-Software, defined on the primitive substrate.
 
 ## What this is
 
-Concrete `Service.define({...})` calls for in-house procurement and supply-chain work — net-new vendor due-diligence + onboarding, PO routing + approval orchestration, multi-SKU reorder optimization, ongoing supplier-risk surveillance, multi-leg freight routing + carrier selection, and cross-border customs declaration + HS-code classification — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`. Twelfth catalog package; advances v3 §15's "catalog Services" leg into the procurement / supply-chain vertical.
+Concrete `Service.define({...})` calls for in-house procurement and supply-chain work — net-new vendor due-diligence + onboarding, PO routing + approval orchestration, multi-SKU reorder optimization, ongoing supplier-risk surveillance, multi-leg freight routing + carrier selection, cross-border customs declaration + HS-code classification, multi-source demand forecasting, production-quality-incident root-cause analysis, and supplier-contract renewal orchestration — that the agentic economy can deliver as software. Sibling of `autonomous-marketing`, `autonomous-revenue`, `autonomous-customer-success`, `autonomous-finance-services`, `autonomous-developer-experience`, `autonomous-startups`, `autonomous-operations`, `autonomous-people`, `autonomous-legal`, `autonomous-data`, `autonomous-product`. Twelfth catalog package; advances v3 §15's "catalog Services" leg into the procurement / supply-chain vertical.
 
 ## Shipped Services
 
@@ -50,6 +50,27 @@ Concrete `Service.define({...})` calls for in-house procurement and supply-chain
   ```ts
   import { customsComplianceFiler } from 'autonomous-supplychain/customs-compliance-filer'
   // typed as ServiceInstance<CustomsFilingInput, CustomsDeclarationOutput>
+  ```
+
+- **`demand-forecast-synthesizer`** — multi-source demand forecasting. Trigger: monthly cron OR product-launch + need-for-forecast. Cascade: `fetch-historical-sales-sales-team-pipeline-macroeconomic-signals-promo-calendar-and-seasonality (Code) → synthesize-baseline-scenario-forecasts-and-confidence-bands (Generative) → draft-narrative-with-key-drivers-risks-and-actionable-stocking-recommendations (Generative) → supply-chain-lead-and-sales-ops-lead-review (Human, approval rationale) → emit-forecast-erp-import-and-dashboard-update (Code)`. EvaluatorPanel of 5 personas (forecast-realism-checker + driver-attribution-reviewer + scenario-completeness-reviewer + statisticalRigor(confidence-interval + effect-size + survivorship-bias, mixed) + assumptionExplicitness(business + market + operational, sensitivity-required)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(supply-chain-lead))`. Pricing: `Pricing.subscription` $1,499/mo per supply-chain-org + metered overage on `product-line-forecasted` events ($99 each). Service-level reward = `forecast-MAPE-improvement-and-stockout-rate-reduction`. Archetype: `forecast-narrative`. Lineage: `business.org.ai/cells/supply-chain/demand-forecast-synthesizer`.
+
+  ```ts
+  import { demandForecastSynthesizer } from 'autonomous-supplychain/demand-forecast-synthesizer'
+  // typed as ServiceInstance<DemandForecastCycleInput, DemandForecastReportOutput>
+  ```
+
+- **`manufacturing-quality-incident-investigator`** — production-quality-incident root-cause-analysis. Trigger: SPC alert OR customer-quality-complaint OR audit-finding. Cascade: `fetch-incident-data-production-batch-records-supplier-lot-traceability-and-recent-equipment-maintenance (Code) → classify-failure-mode-likely-root-causes-and-impact-blast-radius (Generative) → draft-rca-with-corrective-and-preventive-actions-and-customer-comms-needs (Generative) → quality-manager-and-plant-manager-review (Human, regulatory rationale) → emit-incident-doc-capa-tickets-and-audit-trail (Code)`. EvaluatorPanel of 6 personas (rca-soundness-checker + capa-actionability-reviewer + traceability-completeness-reviewer + factual-accuracy(min 2 citations per claim) + sox-regulatoryCompliance + evidenceTraceability(floor 0.95)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(quality-manager))`. Pricing: `Pricing.perInvocation` 3-tier — minor / major / critical-recall ($199 / $999 / $4,999) — keyed on declared incident severity. Service-level reward = `defect-recurrence-rate-and-time-to-root-cause-improvement`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/supply-chain/manufacturing-quality-incident-investigator`.
+
+  ```ts
+  import { manufacturingQualityIncidentInvestigator } from 'autonomous-supplychain/manufacturing-quality-incident-investigator'
+  // typed as ServiceInstance<QualityIncidentInput, QualityIncidentRcaOutput>
+  ```
+
+- **`supplier-contract-renewal-orchestrator`** — supplier-contract renewal cycle. Trigger: supplier contract approaching renewal + 90-day-window. Cascade: `fetch-supplier-perf-spend-analysis-competing-quotes-and-market-benchmarks (Code) → synthesize-negotiation-position-leverage-analysis-and-walkaway-thresholds (Generative) → draft-renewal-proposal-and-rfp-or-renegotiation-strategy (Generative) → procurement-lead-and-finance-lead-review (Human, approval rationale) → emit-renewal-package-and-supplier-communication-batch (Code)`. EvaluatorPanel of 6 personas (leverage-analysis-soundness-checker + walkaway-rationale-reviewer + market-benchmark-recency-reviewer + commercialFit(pricing-realism + unit-economics) + budgetRealism(cost) + contractualClarity(msa, strict)) under `all-approve`. OutcomeContract = `AND(SchemaMatch + EvaluatorPass + HumanSign(procurement-lead))`. Pricing: `Pricing.percentOf` — 0.5% (50 bps) of `contract-value`, capped at $50k per contract. Service-level reward = `renewal-cost-savings-and-cycle-time-improvement`. Archetype: `multi-step-research`. Lineage: `business.org.ai/cells/supply-chain/supplier-contract-renewal-orchestrator`.
+
+  ```ts
+  import { supplierContractRenewalOrchestrator } from 'autonomous-supplychain/supplier-contract-renewal-orchestrator'
+  // typed as ServiceInstance<ContractRenewalCycleInput, ContractRenewalPackageOutput>
   ```
 
 ## Why a separate package

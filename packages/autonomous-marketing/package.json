@@ -1,7 +1,7 @@
 {
   "name": "autonomous-marketing",
   "version": "0.0.1",
-  "description": "Catalog package — marketing Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Six Services: campaign-brief-generator, seo-content-pillar-author, paid-ad-creative-iterator, brand-voice-monitor, content-localization-orchestrator, campaign-attribution-auditor. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-revenue / autonomous-developer-experience / autonomous-startups.",
+  "description": "Catalog package — marketing Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Nine Services: campaign-brief-generator, seo-content-pillar-author, paid-ad-creative-iterator, brand-voice-monitor, content-localization-orchestrator, campaign-attribution-auditor, email-nurture-sequencer, competitor-positioning-monitor, webinar-funnel-orchestrator. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-revenue / autonomous-developer-experience / autonomous-startups.",
   "private": true,
   "type": "module",
   "main": "dist/services/index.js",
@@ -34,6 +34,18 @@
     "./campaign-attribution-auditor": {
       "types": "./dist/services/campaign-attribution-auditor.d.ts",
       "import": "./dist/services/campaign-attribution-auditor.js"
+    },
+    "./email-nurture-sequencer": {
+      "types": "./dist/services/email-nurture-sequencer.d.ts",
+      "import": "./dist/services/email-nurture-sequencer.js"
+    },
+    "./competitor-positioning-monitor": {
+      "types": "./dist/services/competitor-positioning-monitor.d.ts",
+      "import": "./dist/services/competitor-positioning-monitor.js"
+    },
+    "./webinar-funnel-orchestrator": {
+      "types": "./dist/services/webinar-funnel-orchestrator.d.ts",
+      "import": "./dist/services/webinar-funnel-orchestrator.js"
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
