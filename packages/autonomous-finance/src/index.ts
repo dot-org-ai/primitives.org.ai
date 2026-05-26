@@ -96,3 +96,15 @@ export type {
   Subscription,
   MeterEvent,
 } from './port.js'
+
+// Merchant / Connect provisioning (product-line + hosted checkout + payout)
+export type {
+  MerchantCapable,
+  PriceInterval,
+  ProvisionProductOpts,
+  ProvisionedProduct,
+  CheckoutOpts,
+  CheckoutSession,
+  PayoutOpts,
+  PayoutResult,
+} from './merchant.js'

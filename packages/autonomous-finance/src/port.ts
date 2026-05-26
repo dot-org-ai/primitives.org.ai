@@ -12,6 +12,7 @@ import type { Account, AccountSpec, TransferOpts, TransferResult } from './accou
 import type { Card, CardSpec } from './card.js'
 import type { OutcomeContract, ProofOfResult } from './outcome-contract.js'
 import type { StablecoinCurrency } from './types.js'
+import type { MerchantCapable } from './merchant.js'
 
 export type ProviderRail =
   | 'mpp'
@@ -32,6 +33,8 @@ export interface ProviderCapabilities {
   escrow: boolean
   subscriptions: boolean
   metering: boolean
+  /** Platform/Connect product-line provisioning + hosted checkout (see MerchantCapable). */
+  merchant: boolean
   multiCurrency: boolean
   currencies: Currency[]
   stablecoins: StablecoinCurrency[]
@@ -111,7 +114,7 @@ export interface MeterEvent {
   occurredAt: string
 }
 
-export interface FinanceProvider {
+export interface FinanceProvider extends Partial<MerchantCapable> {
   readonly name: string
   readonly capabilities: ProviderCapabilities
 
