@@ -1,5 +1,10 @@
 # human-in-the-loop
 
+## 2.2.1
+
+- fix: pin `ai-functions`, `business-as-code`, `digital-tasks`, `digital-workers` to `^2.1.3` — 2.2.0 referenced in-tree versions (2.2.0/2.1.4) that were not yet published to npm, causing `npm install` to exit non-zero.
+- fix: move `org.ai` to optional `peerDependencies` — `org.ai@0.0.1` was published with `workspace:^` deps that npm cannot resolve (`EUNSUPPORTEDPROTOCOL`). Consumers using the lifecycle sub-modules (`request-lifecycle`, `lifecycle-store`, `lifecycle-store-memory`, `lifecycle-channel-adapter`) do not need `org.ai` at runtime; consumers using the legacy API surface should provide `org.ai` themselves.
+
 ## 2.2.0
 
 ### Minor Changes

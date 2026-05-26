@@ -633,6 +633,14 @@ importers:
         specifier: ^8.17.0
         version: 8.48.1(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
 
+  packages/content-derived-id: {}
+
+  packages/db-docs-rels:
+    devDependencies:
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@cloudflare/workers-types@4.20251202.0)(@opentelemetry/api@1.9.0)(@types/react@19.2.7)(better-sqlite3@11.10.0)(react@19.2.0)
+
   packages/digital-objects:
     dependencies:
       rpc.do:
@@ -788,11 +796,11 @@ importers:
   packages/human-in-the-loop:
     dependencies:
       ai-functions:
-        specifier: workspace:*
-        version: link:../ai-functions
+        specifier: ^2.1.3
+        version: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
       business-as-code:
-        specifier: workspace:*
-        version: link:../business-as-code
+        specifier: ^2.1.3
+        version: 2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3)
       chat:
         specifier: ^4.27.0
         version: 4.27.0
@@ -800,14 +808,14 @@ importers:
         specifier: workspace:*
         version: link:../digital-objects
       digital-tasks:
-        specifier: workspace:*
-        version: link:../digital-tasks
+        specifier: ^2.1.3
+        version: 2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3)
       digital-workers:
-        specifier: workspace:*
-        version: link:../digital-workers
+        specifier: ^2.1.3
+        version: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
       org.ai:
-        specifier: workspace:*
-        version: link:../org.ai
+        specifier: 0.0.1
+        version: 0.0.1
       rpc.do:
         specifier: '*'
         version: 0.1.4
@@ -823,6 +831,8 @@ importers:
         version: 3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
 
   packages/language-models: {}
+
+  packages/llm-pricing: {}
 
   packages/org.ai:
     dependencies:
@@ -2909,6 +2919,9 @@ packages:
     resolution: {integrity: sha512-scSmQBD8eANlMUOglxHrN1JdSW8tDghsPuS83otqealBiIeMukCQMOf/wc0JJjDXomqwNdEQFLXLGHrU6PGxuA==}
     engines: {node: '>= 20.0.0'}
 
+  '@org.ai/core@2.1.3':
+    resolution: {integrity: sha512-LJjJJsQgOd/KvJOJWPEOpGP4bzCwV0Ybj51zFMY1TRGWKZ/SjqyjnlLah+5ebIY9Osisz2asRCO4m6RZNlqZ6g==}
+
   '@peculiar/asn1-schema@2.7.0':
     resolution: {integrity: sha512-W8ZfWzLmQnrcky+eh3tni4IozMdqBDiHWU0N+vve/UGjMaUs8c0L7A2oEdkBXS8rTpWDpK/aoI3DG/L/hxmxPg==}
 
@@ -4231,6 +4244,23 @@ packages:
     resolution: {integrity: sha512-kja8j7PjmncONqaTsB8fQ+wE2mSU2DJ9D4XKoJ5PFWIdRMa6SLSN1ff4mOr4jCbfRSsxR4keIiySJU0N9T5hIQ==}
     engines: {node: '>= 8.0.0'}
 
+  ai-database@2.1.3:
+    resolution: {integrity: sha512-XOLspP1h/LoDXiOjD99OlQzLPZz83iCvXTRNp5Uc/IDg+UTMSQ2F3XoW/SDyCCmwKPSUiwSa4wIuvcBEXqRR5A==}
+    peerDependencies:
+      vitest: ^2.0.0
+    peerDependenciesMeta:
+      vitest:
+        optional: true
+
+  ai-functions@2.1.3:
+    resolution: {integrity: sha512-DSyAyt67iZjpMaJHK4rhiKiPvq2hC1yKs9eUdf34Lch926k08CBdmy8sOy6JipuFSy+4i9GvHqjRtFGxPopyhA==}
+
+  ai-providers@2.1.3:
+    resolution: {integrity: sha512-r23v4wxWa7upj2CkBZPhXoObXAffaDuY8jAbkLe7F5x4q5zNoQX3rQK7zKXV2d7F2NudRSm1Lt6mf1pt7j8KOg==}
+
+  ai-workflows@2.1.3:
+    resolution: {integrity: sha512-fPAEpG2yiYz6womnYJbcrvBIKD8+M6oA6qnD6rvtKUf4PG+t7ZQlFz2rV3AzcM/RtD/FwvsNlWt4h7qUEwhLZA==}
+
   ai@5.0.108:
     resolution: {integrity: sha512-Jex3Lb7V41NNpuqJHKgrwoU6BCLHdI1Pg4qb4GJH4jRIDRXUBySJErHjyN4oTCwbiYCeb/8II9EnqSRPq9EifA==}
     engines: {node: '>=18'}
@@ -4380,6 +4410,9 @@ packages:
   bundle-name@4.1.0:
     resolution: {integrity: sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q==}
     engines: {node: '>=18'}
+
+  business-as-code@2.1.3:
+    resolution: {integrity: sha512-Ml5h6kVIMKtLFi8jYbzUerEnkjw1vx103317oL0Wp4kPeJBW82Cfz1/z6REv1K4fqIXpte94cweA8YCBF/NSWQ==}
 
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
@@ -4645,6 +4678,15 @@ packages:
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
 
+  digital-tasks@2.1.3:
+    resolution: {integrity: sha512-pkKtg9Z5lbtwkZVqHtTSK4J/BO5rmjmHoDOGPaSIj+V4ZuULzXSnC/PCCR1eeorxpXJ61NB7RVLY672u+s1Zyg==}
+
+  digital-tools@2.1.3:
+    resolution: {integrity: sha512-c4kjvoek/MMotyOt3AwOi6Gmqd2IaEeBN10Ii6vwn5ZGNhXtCN+ChjKFT8GPVc6aA7jwZJsIoT73xORIL8m9cA==}
+
+  digital-workers@2.1.3:
+    resolution: {integrity: sha512-wa/ibPJ9q4aSpJI9muuD82eVciAYe09fqIl9No7OfC2whW9m310wqJl4MT69IoVIeZeWwmrpfqnUw5ELIEq0qw==}
+
   dir-glob@3.0.1:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
@@ -4660,6 +4702,98 @@ packages:
   dotenv@8.6.0:
     resolution: {integrity: sha512-IrPdXQsk2BbzvCBGBOTmmSH5SodmqZNt4ERAZDmW4CT+tL8VtvinqywuANaFu4bOMWki16nqf0e4oC0QIaDr/g==}
     engines: {node: '>=10'}
+
+  drizzle-orm@0.36.4:
+    resolution: {integrity: sha512-1OZY3PXD7BR00Gl61UUOFihslDldfH4NFRH2MbP54Yxi0G/PKn4HfO65JYZ7c16DeP3SpM3Aw+VXVG9j6CRSXA==}
+    peerDependencies:
+      '@aws-sdk/client-rds-data': '>=3'
+      '@cloudflare/workers-types': '>=3'
+      '@electric-sql/pglite': '>=0.2.0'
+      '@libsql/client': '>=0.10.0'
+      '@libsql/client-wasm': '>=0.10.0'
+      '@neondatabase/serverless': '>=0.10.0'
+      '@op-engineering/op-sqlite': '>=2'
+      '@opentelemetry/api': ^1.4.1
+      '@planetscale/database': '>=1'
+      '@prisma/client': '*'
+      '@tidbcloud/serverless': '*'
+      '@types/better-sqlite3': '*'
+      '@types/pg': '*'
+      '@types/react': '>=18'
+      '@types/sql.js': '*'
+      '@vercel/postgres': '>=0.8.0'
+      '@xata.io/client': '*'
+      better-sqlite3: '>=7'
+      bun-types: '*'
+      expo-sqlite: '>=14.0.0'
+      knex: '*'
+      kysely: '*'
+      mysql2: '>=2'
+      pg: '>=8'
+      postgres: '>=3'
+      prisma: '*'
+      react: '>=18'
+      sql.js: '>=1'
+      sqlite3: '>=5'
+    peerDependenciesMeta:
+      '@aws-sdk/client-rds-data':
+        optional: true
+      '@cloudflare/workers-types':
+        optional: true
+      '@electric-sql/pglite':
+        optional: true
+      '@libsql/client':
+        optional: true
+      '@libsql/client-wasm':
+        optional: true
+      '@neondatabase/serverless':
+        optional: true
+      '@op-engineering/op-sqlite':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@planetscale/database':
+        optional: true
+      '@prisma/client':
+        optional: true
+      '@tidbcloud/serverless':
+        optional: true
+      '@types/better-sqlite3':
+        optional: true
+      '@types/pg':
+        optional: true
+      '@types/react':
+        optional: true
+      '@types/sql.js':
+        optional: true
+      '@vercel/postgres':
+        optional: true
+      '@xata.io/client':
+        optional: true
+      better-sqlite3:
+        optional: true
+      bun-types:
+        optional: true
+      expo-sqlite:
+        optional: true
+      knex:
+        optional: true
+      kysely:
+        optional: true
+      mysql2:
+        optional: true
+      pg:
+        optional: true
+      postgres:
+        optional: true
+      prisma:
+        optional: true
+      react:
+        optional: true
+      sql.js:
+        optional: true
+      sqlite3:
+        optional: true
 
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
@@ -5526,6 +5660,9 @@ packages:
     resolution: {integrity: sha512-CasD9OCEQSFIam2U8efFK81Yeg8vNMTBUqtMOHlrcWQHqUX3HeCl9Dr31u4toV7emlH8Mymk5+9p0lL6mKb/Xw==}
     engines: {node: '>=14.16'}
 
+  language-models@2.1.3:
+    resolution: {integrity: sha512-XyDPhbvBmigoUiTs4GC/MZOTenk4ZnGUnIAzcsfmPZoRofyeOmqiPep7PwwnFnNnfXOx+MMpi6A4f/svGIyXQQ==}
+
   leb@1.0.0:
     resolution: {integrity: sha512-Y3c3QZfvKWHX60BVOQPhLCvVGmDYWyJEiINE3drOog6KCyN2AOwvuQQzlS3uJg1J85kzpILXIUwRXULWavir+w==}
 
@@ -6105,6 +6242,9 @@ packages:
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
+
+  org.ai@0.0.1:
+    resolution: {integrity: sha512-wi5xrW/7gq6i4hW3xjxV7v6kpM/6n64gpvERVESYjhYnfjHf8vDMnxER9P/KZtL1Ow3DMzUgfY/ihx+9IPOFjw==}
 
   outdent@0.5.0:
     resolution: {integrity: sha512-/jHxFIzoMXdqPzTaCpFzAAWhpkSjZPF4Vsn6jAfNpmbH/ymsmd7Qc6VE9BGn0L6YMj6uwpQLxCECpus4ukKS9Q==}
@@ -7345,6 +7485,13 @@ snapshots:
       zod: 4.1.13
     optional: true
 
+  '@ai-sdk/gateway@2.0.18(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.18(zod@3.25.76)
+      '@vercel/oidc': 3.0.5
+      zod: 3.25.76
+
   '@ai-sdk/gateway@2.0.18(zod@4.1.13)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
@@ -7359,11 +7506,25 @@ snapshots:
       '@vercel/oidc': 3.1.0
       zod: 3.25.76
 
+  '@ai-sdk/google@2.0.45(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.18(zod@3.25.76)
+      zod: 3.25.76
+    optional: true
+
   '@ai-sdk/google@2.0.45(zod@4.1.13)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.18(zod@4.1.13)
       zod: 4.1.13
+    optional: true
+
+  '@ai-sdk/openai@2.0.80(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.18(zod@3.25.76)
+      zod: 3.25.76
     optional: true
 
   '@ai-sdk/openai@2.0.80(zod@4.1.13)':
@@ -9667,6 +9828,14 @@ snapshots:
 
   '@orama/orama@3.1.16': {}
 
+  '@org.ai/core@2.1.3':
+    dependencies:
+      ai: 5.0.108(zod@3.25.76)
+      ai-providers: 2.1.3(zod@3.25.76)
+      language-models: 2.1.3
+      yaml: 2.8.2
+      zod: 3.25.76
+
   '@peculiar/asn1-schema@2.7.0':
     dependencies:
       '@peculiar/utils': 2.0.3
@@ -11267,6 +11436,68 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
+  ai-database@2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3):
+    dependencies:
+      ai-functions: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+      mdxld: 1.0.1(@mdx-js/mdx@3.1.1)(web-streams-polyfill@4.0.0-beta.3)
+    optionalDependencies:
+      vitest: 3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+    transitivePeerDependencies:
+      - '@mdx-js/mdx'
+      - '@radix-ui/themes'
+      - '@tanstack/react-query'
+      - '@workos-inc/authkit-react'
+      - '@workos-inc/widgets'
+      - hono
+      - jose
+      - react
+      - react-dom
+      - supports-color
+      - web-streams-polyfill
+
+  ai-functions@2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0):
+    dependencies:
+      '@ai-sdk/amazon-bedrock': 3.0.68(zod@3.25.76)
+      '@org.ai/core': 2.1.3
+      ai: 5.0.108(zod@3.25.76)
+      ai-providers: 2.1.3(zod@3.25.76)
+      language-models: 2.1.3
+      yaml: 2.8.2
+      zod: 3.25.76
+    optionalDependencies:
+      oauth.do: 0.2.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+    transitivePeerDependencies:
+      - '@radix-ui/themes'
+      - '@tanstack/react-query'
+      - '@workos-inc/authkit-react'
+      - '@workos-inc/widgets'
+      - hono
+      - jose
+      - react
+      - react-dom
+
+  ai-providers@2.1.3(zod@3.25.76):
+    dependencies:
+      ai: 5.0.108(zod@3.25.76)
+      language-models: 2.1.3
+    optionalDependencies:
+      '@ai-sdk/amazon-bedrock': 3.0.68(zod@3.25.76)
+      '@ai-sdk/anthropic': 2.0.54(zod@3.25.76)
+      '@ai-sdk/google': 2.0.45(zod@3.25.76)
+      '@ai-sdk/openai': 2.0.80(zod@3.25.76)
+    transitivePeerDependencies:
+      - zod
+
+  ai-workflows@2.1.3: {}
+
+  ai@5.0.108(zod@3.25.76):
+    dependencies:
+      '@ai-sdk/gateway': 2.0.18(zod@3.25.76)
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.18(zod@3.25.76)
+      '@opentelemetry/api': 1.9.0
+      zod: 3.25.76
+
   ai@5.0.108(zod@4.1.13):
     dependencies:
       '@ai-sdk/gateway': 2.0.18(zod@4.1.13)
@@ -11425,6 +11656,24 @@ snapshots:
   bundle-name@4.1.0:
     dependencies:
       run-applescript: 7.1.0
+
+  business-as-code@2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3):
+    dependencies:
+      ai-database: 2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3)
+      ai-functions: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+    transitivePeerDependencies:
+      - '@mdx-js/mdx'
+      - '@radix-ui/themes'
+      - '@tanstack/react-query'
+      - '@workos-inc/authkit-react'
+      - '@workos-inc/widgets'
+      - hono
+      - jose
+      - react
+      - react-dom
+      - supports-color
+      - vitest
+      - web-streams-polyfill
 
   bytes@3.1.2: {}
 
@@ -11644,6 +11893,59 @@ snapshots:
     dependencies:
       dequal: 2.0.3
 
+  digital-tasks@2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3):
+    dependencies:
+      ai-functions: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+      digital-tools: 2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3)
+      digital-workers: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+    transitivePeerDependencies:
+      - '@mdx-js/mdx'
+      - '@radix-ui/themes'
+      - '@tanstack/react-query'
+      - '@workos-inc/authkit-react'
+      - '@workos-inc/widgets'
+      - hono
+      - jose
+      - react
+      - react-dom
+      - supports-color
+      - vitest
+      - web-streams-polyfill
+
+  digital-tools@2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3):
+    dependencies:
+      ai-database: 2.1.3(@mdx-js/mdx@3.1.1)(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)(vitest@3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9))(web-streams-polyfill@4.0.0-beta.3)
+      ai-functions: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@mdx-js/mdx'
+      - '@radix-ui/themes'
+      - '@tanstack/react-query'
+      - '@workos-inc/authkit-react'
+      - '@workos-inc/widgets'
+      - hono
+      - jose
+      - react
+      - react-dom
+      - supports-color
+      - vitest
+      - web-streams-polyfill
+
+  digital-workers@2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0):
+    dependencies:
+      ai-functions: 2.1.3(hono@4.11.7)(jose@6.2.3)(react-dom@19.2.1(react@19.2.0))(react@19.2.0)
+      ai-workflows: 2.1.3
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@radix-ui/themes'
+      - '@tanstack/react-query'
+      - '@workos-inc/authkit-react'
+      - '@workos-inc/widgets'
+      - hono
+      - jose
+      - react
+      - react-dom
+
   dir-glob@3.0.1:
     dependencies:
       path-type: 4.0.0
@@ -11653,6 +11955,14 @@ snapshots:
   dotenv@17.2.3: {}
 
   dotenv@8.6.0: {}
+
+  drizzle-orm@0.36.4(@cloudflare/workers-types@4.20251202.0)(@opentelemetry/api@1.9.0)(@types/react@19.2.7)(better-sqlite3@11.10.0)(react@19.2.0):
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20251202.0
+      '@opentelemetry/api': 1.9.0
+      '@types/react': 19.2.7
+      better-sqlite3: 11.10.0
+      react: 19.2.0
 
   dunder-proto@1.0.1:
     dependencies:
@@ -12788,6 +13098,8 @@ snapshots:
 
   ky@0.33.3: {}
 
+  language-models@2.1.3: {}
+
   leb@1.0.0: {}
 
   levn@0.4.1:
@@ -13641,6 +13953,26 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
       word-wrap: 1.2.5
+
+  org.ai@0.0.1:
+    dependencies:
+      ai-database: link:packages/ai-database
+      ai-evaluate: link:packages/ai-evaluate
+      ai-experiments: link:packages/ai-experiments
+      ai-functions: link:packages/ai-functions
+      ai-props: link:packages/ai-props
+      ai-providers: link:packages/ai-providers
+      ai-tests: link:packages/ai-tests
+      ai-workflows: link:packages/ai-workflows
+      autonomous-agents: link:packages/autonomous-agents
+      business-as-code: link:packages/business-as-code
+      digital-products: link:packages/digital-products
+      digital-tasks: link:packages/digital-tasks
+      digital-tools: link:packages/digital-tools
+      digital-workers: link:packages/digital-workers
+      human-in-the-loop: link:packages/human-in-the-loop
+      language-models: link:packages/language-models
+      services-as-software: link:packages/services-as-software
 
   outdent@0.5.0: {}
 
