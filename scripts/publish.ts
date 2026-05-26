@@ -15,8 +15,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const rootDir = join(__dirname, '..')
 const packagesDir = join(rootDir, 'packages')
 
-// Packages to exclude from publishing (npm restrictions, etc.)
-const EXCLUDED_PACKAGES = new Set<string>([])
+// Packages to exclude from publishing (npm restrictions, "for now" relocations, etc.)
+//
+// - `org.ai`: moved to a different monorepo; this package is a bridge to its new
+//   home and should not republish from here for now. Re-include once the
+//   org.ai home is fully settled and we decide where it ships from.
+const EXCLUDED_PACKAGES = new Set<string>([
+  'org.ai',
+])
 
 interface PackageJson {
   name: string
