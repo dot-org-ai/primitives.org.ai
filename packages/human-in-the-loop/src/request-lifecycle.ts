@@ -29,13 +29,75 @@
 // ============================================================================
 
 /**
- * The six kinds of Human Function requests.
+ * The six canonical kinds of Human Function requests.
  *
- * Extends the existing HumanRequest.type vocabulary (approval | question |
- * task | decision | review | notification) with the canonical single-word
- * verbs used by the Cascade execution model per CONTEXT.md.
+ * These are THE canonical names, matching the Cascade execution model verbs
+ * per CONTEXT.md (ADR 0001) and the management.studio FunctionKind surface.
+ *
+ * The verbose `HumanRequest.type` values (`approval | question | task |
+ * decision | review | notification`) from the v2.1.4 published package are
+ * kept as **deprecated aliases** for backward compatibility with existing
+ * consumers. Use `legacyKindToRequestKind` to convert them.
+ *
+ * Mapping (legacy → canonical):
+ *   'approval'     → 'approve'
+ *   'question'     → 'ask'
+ *   'task'         → 'do'
+ *   'decision'     → 'decide'
+ *   'review'       → 'review'   (unchanged)
+ *   'notification' → 'notify'
  */
 export type RequestKind = 'approve' | 'ask' | 'decide' | 'review' | 'do' | 'notify'
+
+/**
+ * Legacy kind values from HumanRequest.type (v2.1.4).
+ *
+ * @deprecated Use `RequestKind` instead. These verbose names are kept only
+ * for backward compatibility with existing consumers of `human-in-the-loop@2.1.4`.
+ * Migrate callers to the canonical single-word verbs (`RequestKind`).
+ */
+export type LegacyRequestKind =
+  | 'approval'
+  | 'question'
+  | 'task'
+  | 'decision'
+  | 'review'
+  | 'notification'
+
+/**
+ * Mapping from legacy `HumanRequest.type` values to canonical `RequestKind`.
+ *
+ * @deprecated Exists only for migration of existing consumers. New code
+ * should use `RequestKind` values directly.
+ */
+export const LEGACY_KIND_MAP: Record<LegacyRequestKind, RequestKind> = {
+  approval: 'approve',
+  question: 'ask',
+  task: 'do',
+  decision: 'decide',
+  review: 'review',
+  notification: 'notify',
+}
+
+/**
+ * Convert a legacy `HumanRequest.type` value to the canonical `RequestKind`.
+ *
+ * Use this helper when consuming requests from existing v2.1.4 stores or
+ * API responses that still carry the verbose type names.
+ *
+ * @param legacyKind - The legacy `HumanRequest.type` value
+ * @returns The canonical `RequestKind`
+ *
+ * @deprecated Migration helper only. New code should produce `RequestKind`
+ * values directly.
+ *
+ * @example
+ * legacyKindToRequestKind('approval') // → 'approve'
+ * legacyKindToRequestKind('question') // → 'ask'
+ */
+export function legacyKindToRequestKind(legacyKind: LegacyRequestKind): RequestKind {
+  return LEGACY_KIND_MAP[legacyKind]
+}
 
 /**
  * Status of a lifecycle item.

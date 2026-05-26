@@ -71,7 +71,14 @@ export interface Human {
 export interface HumanRequest<TInput = unknown, TOutput = unknown> {
   /** Request ID */
   id: string
-  /** Request type */
+  /**
+   * Request type (legacy verbose naming — kept for backward compatibility).
+   *
+   * @deprecated Use `RequestKind` from `request-lifecycle` for new code.
+   * The canonical single-word verbs (`approve | ask | do | decide | review |
+   * notify`) match the Cascade execution model. Use `legacyKindToRequestKind`
+   * to convert these values to the canonical form.
+   */
   type: 'approval' | 'question' | 'task' | 'decision' | 'review' | 'notification'
   /** Request status */
   status: HumanRequestStatus

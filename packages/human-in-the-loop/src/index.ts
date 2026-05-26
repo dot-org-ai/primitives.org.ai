@@ -400,10 +400,15 @@ export {
   sortByPriorityThenSLA,
   timeToDeadline,
   isBreached,
+  // Migration helpers (deprecated — for consumers of v2.1.4 verbose types)
+  LEGACY_KIND_MAP,
+  legacyKindToRequestKind,
 } from './request-lifecycle.js'
 
 export type {
   RequestKind,
+  // Deprecated — kept for backward compatibility with v2.1.4 consumers
+  LegacyRequestKind,
   LifecycleStatus,
   LifecyclePriority,
   ArtifactRef,
