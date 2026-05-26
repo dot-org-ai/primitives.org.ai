@@ -491,3 +491,28 @@ export type {
   CircuitBreakerOptions,
   SLAOptions,
 } from './types.js'
+
+// ============================================================================
+// HumanStore port + in-memory impl (#76) — lifecycle-native persistence
+// ============================================================================
+
+export type {
+  LifecycleStoreFilters,
+  LifecycleItemPatch,
+  LifecycleResponse,
+  LifecycleStore,
+} from './lifecycle-store.js'
+
+export { LifecycleStoreMemory } from './lifecycle-store-memory.js'
+
+// ============================================================================
+// ChannelAdapter port (#76) — deliver + inbound-response seam
+// ============================================================================
+
+export type { LifecycleChannelKind, LifecycleChannelAdapter } from './lifecycle-channel-adapter.js'
+
+export { LifecycleAdapterRegistry, adapterRegistry } from './lifecycle-channel-adapter.js'
+
+// Stub adapters (real interfaces, no-op/log bodies — replace with real impls)
+export { emailAdapter } from './adapters/email-adapter.js'
+export { slackAdapter } from './adapters/slack-adapter.js'
