@@ -61,12 +61,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "ai-functions": "^2.3.0",
-    "business-as-code": "^2.3.0",
+    "ai-functions": "workspace:*",
+    "business-as-code": "workspace:*",
     "chat": "^4.27.0",
     "digital-objects": "workspace:*",
-    "digital-tasks": "^2.3.0",
-    "digital-workers": "^2.3.0",
+    "digital-tasks": "workspace:*",
+    "digital-workers": "workspace:*",
     "rpc.do": "*"
   },
   "peerDependencies": {
@@ -80,6 +80,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",
     "@cloudflare/workers-types": "^4.20250124.0",
+    "org.ai": "workspace:*",
     "vitest": "3.0.4"
   },
   "keywords": [

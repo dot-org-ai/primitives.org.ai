@@ -60,10 +60,11 @@ Packages follow strict layer rules -- each layer may only import from layers bel
 > intentional and acyclic (`business-as-code`'s dep closure contains neither
 > `digital-tools` nor `services-as-software`). The substrate is self-contained
 > (no internal workspace deps), so this introduces no dependency cycle.
-> `autonomous-finance` is now a thin re-export shim over `business-as-code/finance`
-> kept for the `autonomous-*` catalog packages until their ownership is decided.
-> **This inversion awaits owner sign-off:** if it must be resolved, the substrate
-> can move to a dedicated Layer 0 foundation module instead of `business-as-code`.
+> The former `autonomous-finance` package (and the 16 unpublished `autonomous-*`
+> catalog packages it served) have been **removed**; `business-as-code/finance`
+> is now the sole home for these economic primitives. The inversion is accepted;
+> if it is later resolved, the substrate can move to a dedicated Layer 0
+> foundation module instead of `business-as-code`.
 
 ### Package Naming
 

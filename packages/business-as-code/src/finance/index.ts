@@ -8,7 +8,7 @@
  *
  * Finance is foundational here because it is the core of the default OKRs
  * (Revenue / Growth / Profit). `services-as-software` and `digital-tools`
- * consume these primitives; `autonomous-finance` re-exports them as a shim.
+ * consume these primitives directly from here.
  *
  * Importable via the `business-as-code/finance` subpath export.
  *

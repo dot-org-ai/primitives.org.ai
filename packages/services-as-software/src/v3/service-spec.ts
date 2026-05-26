@@ -14,7 +14,7 @@
  * `binding.toolPermissions` and is not overridable.
  *
  * All other fields reference real shipped types from `digital-tools`,
- * `autonomous-finance`, and the sibling v3 modules.
+ * `business-as-code/finance`, and the sibling v3 modules.
  *
  * @packageDocumentation
  */
@@ -113,7 +113,7 @@ export interface ServiceSpec<TIn, TOut> {
    * TODO(next-agent: EvaluatorPanel)
    */
   evaluators?: EvaluatorPanel
-  /** Definition-of-done predicate + escrow rules (lives in autonomous-finance). */
+  /** Definition-of-done predicate + escrow rules (lives in business-as-code/finance). */
   outcomeContract?: OutcomeContract
 
   // ---- billing + finance --------------------------------------------------
