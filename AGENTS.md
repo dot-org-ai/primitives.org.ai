@@ -38,3 +38,12 @@ bd sync               # Sync with git
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
+## Publishing & New Packages
+
+See `CLAUDE.md` → "Publishing & npm packages" for the hard rule:
+**agents MUST NOT create new npm packages without explicit human approval.**
+npm names are effectively permanent — a mistakenly-published or
+wrongly-scoped name cannot be reclaimed. Fold most things into an existing
+package as a subpath export (`src/<subdomain>/` + an `./<subdomain>` entry
+in `exports`) before reaching for a new package.
+

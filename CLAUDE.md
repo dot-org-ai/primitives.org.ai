@@ -68,3 +68,28 @@ Only two packages are scoped: `@org.ai/types` and `@org.ai/config`. All other pa
 ### Testing
 
 Framework is Vitest 2.x. Tests live in `test/` directories within each package. AI-dependent tests use long timeouts (60s) and single-worker execution (`maxWorkers: 1`, `pool: 'forks'`) to avoid rate limiting.
+
+## Publishing & npm packages
+
+The publish script (`scripts/publish.ts`) auto-handles npm web auth for non-TTY callers (agents, CI) via `expect` — it opens a browser for the human to authorize each publish. **Agents may run the publish** with the human approving in-browser when prompted.
+
+### What agents CAN do autonomously
+
+- Bump existing package versions (semver-appropriate, via changesets).
+- Modify existing package source (with an appropriate changeset entry).
+- Consume changesets, run `pnpm changeset version`, then run the publish script (the human sees the browser auth prompt and approves).
+
+### What agents MUST NOT do without explicit human discussion + approval
+
+- **Create new npm packages** — any new `packages/*/package.json` with a `name` field destined for npm.
+  - **Why this is non-negotiable:** npm package names are effectively permanent. npm's unpublish policy only allows removal within 72 hours of *original* publish, only if no other package depends on it, and even then the name remains *reserved* (no one can ever publish under it again). A mistakenly-published name is permanent clutter we cannot undo. A wrongly-scoped name (publishing under a scope we don't own, or under a scope someone else does) is worse — it can claim or contest scope ownership.
+  - **Required process before creating any new package:**
+    1. **Scope ownership** — `npm access ls-packages <scope>` confirms we own the scope. If we don't own it, STOP and discuss.
+    2. **Naming intent** — the human approves the exact name + scope.
+    3. **Home placement** — the human confirms it should be a *new* package vs folded into an existing one. Most things that look like they want to be their own package belong inside an existing one as a submodule (e.g. a new subpath export with `src/<subdomain>/` and a `./<subdomain>` entry in `exports`).
+- **Change the npm scope of an existing package** — renaming `@old/x` → `@new/x` orphans the old name on npm (still resolvable, still installable, but unmaintained).
+- **Publish to a scope we don't own** — would fail or contest ownership.
+
+A `pnpm pre-publish` scope-ownership check (`npm access ls-packages <scope>`) is the right long-term guard; until it lands, the human-approval gate above is the discipline.
+
+(Why this section exists: in 2026-05 an agent scaffolded `@primitives/content-derived-id`, `@primitives/db-docs-rels`, and `@primitives/llm-pricing` under a scope we do not own — discovered at pre-publish review. They've since been folded into `@graphdl/core`, `ai-database`, and `language-models` respectively. See the `## Package Naming` note above: only `@org.ai/types` and `@org.ai/config` are scoped; everything else is unscoped.)
