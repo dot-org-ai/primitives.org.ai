@@ -81,6 +81,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20250124.0
         version: 4.20251202.0
+      drizzle-orm:
+        specifier: ^0.36.0
+        version: 0.36.4(@cloudflare/workers-types@4.20251202.0)(@opentelemetry/api@1.9.0)(@types/react@19.2.7)(better-sqlite3@11.10.0)(react@19.2.0)
       vitest:
         specifier: 3.0.4
         version: 3.0.4(@types/debug@4.1.12)(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
@@ -634,12 +637,6 @@ importers:
         version: 8.48.1(eslint@9.39.1(jiti@2.6.1))(typescript@5.9.3)
 
   packages/content-derived-id: {}
-
-  packages/db-docs-rels:
-    devDependencies:
-      drizzle-orm:
-        specifier: ^0.36.0
-        version: 0.36.4(@cloudflare/workers-types@4.20251202.0)(@opentelemetry/api@1.9.0)(@types/react@19.2.7)(better-sqlite3@11.10.0)(react@19.2.0)
 
   packages/digital-objects:
     dependencies:

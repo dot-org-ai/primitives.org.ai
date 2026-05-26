@@ -1,5 +1,5 @@
 /**
- * Canonical-schema tests for @primitives/db-docs-rels.
+ * Canonical-schema tests for ai-database/docs-rels.
  *
  * These tests are static (no live DB). They verify:
  *
@@ -21,9 +21,9 @@ import { getTableColumns } from 'drizzle-orm'
 import { getTableConfig } from 'drizzle-orm/pg-core'
 import { describe, expect, it } from 'vitest'
 
-import { createDocsRelsSchema, createMigrationSql, DEFAULT_EMBEDDING_DIM } from '../src/index.js'
+import { createDocsRelsSchema, createMigrationSql, DEFAULT_EMBEDDING_DIM } from '../src/docs-rels/index.js'
 
-describe('@primitives/db-docs-rels — canonical schema', () => {
+describe('ai-database/docs-rels — canonical schema', () => {
   const { docs, rels, search, events } = createDocsRelsSchema()
 
   it('exposes all four canonical tables', () => {
@@ -118,7 +118,7 @@ describe('@primitives/db-docs-rels — canonical schema', () => {
   })
 })
 
-describe('@primitives/db-docs-rels — strict superset over icps + svc + sb', () => {
+describe('ai-database/docs-rels — strict superset over icps + svc + sb', () => {
   const { docs, rels, search, events } = createDocsRelsSchema()
   const docsCols = new Set(Object.keys(getTableColumns(docs)))
   const relsCols = new Set(Object.keys(getTableColumns(rels)))
@@ -273,7 +273,7 @@ describe('@primitives/db-docs-rels — strict superset over icps + svc + sb', ()
   })
 })
 
-describe('@primitives/db-docs-rels — migration SQL', () => {
+describe('ai-database/docs-rels — migration SQL', () => {
   it('default migrations target halfvec(1536) + halfvec_cosine_ops', () => {
     const stmts = createMigrationSql()
     const joined = stmts.join('\n')
@@ -318,7 +318,7 @@ describe('@primitives/db-docs-rels — migration SQL', () => {
   })
 })
 
-describe('@primitives/db-docs-rels — defaults', () => {
+describe('ai-database/docs-rels — defaults', () => {
   it('default embedding dim is 1536', () => {
     expect(DEFAULT_EMBEDDING_DIM).toBe(1536)
   })

@@ -21,10 +21,15 @@
     "./tests": {
       "types": "./dist/tests.d.ts",
       "import": "./dist/tests.js"
+    },
+    "./docs-rels": {
+      "types": "./dist/docs-rels/index.d.ts",
+      "import": "./dist/docs-rels/index.js"
     }
   },
   "files": [
     "dist",
+    "src/docs-rels/migrations/*.sql",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -55,12 +60,17 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",
     "@cloudflare/workers-types": "^4.20250124.0",
+    "drizzle-orm": "^0.36.0",
     "vitest": "3.0.4"
   },
   "peerDependencies": {
+    "drizzle-orm": "^0.36.0",
     "vitest": "^2.0.0"
   },
   "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    },
     "vitest": {
       "optional": true
     }
