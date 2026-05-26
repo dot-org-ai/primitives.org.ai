@@ -1,10 +1,19 @@
 # digital-workers
 
+## 2.3.0
+
+### Patch Changes
+
+- Updated dependencies [9e2779a]
+  - ai-functions@2.3.0
+  - ai-workflows@2.3.0
+
 ## 2.1.3
 
 ### Patch Changes
 
 - Documentation and testing improvements
+
   - Add deterministic AI testing suite with self-validating patterns
   - Apply StoryBrand narrative to all package READMEs
   - Update TESTING.md with four principles of deterministic AI testing

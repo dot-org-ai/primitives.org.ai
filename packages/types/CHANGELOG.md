@@ -1,5 +1,7 @@
 # @org.ai/types
 
+## 2.3.0
+
 ## 2.1.3
 
 ### Patch Changes
@@ -15,6 +17,7 @@
 ### Patch Changes
 
 - 6beb531: Add TDD RED phase tests for type system unification
+
   - ai-functions: Add tests for AIFunction<Output, Input> generic order flip
   - ai-workflows: Add tests for EventHandler<TOutput, TInput> order and OnProxy/EveryProxy autocomplete
   - ai-database: Existing package - no changes in this release

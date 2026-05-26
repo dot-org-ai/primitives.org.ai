@@ -1,6 +1,6 @@
 {
   "name": "autonomous-marketing",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — marketing Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Nine Services: campaign-brief-generator, seo-content-pillar-author, paid-ad-creative-iterator, brand-voice-monitor, content-localization-orchestrator, campaign-attribution-auditor, email-nurture-sequencer, competitor-positioning-monitor, webinar-funnel-orchestrator. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-revenue / autonomous-developer-experience / autonomous-startups.",
   "private": true,
   "type": "module",
@@ -48,7 +48,11 @@
       "import": "./dist/services/webinar-funnel-orchestrator.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

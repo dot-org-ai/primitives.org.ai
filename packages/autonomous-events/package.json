@@ -1,6 +1,6 @@
 {
   "name": "autonomous-events",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — events-vertical Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Three Services: event-program-curator, partnership-deal-orchestrator, event-attendee-engagement-monitor. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal / autonomous-data / autonomous-product / autonomous-supplychain / autonomous-research / autonomous-security.",
   "private": true,
   "type": "module",
@@ -24,7 +24,11 @@
       "import": "./dist/services/event-attendee-engagement-monitor.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

@@ -1,6 +1,6 @@
 {
   "name": "autonomous-revenue",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — revenue / sales Services-as-Software defined on the autonomous-finance substrate + services-as-software primitive. Initial: lead-qualification (BANT/MEDDIC + Clearbit + LinkedIn enrichment). Future: meeting-prep, proposal-generator, contract-redliner, renewal-workbench, campaign-orchestrator. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-developer-experience.",
   "private": true,
   "type": "module",
@@ -44,7 +44,11 @@
       "import": "./dist/services/account-research-brief.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

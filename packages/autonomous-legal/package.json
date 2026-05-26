@@ -1,6 +1,6 @@
 {
   "name": "autonomous-legal",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — legal Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Six Services: contract-reviewer, policy-impact-analyzer, ip-disclosure-triage, litigation-discovery-prep, compliance-attestation-author, regulatory-filing-drafter. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations.",
   "private": true,
   "type": "module",
@@ -36,7 +36,11 @@
       "import": "./dist/services/regulatory-filing-drafter.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

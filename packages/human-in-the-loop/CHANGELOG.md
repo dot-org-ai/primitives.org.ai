@@ -1,5 +1,15 @@
 # human-in-the-loop
 
+## 2.3.0
+
+### Patch Changes
+
+- Updated dependencies [9e2779a]
+  - ai-functions@2.3.0
+  - business-as-code@2.3.0
+  - digital-tasks@2.3.0
+  - digital-workers@2.3.0
+
 ## 2.2.2
 
 fix: expose lifecycle subpath exports (request-lifecycle, escalation-engine, lifecycle-store, lifecycle-channel-adapter) so consumers can import them. The main entry still requires `org.ai` and remains unusable for consumers that don't depend on org.ai — use the lifecycle subpaths.

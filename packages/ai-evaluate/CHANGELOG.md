@@ -1,10 +1,17 @@
 # ai-evaluate
 
+## 2.3.0
+
+### Patch Changes
+
+- c858725: Fix worker_loaders API to use getEntrypoint().fetch() instead of worker.fetch()
+
 ## 2.1.3
 
 ### Patch Changes
 
 - Documentation and testing improvements
+
   - Add deterministic AI testing suite with self-validating patterns
   - Apply StoryBrand narrative to all package READMEs
   - Update TESTING.md with four principles of deterministic AI testing

@@ -1,6 +1,6 @@
 {
   "name": "business-as-code",
-  "version": "2.1.4",
+  "version": "2.3.0",
   "description": "Primitives for expressing business logic and processes as code",
   "type": "module",
   "main": "dist/index.js",

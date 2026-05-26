@@ -1,6 +1,6 @@
 {
   "name": "autonomous-data",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — data-engineering / analytics Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Ships: dbt-model-author, data-quality-incident-triager, metrics-catalog-curator, pipeline-incident-investigator, schema-evolution-planner, ml-model-monitor. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-operations / autonomous-people / autonomous-legal.",
   "private": true,
   "type": "module",
@@ -36,7 +36,11 @@
       "import": "./dist/services/ml-model-monitor.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

@@ -1,6 +1,6 @@
 {
   "name": "autonomous-operations",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — operations Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Six Services: incident-commander, oncall-handoff-narrator, capacity-planner, slo-budget-tracker, change-window-coordinator, runbook-author. Sibling to autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups.",
   "private": true,
   "type": "module",
@@ -36,7 +36,11 @@
       "import": "./dist/services/runbook-author.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

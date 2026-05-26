@@ -1,6 +1,6 @@
 {
   "name": "ai-workflows",
-  "version": "2.1.4",
+  "version": "2.3.0",
   "description": "Event-driven workflows with state machine support",
   "type": "module",
   "main": "dist/index.js",

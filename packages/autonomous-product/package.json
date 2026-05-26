@@ -1,6 +1,6 @@
 {
   "name": "autonomous-product",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — product-management Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: prd-author, customer-feedback-synthesizer, roadmap-tradeoff-evaluator, release-experiment-designer, feature-deprecation-coordinator, jobs-to-be-done-clusterer. Sibling to autonomous-operations / autonomous-marketing / autonomous-revenue / autonomous-customer-success / autonomous-finance-services / autonomous-developer-experience / autonomous-startups / autonomous-legal / autonomous-people.",
   "private": true,
   "type": "module",
@@ -36,7 +36,11 @@
       "import": "./dist/services/jobs-to-be-done-clusterer.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

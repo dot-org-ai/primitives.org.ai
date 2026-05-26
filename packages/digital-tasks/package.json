@@ -1,6 +1,6 @@
 {
   "name": "digital-tasks",
-  "version": "2.1.4",
+  "version": "2.3.0",
   "description": "Task management primitives for digital workers (agents and humans)",
   "type": "module",
   "main": "dist/index.js",

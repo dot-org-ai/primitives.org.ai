@@ -1,6 +1,6 @@
 {
   "name": "autonomous-developer-experience",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — developer-experience Services-as-Software defined on the primitive substrate. Initial: api-docs-writer (AST extract → typed reference docs published to GitHub Pages). Future: changelog-generator, sdk-generator, migration-guide-writer, tutorial-author, example-suite-builder. Sibling to autonomous-finance-services / autonomous-customer-success / autonomous-revenue.",
   "private": true,
   "type": "module",
@@ -44,7 +44,11 @@
       "import": "./dist/services/incident-postmortem-author.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

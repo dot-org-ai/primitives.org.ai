@@ -1,6 +1,6 @@
 {
   "name": "autonomous-customer-success",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — customer-success Services-as-Software defined on the services-as-software primitive + autonomous-finance substrate. Initial: support-triage. Future: nps-followup, onboarding-runbook, churn-rescue, account-review. Sibling to autonomous-finance-services / autonomous-revenue / autonomous-developer-experience.",
   "private": true,
   "type": "module",
@@ -44,7 +44,11 @@
       "import": "./dist/services/health-score-narrator.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

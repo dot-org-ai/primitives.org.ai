@@ -1,6 +1,6 @@
 {
   "name": "autonomous-finance-services",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — finance Services-as-Software defined on the autonomous-finance substrate + services-as-software primitive. Initial: bookkeeper. Future: controller, AP, AR, tax, treasury, payroll. Sibling to autonomous-customer-success / autonomous-revenue / autonomous-developer-experience.",
   "private": true,
   "type": "module",
@@ -56,7 +56,11 @@
       "import": "./dist/services/board-deck-financials-pack.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

@@ -1,6 +1,6 @@
 {
   "name": "ai-providers",
-  "version": "2.1.4",
+  "version": "2.3.0",
   "description": "Unified AI provider registry with Cloudflare AI Gateway support",
   "type": "module",
   "main": "dist/index.js",

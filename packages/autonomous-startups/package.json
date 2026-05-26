@@ -1,6 +1,6 @@
 {
   "name": "autonomous-startups",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Catalog package — startup-shaped Services-as-Software defined on the autonomous-finance substrate + services-as-software primitive. Initial: claude-code-feature-build (the v3 worked example). Future: cross-business-model primitives (SaaSProduct / APIProduct / DataProduct / ...).",
   "private": true,
   "type": "module",
@@ -40,7 +40,11 @@
       "import": "./dist/services/gtm-experiment-runner.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -b",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",

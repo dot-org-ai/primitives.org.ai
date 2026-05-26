@@ -1,6 +1,6 @@
 {
   "name": "@org.ai/examples",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Example apps and code snippets for primitives.org.ai",
   "type": "module",
@@ -49,6 +49,14 @@
     "ai-providers": "workspace:*"
   },
   "devDependencies": {},
-  "keywords": ["examples", "saas", "api", "marketplace", "directory", "startup", "vc"],
+  "keywords": [
+    "examples",
+    "saas",
+    "api",
+    "marketplace",
+    "directory",
+    "startup",
+    "vc"
+  ],
   "license": "MIT"
 }

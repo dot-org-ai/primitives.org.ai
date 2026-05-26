@@ -1,5 +1,13 @@
 # autonomous-agents
 
+## 2.3.0
+
+### Patch Changes
+
+- Updated dependencies [9e2779a]
+  - ai-functions@2.3.0
+  - digital-workers@2.3.0
+
 ## 2.1.3
 
 ### Patch Changes
