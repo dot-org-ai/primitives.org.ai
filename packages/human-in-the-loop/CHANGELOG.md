@@ -1,5 +1,9 @@
 # human-in-the-loop
 
+## 2.2.2
+
+fix: expose lifecycle subpath exports (request-lifecycle, escalation-engine, lifecycle-store, lifecycle-channel-adapter) so consumers can import them. The main entry still requires `org.ai` and remains unusable for consumers that don't depend on org.ai — use the lifecycle subpaths.
+
 ## 2.2.1
 
 - fix: pin `ai-functions`, `business-as-code`, `digital-tasks`, `digital-workers` to `^2.1.3` — 2.2.0 referenced in-tree versions (2.2.0/2.1.4) that were not yet published to npm, causing `npm install` to exit non-zero.
