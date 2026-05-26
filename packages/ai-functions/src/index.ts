@@ -57,6 +57,7 @@ export type {
   DefinedFunction,
   FunctionRegistry,
   AutoDefineResult,
+  SandboxEnv,
 } from './types.js'
 
 // Schema exports
@@ -167,6 +168,8 @@ export {
   convertArgsToJSONSchema,
   fillTemplate,
   generateCode,
+  generateAndRunCode,
+  type GeneratedCodeRunResult,
 } from './ai.js'
 
 // Also export 'ai' primitive as 'aiPrompt' for convenience

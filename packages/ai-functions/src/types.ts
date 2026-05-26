@@ -2,6 +2,17 @@
  * Core types for AI functions
  */
 
+import type { SandboxEnv } from 'ai-evaluate'
+
+/**
+ * Host Workers environment for the ai-evaluate sandbox.
+ *
+ * Re-exported from ai-evaluate so consumers can type the optional `env`
+ * argument threaded through `DefinedFunction.call` / `generateAndRunCode`
+ * without importing ai-evaluate directly.
+ */
+export type { SandboxEnv } from 'ai-evaluate'
+
 // ============================================================================
 // Human Function Pending Types
 // ============================================================================
@@ -658,8 +669,17 @@ export type FunctionDefinition<TOutput = unknown, TInput = unknown> =
 export interface DefinedFunction<TOutput = unknown, TInput = unknown> {
   /** The original definition */
   definition: FunctionDefinition<TOutput, TInput>
-  /** Call the function */
-  call: (args: TInput) => Promise<TOutput>
+  /**
+   * Call the function.
+   *
+   * @param args - The function arguments.
+   * @param env - Optional host Workers env (carrying a `LOADER` worker-loader
+   *   binding, and `TEST` for the test path) used by `type: 'code'` functions
+   *   to run inline `code` bodies in ai-evaluate's sandbox. When omitted, the
+   *   inline-code path falls back to the Miniflare-backed Node runtime. Has no
+   *   effect on `handler`-based code functions or other function types.
+   */
+  call: (args: TInput, env?: SandboxEnv) => Promise<TOutput>
   /** Get the function as a tool definition for AI */
   asTool: () => AIFunctionDefinition<TOutput, TInput>
 }

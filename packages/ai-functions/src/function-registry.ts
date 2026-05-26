@@ -23,6 +23,7 @@ import type {
 import { PENDING_HUMAN_RESULT_SYMBOL } from './types.js'
 import { schema as convertSchema, type SimpleSchema as SimpleSchemaType } from './schema.js'
 import { getLogger } from './logger.js'
+import { runInSandbox, type SandboxEnv } from './sandbox.js'
 
 // ============================================================================
 // JSON Schema Conversion
@@ -136,16 +137,25 @@ export function fillTemplate(template: string, args: Record<string, unknown>): s
  *
  * This is a deliberate change from the previous behavior, where `type: 'code'`
  * LLM-generated source at call time. That code-*authoring* behavior now lives
- * in {@link generateCode} (and the `generate('code', …)` primitive), so that
- * `Code` can carry the "deterministic handler" contract consumers depend on
- * (ADR-0033). See the package README migration note.
+ * in {@link generateAndRunCode} (and the `generate('code', …)` primitive), so
+ * that `Code` can carry the "deterministic handler" contract consumers depend
+ * on (ADR-0033). See the package README migration note.
+ *
+ * Inline `code` bodies are executed in ai-evaluate's V8-isolate sandbox — never
+ * via `new Function`/`eval`. Execution stays deterministic: no model is ever
+ * consulted on this path.
+ *
+ * @param env - Optional host Workers env (carrying `LOADER`) for the sandbox;
+ *   when omitted the inline-code path falls back to the Miniflare-backed Node
+ *   runtime. Ignored when a `handler` is supplied (direct call, no sandbox).
  *
  * @throws if neither `handler` nor `code` is provided, or if an inline `code`
  *   body is in a non-evaluable language.
  */
 async function executeCodeFunction<TOutput, TInput>(
   definition: CodeFunctionDefinition<TOutput, TInput>,
-  args: TInput
+  args: TInput,
+  env?: SandboxEnv
 ): Promise<TOutput> {
   const { handler, code, language = 'typescript', name } = definition
 
@@ -154,55 +164,78 @@ async function executeCodeFunction<TOutput, TInput>(
   }
 
   if (typeof code === 'string' && code.length > 0) {
-    return await runInlineCode<TOutput, TInput>(code, args, language, name)
+    return await runInlineCode<TOutput, TInput>(code, args, language, name, env)
   }
 
   throw new Error(
     `Code function '${name}' has no handler or inline code. ` +
       `'code' functions are deterministic and require a handler: (input) => output ` +
       `(or an inline 'code' body). To have a model *author* code instead, use ` +
-      `generateCode() or define a 'generative' function.`
+      `generateAndRunCode() / generateCode() or define a 'generative' function.`
   )
 }
 
 /**
- * Deterministically compile and run an inline `code` body for a Code function.
+ * Deterministically run an inline `code` body for a Code function in the
+ * ai-evaluate V8-isolate sandbox.
  *
- * The body is treated as a function whose single parameter is the parsed
- * `args` object and whose `return` value is the result. Only the
- * JS/TS-compatible languages can be evaluated in-process; other languages are
+ * The body is treated as a function whose `return` value is the result; the
+ * parsed `args` are exposed as a top-level `args` binding inside the sandbox.
+ * Only the JS/TS-compatible languages can be evaluated; other languages are
  * carried as metadata for an external runtime and are rejected here.
  *
- * No model is involved — this is a pure `new Function(...)` compile of the
- * supplied source, so the same body always produces the same behavior.
+ * No model is involved — the same body always produces the same behavior. This
+ * replaces the former `new Function(...)` path: `new Function`/`eval` are
+ * banned in this package (broken under Workers, unsandboxed under Node).
+ *
+ * Limitation: `args` are injected by JSON-serializing them into the sandbox
+ * script (`JSON.parse(<json>)`), so only JSON-serializable inputs are
+ * supported on the inline-`code` path. Pass a `handler` for non-serializable
+ * inputs (functions, class instances, etc.).
+ *
+ * @param env - Optional host Workers env (carrying `LOADER`) for the sandbox;
+ *   when omitted, runs against the Miniflare-backed Node runtime.
  */
 async function runInlineCode<TOutput, TInput>(
   code: string,
   args: TInput,
   language: string,
-  name: string
+  name: string,
+  env?: SandboxEnv
 ): Promise<TOutput> {
   if (language !== 'typescript' && language !== 'javascript') {
     throw new Error(
       `Code function '${name}' has an inline 'code' body in language '${language}', ` +
-        `which cannot be evaluated in-process. Pass a 'handler' instead, or run it ` +
+        `which cannot be evaluated in the sandbox. Pass a 'handler' instead, or run it ` +
         `in an external deterministic runtime.`
     )
   }
 
   const body = /\breturn\b/.test(code) ? code : `return (${code})`
-  let fn: (input: TInput) => TOutput | Promise<TOutput>
+
+  // Inject args deterministically by serializing them into the sandbox script.
+  // (JSON-serializable inputs only — see the doc comment.)
+  let argsJson: string
   try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    fn = new Function('args', `"use strict";\n${body}`) as (
-      input: TInput
-    ) => TOutput | Promise<TOutput>
+    argsJson = JSON.stringify(args ?? null)
   } catch (e) {
     throw new Error(
-      `Code function '${name}' has an invalid inline 'code' body: ${(e as Error).message}`
+      `Code function '${name}' received non-JSON-serializable args for its inline 'code' ` +
+        `body: ${(e as Error).message}. Pass a 'handler' for non-serializable inputs.`
     )
   }
-  return await fn(args)
+
+  const script = `const args = JSON.parse(${JSON.stringify(argsJson)});\n${body}`
+
+  const result = await runInSandbox({ script }, env)
+
+  if (result.success === false) {
+    throw new Error(
+      `Code function '${name}' failed in the sandbox: ${result.error ?? 'unknown error'}`
+    )
+  }
+
+  return result.value as TOutput
 }
 
 /**
@@ -231,8 +264,14 @@ export async function generateCode<TInput>(
   definition: CodeGenerationDefinition<TInput>,
   args?: TInput
 ): Promise<string> {
-  const { name, description, language = 'typescript', instructions, returnType, model = 'sonnet' } =
-    definition
+  const {
+    name,
+    description,
+    language = 'typescript',
+    instructions,
+    returnType,
+    model = 'sonnet',
+  } = definition
 
   const argsDescription = JSON.stringify(args ?? definition.args, null, 2)
 
@@ -259,6 +298,162 @@ Requirements:
   })
 
   return (result.object as { code: string }).code
+}
+
+/**
+ * Result of {@link generateAndRunCode}: the executed value plus the artifacts
+ * that produced it.
+ */
+export interface GeneratedCodeRunResult<TOutput = unknown> {
+  /** The value returned by running the authored code against the inputs. */
+  value: TOutput
+  /** The model-authored module source that was executed. */
+  code: string
+  /** The model-authored test source, if tests were requested. */
+  tests?: string
+  /** Test results, if tests ran in the sandbox. */
+  testResults?: {
+    total: number
+    passed: number
+    failed: number
+    skipped: number
+  }
+  /** Console logs captured during execution. */
+  logs: { level: string; message: string }[]
+}
+
+/**
+ * The **non-deterministic** generate → run → test → return capability.
+ *
+ * This is the headline of the `generate('code', …)` primitive: a model
+ * **authors** code, that code is **run** in ai-evaluate's V8-isolate sandbox,
+ * optionally **tested** there, and the executed **result** is returned (not
+ * just the source). This is deliberately separate from `type: 'code'`, which is
+ * deterministic and never consults a model — so determinism is never blurred.
+ *
+ * Unlike {@link generateCode} (which only returns source text), this runs the
+ * authored code. The authored module is expected to `export function ${name}`
+ * (a NAMED export — the sandbox's module loader does not support `export
+ * default`); the sandbox script invokes `${name}(args)` and returns its result.
+ *
+ * @param definition - The code-authoring spec ({@link CodeGenerationDefinition}).
+ *   Set `includeTests: false` to skip test authoring (default: tests included).
+ * @param args - Concrete inputs the authored code is invoked with.
+ * @param env - Optional host Workers env. When it carries `LOADER` **and**
+ *   `TEST`, tests run on the real Dynamic Workers loader; otherwise execution
+ *   falls back to the Miniflare-backed Node runtime (whose dev worker has its
+ *   own embedded test runner and needs no live `TEST` binding).
+ * @returns The executed result plus authored artifacts.
+ *
+ * @example
+ * ```ts
+ * import { generateAndRunCode } from 'ai-functions'
+ *
+ * const { value } = await generateAndRunCode(
+ *   { name: 'calculateTax', args: { amount: '(number)', rate: '(number)' } },
+ *   { amount: 100, rate: 0.2 }
+ * )
+ * // value === 20  (the model authored the code, the sandbox ran it)
+ * ```
+ */
+export async function generateAndRunCode<TOutput = unknown, TInput = unknown>(
+  definition: CodeGenerationDefinition<TInput>,
+  args?: TInput,
+  env?: SandboxEnv
+): Promise<GeneratedCodeRunResult<TOutput>> {
+  const {
+    name,
+    description,
+    language = 'typescript',
+    instructions,
+    returnType,
+    includeTests = true,
+    model = 'sonnet',
+  } = definition
+
+  const argsDescription = JSON.stringify(args ?? definition.args, null, 2)
+
+  // Step 1 — model AUTHORS the module (+ optional tests). Non-deterministic.
+  const codeSpec = `The complete ${language} module. It MUST contain a NAMED export 'export function ${name}(args) { ... }' (NOT a default export) that takes a single arguments object and returns the result. Output ONLY raw code, no markdown fences.`
+  const schema: SimpleSchemaType = includeTests
+    ? {
+        code: codeSpec,
+        tests: `vitest-style tests using global describe/it/expect. The function '${name}' is already in scope (do not import it). Output ONLY raw code, no markdown fences.`,
+      }
+    : {
+        code: codeSpec,
+      }
+
+  const authored = await generateObject({
+    model,
+    schema,
+    system: `You are an expert ${language} developer. Generate clean, production-ready code. The module MUST expose a NAMED export 'export function ${name}(args)' taking one arguments object — do NOT use 'export default'. Output ONLY raw code, no markdown code fences or language tags.`,
+    prompt: `Author a ${language} module with the following specification:
+
+Name: ${name}
+Description: ${description || 'No description provided'}
+Arguments: ${argsDescription}
+Return Type: ${JSON.stringify(returnType)}
+
+${instructions ? `Additional Instructions: ${instructions}` : ''}
+
+Requirements:
+- Expose 'export function ${name}(args) { ... }' (a NAMED export, not default), taking one arguments object.
+- Handle edge cases appropriately.
+- Return ONLY raw code without markdown formatting.`,
+  })
+
+  const authoredObj = authored.object as { code: string; tests?: string }
+  const code = authoredObj.code
+  const tests = includeTests ? authoredObj.tests : undefined
+
+  // Step 2 — RUN the authored code in the sandbox and capture its return value.
+  // The module's default export is invoked with the JSON-injected args; the
+  // result is returned by the sandbox script. Tests (if any) run in the same
+  // sandbox via the worker template's test runner.
+  let argsJson: string
+  try {
+    argsJson = JSON.stringify(args ?? null)
+  } catch (e) {
+    throw new Error(
+      `generateAndRunCode('${name}'): args are not JSON-serializable: ${(e as Error).message}`
+    )
+  }
+
+  // The named export `${name}` is exposed as a top-level binding by the worker
+  // template (`const { ${name} } = exports`). The script calls it with the
+  // JSON-injected args and returns the result.
+  const result = await runInSandbox(
+    {
+      module: code,
+      script: `const __args__ = JSON.parse(${JSON.stringify(
+        argsJson
+      )}); if (typeof ${name} !== 'function') { throw new Error("authored module did not export a callable '${name}'"); } return await ${name}(__args__);`,
+      ...(tests !== undefined && { tests }),
+    },
+    env
+  )
+
+  if (result.success === false) {
+    throw new Error(
+      `generateAndRunCode('${name}') failed in the sandbox: ${result.error ?? 'unknown error'}`
+    )
+  }
+
+  return {
+    value: result.value as TOutput,
+    code,
+    ...(tests !== undefined && { tests }),
+    ...(result.testResults && {
+      testResults: {
+        total: result.testResults.total,
+        passed: result.testResults.passed,
+        failed: result.testResults.failed,
+        skipped: result.testResults.skipped,
+      },
+    }),
+    logs: result.logs.map((l) => ({ level: l.level, message: l.message })),
+  }
 }
 
 /**
@@ -529,10 +724,12 @@ Generate the appropriate ${channel} UI/content to collect this response from a h
 export function createDefinedFunction<TOutput, TInput>(
   definition: FunctionDefinition<TOutput, TInput>
 ): DefinedFunction<TOutput, TInput> {
-  const call = async (args: TInput): Promise<TOutput> => {
+  const call = async (args: TInput, env?: SandboxEnv): Promise<TOutput> => {
     switch (definition.type) {
       case 'code':
-        return executeCodeFunction(definition, args) as Promise<TOutput>
+        // Optional host Workers env threads through to the sandbox for inline
+        // `code` bodies; ignored for `handler` (direct call) and other types.
+        return executeCodeFunction(definition, args, env) as Promise<TOutput>
       case 'generative':
         return executeGenerativeFunction(definition, args) as Promise<TOutput>
       case 'agentic':

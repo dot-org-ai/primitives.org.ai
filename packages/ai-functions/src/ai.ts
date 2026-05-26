@@ -31,6 +31,8 @@ export {
   convertArgsToJSONSchema,
   fillTemplate,
   generateCode,
+  generateAndRunCode,
+  type GeneratedCodeRunResult,
 } from './function-registry.js'
 
 // ============================================================================
