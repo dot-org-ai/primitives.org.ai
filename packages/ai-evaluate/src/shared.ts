@@ -65,10 +65,28 @@ export function extractPackageName(specifier: string, index: number): string {
 export const SANDBOX_URL = 'http://sandbox/execute'
 
 /**
- * Generate a unique sandbox worker ID
+ * Generate a content-addressed sandbox worker ID from the worker source.
+ *
+ * Deterministic: identical worker code yields the same id, so the Dynamic
+ * Workers loader (`LOADER.get(id, factory)`) reuses the cached isolate instead
+ * of minting a fresh one per call. This dedupes to one "unique worker" per
+ * distinct code (relevant once Cloudflare's per-worker billing leaves beta),
+ * rather than one per invocation. Uses cyrb53 (fast, well-distributed, ~53-bit
+ * — ample for a cache key; not a security hash).
  */
-export const generateSandboxId = (): string =>
-  `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
+export const generateSandboxId = (code: string): string => {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < code.length; i++) {
+    const ch = code.charCodeAt(i)
+    h1 = Math.imul(h1 ^ ch, 2654435761)
+    h2 = Math.imul(h2 ^ ch, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  const hash = (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
+  return `sandbox-${hash}`
+}
 
 /**
  * Create an error result with consistent structure

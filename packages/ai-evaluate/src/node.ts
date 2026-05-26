@@ -1,7 +1,7 @@
 /**
  * Evaluate code in a sandboxed environment (Node.js version)
  *
- * Uses Cloudflare worker_loaders when available, falls back to Miniflare for local dev.
+ * Uses Cloudflare Dynamic Workers (the `worker_loaders` binding) when available, falls back to Miniflare for local dev.
  * For Workers-only builds, import from 'ai-evaluate' instead.
  */
 
@@ -14,7 +14,7 @@ import type {
   WorkerCode,
 } from './types.js'
 import { generateWorkerCode, generateDevWorkerCode } from './worker-template/index.js'
-import { COMPATIBILITY_DATE, isDomainAllowed, normalizeImports } from './shared.js'
+import { COMPATIBILITY_DATE, generateSandboxId, isDomainAllowed, normalizeImports } from './shared.js'
 
 /**
  * Check if code contains JSX syntax that needs transformation
@@ -107,7 +107,7 @@ async function evaluateWithWorkerLoader(
     sdk: options.sdk,
     imports: options.imports,
   })
-  const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const id = generateSandboxId(workerCode)
 
   const worker = loader.get(
     id,
