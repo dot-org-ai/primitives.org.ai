@@ -5,7 +5,6 @@
   "fixed": [
     [
       "@org.ai/types",
-      "@org.ai/core",
       "ai-functions",
       "ai-database",
       "ai-workflows",
