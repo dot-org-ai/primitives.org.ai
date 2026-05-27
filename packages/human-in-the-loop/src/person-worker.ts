@@ -28,6 +28,10 @@ import type {
   WorkerDispatcher,
   WorkerAskInput,
   WorkerAskOutput,
+  WorkerApproveInput,
+  WorkerApproveOutput,
+  WorkerNotifyInput,
+  WorkerNotifyOutput,
 } from 'digital-workers'
 import type { Human } from './types.js'
 import type {
@@ -62,6 +66,70 @@ export interface PersonAskContext {
  * MUST resolve with the answer string (or reject to trigger escalation).
  */
 export type PersonAskResolver = (ctx: PersonAskContext) => Promise<string>
+
+/**
+ * Context handed to a `PersonApproveResolver` when the lifecycle reaches the
+ * point where the human's approve/reject decision is needed.
+ */
+export interface PersonApproveContext {
+  /** The created (and claimed/in-progress) lifecycle item. */
+  item: LifecycleItem
+  /** The original approval request body. */
+  request: string
+  /** The Person who owns this Worker. */
+  person: Human
+}
+
+/**
+ * Decision returned by a `PersonApproveResolver`.
+ *
+ * `approved: false` causes the lifecycle to escalate (active → escalated) when
+ * the adapter was constructed with `escalateOnReject: true` (default), in
+ * line with the existing Human approval semantics. Otherwise the rejection
+ * resolves the item with verb='reject' and the caller receives
+ * `{ approved: false }`.
+ */
+export interface PersonApproveDecision {
+  /** Whether the human approved the request. */
+  approved: boolean
+  /** Optional free-text notes captured alongside the decision. */
+  notes?: string
+}
+
+/**
+ * Strategy for obtaining a human's approve/reject decision.
+ *
+ * The channel-delivery seam for `approve`. Tests pass a stub; real deployments
+ * wire this to the channel adapter's inbound decision response. Resolver
+ * failure (a thrown error or a timeout) triggers escalation.
+ */
+export type PersonApproveResolver = (ctx: PersonApproveContext) => Promise<PersonApproveDecision>
+
+/**
+ * Context handed to a `PersonNotifyHandler` when a notification is delivered
+ * to the human. The handler is OPTIONAL — when omitted, the dispatcher relies
+ * solely on the channel adapter for delivery.
+ */
+export interface PersonNotifyContext {
+  /** The created lifecycle item (status='completed' after notify acknowledge). */
+  item: LifecycleItem
+  /** The notification body. */
+  message: string
+  /** Priority hint. */
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  /** The Person who owns this Worker. */
+  person: Human
+}
+
+/**
+ * Optional strategy for a Person filler to receive a delivered notification.
+ *
+ * Notify is fire-and-forget; the lifecycle item is created and immediately
+ * resolved with verb='acknowledged'. This handler runs after the channel
+ * adapter delivery — useful for in-process subscribers (e.g. an in-app toast
+ * queue). It must not throw; throws are logged and swallowed.
+ */
+export type PersonNotifyHandler = (ctx: PersonNotifyContext) => void | Promise<void>
 
 /**
  * Options for {@link personAsWorker}.
@@ -102,6 +170,29 @@ export interface PersonWorkerAdapterOptions {
    * resolver.
    */
   resolve: PersonAskResolver
+  /**
+   * How the human's approve/reject decision is obtained. OPTIONAL — when
+   * omitted the dispatcher does not implement the `approve` verb, and
+   * `digital-workers.approve(personWorker, …)` falls back to channel routing.
+   * Tests pass a stub; real deployments wire a channel-inbound resolver.
+   */
+  approveResolver?: PersonApproveResolver
+  /**
+   * Whether rejection (a resolver returning `{ approved: false }`) escalates
+   * the lifecycle item. Defaults to `false` — a rejection is a legitimate
+   * decision and resolves cleanly with verb='reject'. Set to `true` for
+   * approval flows that must escalate any rejection (per ApprovalOptions
+   * `escalate`). Resolver THROWS always escalate, regardless of this flag.
+   */
+  escalateOnReject?: boolean
+  /**
+   * Optional handler invoked when a notification is delivered. The lifecycle
+   * item is created with kind='notify' and immediately resolved
+   * (verb='acknowledged'); this handler runs after channel-adapter delivery
+   * and after the resolution. Useful for in-process subscribers. Errors
+   * thrown here are logged and swallowed (notify is fire-and-forget).
+   */
+  notifyHandler?: PersonNotifyHandler
   /**
    * Default SLA window in milliseconds (used to compute `slaDeadline`).
    * Defaults to 1 hour.
@@ -186,7 +277,7 @@ function personDispatcher(
   const priority = options.priority ?? 'normal'
   const assignee = options.assignee ?? person.id
 
-  return {
+  const dispatcher: WorkerDispatcher = {
     async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
       const now = new Date()
       const kind: RequestKind = 'ask'
@@ -256,4 +347,168 @@ function personDispatcher(
       }
     },
   }
+
+  // `approve` is only attached when the adapter was given an approveResolver.
+  // Without it `digital-workers.approve` falls back to channel routing.
+  if (options.approveResolver) {
+    dispatcher.approve = async (input: WorkerApproveInput): Promise<WorkerApproveOutput> => {
+      const now = new Date()
+      const escalateOnReject = options.escalateOnReject ?? false
+      const artifact: ArtifactRef = {
+        kind: 'ApprovalRequest',
+        id: `ar_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+        title: input.request,
+        ...(input.context !== undefined && { context: input.context }),
+      }
+
+      const item: LifecycleItem = {
+        id: `hf_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+        kind: 'approve',
+        status: 'pending',
+        priority,
+        title: input.request,
+        artifact,
+        assignee,
+        createdAt: now,
+        slaDeadline: new Date(now.getTime() + (input.timeout ?? slaMs)),
+        updatedAt: now,
+      }
+
+      // 1. Persist the pending approval Function.
+      const created = await store.create(item)
+
+      // 2. Deliver to the human via the configured channel (best-effort).
+      if (options.channelAdapter) {
+        try {
+          await options.channelAdapter.deliver(created, store)
+        } catch (err) {
+          console.warn(`[human-in-the-loop] channel delivery failed for ${created.id}:`, err)
+        }
+      }
+
+      // 3. Claim and move to in_progress (matches the ask lifecycle walk).
+      let current = await store.update(created.id, {
+        status: 'claimed',
+        claimedBy: assignee,
+        claimedAt: new Date(),
+      })
+      current = await store.update(current.id, { status: 'in_progress' })
+
+      // 4. Obtain the human's decision (the channel-inbound seam). Throws
+      //    always escalate, surfacing the error.
+      let decision: PersonApproveDecision
+      try {
+        decision = await options.approveResolver!({
+          item: current,
+          request: input.request,
+          person,
+        })
+      } catch (err) {
+        await store.escalate(current.id, assignee)
+        throw err
+      }
+
+      // 5. Apply the decision. A rejection optionally escalates (when the
+      //    adapter was constructed with escalateOnReject OR the caller passed
+      //    `escalate: true` on this call). Otherwise resolve cleanly.
+      const shouldEscalate = !decision.approved && (escalateOnReject || input.escalate === true)
+      if (shouldEscalate) {
+        await store.escalate(current.id, assignee)
+      } else {
+        await store.complete(current.id, {
+          verb: decision.approved ? 'approve' : 'reject',
+          resolvedBy: assignee,
+          ...(decision.notes !== undefined && { comments: decision.notes }),
+          data: { approved: decision.approved },
+        })
+      }
+
+      return {
+        approved: decision.approved,
+        ...(decision.notes !== undefined && { notes: decision.notes }),
+        approvedBy: { id, type: 'human', name },
+      }
+    }
+  }
+
+  // `notify` is always attached for a Person filler — humans always have a
+  // reasonable notification semantic (deliver via channel adapter, log a
+  // lifecycle item). `digital-workers.notify` still adds delivery metadata
+  // around this.
+  dispatcher.notify = async (input: WorkerNotifyInput): Promise<WorkerNotifyOutput> => {
+    const now = new Date()
+    const artifact: ArtifactRef = {
+      kind: 'Notification',
+      id: `nf_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+      title: input.message,
+    }
+
+    const item: LifecycleItem = {
+      id: `hf_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+      kind: 'notify',
+      status: 'pending',
+      priority,
+      title: input.message,
+      artifact,
+      assignee,
+      createdAt: now,
+      slaDeadline: new Date(now.getTime() + slaMs),
+      updatedAt: now,
+    }
+
+    // 1. Persist the pending notify Function.
+    const created = await store.create(item)
+
+    let deliveryFailed = false
+    // 2. Deliver via the configured channel (best-effort). Failures do NOT
+    //    break the caller's flow but are reflected in the returned `sent`.
+    if (options.channelAdapter) {
+      try {
+        await options.channelAdapter.deliver(created, store)
+      } catch (err) {
+        deliveryFailed = true
+        console.warn(`[human-in-the-loop] channel delivery failed for ${created.id}:`, err)
+      }
+    }
+
+    // 3. notify is fire-and-forget: claim and resolve immediately with
+    //    verb='acknowledged' (the lifecycle still records who received it).
+    let current = await store.update(created.id, {
+      status: 'claimed',
+      claimedBy: assignee,
+      claimedAt: new Date(),
+    })
+    const completed = await store.complete(current.id, {
+      verb: 'acknowledged',
+      resolvedBy: assignee,
+      comments: input.message,
+      data: {
+        ...(input.priority !== undefined && { priority: input.priority }),
+        ...(input.metadata !== undefined && { metadata: input.metadata }),
+      },
+    })
+
+    // 4. Optional in-process subscriber hook (swallow errors — fire-and-forget).
+    if (options.notifyHandler) {
+      try {
+        await options.notifyHandler({
+          item: completed,
+          message: input.message,
+          ...(input.priority !== undefined && { priority: input.priority }),
+          person,
+        })
+      } catch (err) {
+        console.warn(`[human-in-the-loop] notifyHandler threw for ${completed.id}:`, err)
+      }
+    }
+
+    return {
+      sent: !deliveryFailed,
+      ...(deliveryFailed && {
+        notes: 'channel adapter delivery failed — lifecycle item still recorded',
+      }),
+    }
+  }
+
+  return dispatcher
 }

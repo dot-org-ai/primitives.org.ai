@@ -34,9 +34,14 @@ import type {
   WorkerDispatcher,
   WorkerAskInput,
   WorkerAskOutput,
+  WorkerApproveInput,
+  WorkerApproveOutput,
+  WorkerNotifyInput,
+  WorkerNotifyOutput,
 } from 'digital-workers'
 import type { Agent as AutonomousAgent } from './types.js'
-import type { AIGenerateOptions, JSONSchema } from 'ai-functions'
+import type { AIGenerateOptions, JSONSchema, SimpleSchema } from 'ai-functions'
+import { generateObject } from 'ai-functions'
 import { runAsk } from './ask-dispatch.js'
 
 // ==================== Types ====================
@@ -890,7 +895,78 @@ export interface AgentWorkerAdapterOptions {
    * preserving parity with the prior `autonomous-agents.ask` semantics.
    */
   askOptions?: AIGenerateOptions
+  /**
+   * Policy governing the agent's autonomous approve decisions.
+   *
+   * Agents are NOT the primary approver in most flows (the canonical filler
+   * is a Person). When this option is omitted the dispatcher does NOT
+   * implement the `approve` verb, and `digital-workers.approve(agent, …)`
+   * falls back to channel routing — the safe default, since granting an
+   * agent unconstrained approve authority is a governance hazard.
+   *
+   * When supplied, the dispatcher uses `ai-functions.generateObject` with a
+   * structured `{ approved, notes }` schema and a system prompt that
+   * embeds the policy text verbatim, so the auto-decision is constrained by
+   * an EXPLICIT, AUDITABLE policy. The `defaultApproved` field is the
+   * fail-safe when the LLM refuses to render a verdict.
+   *
+   * Example:
+   * ```ts
+   * approvePolicy: {
+   *   instructions: 'Approve only refunds under $50 with > 90% confidence.',
+   *   defaultApproved: false,
+   * }
+   * ```
+   */
+  approvePolicy?: AgentApprovePolicy
+  /**
+   * Optional handler invoked when a notification is delivered to this agent.
+   * Defaults to a structured `console.log` in the form
+   * `[autonomous-agents] notify(<agent name>): <message>`. Notify is
+   * fire-and-forget for agents — they have no human-style attention surface
+   * and pulling them into a long LLM "acknowledgement" loop would be
+   * wasteful. Callers that need an LLM acknowledge can wire one here.
+   */
+  notifyHandler?: AgentNotifyHandler
 }
+
+/**
+ * Explicit policy gating an Agent filler's autonomous approve decisions.
+ *
+ * Approve authority for an autonomous agent is a governance concern — this
+ * type names the seam. The dispatcher embeds `instructions` verbatim into the
+ * LLM system prompt so the policy is the SOLE authority shaping the
+ * verdict.
+ */
+export interface AgentApprovePolicy {
+  /**
+   * Policy text injected as the system prompt for the auto-decision. Should
+   * describe what the agent IS and IS NOT allowed to approve, plus any
+   * confidence thresholds.
+   */
+  instructions: string
+  /**
+   * Fail-safe verdict returned when the LLM call fails or returns an invalid
+   * response. Defaults to `false` (deny on failure) — the safe default for
+   * approval flows.
+   */
+  defaultApproved?: boolean
+  /** Model to use. Defaults to `'sonnet'`. */
+  model?: string
+  /** Temperature. Defaults to `0` so the policy decision is deterministic. */
+  temperature?: number
+}
+
+/**
+ * Handler for a notify delivered to an Agent filler. Receives the message
+ * plus the agent for attribution. Default implementation logs via
+ * `console.log`.
+ */
+export type AgentNotifyHandler = (
+  message: string,
+  agent: AutonomousAgent,
+  options?: { priority?: 'low' | 'normal' | 'high' | 'urgent'; metadata?: Record<string, unknown> }
+) => void | Promise<void>
 
 /**
  * `agentAsWorker` — adapt an autonomous `Agent` to the kind-agnostic `Worker`
@@ -944,7 +1020,7 @@ export function agentAsWorker(
     status: options.status ?? 'available',
     contacts: options.contacts ?? {},
     skills: options.skills ?? agent.config.role.skills,
-    dispatch: agentDispatcher(agent, id, name, options.askOptions),
+    dispatch: agentDispatcher(agent, id, name, options),
   }
 
   if (options.preferences !== undefined) worker.preferences = options.preferences
@@ -963,31 +1039,121 @@ export function agentAsWorker(
  * `WorkerAskInput` take precedence over the adapter's default `askOptions`,
  * which themselves default to the agent's own `config.model` /
  * `config.temperature` / `config.system`.
+ *
+ * The `approve` verb is **only attached when an explicit `approvePolicy` is
+ * provided**. Granting an autonomous agent unconstrained approve authority is
+ * a governance hazard; the policy is the SOLE authority shaping the verdict
+ * (embedded verbatim in the system prompt, deterministic temperature=0 by
+ * default). When the policy is omitted, `digital-workers.approve(agent, …)`
+ * falls back to channel routing.
+ *
+ * The `notify` verb is always attached for an Agent filler and defaults to a
+ * structured `console.log`. Agents have no human-style attention surface, so
+ * notify is intentionally lightweight (no LLM round-trip). Callers wanting an
+ * LLM acknowledgement wire their own `notifyHandler`.
  */
 function agentDispatcher(
   agent: AutonomousAgent,
   id: string,
   name: string,
-  askOptions?: AIGenerateOptions
+  options: AgentWorkerAdapterOptions
 ): WorkerDispatcher {
-  return {
+  const askOptions = options.askOptions
+  const approvePolicy = options.approvePolicy
+  const notifyHandler = options.notifyHandler ?? defaultAgentNotifyHandler
+
+  const dispatcher: WorkerDispatcher = {
     async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
       // Compose generation options: per-call schema wins, then explicit
       // adapter askOptions, then the agent's own config.
-      const options: AIGenerateOptions = {
+      const generateOptions: AIGenerateOptions = {
         ...(agent.config.model !== undefined && { model: agent.config.model }),
         ...(agent.config.temperature !== undefined && { temperature: agent.config.temperature }),
         ...(agent.config.system !== undefined && { system: agent.config.system }),
         ...askOptions,
       }
       if (input.schema !== undefined) {
-        options.schema = input.schema as unknown as JSONSchema
+        generateOptions.schema = input.schema as unknown as JSONSchema
       }
 
-      const answer = await runAsk<T>(input.question, input.context, options)
+      const answer = await runAsk<T>(input.question, input.context, generateOptions)
       return { answer, answeredBy: { id, type: 'agent', name } }
     },
   }
+
+  if (approvePolicy) {
+    dispatcher.approve = async (input: WorkerApproveInput): Promise<WorkerApproveOutput> => {
+      const schema: SimpleSchema = {
+        approved: 'Whether the request should be approved (boolean)',
+        notes: 'Reason for the decision, referencing the governing policy',
+      }
+      const fallback = approvePolicy.defaultApproved ?? false
+      try {
+        const result = await generateObject({
+          model: approvePolicy.model ?? 'sonnet',
+          schema,
+          system:
+            `You are an autonomous approval authority acting under this policy ` +
+            `— DO NOT deviate from it under any circumstances:\n\n${approvePolicy.instructions}`,
+          prompt:
+            `Approval request: ${input.request}\n\n` +
+            `Context: ${JSON.stringify(input.context ?? {})}\n\n` +
+            `Render a verdict ('approved': true|false) and notes citing the policy.`,
+          temperature: approvePolicy.temperature ?? 0,
+        })
+        const decision = result.object as unknown as { approved: boolean; notes: string }
+        return {
+          approved: Boolean(decision.approved),
+          notes: decision.notes,
+          approvedBy: { id, type: 'agent', name },
+        }
+      } catch (err) {
+        // Fail closed (or open per policy) when the LLM call fails so the
+        // caller still gets a deterministic verdict.
+        return {
+          approved: fallback,
+          notes: `agent approve failed (${
+            err instanceof Error ? err.message : String(err)
+          }); defaultApproved=${fallback}`,
+          approvedBy: { id, type: 'agent', name },
+        }
+      }
+    }
+  }
+
+  dispatcher.notify = async (input: WorkerNotifyInput): Promise<WorkerNotifyOutput> => {
+    try {
+      await notifyHandler(input.message, agent, {
+        ...(input.priority !== undefined && { priority: input.priority }),
+        ...(input.metadata !== undefined && { metadata: input.metadata }),
+      })
+      return { sent: true }
+    } catch (err) {
+      return {
+        sent: false,
+        notes: `notifyHandler threw: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    }
+  }
+
+  return dispatcher
+}
+
+/**
+ * Default `notifyHandler` for Agent fillers — a structured `console.log` that
+ * records the message + agent name. Agents have no human-style attention
+ * surface; the default is lightweight and synchronous.
+ */
+function defaultAgentNotifyHandler(
+  message: string,
+  agent: AutonomousAgent,
+  options?: { priority?: string; metadata?: Record<string, unknown> }
+): void {
+  console.log(
+    `[autonomous-agents] notify(${agent.config.name}):`,
+    message,
+    options?.priority ? `[priority=${options.priority}]` : ''
+  )
 }
 
 /**

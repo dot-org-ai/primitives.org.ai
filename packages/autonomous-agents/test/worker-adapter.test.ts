@@ -94,4 +94,134 @@ describe('agentAsWorker', () => {
     expect(worker.id.startsWith('agent_')).toBe(true)
     expect(worker.id.length).toBeGreaterThan('agent_'.length)
   })
+
+  // ==========================================================================
+  // PRD aip-9l4r — Agent dispatcher approve / notify
+  // ==========================================================================
+
+  describe('dispatch.approve (Agent filler)', () => {
+    it('is omitted when no approvePolicy is provided (governance default)', () => {
+      const worker = agentAsWorker(makeAgent())
+      expect(worker.dispatch?.approve).toBeUndefined()
+    })
+
+    it('attaches approve when an explicit approvePolicy is supplied', async () => {
+      const { generateObject } = await import('ai-functions')
+      vi.mocked(generateObject).mockResolvedValueOnce({
+        object: { approved: true, notes: 'within $50 refund threshold' },
+      } as any)
+
+      const worker = agentAsWorker(makeAgent(), {
+        approvePolicy: {
+          instructions: 'Approve refunds under $50 only.',
+          defaultApproved: false,
+        },
+      })
+      expect(typeof worker.dispatch?.approve).toBe('function')
+
+      const result = await worker.dispatch!.approve!({ request: 'Approve $25 refund' })
+      expect(result.approved).toBe(true)
+      expect(result.notes).toContain('$50')
+      expect(result.approvedBy?.type).toBe('agent')
+    })
+
+    it('passes the policy text verbatim as the system prompt', async () => {
+      const { generateObject } = await import('ai-functions')
+      const spy = vi.mocked(generateObject)
+      spy.mockResolvedValueOnce({
+        object: { approved: false, notes: 'over threshold' },
+      } as any)
+
+      const worker = agentAsWorker(makeAgent(), {
+        approvePolicy: {
+          instructions: 'POLICY: deny all requests over $100.',
+        },
+      })
+
+      await worker.dispatch!.approve!({ request: 'Approve $500 expense?' })
+
+      const call = spy.mock.calls[spy.mock.calls.length - 1]?.[0] as {
+        system: string
+        temperature: number
+      }
+      expect(call.system).toContain('POLICY: deny all requests over $100.')
+      // Deterministic by default.
+      expect(call.temperature).toBe(0)
+    })
+
+    it('returns defaultApproved=false on LLM failure (fail-closed)', async () => {
+      const { generateObject } = await import('ai-functions')
+      vi.mocked(generateObject).mockRejectedValueOnce(new Error('rate limit'))
+
+      const worker = agentAsWorker(makeAgent(), {
+        approvePolicy: { instructions: 'p', defaultApproved: false },
+      })
+
+      const result = await worker.dispatch!.approve!({ request: 'r' })
+      expect(result.approved).toBe(false)
+      expect(result.notes).toContain('rate limit')
+    })
+
+    it('honours defaultApproved=true on LLM failure when configured', async () => {
+      const { generateObject } = await import('ai-functions')
+      vi.mocked(generateObject).mockRejectedValueOnce(new Error('rate limit'))
+
+      const worker = agentAsWorker(makeAgent(), {
+        approvePolicy: { instructions: 'p', defaultApproved: true },
+      })
+
+      const result = await worker.dispatch!.approve!({ request: 'r' })
+      expect(result.approved).toBe(true)
+    })
+  })
+
+  describe('dispatch.notify (Agent filler)', () => {
+    it('is always attached', () => {
+      const worker = agentAsWorker(makeAgent())
+      expect(typeof worker.dispatch?.notify).toBe('function')
+    })
+
+    it('defaults to a structured console.log and returns sent=true', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const worker = agentAsWorker(makeAgent())
+
+      const result = await worker.dispatch!.notify!({ message: 'deploy done' })
+      expect(result.sent).toBe(true)
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[autonomous-agents] notify(TestAgent)'),
+        'deploy done',
+        ''
+      )
+      logSpy.mockRestore()
+    })
+
+    it('invokes a custom notifyHandler with message + agent + options', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined)
+      const agent = makeAgent('Custom')
+      const worker = agentAsWorker(agent, { notifyHandler: handler })
+
+      await worker.dispatch!.notify!({
+        message: 'm',
+        priority: 'urgent',
+        metadata: { foo: 'bar' },
+      })
+      expect(handler).toHaveBeenCalledOnce()
+      const args = handler.mock.calls[0]
+      expect(args?.[0]).toBe('m')
+      expect(args?.[1].config.name).toBe('Custom')
+      expect(args?.[2]).toEqual({ priority: 'urgent', metadata: { foo: 'bar' } })
+    })
+
+    it('reports sent=false with notes when notifyHandler throws', async () => {
+      const worker = agentAsWorker(makeAgent(), {
+        notifyHandler: () => {
+          throw new Error('subscriber down')
+        },
+      })
+
+      const result = await worker.dispatch!.notify!({ message: 'm' })
+      expect(result.sent).toBe(false)
+      expect(result.notes).toContain('subscriber down')
+    })
+  })
 })
