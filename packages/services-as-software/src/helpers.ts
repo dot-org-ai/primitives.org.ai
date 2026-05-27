@@ -2,6 +2,7 @@
  * Helper functions for common service operations
  */
 
+import { warnDeprecatedOnce, resetDeprecationTelemetry } from 'digital-workers/deprecation'
 import type {
   Notification,
   Order,
@@ -15,8 +16,35 @@ import type {
   JSONSchema,
 } from './types.js'
 
+// ============================================================================
+// Deprecation telemetry (PRD aip-qozi, consolidated in aip-chuu)
+// ============================================================================
+
+// Re-export the shared telemetry surface so existing callers
+// (`import { warnDeprecatedOnce } from '../src/helpers.js'`) keep working
+// while the canonical home of the helper is `digital-workers/deprecation`.
+export { warnDeprecatedOnce } from 'digital-workers/deprecation'
+
 /**
- * Ask a question (helper for creating ask endpoints)
+ * Reset the one-time deprecation tracker (test-only).
+ *
+ * @internal Legacy alias retained so existing tests keep compiling; new
+ * tests should import `resetDeprecationTelemetry` directly from
+ * `digital-workers/deprecation`.
+ */
+export function __resetDeprecationNotices(): void {
+  resetDeprecationTelemetry()
+}
+
+/**
+ * Ask a question (helper for creating ask endpoints).
+ *
+ * @deprecated The Verb action surface lives in `digital-workers`. Endpoint
+ * handlers that need to invoke a Worker `ask` should import directly from
+ * `digital-workers` (e.g. `import { ask } from 'digital-workers'`) and pass a
+ * `Worker` target (an `agentAsWorker(agent)` or `personAsWorker(person)`).
+ * This pass-through helper will be removed in the next minor release. PRD:
+ * route Layer 5 through digital-workers (aip-qozi).
  *
  * @example
  * ```ts
@@ -32,6 +60,10 @@ import type {
 export function ask(
   handler: (question: string, context?: unknown, serviceContext?: ServiceContext) => Promise<string>
 ) {
+  warnDeprecatedOnce(
+    'services-as-software.ask',
+    "[services-as-software] DEPRECATED: the `ask` helper is a pass-through wrapper around an endpoint handler. The Verb action surface lives in 'digital-workers' — import `ask` from there and dispatch through a Worker target (e.g. `agentAsWorker(agent)` or `personAsWorker(person)`). This helper will be removed in the next minor release."
+  )
   return async (
     input: { question: string; context?: unknown },
     serviceContext?: ServiceContext
@@ -86,6 +118,10 @@ export function deliver(
 export function do_(
   handler: (action: string, input?: unknown, context?: ServiceContext) => Promise<unknown>
 ) {
+  warnDeprecatedOnce(
+    'services-as-software.do',
+    "[services-as-software] DEPRECATED: the `do` helper is a pass-through wrapper around an endpoint handler. The Verb action surface lives in 'digital-workers' — import `do` from there and dispatch through a Worker target. This helper will be removed in the next minor release."
+  )
   return async (
     input: { action: string; input?: unknown },
     context?: ServiceContext
@@ -111,6 +147,10 @@ export function do_(
 export function generate(
   handler: (prompt: string, options?: unknown, context?: ServiceContext) => Promise<unknown>
 ) {
+  warnDeprecatedOnce(
+    'services-as-software.generate',
+    "[services-as-software] DEPRECATED: the `generate` helper is a pass-through wrapper around an endpoint handler. The Verb action surface lives in 'digital-workers' — import `generate` from there and dispatch through a Worker target. This helper will be removed in the next minor release."
+  )
   return async (
     input: { prompt: string; options?: unknown },
     context?: ServiceContext
@@ -136,6 +176,10 @@ export function generate(
 export function is(
   handler: (value: unknown, type: string | JSONSchema, context?: ServiceContext) => Promise<boolean>
 ) {
+  warnDeprecatedOnce(
+    'services-as-software.is',
+    "[services-as-software] DEPRECATED: the `is` helper is a pass-through wrapper around an endpoint handler. The Verb action surface lives in 'digital-workers' — import `is` from there and dispatch through a Worker target. This helper will be removed in the next minor release."
+  )
   return async (
     input: { value: unknown; type: string | JSONSchema },
     context?: ServiceContext
@@ -161,6 +205,10 @@ export function is(
 export function notify(
   handler: (notification: Notification, context?: ServiceContext) => Promise<void>
 ) {
+  warnDeprecatedOnce(
+    'services-as-software.notify',
+    "[services-as-software] DEPRECATED: the `notify` helper is a pass-through wrapper around an endpoint handler. The Verb action surface lives in 'digital-workers' — import `notify` from there and dispatch through a Worker target. This helper will be removed in the next minor release."
+  )
   return async (input: Notification, context?: ServiceContext): Promise<void> => {
     return handler(input, context)
   }
@@ -207,7 +255,11 @@ export function on<TPayload>(
  * ```
  */
 export function order<TProduct>(
-  handler: (product: TProduct, quantity: number, context?: ServiceContext) => Promise<Order<TProduct>>
+  handler: (
+    product: TProduct,
+    quantity: number,
+    context?: ServiceContext
+  ) => Promise<Order<TProduct>>
 ) {
   return async (
     input: { product: TProduct; quantity: number },
@@ -256,7 +308,11 @@ export function queue<TJob>(
  * ```
  */
 export function quote<TProduct>(
-  handler: (product: TProduct, quantity: number, context?: ServiceContext) => Promise<Quote<TProduct>>
+  handler: (
+    product: TProduct,
+    quantity: number,
+    context?: ServiceContext
+  ) => Promise<Quote<TProduct>>
 ) {
   return async (
     input: { product: TProduct; quantity: number },
@@ -345,8 +401,13 @@ export function entitlements(handler: (context?: ServiceContext) => Promise<stri
  * })
  * ```
  */
-export function kpis(handler: (context?: ServiceContext) => Promise<Record<string, number | string>>) {
-  return async (_input: unknown, context?: ServiceContext): Promise<Record<string, number | string>> => {
+export function kpis(
+  handler: (context?: ServiceContext) => Promise<Record<string, number | string>>
+) {
+  return async (
+    _input: unknown,
+    context?: ServiceContext
+  ): Promise<Record<string, number | string>> => {
     return handler(context)
   }
 }

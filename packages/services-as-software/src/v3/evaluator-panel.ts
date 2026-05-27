@@ -21,18 +21,37 @@
  * multi-persona-reviewer primitive. Per the deferred-placement decision in
  * v3 §9, EvaluatorPanel lands inline here in `services-as-software/src/v3/`.
  *
- * **Round 7 (this commit):** {@link EvaluatorPanel.run} is now real — each
- * persona resolves to an `ai-functions.generateObject` call against a typed
- * `VerdictSchema`. Iteration semantics (`iterationPolicy.maxRounds`) live on
- * the panel surface but are *driven by the caller* (Service.verify or
- * Service.invoke) — the panel itself doesn't know what to revise, so it just
- * counts rounds and returns. Round 8 will weave round-feedback into the
- * carry-prompt.
+ * **Round 7:** {@link EvaluatorPanel.run} is now real — each persona resolves
+ * to an `ai-functions.generateObject` call against a typed `VerdictSchema`.
+ * Iteration semantics (`iterationPolicy.maxRounds`) live on the panel surface
+ * but are *driven by the caller* (Service.verify or Service.invoke) — the
+ * panel itself doesn't know what to revise, so it just counts rounds and
+ * returns. Round 8 will weave round-feedback into the carry-prompt.
+ *
+ * **Layer-5-through-digital-workers (aip-hhzf):** in `parallel-multi-call`
+ * mode each persona's verdict request is now dispatched via
+ * `digital-workers.ask(personaWorker, …)`. By default the panel synthesizes
+ * an inline Agent-as-Worker that routes through the same
+ * `ai-functions.generateObject` call as before (preserving prompt + schema
+ * + model resolution + cost tracking). A persona may carry an explicit
+ * `worker` field — `agentAsWorker(myAgent)` (custom Agent reviewer) or
+ * `personAsWorker(human, { resolve })` (Person reviewer) — and the panel
+ * dispatches through that worker instead. The `aggregate-single-call` mode
+ * is unchanged: it makes ONE LLM call across all personas, so the per-
+ * persona Worker dispatch does not apply — it still calls `generateObject`
+ * directly.
  *
  * @packageDocumentation
  */
 
 import { generateObject, type LanguageModelV3 } from 'ai-functions'
+import {
+  ask as workerAsk,
+  type Worker as DigitalWorker,
+  type WorkerDispatcher,
+  type WorkerAskInput,
+  type WorkerAskOutput,
+} from 'digital-workers'
 import { z } from 'zod'
 
 import { estimateCostFromUsage } from './invoke/cost-estimate.js'
@@ -83,6 +102,32 @@ export interface AgenticPersona {
    * the LLM prompt.
    */
   config: Record<string, unknown>
+  /**
+   * Optional pre-built `digital-workers` Worker that this persona dispatches
+   * through. When present, the panel routes the per-persona verdict request
+   * via `digital-workers.ask(persona.worker, …)`. When absent (the default),
+   * the panel synthesizes an inline Agent-as-Worker on the fly: a Worker
+   * whose `dispatch.ask` invokes `ai-functions.generateObject` with the
+   * persona's prompt+config and the panel's resolved model. Both paths
+   * traverse the SAME `digital-workers.ask` seam, so the dispatch contract is
+   * uniform regardless of who fills the persona.
+   *
+   * The discriminant between Agent and Person reviewers is **the worker's
+   * own `type` field** (`'agent'` | `'human'`) — `agentAsWorker` mints
+   * `type: 'agent'`, `personAsWorker` mints `type: 'human'`. Keeping the
+   * distinction on the worker (not on the persona) means the persona stays a
+   * declarative shape and the dispatch port stays the single seam.
+   *
+   * Cost note: when this field is set, `PanelVerdict.costUsd` no longer
+   * tracks LLM spend for this persona — the panel cannot see inside an
+   * external worker's dispatch (it may be a Human lifecycle with no LLM
+   * cost, or a wrapped agent with its own budget accounting). The
+   * synthesized-worker (default) path still tracks cost via
+   * {@link estimateCostFromUsage}.
+   *
+   * PRD: route Layer 5 through digital-workers (aip-qozi); slice: aip-hhzf.
+   */
+  worker?: DigitalWorker
 }
 
 // ============================================================================
@@ -262,21 +307,29 @@ export interface EvaluatorPanel {
    * Run the panel against `target`.
    *
    * Contract:
-   *   1. For each persona, dispatch an `ai-functions.generateObject` call
-   *      carrying `persona.persona` as the system-style prompt and
-   *      `persona.config` as structured rubric inputs. Mode selects between
-   *      N parallel calls (`parallel-multi-call`) or one merged call
-   *      (`aggregate-single-call`).
-   *   2. Resolve the model for each call in this order:
+   *   1. For each persona in `'parallel-multi-call'` mode, dispatch the
+   *      verdict request via `digital-workers.ask(personaWorker, prompt,
+   *      { schema: VerdictSchema })`. The `personaWorker` is either
+   *      `persona.worker` (caller-supplied — `agentAsWorker` or
+   *      `personAsWorker`) or an inline Agent-as-Worker the panel
+   *      synthesizes on the fly that wraps an `ai-functions.generateObject`
+   *      call. `'aggregate-single-call'` mode bypasses Worker dispatch — it
+   *      runs ONE LLM call across all personas, so per-persona routing is
+   *      not applicable.
+   *   2. For the synthesized-worker path, resolve the model in this order:
    *      `persona.config.modelHint` > `ctx.model` > `spec.model` >
-   *      legacy `'sonnet'` string-name fallback.
+   *      legacy `'sonnet'` string-name fallback. For the explicit-worker
+   *      path, the worker is authoritative for HOW the answer is produced —
+   *      model resolution is the worker's concern.
    *   3. Aggregate the per-persona verdicts under `signOffPolicy`.
    *   4. Track which round this is via `ctx.rounds` (defaults to 1). The
    *      panel itself does not iterate — it returns the verdict and lets the
    *      caller (Service.verify or Service.invoke) decide whether to re-run
    *      with feedback. When `rounds >= maxRounds`, `onMaxRoundsExceeded`
    *      semantics are the caller's responsibility (round 8 wiring).
-   *   5. Sum LLM costs into `PanelVerdict.costUsd`.
+   *   5. Sum LLM costs into `PanelVerdict.costUsd` for the synthesized-worker
+   *      path. Explicit-worker personas contribute `0` (the panel cannot
+   *      see inside an external dispatcher's cost).
    */
   run(target: unknown, ctx?: PanelRunContext): Promise<PanelVerdict>
 }
@@ -326,20 +379,94 @@ function buildPersonaPrompt(persona: AgenticPersona, target: unknown, round: num
 }
 
 /**
+ * Synthesize an inline Agent-as-Worker for the default (persona has no
+ * `worker`) path. The Worker's `dispatch.ask` invokes
+ * `ai-functions.generateObject` with the panel's resolved model so model
+ * routing + cost tracking are preserved across the seam.
+ *
+ * Tracks `costUsd` out-of-band via the supplied {@link onCost} callback —
+ * the {@link WorkerAskOutput} contract has no slot for cost, so we report
+ * it via closure instead. Returns the Worker; the caller dispatches via
+ * `digital-workers.ask(worker, prompt, { schema: VerdictSchema })`.
+ *
+ * The Worker carries `type: 'agent'` so the dispatch routing is unambiguous
+ * — it is an Agent filler of the Worker port, even though the agent is
+ * synthesized inline rather than wrapped from `autonomous-agents.Agent`.
+ */
+function synthesizeAgentWorker(
+  persona: AgenticPersona,
+  resolvedModel: string | LanguageModelV3,
+  costModelId: string,
+  onCost: (usd: number) => void
+): DigitalWorker {
+  const dispatch: WorkerDispatcher = {
+    async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
+      const result = await generateObject({
+        model: resolvedModel,
+        schema: input.schema ?? VerdictSchema,
+        prompt: input.question,
+      })
+      onCost(estimateCostFromUsage(result.usage, costModelId))
+      return {
+        answer: result.object as T,
+        answeredBy: { id: `persona_${persona.name}`, type: 'agent', name: persona.name },
+      }
+    },
+  }
+  return {
+    id: `persona_${persona.name}`,
+    name: persona.name,
+    type: 'agent',
+    status: 'available',
+    contacts: {},
+    dispatch,
+  }
+}
+
+/**
+ * Coerce an unknown answer from a Worker dispatcher to the verdict shape.
+ *
+ * - Synthesized-agent path: `generateObject({ schema: VerdictSchema })`
+ *   returns the parsed object directly.
+ * - External-worker path (Person / custom Agent): the dispatcher may
+ *   return a string ("approve, looks good") or a `{ verdict, rationale }`
+ *   object. We accept either: a string is normalized to
+ *   `{ verdict: 'approve', rationale: <string> }` unless it parses as
+ *   `'reject'`. This keeps the Person path practical without forcing the
+ *   resolver to know the panel's internal schema.
+ */
+function coerceVerdict(raw: unknown): z.infer<typeof VerdictSchema> {
+  if (typeof raw === 'string') {
+    const lowered = raw.trim().toLowerCase()
+    const isReject = lowered.startsWith('reject') || lowered.startsWith('no')
+    return { verdict: isReject ? 'reject' : 'approve', rationale: raw }
+  }
+  return VerdictSchema.parse(raw)
+}
+
+/**
  * Dispatch one persona → one verdict. Used by `parallel-multi-call`.
  *
- * Resolves the model for this call using the cluster-5 resolution order:
+ * The verdict is **always** routed through `digital-workers.ask` so the
+ * persona's reviewer kind (Agent today, Person tomorrow) becomes a swap of
+ * the worker rather than a panel-code change. Two paths:
  *
- *   1. `persona.config.modelHint` (string alias) — wins; lets a single
- *      persona escalate to e.g. `'opus'` for high-stakes review.
- *   2. `injectedModel` (a pre-wrapped {@link LanguageModelV3} from the
- *      panel-level default or a per-call override).
- *   3. legacy `'sonnet'` string-name fallback.
+ *  - `persona.worker` set — caller-supplied Worker (e.g.
+ *    `personAsWorker(human, …)` or `agentAsWorker(agent, …)`). The panel
+ *    dispatches through the Worker's `dispatch.ask` port. Cost tracking is
+ *    out-of-band: `costUsd` is `0` because the panel cannot see inside an
+ *    external dispatcher.
+ *  - `persona.worker` absent (default) — the panel synthesizes an
+ *    Agent-as-Worker inline. The synthesized Worker's `dispatch.ask`
+ *    invokes `generateObject` with the cluster-5 resolved model
+ *    (`persona.config.modelHint` > `injectedModel` > `'sonnet'`) and the
+ *    same prompt construction as before. `costUsd` is priced via
+ *    {@link estimateCostFromUsage}.
  *
- * The resolved model is also threaded through to {@link estimateCostFromUsage}
- * so the cost is priced against the real rate table rather than a hardcoded
- * constant. When the resolved model is a `LanguageModelV3` instance (not a
- * string), we price against its `modelId` so the rate-card lookup still works.
+ * Both paths traverse the SAME `digital-workers.ask` seam — the user-visible
+ * payoff of the Layer-5-through-digital-workers PRD (aip-qozi): a typed
+ * persona panel where personas can mix Agent and Person fillers without
+ * panel code changes.
  */
 async function runPersonaCall(
   persona: AgenticPersona,
@@ -348,6 +475,7 @@ async function runPersonaCall(
   injectedModel: LanguageModelV3 | undefined
 ): Promise<{ approval?: PanelApproval; rejection?: PanelRejection; costUsd: number }> {
   const prompt = buildPersonaPrompt(persona, target, round)
+
   // Resolution order: persona.config.modelHint > injectedModel > 'sonnet'.
   const modelHint = persona.config['modelHint']
   const personaHint: string | undefined = typeof modelHint === 'string' ? modelHint : undefined
@@ -356,17 +484,26 @@ async function runPersonaCall(
   // V3 model is supplied, use its `modelId`; otherwise use the string alias.
   const costModelId =
     typeof resolvedModel === 'string' ? resolvedModel : resolvedModel.modelId ?? 'sonnet'
-  const result = await generateObject({
-    model: resolvedModel,
-    schema: VerdictSchema,
-    prompt,
-  })
-  // ai-functions.generateObject types `result.object` as the schema arg
-  // itself (T = schema), not its inferred output. Round 7+ in ai-functions
-  // will tighten this with a `z.infer<S>` overload; until then we narrow
-  // via the schema's own `_output` type via a single typed cast.
-  const verdict = result.object as unknown as z.infer<typeof VerdictSchema>
-  const costUsd = estimateCostFromUsage(result.usage, costModelId)
+
+  // Cost is tracked via closure because WorkerAskOutput has no cost slot.
+  // External workers (Person, custom Agent) leave this at 0; the synthesized
+  // worker updates it from `generateObject`'s usage report.
+  let costUsd = 0
+  const worker =
+    persona.worker ??
+    synthesizeAgentWorker(persona, resolvedModel, costModelId, (usd) => {
+      costUsd = usd
+    })
+
+  // Dispatch via the unified Worker action surface — for the synthesized
+  // path this is a no-op indirection (the inline dispatcher is the only
+  // strategy); for the external-worker path this is the Agent/Person seam.
+  // The dispatcher's answer type is `unknown` here because Person workers
+  // return strings and Agent workers return verdict objects; `coerceVerdict`
+  // normalizes both shapes.
+  const out = await workerAsk<unknown>(worker, prompt, { schema: VerdictSchema })
+
+  const verdict = coerceVerdict(out.answer)
   if (verdict.verdict === 'approve') {
     return {
       approval: { reviewer: persona.name, rationale: verdict.rationale },

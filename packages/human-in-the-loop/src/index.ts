@@ -62,7 +62,23 @@ export {
   okrs,
   registerHuman,
   getDefaultHuman,
+  warnDeprecatedOnce,
+  __resetDeprecationNotices,
 } from './helpers.js'
+
+// Person-as-Worker adapter (PRD: route Layer 5 through digital-workers — aip-qozi)
+export { personAsWorker } from './person-worker.js'
+
+export type {
+  PersonWorkerAdapterOptions,
+  PersonAskContext,
+  PersonAskResolver,
+  PersonApproveContext,
+  PersonApproveDecision,
+  PersonApproveResolver,
+  PersonNotifyContext,
+  PersonNotifyHandler,
+} from './person-worker.js'
 
 // Re-export organizational types from org.ai for convenience
 export type {

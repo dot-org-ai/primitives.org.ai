@@ -24,7 +24,19 @@
  * @module
  */
 
-import type { TaskResult, DoOptions } from './types.js'
+import type { TaskResult, DoOptions, Worker, ActionTarget, RoleTarget } from './types.js'
+
+/**
+ * A target for `do` — concrete Worker/Team/WorkerRef/string, OR a `RoleTarget`
+ * that resolves to its current filler at dispatch time.
+ *
+ * The legacy 2-arg form `do(task, options)` keeps its original LLM-direct
+ * behaviour and is unchanged. The 3-arg form `do(target, task, options)`
+ * routes through the resolved Worker's `dispatch.do` port (Agent filler →
+ * LLM with parity-preserving prompt+schema; Person filler → Human lifecycle
+ * `do` request). PRD: aip-2q19 (Migrate LLM-shape Verbs).
+ */
+export type DoTarget = ActionTarget | RoleTarget
 
 /**
  * Execute a task by routing to an appropriate Worker (AI Agent or Human).
@@ -84,10 +96,64 @@ import type { TaskResult, DoOptions } from './types.js'
  *
  * @see {@link ai-functions#do} for direct LLM task description
  */
+export async function doTask<T = unknown>(task: string, options?: DoOptions): Promise<TaskResult<T>>
 export async function doTask<T = unknown>(
+  target: DoTarget,
   task: string,
-  options: DoOptions = {}
+  options?: DoOptions
+): Promise<TaskResult<T>>
+export async function doTask<T = unknown>(
+  taskOrTarget: string | DoTarget,
+  taskOrOptions?: string | DoOptions,
+  maybeOptions?: DoOptions
 ): Promise<TaskResult<T>> {
+  // Normalize overloads — sniff whether the first arg is the task or a target.
+  let task: string
+  let options: DoOptions
+  let target: DoTarget | undefined
+  if (typeof taskOrTarget === 'string' && typeof taskOrOptions !== 'string') {
+    // Legacy 2-arg form: doTask(task, options?)
+    task = taskOrTarget
+    options = (taskOrOptions as DoOptions | undefined) ?? {}
+    target = undefined
+  } else {
+    // 3-arg form: doTask(target, task, options?)
+    target = taskOrTarget as DoTarget
+    task = taskOrOptions as string
+    options = maybeOptions ?? {}
+  }
+
+  // If a target is supplied, resolve a Role + try the Worker dispatcher first.
+  if (target !== undefined) {
+    const resolved = await resolveRoleTarget(target)
+    const dispatcher = getDispatcher(resolved)
+    if (dispatcher && dispatcher.do) {
+      const startTime = Date.now()
+      try {
+        const out = await dispatcher.do<T>({
+          task,
+          ...(options.context !== undefined && { context: options.context }),
+          ...(options.timeout !== undefined && { timeout: options.timeout }),
+        })
+        return {
+          result: out.result,
+          success: true,
+          duration: Date.now() - startTime,
+          steps: [],
+        }
+      } catch (err) {
+        return {
+          result: undefined as T,
+          success: false,
+          error: (err as Error).message,
+          duration: Date.now() - startTime,
+          steps: [],
+        }
+      }
+    }
+    // No dispatcher available — fall through to the legacy LLM path.
+  }
+
   const { maxRetries = 0, timeout, background = false, context } = options
 
   const startTime = Date.now()
@@ -318,4 +384,40 @@ doTask.withDependencies = async <T = unknown>(
       dependencies: depResults.map((r) => r.result),
     },
   })
+}
+
+// ============================================================================
+// Internal Helpers — Worker dispatch (PRD aip-2q19)
+// ============================================================================
+
+/**
+ * Type guard: is this target a Role slot that must resolve to a filler?
+ */
+function isRoleTarget(target: DoTarget): target is RoleTarget {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    (target as { $type?: unknown }).$type === 'Role' &&
+    typeof (target as RoleTarget).resolveWorker === 'function'
+  )
+}
+
+/**
+ * Resolve a Role slot to its current filler Worker at dispatch time.
+ */
+async function resolveRoleTarget(target: DoTarget): Promise<ActionTarget> {
+  if (isRoleTarget(target)) {
+    return target.resolveWorker()
+  }
+  return target as ActionTarget
+}
+
+/**
+ * Return the dispatcher attached to a Worker target, if any.
+ */
+function getDispatcher(target: ActionTarget) {
+  if (typeof target === 'object' && target !== null && 'dispatch' in target) {
+    return (target as Worker).dispatch
+  }
+  return undefined
 }

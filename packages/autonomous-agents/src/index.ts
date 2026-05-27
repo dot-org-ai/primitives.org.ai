@@ -167,4 +167,16 @@ export {
   generate,
   is,
   notify,
+  warnDeprecatedOnce,
+  __resetDeprecationNotices,
 } from './actions.js'
+
+// Shared ask-dispatch builder (parity-critical generateObject construction).
+// The Agent-as-Worker adapter (`agentAsWorker`) lives on the `./worker`
+// subpath because it depends on the Cloudflare WorkerEntrypoint module.
+export {
+  buildAskGenerateOptions,
+  runAsk,
+  DEFAULT_ASK_SCHEMA,
+  DEFAULT_ASK_SYSTEM,
+} from './ask-dispatch.js'

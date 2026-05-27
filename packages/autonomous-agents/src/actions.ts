@@ -7,24 +7,55 @@
  * @packageDocumentation
  */
 
-import { generateObject, type AIGenerateOptions, type SimpleSchema } from 'ai-functions'
+import {
+  generateObject,
+  type AIGenerateOptions,
+  type SimpleSchema,
+  type JSONSchema,
+} from 'ai-functions'
+import { ask as askWorker } from 'digital-workers'
+import type { Worker, WorkerDispatcher, WorkerAskInput, WorkerAskOutput } from 'digital-workers'
+import { warnDeprecatedOnce, resetDeprecationTelemetry } from 'digital-workers/deprecation'
 import type {
   ApprovalRequest,
   ApprovalResult,
   ApprovalStatus,
   NotificationOptions,
 } from './types.js'
+import { runAsk, runDo, runDecide, runGenerate, runIs } from './ask-dispatch.js'
+
+// Re-export the shared telemetry surface so existing callers
+// (`import { warnDeprecatedOnce } from '../src/actions.js'`) keep working.
+// `__resetDeprecationNotices` is the legacy test-only alias, preserved for
+// the existing ask-deprecation.test.ts suite.
+export { warnDeprecatedOnce } from 'digital-workers/deprecation'
 
 /**
- * Execute a task using AI
+ * Reset the one-time deprecation tracker (test-only).
+ *
+ * @internal Legacy alias retained so existing tests keep compiling; new
+ * tests should import `resetDeprecationTelemetry` directly from
+ * `digital-workers/deprecation`.
+ */
+export function __resetDeprecationNotices(): void {
+  resetDeprecationTelemetry()
+}
+
+/**
+ * Execute a task using AI.
+ *
+ * @deprecated Import `do` from `digital-workers` instead. The action verbs
+ * are now dispatched through the unified Worker port; this re-export
+ * delegates through the shared `runDo` builder (so the `generateObject`
+ * prompt + schema are unchanged) and logs a one-time deprecation notice.
+ * PRD: route Layer 5 through digital-workers (aip-2q19).
  *
  * @example
  * ```ts
- * import { do as doTask } from 'autonomous-agents'
+ * import { do as doTask } from 'digital-workers'
+ * import { agentAsWorker } from 'autonomous-agents/worker'
  *
- * const result = await doTask('Analyze customer feedback and provide insights', {
- *   feedback: ['Great product!', 'Needs improvement', 'Love the features'],
- * })
+ * const result = await doTask(agentAsWorker(myAgent), 'Analyse feedback')
  * ```
  */
 export async function doAction<TResult = unknown>(
@@ -32,29 +63,49 @@ export async function doAction<TResult = unknown>(
   context?: unknown,
   options?: AIGenerateOptions
 ): Promise<TResult> {
-  const result = await generateObject({
-    model: options?.model || 'sonnet',
-    schema: options?.schema || { result: 'The result of the task' },
-    system:
-      options?.system || 'You are a helpful AI assistant. Execute tasks accurately and thoroughly.',
-    prompt: `Task: ${task}\n\nContext: ${JSON.stringify(context || {})}`,
-    temperature: options?.temperature ?? 0.7,
-  })
-
-  return (result.object as { result: TResult }).result || (result.object as TResult)
+  warnDeprecatedOnce(
+    'autonomous-agents.do',
+    "[autonomous-agents] DEPRECATED: `do` is now dispatched through the unified Worker port. Import `do` from 'digital-workers' (e.g. `do(agentAsWorker(agent), task)`). This re-export will be removed in the next minor release."
+  )
+  return runDo<TResult>(task, context, options)
 }
 
 /**
- * Ask a question and get an answer
+ * A context-only Worker dispatcher that preserves the EXACT prior
+ * `autonomous-agents.ask` behaviour: it passes only the caller-supplied
+ * `options` (model / schema / system / temperature) into the shared
+ * {@link runAsk} builder — no agent config is injected. Used by the deprecated
+ * standalone `ask` so its delegation through `digital-workers.ask` is parity-
+ * preserving.
+ */
+function contextOnlyAskDispatcher(options?: AIGenerateOptions): WorkerDispatcher {
+  return {
+    async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
+      const merged: AIGenerateOptions = { ...options }
+      if (input.schema !== undefined) {
+        merged.schema = input.schema as unknown as JSONSchema
+      }
+      const answer = await runAsk<T>(input.question, input.context, merged)
+      return { answer }
+    },
+  }
+}
+
+/**
+ * Ask a question and get an answer.
+ *
+ * @deprecated Import `ask` from `digital-workers` instead. The action verbs
+ * are now dispatched through the unified Worker port. This export delegates to
+ * `digital-workers.ask` (routing through `ai-functions.generateObject` with
+ * identical prompt + schema construction) and will be removed in the next
+ * minor release. PRD: route Layer 5 through digital-workers (aip-qozi).
  *
  * @example
  * ```ts
- * import { ask } from 'autonomous-agents'
+ * import { ask } from 'digital-workers'
+ * import { agentAsWorker } from 'autonomous-agents/worker'
  *
- * const answer = await ask('What are the key benefits of our product?', {
- *   product: 'AI Assistant',
- *   features: ['smart automation', 'natural language', 'context awareness'],
- * })
+ * const answer = await ask(agentAsWorker(myAgent), 'What are the key benefits?')
  * ```
  */
 export async function ask<TResult = unknown>(
@@ -62,33 +113,46 @@ export async function ask<TResult = unknown>(
   context?: unknown,
   options?: AIGenerateOptions
 ): Promise<TResult> {
-  const result = await generateObject({
-    model: options?.model || 'sonnet',
-    schema: options?.schema || {
-      answer: 'The answer to the question',
-      reasoning: 'Supporting reasoning',
-    },
-    system:
-      options?.system || 'You are a knowledgeable AI assistant. Provide clear, accurate answers.',
-    prompt: `Question: ${question}\n\nContext: ${JSON.stringify(context || {})}`,
-    temperature: options?.temperature ?? 0.7,
+  warnDeprecatedOnce(
+    'autonomous-agents.ask',
+    "[autonomous-agents] DEPRECATED: `ask` is now dispatched through the unified Worker port. Import `ask` from 'digital-workers' (e.g. `ask(agentAsWorker(agent), question)`). This re-export will be removed in the next minor release."
+  )
+
+  // Delegate to the canonical digital-workers.ask via a context-only Worker.
+  // The dispatcher routes through the shared runAsk builder, so the
+  // generateObject prompt + schema match the prior implementation exactly.
+  const worker: Worker = {
+    id: 'autonomous-agents:ask',
+    name: 'autonomous-agents ask',
+    type: 'agent',
+    status: 'available',
+    contacts: {},
+    dispatch: contextOnlyAskDispatcher(options),
+  }
+
+  const result = await askWorker<TResult>(worker, question, {
+    ...(context !== undefined && { context: context as Record<string, unknown> }),
+    ...(options?.schema !== undefined && { schema: options.schema as SimpleSchema }),
   })
 
-  const response = result.object as { answer: TResult; reasoning: string }
-  return response.answer
+  return result.answer
 }
 
 /**
- * Make a decision between options
+ * Make a decision between options.
+ *
+ * @deprecated Import `decide` from `digital-workers` instead. The action
+ * verbs are now dispatched through the unified Worker port; this re-export
+ * delegates through the shared `runDecide` builder (so the `generateObject`
+ * prompt + schema are unchanged) and logs a one-time deprecation notice.
+ * PRD: route Layer 5 through digital-workers (aip-2q19).
  *
  * @example
  * ```ts
- * import { decide } from 'autonomous-agents'
+ * import { decide } from 'digital-workers'
+ * import { agentAsWorker } from 'autonomous-agents/worker'
  *
- * const choice = await decide(
- *   ['option A', 'option B', 'option C'],
- *   'Which option has the highest ROI?'
- * )
+ * const choice = await decide(agentAsWorker(myAgent), { options: ['A', 'B'] })
  * ```
  */
 export async function decide<T extends string>(
@@ -96,29 +160,11 @@ export async function decide<T extends string>(
   context?: string,
   settings?: AIGenerateOptions
 ): Promise<T> {
-  const result = await generateObject({
-    model: settings?.model || 'sonnet',
-    schema: {
-      decision: options.join(' | '),
-      reasoning: 'Reasoning for this decision',
-      confidence: 'Confidence level 0-100 (number)',
-    } as SimpleSchema,
-    system:
-      settings?.system ||
-      'You are a strategic decision-maker. Evaluate options carefully and provide clear reasoning.',
-    prompt: `Make a decision between these options:\n${options
-      .map((o, i) => `${i + 1}. ${o}`)
-      .join('\n')}\n\nContext: ${context || 'No additional context'}`,
-    temperature: settings?.temperature ?? 0.7,
-  })
-
-  const response = result.object as unknown as {
-    decision: T
-    reasoning: string
-    confidence: number
-  }
-
-  return response.decision
+  warnDeprecatedOnce(
+    'autonomous-agents.decide',
+    "[autonomous-agents] DEPRECATED: `decide` is now dispatched through the unified Worker port. Import `decide` from 'digital-workers' (e.g. `decide(agentAsWorker(agent), { options })`). This re-export will be removed in the next minor release."
+  )
+  return runDecide<T>(options, context, settings)
 }
 
 /**
@@ -141,9 +187,22 @@ export async function decide<T extends string>(
  * }
  * ```
  */
+/**
+ * Request approval for an action or decision.
+ *
+ * @deprecated Import `approve` from `digital-workers` instead. The action
+ * verbs are dispatched through the unified Worker port. For an Agent target,
+ * supply an `approvePolicy` to `agentAsWorker` to grant the agent
+ * autonomous-approve authority under explicit policy. PRD: route Layer 5
+ * through digital-workers (aip-qozi, slice aip-9l4r).
+ */
 export async function approve<TResult = unknown>(
   request: ApprovalRequest
 ): Promise<ApprovalResult<TResult>> {
+  warnDeprecatedOnce(
+    'autonomous-agents.approve',
+    "[autonomous-agents] DEPRECATED: `approve` is now dispatched through the unified Worker port. Import `approve` from 'digital-workers' (e.g. `approve('request', agentAsWorker(agent, { approvePolicy }))`). This re-export will be removed in the next minor release."
+  )
   return executeApproval(request)
 }
 
@@ -224,33 +283,30 @@ function getApprovalUISchema(channel: string): SimpleSchema {
 }
 
 /**
- * Generate content using AI
+ * Generate content using AI.
+ *
+ * @deprecated Import `generate` from `digital-workers` instead. The action
+ * verbs are now dispatched through the unified Worker port; this re-export
+ * delegates through the shared `runGenerate` builder (so the `generateObject`
+ * prompt + schema are unchanged) and logs a one-time deprecation notice.
+ * PRD: route Layer 5 through digital-workers (aip-2q19).
  *
  * @example
  * ```ts
- * import { generate } from 'autonomous-agents'
+ * import { generate } from 'digital-workers'
+ * import { agentAsWorker } from 'autonomous-agents/worker'
  *
- * const content = await generate({
- *   model: 'sonnet',
- *   schema: {
- *     title: 'Blog post title',
- *     content: 'Blog post content',
- *     tags: ['List of tags'],
- *   },
- *   prompt: 'Write a blog post about AI automation',
+ * const content = await generate(agentAsWorker(myAgent), 'Write a blog post', {
+ *   schema: { title: 'Blog post title', content: 'Blog post content' },
  * })
  * ```
  */
 export async function generate<TResult = unknown>(options: AIGenerateOptions): Promise<TResult> {
-  const result = await generateObject({
-    model: options.model || 'sonnet',
-    schema: (options.schema || { result: 'Generated content' }) as SimpleSchema,
-    system: options.system || 'You are a creative AI assistant. Generate high-quality content.',
-    prompt: options.prompt || '',
-    temperature: options.temperature ?? 0.8,
-  })
-
-  return result.object as TResult
+  warnDeprecatedOnce(
+    'autonomous-agents.generate',
+    "[autonomous-agents] DEPRECATED: `generate` is now dispatched through the unified Worker port. Import `generate` from 'digital-workers' (e.g. `generate(agentAsWorker(agent), prompt, { schema })`). This re-export will be removed in the next minor release."
+  )
+  return runGenerate<TResult>(options)
 }
 
 /**
@@ -272,22 +328,11 @@ export async function generate<TResult = unknown>(options: AIGenerateOptions): P
  * ```
  */
 export async function is(value: unknown, type: string | SimpleSchema): Promise<boolean> {
-  const schema =
-    typeof type === 'string'
-      ? { isValid: `Is this value a valid ${type}? (boolean)`, reason: 'Explanation' }
-      : { isValid: 'Does this value match the schema? (boolean)', reason: 'Explanation' }
-
-  const result = await generateObject({
-    model: 'sonnet',
-    schema,
-    system: 'You are a type validator. Determine if the value matches the expected type or schema.',
-    prompt: `Value: ${JSON.stringify(value)}\n\nExpected type: ${
-      typeof type === 'string' ? type : JSON.stringify(type)
-    }`,
-    temperature: 0,
-  })
-
-  return (result.object as unknown as { isValid: boolean; reason: string }).isValid
+  warnDeprecatedOnce(
+    'autonomous-agents.is',
+    "[autonomous-agents] DEPRECATED: `is` is now dispatched through the unified Worker port. Import `is` from 'digital-workers' (e.g. `is(agentAsWorker(agent), value, type)`). This re-export will be removed in the next minor release."
+  )
+  return runIs(value, type)
 }
 
 /**
@@ -306,7 +351,19 @@ export async function is(value: unknown, type: string | SimpleSchema): Promise<b
  * })
  * ```
  */
+/**
+ * Send a notification.
+ *
+ * @deprecated Import `notify` from `digital-workers` instead. The action verbs
+ * are dispatched through the unified Worker port; for an Agent target, the
+ * dispatcher logs via console (or a custom `notifyHandler`). PRD: route
+ * Layer 5 through digital-workers (aip-qozi, slice aip-9l4r).
+ */
 export async function notify(options: NotificationOptions): Promise<void> {
+  warnDeprecatedOnce(
+    'autonomous-agents.notify',
+    "[autonomous-agents] DEPRECATED: `notify` is now dispatched through the unified Worker port. Import `notify` from 'digital-workers' (e.g. `notify(agentAsWorker(agent), message)`). This re-export will be removed in the next minor release."
+  )
   const { message, channel = 'web', recipients = [], priority = 'medium', data = {} } = options
 
   // Generate channel-specific notification format

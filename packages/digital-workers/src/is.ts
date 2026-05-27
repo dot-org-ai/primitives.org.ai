@@ -28,7 +28,16 @@
 
 import { generateObject } from 'ai-functions'
 import { schema as convertSchema, type SimpleSchema } from 'ai-functions'
-import type { TypeCheckResult, IsOptions } from './types.js'
+import type { TypeCheckResult, IsOptions, Worker, ActionTarget, RoleTarget } from './types.js'
+
+/**
+ * A target for `is` — concrete `ActionTarget` or `RoleTarget`.
+ *
+ * The legacy 3-arg form `is(value, type, options)` keeps its LLM-direct
+ * behaviour. The 4-arg form `is(target, value, type, options)` routes through
+ * the resolved Worker's `dispatch.is` port. PRD: aip-2q19.
+ */
+export type IsTarget = ActionTarget | RoleTarget
 
 /**
  * Validate a value against a type or schema with detailed results.
@@ -85,8 +94,52 @@ import type { TypeCheckResult, IsOptions } from './types.js'
 export async function is(
   value: unknown,
   type: string | SimpleSchema,
-  options: IsOptions = {}
+  options?: IsOptions
+): Promise<TypeCheckResult>
+export async function is(
+  target: IsTarget,
+  value: unknown,
+  type: string | SimpleSchema,
+  options?: IsOptions
+): Promise<TypeCheckResult>
+export async function is(
+  valueOrTarget: unknown,
+  typeOrValue: unknown,
+  optionsOrType?: string | SimpleSchema | IsOptions,
+  maybeOptions?: IsOptions
 ): Promise<TypeCheckResult> {
+  // Normalize overloads — sniff whether the first arg is a Worker-shaped
+  // target (object with `dispatch` or `$type === 'Role'`) or a value.
+  let target: IsTarget | undefined
+  let value: unknown
+  let type: string | SimpleSchema
+  let options: IsOptions
+  if (looksLikeTarget(valueOrTarget)) {
+    target = valueOrTarget as IsTarget
+    value = typeOrValue
+    type = optionsOrType as string | SimpleSchema
+    options = maybeOptions ?? {}
+  } else {
+    target = undefined
+    value = valueOrTarget
+    type = typeOrValue as string | SimpleSchema
+    options = (optionsOrType as IsOptions | undefined) ?? {}
+  }
+
+  // If a target is supplied, try its `is` dispatcher first.
+  if (target !== undefined) {
+    const resolved = await resolveRoleTarget(target)
+    const dispatcher = getDispatcher(resolved)
+    if (dispatcher && dispatcher.is) {
+      const out = await dispatcher.is({ value, type })
+      return {
+        valid: out.valid,
+        ...(out.valid ? { value } : { errors: ['Invalid'] }),
+      }
+    }
+    // No dispatcher available — fall through to the legacy LLM path.
+  }
+
   const { coerce = false, strict = false } = options
 
   // Handle simple type strings
@@ -403,4 +456,52 @@ is.custom = async (
       errors: [(error as Error).message],
     }
   }
+}
+
+// ============================================================================
+// Internal Helpers — Worker dispatch (PRD aip-2q19)
+// ============================================================================
+
+/**
+ * Heuristic: is the first argument a target (Worker/Team/Role) vs a value?
+ *
+ * Worker/Team/Role targets are always objects with either a `dispatch` port,
+ * a `$type === 'Role'` discriminant, OR a `Worker`-shaped `id`+`type`+`contacts`
+ * triple. Anything else (primitives, plain validation values) is treated as
+ * `value`.
+ */
+function looksLikeTarget(arg: unknown): boolean {
+  if (typeof arg !== 'object' || arg === null || Array.isArray(arg)) return false
+  const obj = arg as Record<string, unknown>
+  if ('dispatch' in obj) return true
+  if (obj['$type'] === 'Role' && typeof obj['resolveWorker'] === 'function') return true
+  // Worker-shaped: has id + type + contacts (the minimal Worker required fields).
+  return (
+    typeof obj['id'] === 'string' &&
+    typeof obj['type'] === 'string' &&
+    typeof obj['contacts'] === 'object'
+  )
+}
+
+function isRoleTarget(target: IsTarget): target is RoleTarget {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    (target as { $type?: unknown }).$type === 'Role' &&
+    typeof (target as RoleTarget).resolveWorker === 'function'
+  )
+}
+
+async function resolveRoleTarget(target: IsTarget): Promise<ActionTarget> {
+  if (isRoleTarget(target)) {
+    return target.resolveWorker()
+  }
+  return target as ActionTarget
+}
+
+function getDispatcher(target: ActionTarget) {
+  if (typeof target === 'object' && target !== null && 'dispatch' in target) {
+    return (target as Worker).dispatch
+  }
+  return undefined
 }

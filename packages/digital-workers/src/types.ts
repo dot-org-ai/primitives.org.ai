@@ -279,7 +279,258 @@ export interface Worker {
    * PaymentBroker. SVO co-design step 4 (aip-ttfk).
    */
   identity?: IdentityRef
+  /**
+   * Optional Verb-dispatch port. When present, `digital-workers` action
+   * verbs (`ask`, …) route to this dispatcher INSTEAD of channel delivery.
+   *
+   * This is the seam that lets Layer 5 packages fill the Worker port:
+   *   - `autonomous-agents.agentAsWorker(agent)` attaches a dispatcher that
+   *     routes `ask` through `ai-functions.generateObject` with the Agent's
+   *     role/goals as system context (preserving the prior
+   *     `autonomous-agents.ask` semantics).
+   *   - `human-in-the-loop.personAsWorker(person)` attaches a dispatcher that
+   *     surfaces the Human lifecycle (claim / progress / resolve / escalate)
+   *     plus channel delivery.
+   *
+   * When absent, the verbs fall back to channel routing (the original
+   * behaviour). A `Role` target resolves to its current filler's dispatcher
+   * at dispatch time. PRD: route-layer5-through-digital-workers (aip-qozi).
+   */
+  dispatch?: WorkerDispatcher
   metadata?: Record<string, unknown>
+}
+
+// ============================================================================
+// Worker Dispatch Port (PRD: route Layer 5 through digital-workers — aip-qozi)
+// ============================================================================
+
+/**
+ * Input to a Worker dispatcher's `ask` verb.
+ *
+ * Carries the same payload `digital-workers.ask` resolves from its
+ * `(target, question, options)` arguments, so a dispatcher receives exactly
+ * what the caller intended without re-deriving it.
+ */
+export interface WorkerAskInput {
+  /** The question to route to the Worker. */
+  question: string
+  /** Optional structured-response schema (forwarded to the LLM / lifecycle). */
+  schema?: SimpleSchema
+  /** Optional context object (becomes system context for an Agent filler). */
+  context?: Record<string, unknown>
+  /** Optional timeout in milliseconds. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `ask` verb.
+ */
+export interface WorkerAskOutput<T = string> {
+  /** The Worker's answer. */
+  answer: T
+  /**
+   * Who actually answered. For an Agent filler this is the agent Worker; for
+   * a Role this is the resolved filler. `digital-workers.ask` uses this to
+   * populate `AskResult.answeredBy` when the dispatcher supplies it.
+   */
+  answeredBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `approve` verb.
+ *
+ * Mirrors the `(request, target, options)` shape that `digital-workers.approve`
+ * resolves so a dispatcher receives exactly what the caller intended.
+ */
+export interface WorkerApproveInput {
+  /** The thing being requested for approval (rendered to the human). */
+  request: string
+  /** Optional context object (decision pros/cons, deadline, etc.). */
+  context?: Record<string, unknown>
+  /** Optional timeout in milliseconds (becomes the lifecycle SLA window). */
+  timeout?: number
+  /** Whether rejection or timeout should escalate to the next tier. */
+  escalate?: boolean
+}
+
+/**
+ * Result returned by a Worker dispatcher's `approve` verb.
+ */
+export interface WorkerApproveOutput {
+  /** Whether the request was approved (`true`) or rejected (`false`). */
+  approved: boolean
+  /** Free-form notes captured alongside the decision. */
+  notes?: string
+  /**
+   * Who actually decided. For an Agent filler this is the agent Worker; for a
+   * Person this is the resolver. `digital-workers.approve` uses this to
+   * populate `ApprovalResult.approvedBy` when the dispatcher supplies it.
+   */
+  approvedBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `notify` verb.
+ *
+ * Mirrors the `(target, message, options)` shape that `digital-workers.notify`
+ * resolves so a dispatcher receives exactly what the caller intended.
+ */
+export interface WorkerNotifyInput {
+  /** The notification body. */
+  message: string
+  /** Priority hint forwarded to the channel adapter. */
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  /** Free-form metadata forwarded to the channel adapter. */
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Result returned by a Worker dispatcher's `notify` verb.
+ *
+ * `notify` is fire-and-forget — the result simply signals whether the filler
+ * accepted the message. `digital-workers.notify` adds delivery metadata
+ * (channel, recipients, messageId) around this.
+ */
+export interface WorkerNotifyOutput {
+  /** Whether the dispatcher accepted the message for delivery. */
+  sent: boolean
+  /** Optional notes — e.g. why a notify was no-oped by an Agent filler. */
+  notes?: string
+}
+
+/**
+ * Input to a Worker dispatcher's `do` verb.
+ *
+ * Carries the payload `digital-workers.do` resolves from its
+ * `(task, options)` arguments.
+ */
+export interface WorkerDoInput {
+  /** The task description. */
+  task: string
+  /** Optional context object (passed into the LLM / lifecycle). */
+  context?: Record<string, unknown>
+  /** Optional structured-response schema. */
+  schema?: SimpleSchema
+  /** Optional timeout in milliseconds. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `do` verb.
+ */
+export interface WorkerDoOutput<T = unknown> {
+  /** The task result. */
+  result: T
+  /** Who actually executed the task. */
+  doneBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `decide` verb.
+ */
+export interface WorkerDecideInput<T = string> {
+  /** The options to choose between. */
+  options: T[]
+  /** Optional context, passed into the LLM / lifecycle. */
+  context?: string | Record<string, unknown>
+  /** Optional structured-response schema (override). */
+  schema?: SimpleSchema
+  /** Optional timeout in milliseconds. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `decide` verb.
+ */
+export interface WorkerDecideOutput<T = string> {
+  /** The chosen option. */
+  decision: T
+  /** Who made the decision. */
+  decidedBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `generate` verb.
+ */
+export interface WorkerGenerateInput {
+  /** The generation prompt. */
+  prompt: string
+  /** Optional structured-response schema. */
+  schema?: SimpleSchema
+  /** Optional system prompt override. */
+  system?: string
+  /** Optional context. */
+  context?: Record<string, unknown>
+  /** Optional timeout. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `generate` verb.
+ */
+export interface WorkerGenerateOutput<T = unknown> {
+  /** The generated content. */
+  content: T
+  /** Who generated it. */
+  generatedBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `is` verb.
+ */
+export interface WorkerIsInput {
+  /** The value being checked. */
+  value: unknown
+  /** Type name or schema to validate against. */
+  type: string | SimpleSchema
+  /** Optional context. */
+  context?: Record<string, unknown>
+  /** Optional timeout. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `is` verb.
+ */
+export interface WorkerIsOutput {
+  /** Whether the value matches the type. */
+  valid: boolean
+  /** Who made the determination. */
+  checkedBy?: WorkerRef
+}
+
+/**
+ * WorkerDispatcher — the runtime Verb-dispatch port a Worker filler satisfies.
+ *
+ * The **contract that the Agent-as-Worker and Person-as-Worker adapters
+ * implement**. A dispatcher is a thin, kind-specific strategy: `digital-workers`
+ * owns the target/channel-resolution pipeline and the verb-specific result
+ * shaping; the dispatcher owns *how the answer/decision/delivery is produced*
+ * (LLM call vs. Human lifecycle).
+ *
+ * Verbs were added in slices: the tracer (aip-qozi) formalised `ask`; the
+ * channel-verbs slice (aip-9l4r) added `approve` + `notify`; the LLM-shape
+ * verbs slice (aip-2q19) added `do` + `decide` + `generate` + `is`. Every verb
+ * other than `ask` is OPTIONAL on the contract so callers carrying older
+ * dispatchers (and tests that stub only the verbs they need) keep
+ * type-checking; `digital-workers.<verb>` falls back to its legacy routing
+ * when the dispatcher does not implement the verb.
+ */
+export interface WorkerDispatcher {
+  /** Route a question to the underlying filler and await its answer. */
+  ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>>
+  /** Route an approval request and await the approve/reject decision. */
+  approve?(input: WorkerApproveInput): Promise<WorkerApproveOutput>
+  /** Deliver a notification to the underlying filler (no required response). */
+  notify?(input: WorkerNotifyInput): Promise<WorkerNotifyOutput>
+  /** Route a task to the underlying filler for execution. */
+  do?<T = unknown>(input: WorkerDoInput): Promise<WorkerDoOutput<T>>
+  /** Route a multi-option decision to the underlying filler. */
+  decide?<T = string>(input: WorkerDecideInput<T>): Promise<WorkerDecideOutput<T>>
+  /** Route a content-generation request to the underlying filler. */
+  generate?<T = unknown>(input: WorkerGenerateInput): Promise<WorkerGenerateOutput<T>>
+  /** Route a type-check request to the underlying filler. */
+  is?(input: WorkerIsInput): Promise<WorkerIsOutput>
 }
 
 /**
@@ -870,9 +1121,57 @@ export interface WorkerOKR {
 // ============================================================================
 
 /**
- * Target for an action - Worker, Team, or reference
+ * RoleTarget — an org-structure slot that resolves to its current filler at
+ * dispatch time (per `CONTEXT.md`: "A Role is filled by a Person or Agent; a
+ * Worker referencing a Role resolves to its current filler at invocation
+ * time").
+ *
+ * `digital-workers.ask(role, …)` calls `resolveWorker()` once, at dispatch,
+ * then dispatches to the resolved filler Worker. This keeps org-structure
+ * changes from breaking callsites. The resolver may be sync or async.
+ *
+ * The `$type: 'Role'` discriminant lets `resolveTarget` distinguish a Role
+ * from a plain `Worker`/`Team` without structural ambiguity.
+ */
+export interface RoleTarget {
+  $type: 'Role'
+  /** Display name of the slot (e.g. 'CEO', 'PDM'). */
+  name?: string
+  /** Resolve the slot to its current filler Worker at dispatch time. */
+  resolveWorker(): Worker | Promise<Worker>
+}
+
+/**
+ * Target for an action - Worker, Team, or reference.
+ *
+ * A `Worker` carrying a `dispatch` port (e.g. an Agent or Person filler from a
+ * Layer 5 adapter) routes through that port; everything else falls back to
+ * channel routing.
  */
 export type ActionTarget = Worker | Team | WorkerRef | string
+
+/**
+ * Target accepted by the `ask` verb — an `ActionTarget` plus a `RoleTarget`
+ * slot that resolves to its current filler at dispatch time.
+ *
+ * `ask` was the tracer for the Layer-5-through-digital-workers PRD (aip-qozi);
+ * `approve` and `notify` widen here too in slice aip-9l4r.
+ */
+export type AskTarget = ActionTarget | RoleTarget
+
+/**
+ * Target accepted by the `approve` verb — an `ActionTarget` plus a
+ * `RoleTarget` slot. Role resolution happens at dispatch time so org-structure
+ * changes do not break approve callsites. PRD aip-qozi slice aip-9l4r.
+ */
+export type ApproveTarget = ActionTarget | RoleTarget
+
+/**
+ * Target accepted by the `notify` verb — an `ActionTarget` plus a
+ * `RoleTarget` slot. Role resolution happens at dispatch time so org-structure
+ * changes do not break notify callsites. PRD aip-qozi slice aip-9l4r.
+ */
+export type NotifyTarget = ActionTarget | RoleTarget
 
 /**
  * Union of all action data types

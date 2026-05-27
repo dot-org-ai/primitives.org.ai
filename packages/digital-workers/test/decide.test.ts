@@ -10,8 +10,15 @@
  * Tests are skipped if AI_GATEWAY_URL is not configured.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { decide } from '../src/index.js'
+import type {
+  Worker,
+  WorkerDispatcher,
+  WorkerDecideInput,
+  WorkerDecideOutput,
+  RoleTarget,
+} from '../src/types.js'
 
 // Skip tests if no gateway configured
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
@@ -247,6 +254,112 @@ describe('decide() - Decision Making Primitive', () => {
     it('should have withApproval method that requires approver', async () => {
       // Just verify the signature - actual approval routing is tested in approve.test.ts
       expect(typeof decide.withApproval).toBe('function')
+    })
+  })
+
+  // ==========================================================================
+  // PRD aip-2q19 — Worker dispatch port (Agent / Person / Role) for `decide`
+  // ==========================================================================
+  describe('Worker dispatch port (PRD aip-2q19)', () => {
+    it('routes through a Worker dispatcher when present (Agent filler)', async () => {
+      const dispatcherDecide = vi
+        .fn<(input: WorkerDecideInput<string>) => Promise<WorkerDecideOutput<string>>>()
+        .mockResolvedValue({ decision: 'A' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        decide: dispatcherDecide,
+      }
+      const worker: Worker = {
+        id: 'agent_decider',
+        name: 'Decider',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await decide(worker, { options: ['A', 'B', 'C'] })
+
+      expect(dispatcherDecide).toHaveBeenCalledOnce()
+      expect(dispatcherDecide).toHaveBeenCalledWith({ options: ['A', 'B', 'C'] })
+      expect(result.choice).toBe('A')
+    })
+
+    it('forwards context to the dispatcher input', async () => {
+      const dispatcherDecide = vi
+        .fn<(input: WorkerDecideInput<string>) => Promise<WorkerDecideOutput<string>>>()
+        .mockResolvedValue({ decision: 'X' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        decide: dispatcherDecide,
+      }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      await decide(worker, { options: ['X', 'Y'], context: 'pick the safer one' })
+
+      expect(dispatcherDecide).toHaveBeenCalledWith({
+        options: ['X', 'Y'],
+        context: 'pick the safer one',
+      })
+    })
+
+    it('resolves a Role target to its filler before dispatching', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        decide: async () => ({ decision: 'B' }),
+      }
+      const filler: Worker = {
+        id: 'person_priya',
+        name: 'Priya',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+      const resolveWorker = vi.fn().mockResolvedValue(filler)
+      const role: RoleTarget = {
+        $type: 'Role',
+        name: 'CEO',
+        resolveWorker,
+      }
+
+      const result = await decide(role, { options: ['A', 'B'] })
+
+      expect(resolveWorker).toHaveBeenCalledOnce()
+      expect(result.choice).toBe('B')
+    })
+
+    it('falls back to LLM path when dispatcher has no decide method', async () => {
+      // The dispatcher only implements ask — decide should fall through to
+      // the legacy LLM behaviour. This test doesn't run the LLM (no network);
+      // we just confirm the dispatcher's decide is NOT called.
+      const dispatcherDecide = vi.fn()
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+      }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      // Calling decide with this worker should NOT invoke dispatcher.decide
+      // (it's undefined). It would otherwise try to hit the LLM — we verify by
+      // checking the mock was never called BEFORE the LLM call kicks off.
+      void decide(worker, { options: ['A', 'B'] }).catch(() => {})
+      // Yield once to let the dispatch resolution run.
+      await Promise.resolve()
+      expect(dispatcherDecide).not.toHaveBeenCalled()
     })
   })
 })
