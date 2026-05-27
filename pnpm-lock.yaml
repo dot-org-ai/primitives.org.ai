@@ -638,6 +638,10 @@ importers:
       zod:
         specifier: ^3.23.0
         version: 3.25.76
+    devDependencies:
+      human-in-the-loop:
+        specifier: workspace:*
+        version: link:../human-in-the-loop
 
   packages/types:
     dependencies:

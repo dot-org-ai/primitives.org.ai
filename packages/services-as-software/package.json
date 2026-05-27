@@ -34,6 +34,9 @@
     "language-models": "workspace:*",
     "zod": "^3.23.0"
   },
+  "devDependencies": {
+    "human-in-the-loop": "workspace:*"
+  },
   "keywords": [
     "services",
     "software",
