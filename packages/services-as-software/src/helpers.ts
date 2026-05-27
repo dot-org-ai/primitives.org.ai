@@ -2,6 +2,7 @@
  * Helper functions for common service operations
  */
 
+import { warnDeprecatedOnce, resetDeprecationTelemetry } from 'digital-workers/deprecation'
 import type {
   Notification,
   Order,
@@ -16,35 +17,23 @@ import type {
 } from './types.js'
 
 // ============================================================================
-// One-time deprecation notice tracker (PRD aip-qozi, Phase 1)
+// Deprecation telemetry (PRD aip-qozi, consolidated in aip-chuu)
 // ============================================================================
 
-/**
- * One-time deprecation notice tracker. Each deprecated export logs its notice
- * at most once per process.
- *
- * @internal
- */
-const deprecationNotified = new Set<string>()
-
-/**
- * Log a deprecation notice once per process for the given key.
- *
- * @internal exported for testing.
- */
-export function warnDeprecatedOnce(key: string, message: string): void {
-  if (deprecationNotified.has(key)) return
-  deprecationNotified.add(key)
-  console.warn(message)
-}
+// Re-export the shared telemetry surface so existing callers
+// (`import { warnDeprecatedOnce } from '../src/helpers.js'`) keep working
+// while the canonical home of the helper is `digital-workers/deprecation`.
+export { warnDeprecatedOnce } from 'digital-workers/deprecation'
 
 /**
  * Reset the one-time deprecation tracker (test-only).
  *
- * @internal
+ * @internal Legacy alias retained so existing tests keep compiling; new
+ * tests should import `resetDeprecationTelemetry` directly from
+ * `digital-workers/deprecation`.
  */
 export function __resetDeprecationNotices(): void {
-  deprecationNotified.clear()
+  resetDeprecationTelemetry()
 }
 
 /**

@@ -15,6 +15,7 @@ import {
 } from 'ai-functions'
 import { ask as askWorker } from 'digital-workers'
 import type { Worker, WorkerDispatcher, WorkerAskInput, WorkerAskOutput } from 'digital-workers'
+import { warnDeprecatedOnce, resetDeprecationTelemetry } from 'digital-workers/deprecation'
 import type {
   ApprovalRequest,
   ApprovalResult,
@@ -22,6 +23,23 @@ import type {
   NotificationOptions,
 } from './types.js'
 import { runAsk, runDo, runDecide, runGenerate, runIs } from './ask-dispatch.js'
+
+// Re-export the shared telemetry surface so existing callers
+// (`import { warnDeprecatedOnce } from '../src/actions.js'`) keep working.
+// `__resetDeprecationNotices` is the legacy test-only alias, preserved for
+// the existing ask-deprecation.test.ts suite.
+export { warnDeprecatedOnce } from 'digital-workers/deprecation'
+
+/**
+ * Reset the one-time deprecation tracker (test-only).
+ *
+ * @internal Legacy alias retained so existing tests keep compiling; new
+ * tests should import `resetDeprecationTelemetry` directly from
+ * `digital-workers/deprecation`.
+ */
+export function __resetDeprecationNotices(): void {
+  resetDeprecationTelemetry()
+}
 
 /**
  * Execute a task using AI.
@@ -50,30 +68,6 @@ export async function doAction<TResult = unknown>(
     "[autonomous-agents] DEPRECATED: `do` is now dispatched through the unified Worker port. Import `do` from 'digital-workers' (e.g. `do(agentAsWorker(agent), task)`). This re-export will be removed in the next minor release."
   )
   return runDo<TResult>(task, context, options)
-}
-
-/**
- * One-time deprecation notice tracker. Each deprecated export logs its notice
- * at most once per process.
- */
-const deprecationNotified = new Set<string>()
-
-/**
- * Log a deprecation notice once per process for the given key.
- * @internal exported for testing.
- */
-export function warnDeprecatedOnce(key: string, message: string): void {
-  if (deprecationNotified.has(key)) return
-  deprecationNotified.add(key)
-  console.warn(message)
-}
-
-/**
- * Reset the one-time deprecation tracker (test-only).
- * @internal
- */
-export function __resetDeprecationNotices(): void {
-  deprecationNotified.clear()
 }
 
 /**

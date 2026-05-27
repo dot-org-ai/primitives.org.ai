@@ -17,6 +17,10 @@
     "./client": {
       "import": "./dist/client.js",
       "types": "./dist/client.d.ts"
+    },
+    "./deprecation": {
+      "import": "./dist/deprecation.js",
+      "types": "./dist/deprecation.d.ts"
     }
   },
   "scripts": {

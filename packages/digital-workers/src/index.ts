@@ -121,6 +121,18 @@ export { kpis, okrs } from './kpis.js'
 // Export verb definitions
 export { WorkerVerbs } from './types.js'
 
+// Deprecation telemetry — shared across the Layer 5 packages whose Verb
+// exports are being retired. Also reachable via the `./deprecation` subpath
+// for the deletion-slice (aip-x6js) guard script that asserts zero callers
+// before removing the wrappers.
+export {
+  warnDeprecatedOnce,
+  getDeprecationCounts,
+  getDeprecationLog,
+  resetDeprecationTelemetry,
+} from './deprecation.js'
+export type { DeprecationLogEntry } from './deprecation.js'
+
 // Export capability tiers
 export {
   CAPABILITY_TIERS,
