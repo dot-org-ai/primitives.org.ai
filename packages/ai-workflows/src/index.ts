@@ -244,6 +244,8 @@ export {
   fromMermaid,
   MermaidParseError,
   bridgeMachineToEventBus,
+  toMermaid,
+  MermaidRenderError,
   type RunnableMachine,
   type RunMachineOptions,
   type MachineHandle,
@@ -261,6 +263,8 @@ export {
   type BridgeMachineToEventBusOptions,
   type EventBusPort,
   type BridgeDisposer,
+  type RenderableMachineConfig,
+  type ToMermaidOptions,
 } from './state-machine/index.js'
 
 // Types
