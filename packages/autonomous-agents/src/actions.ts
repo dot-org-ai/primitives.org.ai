@@ -207,9 +207,22 @@ export async function decide<T extends string>(
  * }
  * ```
  */
+/**
+ * Request approval for an action or decision.
+ *
+ * @deprecated Import `approve` from `digital-workers` instead. The action
+ * verbs are dispatched through the unified Worker port. For an Agent target,
+ * supply an `approvePolicy` to `agentAsWorker` to grant the agent
+ * autonomous-approve authority under explicit policy. PRD: route Layer 5
+ * through digital-workers (aip-qozi, slice aip-9l4r).
+ */
 export async function approve<TResult = unknown>(
   request: ApprovalRequest
 ): Promise<ApprovalResult<TResult>> {
+  warnDeprecatedOnce(
+    'autonomous-agents.approve',
+    "[autonomous-agents] DEPRECATED: `approve` is now dispatched through the unified Worker port. Import `approve` from 'digital-workers' (e.g. `approve('request', agentAsWorker(agent, { approvePolicy }))`). This re-export will be removed in the next minor release."
+  )
   return executeApproval(request)
 }
 
@@ -372,7 +385,19 @@ export async function is(value: unknown, type: string | SimpleSchema): Promise<b
  * })
  * ```
  */
+/**
+ * Send a notification.
+ *
+ * @deprecated Import `notify` from `digital-workers` instead. The action verbs
+ * are dispatched through the unified Worker port; for an Agent target, the
+ * dispatcher logs via console (or a custom `notifyHandler`). PRD: route
+ * Layer 5 through digital-workers (aip-qozi, slice aip-9l4r).
+ */
 export async function notify(options: NotificationOptions): Promise<void> {
+  warnDeprecatedOnce(
+    'autonomous-agents.notify',
+    "[autonomous-agents] DEPRECATED: `notify` is now dispatched through the unified Worker port. Import `notify` from 'digital-workers' (e.g. `notify(agentAsWorker(agent), message)`). This re-export will be removed in the next minor release."
+  )
   const { message, channel = 'web', recipients = [], priority = 'medium', data = {} } = options
 
   // Generate channel-specific notification format

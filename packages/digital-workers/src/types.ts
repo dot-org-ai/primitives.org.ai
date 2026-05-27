@@ -337,20 +337,92 @@ export interface WorkerAskOutput<T = string> {
 }
 
 /**
+ * Input to a Worker dispatcher's `approve` verb.
+ *
+ * Mirrors the `(request, target, options)` shape that `digital-workers.approve`
+ * resolves so a dispatcher receives exactly what the caller intended.
+ */
+export interface WorkerApproveInput {
+  /** The thing being requested for approval (rendered to the human). */
+  request: string
+  /** Optional context object (decision pros/cons, deadline, etc.). */
+  context?: Record<string, unknown>
+  /** Optional timeout in milliseconds (becomes the lifecycle SLA window). */
+  timeout?: number
+  /** Whether rejection or timeout should escalate to the next tier. */
+  escalate?: boolean
+}
+
+/**
+ * Result returned by a Worker dispatcher's `approve` verb.
+ */
+export interface WorkerApproveOutput {
+  /** Whether the request was approved (`true`) or rejected (`false`). */
+  approved: boolean
+  /** Free-form notes captured alongside the decision. */
+  notes?: string
+  /**
+   * Who actually decided. For an Agent filler this is the agent Worker; for a
+   * Person this is the resolver. `digital-workers.approve` uses this to
+   * populate `ApprovalResult.approvedBy` when the dispatcher supplies it.
+   */
+  approvedBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `notify` verb.
+ *
+ * Mirrors the `(target, message, options)` shape that `digital-workers.notify`
+ * resolves so a dispatcher receives exactly what the caller intended.
+ */
+export interface WorkerNotifyInput {
+  /** The notification body. */
+  message: string
+  /** Priority hint forwarded to the channel adapter. */
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  /** Free-form metadata forwarded to the channel adapter. */
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Result returned by a Worker dispatcher's `notify` verb.
+ *
+ * `notify` is fire-and-forget — the result simply signals whether the filler
+ * accepted the message. `digital-workers.notify` adds delivery metadata
+ * (channel, recipients, messageId) around this.
+ */
+export interface WorkerNotifyOutput {
+  /** Whether the dispatcher accepted the message for delivery. */
+  sent: boolean
+  /** Optional notes — e.g. why a notify was no-oped by an Agent filler. */
+  notes?: string
+}
+
+/**
  * WorkerDispatcher — the runtime Verb-dispatch port a Worker filler satisfies.
  *
  * This is the **contract that the Agent-as-Worker and Person-as-Worker
- * adapters implement**. Slices that follow this tracer (`do`, `decide`,
- * `approve`, `notify`, `generate`, `is`) extend this interface with their
- * corresponding verbs; the tracer formalises `ask` only.
+ * adapters implement**. Slices that follow the tracer (`do`, `decide`,
+ * `generate`, `is`) extend this interface further with their corresponding
+ * verbs; this version formalises `ask`, `approve`, and `notify`.
  *
  * A dispatcher is a thin, kind-specific strategy: `digital-workers` owns the
- * target/channel-resolution pipeline and the `AskResult` shaping; the
- * dispatcher owns *how the answer is produced* (LLM call vs. Human lifecycle).
+ * target/channel-resolution pipeline and the verb-specific result shaping;
+ * the dispatcher owns *how the answer/decision/delivery is produced* (LLM
+ * call vs. Human lifecycle).
+ *
+ * `approve` and `notify` are OPTIONAL on the contract so callers that only
+ * implement `ask` (the tracer) keep type-checking. `digital-workers.approve`
+ * and `digital-workers.notify` fall back to channel routing when the
+ * dispatcher does not implement the verb.
  */
 export interface WorkerDispatcher {
   /** Route a question to the underlying filler and await its answer. */
   ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>>
+  /** Route an approval request and await the approve/reject decision. */
+  approve?(input: WorkerApproveInput): Promise<WorkerApproveOutput>
+  /** Deliver a notification to the underlying filler (no required response). */
+  notify?(input: WorkerNotifyInput): Promise<WorkerNotifyOutput>
 }
 
 /**
@@ -974,11 +1046,24 @@ export type ActionTarget = Worker | Team | WorkerRef | string
  * Target accepted by the `ask` verb — an `ActionTarget` plus a `RoleTarget`
  * slot that resolves to its current filler at dispatch time.
  *
- * `ask` is the tracer for the Layer-5-through-digital-workers PRD (aip-qozi);
- * Role resolution is wired here first. The other verbs widen to `RoleTarget`
- * in subsequent slices.
+ * `ask` was the tracer for the Layer-5-through-digital-workers PRD (aip-qozi);
+ * `approve` and `notify` widen here too in slice aip-9l4r.
  */
 export type AskTarget = ActionTarget | RoleTarget
+
+/**
+ * Target accepted by the `approve` verb — an `ActionTarget` plus a
+ * `RoleTarget` slot. Role resolution happens at dispatch time so org-structure
+ * changes do not break approve callsites. PRD aip-qozi slice aip-9l4r.
+ */
+export type ApproveTarget = ActionTarget | RoleTarget
+
+/**
+ * Target accepted by the `notify` verb — an `ActionTarget` plus a
+ * `RoleTarget` slot. Role resolution happens at dispatch time so org-structure
+ * changes do not break notify callsites. PRD aip-qozi slice aip-9l4r.
+ */
+export type NotifyTarget = ActionTarget | RoleTarget
 
 /**
  * Union of all action data types

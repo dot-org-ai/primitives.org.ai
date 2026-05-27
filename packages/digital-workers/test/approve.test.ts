@@ -10,9 +10,9 @@
  * Tests are skipped if AI_GATEWAY_URL is not configured.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { approve } from '../src/index.js'
-import type { Worker, WorkerRef, WorkerTeam } from '../src/types.js'
+import type { Worker, WorkerRef, WorkerTeam, WorkerDispatcher, RoleTarget } from '../src/types.js'
 
 // Skip tests if no gateway configured
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
@@ -300,6 +300,175 @@ describe('approve() - Approval Workflow Primitive', () => {
 
       expect(result).toBeDefined()
       // Escalation is a hint to the approval system
+    })
+  })
+
+  // ==========================================================================
+  // PRD aip-qozi slice aip-9l4r — Worker Dispatcher Port (approve)
+  // ==========================================================================
+  //
+  // These tests exercise the unified seam: a Worker target carries an
+  // `approve` dispatcher and `digital-workers.approve` routes through it
+  // instead of channel delivery. The Agent-as-Worker and Person-as-Worker
+  // adapters live in Layer 5 packages; here we exercise the SEAM contract
+  // using minimal in-test dispatchers so the tests stay self-contained.
+  describe('Worker dispatch port — approve (PRD aip-9l4r)', () => {
+    it('routes through a Worker dispatcher when present (Person filler approves)', async () => {
+      const approveFn = vi.fn().mockResolvedValue({
+        approved: true,
+        notes: 'looks good',
+        approvedBy: { id: 'person_priya', type: 'human', name: 'Priya' },
+      })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        approve: approveFn,
+      }
+      const personWorker: Worker = {
+        id: 'person_priya_worker',
+        name: 'Priya (Person Worker)',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await approve('Approve $500 expense?', personWorker, {
+        context: { amount: 500 },
+      })
+
+      expect(approveFn).toHaveBeenCalledOnce()
+      expect(approveFn).toHaveBeenCalledWith({
+        request: 'Approve $500 expense?',
+        context: { amount: 500 },
+        escalate: false,
+      })
+      expect(result.approved).toBe(true)
+      expect(result.notes).toBe('looks good')
+      // dispatcher-supplied approvedBy wins over worker-derived ref.
+      expect(result.approvedBy?.id).toBe('person_priya')
+      expect(result.approvedBy?.name).toBe('Priya')
+      // No `via` is set when the dispatcher is used — there's no channel.
+      expect(result.via).toBeUndefined()
+    })
+
+    it('routes through a Worker dispatcher when present (Agent filler auto-decides)', async () => {
+      const approveFn = vi.fn().mockResolvedValue({
+        approved: false,
+        notes: 'amount exceeds policy threshold of $100',
+      })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        approve: approveFn,
+      }
+      const agentWorker: Worker = {
+        id: 'agent_approver',
+        name: 'Policy Bot',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await approve('Approve $500 refund?', agentWorker)
+
+      expect(approveFn).toHaveBeenCalledOnce()
+      expect(result.approved).toBe(false)
+      expect(result.notes).toContain('policy')
+      // answeredBy falls back to the worker ref when the dispatcher omits it.
+      expect(result.approvedBy?.id).toBe('agent_approver')
+      expect(result.approvedBy?.type).toBe('agent')
+    })
+
+    it('forwards context / timeout / escalate to the dispatcher input', async () => {
+      const approveFn = vi.fn().mockResolvedValue({ approved: true })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        approve: approveFn,
+      }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      await approve('Deploy?', worker, {
+        context: { env: 'prod' },
+        timeout: 30000,
+        escalate: true,
+      })
+
+      expect(approveFn).toHaveBeenCalledWith({
+        request: 'Deploy?',
+        context: { env: 'prod' },
+        timeout: 30000,
+        escalate: true,
+      })
+    })
+
+    it('resolves a Role target to its current filler at dispatch time', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        approve: async () => ({ approved: true, notes: 'CEO approves' }),
+      }
+      const ceoFiller: Worker = {
+        id: 'person_priya',
+        name: 'Priya',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const resolveWorker = vi.fn().mockResolvedValue(ceoFiller)
+      const ceoRole: RoleTarget = {
+        $type: 'Role',
+        name: 'CEO',
+        resolveWorker,
+      }
+
+      const result = await approve('Approve Q1 launch?', ceoRole)
+
+      expect(resolveWorker).toHaveBeenCalledOnce()
+      expect(result.approved).toBe(true)
+      expect(result.notes).toBe('CEO approves')
+      expect(result.approvedBy?.id).toBe('person_priya')
+    })
+
+    it('falls back to channel routing when a Worker has no approve dispatcher', async () => {
+      // Worker carries ask-only dispatcher (no `approve`). The verb should
+      // fall through to channel delivery just as before.
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+      }
+      const worker: Worker = {
+        id: 'partial',
+        name: 'Partial',
+        type: 'human',
+        status: 'available',
+        contacts: { slack: '@partial' },
+        dispatch: dispatcher,
+      }
+
+      const result = await approve('Request', worker, { via: 'slack' })
+      // channel routing was used — `via` is populated.
+      expect(result.via).toBe('slack')
+      expect(result.approvedBy?.id).toBe('partial')
+    })
+
+    it('falls back to channel routing when a Worker has no dispatcher at all', async () => {
+      const w: Worker = {
+        id: 'no_dispatch',
+        name: 'No Dispatch',
+        type: 'human',
+        status: 'available',
+        contacts: { email: 'test@example.com' },
+      }
+      const result = await approve('Request', w, { via: 'email' })
+      expect(result.via).toBe('email')
+      expect(result.approvedBy?.id).toBe('no_dispatch')
     })
   })
 })

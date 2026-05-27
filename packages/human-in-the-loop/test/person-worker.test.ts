@@ -183,3 +183,232 @@ describe('personAsWorker.dispatch.ask — Human lifecycle (PRD aip-qozi)', () =>
     expect(delta).toBeLessThanOrEqual(10000)
   })
 })
+
+describe('personAsWorker.dispatch.approve — Human approval lifecycle (PRD aip-9l4r)', () => {
+  it('attaches approve only when approveResolver is supplied', () => {
+    const noApprove = personAsWorker(makePerson(), { resolve: async () => 'noop' })
+    expect(noApprove.dispatch?.approve).toBeUndefined()
+
+    const withApprove = personAsWorker(makePerson(), {
+      resolve: async () => 'noop',
+      approveResolver: async () => ({ approved: true }),
+    })
+    expect(typeof withApprove.dispatch?.approve).toBe('function')
+  })
+
+  it('walks the lifecycle create → claim → in_progress → completed and returns the decision', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => 'noop',
+      approveResolver: async ({ item, request, person }) => {
+        // The resolver receives the persisted lifecycle item (in_progress
+        // status), the original request body, and the person record.
+        expect(item.status).toBe('in_progress')
+        expect(item.kind).toBe('approve')
+        expect(item.artifact.kind).toBe('ApprovalRequest')
+        expect(request).toBe('Approve $500 refund?')
+        expect(person.id).toBe('person_priya')
+        return { approved: true, notes: 'within refund policy' }
+      },
+    })
+
+    const result = await worker.dispatch!.approve!({ request: 'Approve $500 refund?' })
+    expect(result.approved).toBe(true)
+    expect(result.notes).toBe('within refund policy')
+    expect(result.approvedBy?.id).toBe('person_priya')
+    expect(result.approvedBy?.type).toBe('human')
+    expect(result.approvedBy?.name).toBe('Priya')
+
+    // After resolution the lifecycle item is in 'completed' status.
+    const items = await store.list()
+    expect(items).toHaveLength(1)
+    expect(items[0]?.status).toBe('completed')
+    expect(items[0]?.resolution?.verb).toBe('approve')
+  })
+
+  it('records rejection cleanly with verb="reject" (no escalation by default)', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => 'noop',
+      approveResolver: async () => ({ approved: false, notes: 'over budget' }),
+    })
+
+    const result = await worker.dispatch!.approve!({ request: 'Approve $5000?' })
+    expect(result.approved).toBe(false)
+    expect(result.notes).toBe('over budget')
+
+    const items = await store.list()
+    expect(items[0]?.status).toBe('completed')
+    expect(items[0]?.resolution?.verb).toBe('reject')
+  })
+
+  it('escalates rejection when escalateOnReject=true (adapter-level policy)', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => 'noop',
+      approveResolver: async () => ({ approved: false }),
+      escalateOnReject: true,
+    })
+
+    const result = await worker.dispatch!.approve!({ request: 'q' })
+    expect(result.approved).toBe(false)
+
+    const items = await store.list()
+    expect(items[0]?.status).toBe('escalated')
+  })
+
+  it('escalates rejection when caller passes escalate=true on the call', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => 'noop',
+      approveResolver: async () => ({ approved: false }),
+    })
+
+    await worker.dispatch!.approve!({ request: 'q', escalate: true })
+    const items = await store.list()
+    expect(items[0]?.status).toBe('escalated')
+  })
+
+  it('escalates the lifecycle item when the resolver throws', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => 'noop',
+      approveResolver: async () => {
+        throw new Error('channel timeout')
+      },
+    })
+
+    await expect(worker.dispatch!.approve!({ request: 'q' })).rejects.toThrow('channel timeout')
+
+    const items = await store.list()
+    expect(items[0]?.status).toBe('escalated')
+  })
+
+  it('invokes the channel adapter before claiming (best-effort delivery)', async () => {
+    const deliver = vi.fn().mockResolvedValue({ ok: true })
+    const adapter = { kind: 'web' as const, deliver }
+    const worker = personAsWorker(makePerson(), {
+      channelAdapter: adapter,
+      resolve: async () => 'noop',
+      approveResolver: async () => ({ approved: true }),
+    })
+
+    await worker.dispatch!.approve!({ request: 'Approve?' })
+    expect(deliver).toHaveBeenCalledOnce()
+    const deliveredItem = deliver.mock.calls[0]?.[0]
+    expect(deliveredItem?.status).toBe('pending')
+    expect(deliveredItem?.kind).toBe('approve')
+    expect(deliveredItem?.title).toBe('Approve?')
+  })
+
+  it('honours per-call timeout in slaDeadline', async () => {
+    const store = new LifecycleStoreMemory()
+    const now = Date.now()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => 'noop',
+      approveResolver: async () => ({ approved: true }),
+    })
+
+    await worker.dispatch!.approve!({ request: 'q', timeout: 5000 })
+    const items = await store.list()
+    expect(items).toHaveLength(1)
+    const item = items[0]!
+    const delta = item.slaDeadline.getTime() - now
+    expect(delta).toBeGreaterThanOrEqual(4000)
+    expect(delta).toBeLessThanOrEqual(10000)
+  })
+})
+
+describe('personAsWorker.dispatch.notify — channel delivery (PRD aip-9l4r)', () => {
+  it('attaches notify by default (no extra options required)', () => {
+    const worker = personAsWorker(makePerson(), { resolve: async () => 'noop' })
+    expect(typeof worker.dispatch?.notify).toBe('function')
+  })
+
+  it('creates a notify lifecycle item, delivers, and resolves with acknowledged', async () => {
+    const store = new LifecycleStoreMemory()
+    const deliver = vi.fn().mockResolvedValue({ ok: true })
+    const adapter = { kind: 'web' as const, deliver }
+    const worker = personAsWorker(makePerson(), {
+      store,
+      channelAdapter: adapter,
+      resolve: async () => 'noop',
+    })
+
+    const result = await worker.dispatch!.notify!({ message: 'Deploy complete' })
+    expect(result.sent).toBe(true)
+    expect(deliver).toHaveBeenCalledOnce()
+    const deliveredItem = deliver.mock.calls[0]?.[0]
+    expect(deliveredItem?.kind).toBe('notify')
+    expect(deliveredItem?.status).toBe('pending')
+
+    const items = await store.list()
+    expect(items).toHaveLength(1)
+    expect(items[0]?.status).toBe('completed')
+    expect(items[0]?.resolution?.verb).toBe('acknowledged')
+  })
+
+  it('reflects sent=false when channel delivery fails (but lifecycle still records the item)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = new LifecycleStoreMemory()
+    const adapter = {
+      kind: 'web' as const,
+      deliver: vi.fn().mockRejectedValue(new Error('slack down')),
+    }
+    const worker = personAsWorker(makePerson(), {
+      store,
+      channelAdapter: adapter,
+      resolve: async () => 'noop',
+    })
+
+    const result = await worker.dispatch!.notify!({ message: 'm' })
+    expect(result.sent).toBe(false)
+    expect(result.notes).toContain('channel adapter delivery failed')
+
+    const items = await store.list()
+    expect(items[0]?.status).toBe('completed')
+    expect(items[0]?.resolution?.verb).toBe('acknowledged')
+
+    warnSpy.mockRestore()
+  })
+
+  it('invokes the optional notifyHandler after delivery + resolution', async () => {
+    const handler = vi.fn().mockResolvedValue(undefined)
+    const worker = personAsWorker(makePerson(), {
+      resolve: async () => 'noop',
+      notifyHandler: handler,
+    })
+
+    await worker.dispatch!.notify!({ message: 'hello', priority: 'high' })
+    expect(handler).toHaveBeenCalledOnce()
+    const ctx = handler.mock.calls[0]?.[0]
+    expect(ctx.message).toBe('hello')
+    expect(ctx.priority).toBe('high')
+    expect(ctx.item.status).toBe('completed')
+    expect(ctx.person.id).toBe('person_priya')
+  })
+
+  it('swallows notifyHandler errors (fire-and-forget)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const worker = personAsWorker(makePerson(), {
+      resolve: async () => 'noop',
+      notifyHandler: async () => {
+        throw new Error('subscriber blew up')
+      },
+    })
+
+    const result = await worker.dispatch!.notify!({ message: 'm' })
+    expect(result.sent).toBe(true)
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('notifyHandler threw'),
+      expect.any(Error)
+    )
+    warnSpy.mockRestore()
+  })
+})

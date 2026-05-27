@@ -73,6 +73,11 @@ export type {
   PersonWorkerAdapterOptions,
   PersonAskContext,
   PersonAskResolver,
+  PersonApproveContext,
+  PersonApproveDecision,
+  PersonApproveResolver,
+  PersonNotifyContext,
+  PersonNotifyHandler,
 } from './person-worker.js'
 
 // Re-export organizational types from org.ai for convenience

@@ -28,6 +28,8 @@ import type {
   Team,
   WorkerRef,
   ActionTarget,
+  NotifyTarget,
+  RoleTarget,
   ContactChannel,
   NotifyResult,
   NotifyOptions,
@@ -70,14 +72,42 @@ import type {
  * @see {@link notify.schedule} for delayed/scheduled notifications
  */
 export async function notify(
-  target: ActionTarget,
+  target: NotifyTarget,
   message: string,
   options: NotifyOptions = {}
 ): Promise<NotifyResult> {
   const { via, priority = 'normal', fallback = false, timeout, context, metadata } = options
 
+  // Resolve a Role slot to its current filler before dispatching. Per
+  // CONTEXT.md a Role resolves to its Person/Agent filler at invocation time.
+  const resolved = await resolveRoleTarget(target)
+
+  // If the resolved target is a Worker carrying a `notify` dispatcher (Person
+  // or Agent filler), route through it. The dispatcher decides HOW the
+  // delivery is realised (lifecycle notify-item with acknowledge for a
+  // Person, log/no-op for an Agent). `digital-workers` still shapes the
+  // result so callers see uniform delivery metadata.
+  const dispatcher = getDispatcher(resolved)
+  if (dispatcher?.notify) {
+    const recipients = [workerToRef(resolved as Worker)]
+    const out = await dispatcher.notify({
+      message,
+      priority,
+      ...(metadata !== undefined && { metadata }),
+    })
+
+    return {
+      sent: out.sent,
+      via: [],
+      recipients,
+      sentAt: new Date(),
+      messageId: generateMessageId(),
+      delivery: [],
+    }
+  }
+
   // Resolve target to get contacts
-  const { contacts, recipients } = resolveTarget(target)
+  const { contacts, recipients } = resolveTarget(resolved)
 
   // Determine which channels to use
   const channels = resolveChannels(via, contacts, priority)
@@ -132,7 +162,7 @@ export async function notify(
  * ```
  */
 notify.alert = async (
-  target: ActionTarget,
+  target: NotifyTarget,
   message: string,
   options: NotifyOptions = {}
 ): Promise<NotifyResult> => {
@@ -148,7 +178,7 @@ notify.alert = async (
  * ```
  */
 notify.info = async (
-  target: ActionTarget,
+  target: NotifyTarget,
   message: string,
   options: NotifyOptions = {}
 ): Promise<NotifyResult> => {
@@ -167,7 +197,7 @@ notify.info = async (
  * ```
  */
 notify.rich = async (
-  target: ActionTarget,
+  target: NotifyTarget,
   title: string,
   body: string,
   options: NotifyOptions = {}
@@ -190,7 +220,7 @@ notify.rich = async (
  */
 notify.batch = async (
   notifications: Array<{
-    target: ActionTarget
+    target: NotifyTarget
     message: string
     options?: NotifyOptions
   }>
@@ -213,7 +243,7 @@ notify.batch = async (
  * ```
  */
 notify.schedule = async (
-  target: ActionTarget,
+  target: NotifyTarget,
   message: string,
   when: Date | number,
   options: NotifyOptions = {}
@@ -233,7 +263,49 @@ notify.schedule = async (
 // ============================================================================
 
 /**
- * Resolve an action target to contacts and recipients
+ * Type guard: is this target a Role slot that must resolve to a filler?
+ */
+function isRoleTarget(target: NotifyTarget): target is RoleTarget {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    (target as { $type?: unknown }).$type === 'Role' &&
+    typeof (target as RoleTarget).resolveWorker === 'function'
+  )
+}
+
+/**
+ * Resolve a Role slot to its current filler Worker at dispatch time. Any other
+ * target kind passes through unchanged.
+ */
+async function resolveRoleTarget(target: NotifyTarget): Promise<ActionTarget> {
+  if (isRoleTarget(target)) {
+    return target.resolveWorker()
+  }
+  return target
+}
+
+/**
+ * Return the dispatcher attached to a Worker target, if any.
+ */
+function getDispatcher(target: ActionTarget) {
+  if (typeof target === 'object' && target !== null && 'dispatch' in target) {
+    return (target as Worker).dispatch
+  }
+  return undefined
+}
+
+/**
+ * Build a lightweight WorkerRef from a Worker for result attribution.
+ */
+function workerToRef(worker: Worker): WorkerRef {
+  return { id: worker.id, type: worker.type, name: worker.name }
+}
+
+/**
+ * Resolve an action target to contacts and recipients.
+ *
+ * Called only after `resolveRoleTarget`, so the input is never a `RoleTarget`.
  */
 function resolveTarget(target: ActionTarget): {
   contacts: Contacts

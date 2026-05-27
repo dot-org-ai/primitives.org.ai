@@ -30,6 +30,8 @@ import type {
   Team,
   WorkerRef,
   ActionTarget,
+  ApproveTarget,
+  RoleTarget,
   ContactChannel,
   ApprovalResult,
   ApprovalOptions,
@@ -75,13 +77,41 @@ import type {
  */
 export async function approve(
   request: string,
-  target: ActionTarget,
+  target: ApproveTarget,
   options: ApprovalOptions = {}
 ): Promise<ApprovalResult> {
   const { via, timeout, context, escalate = false } = options
 
+  // Resolve a Role slot to its current filler before dispatching. Per
+  // CONTEXT.md a Role resolves to its Person/Agent filler at invocation time.
+  const resolved = await resolveRoleTarget(target)
+
+  // If the resolved target is a Worker filling the Worker port (Person or
+  // Agent adapter), and that filler implements the `approve` verb, route
+  // through it. The dispatcher decides HOW the decision is produced (full
+  // Human lifecycle for a Person, policy-gated LLM auto-decide for an Agent)
+  // while digital-workers owns target resolution + result shaping.
+  const dispatcher = getDispatcher(resolved)
+  if (dispatcher?.approve) {
+    const approver = workerToRef(resolved as Worker)
+    const out = await dispatcher.approve({
+      request,
+      ...(context !== undefined && { context }),
+      ...(timeout !== undefined && { timeout }),
+      escalate,
+    })
+
+    return {
+      approved: out.approved,
+      approvedBy: out.approvedBy ?? approver,
+      approvedAt: new Date(),
+      ...(out.notes !== undefined && { notes: out.notes }),
+    }
+  }
+
+  // Otherwise fall back to channel routing (the original behaviour).
   // Resolve target to get contacts and approver info
-  const { contacts, approver } = resolveTarget(target)
+  const { contacts, approver } = resolveTarget(resolved)
 
   // Determine which channel to use
   const channel = resolveChannel(via, contacts)
@@ -127,7 +157,7 @@ export async function approve(
  */
 approve.withContext = async (
   request: string,
-  target: ActionTarget,
+  target: ApproveTarget,
   decision: {
     pros?: string[]
     cons?: string[]
@@ -162,7 +192,7 @@ approve.withContext = async (
  */
 approve.batch = async (
   requests: string[],
-  target: ActionTarget,
+  target: ApproveTarget,
   options: ApprovalOptions = {}
 ): Promise<ApprovalResult[]> => {
   return Promise.all(requests.map((request) => approve(request, target, options)))
@@ -183,7 +213,7 @@ approve.batch = async (
  */
 approve.withDeadline = async (
   request: string,
-  target: ActionTarget,
+  target: ApproveTarget,
   deadline: Date,
   options: ApprovalOptions = {}
 ): Promise<ApprovalResult> => {
@@ -212,7 +242,7 @@ approve.withDeadline = async (
  */
 approve.any = async (
   request: string,
-  targets: ActionTarget[],
+  targets: ApproveTarget[],
   options: ApprovalOptions = {}
 ): Promise<ApprovalResult> => {
   // Race all approval requests - first to respond wins
@@ -233,7 +263,7 @@ approve.any = async (
  */
 approve.all = async (
   request: string,
-  targets: ActionTarget[],
+  targets: ApproveTarget[],
   options: ApprovalOptions = {}
 ): Promise<ApprovalResult & { approvals: ApprovalResult[] }> => {
   const results = await Promise.all(targets.map((target) => approve(request, target, options)))
@@ -255,7 +285,50 @@ approve.all = async (
 // ============================================================================
 
 /**
- * Resolve an action target to contacts and approver
+ * Type guard: is this target a Role slot that must resolve to a filler?
+ */
+function isRoleTarget(target: ApproveTarget): target is RoleTarget {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    (target as { $type?: unknown }).$type === 'Role' &&
+    typeof (target as RoleTarget).resolveWorker === 'function'
+  )
+}
+
+/**
+ * Resolve a Role slot to its current filler Worker at dispatch time. Any other
+ * target kind passes through unchanged.
+ */
+async function resolveRoleTarget(target: ApproveTarget): Promise<ActionTarget> {
+  if (isRoleTarget(target)) {
+    return target.resolveWorker()
+  }
+  return target
+}
+
+/**
+ * Return the dispatcher attached to a Worker target, if any. Only `Worker`
+ * objects carry a `dispatch` port; strings, refs, and teams never do.
+ */
+function getDispatcher(target: ActionTarget) {
+  if (typeof target === 'object' && target !== null && 'dispatch' in target) {
+    return (target as Worker).dispatch
+  }
+  return undefined
+}
+
+/**
+ * Build a lightweight WorkerRef from a Worker for result attribution.
+ */
+function workerToRef(worker: Worker): WorkerRef {
+  return { id: worker.id, type: worker.type, name: worker.name }
+}
+
+/**
+ * Resolve an action target to contacts and approver.
+ *
+ * Called only after `resolveRoleTarget`, so the input is never a `RoleTarget`.
  */
 function resolveTarget(target: ActionTarget): {
   contacts: Contacts

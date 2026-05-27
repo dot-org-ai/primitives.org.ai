@@ -10,9 +10,9 @@
  * focuses on LLM operations rather than communication channel delivery.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { notify } from '../src/index.js'
-import type { Worker, WorkerRef, WorkerTeam } from '../src/types.js'
+import type { Worker, WorkerRef, WorkerTeam, WorkerDispatcher, RoleTarget } from '../src/types.js'
 
 // Test fixtures
 const alice: Worker = {
@@ -429,6 +429,153 @@ describe('notify() - Notification Delivery Primitive', () => {
 
       // Should not include teams in via since it's not available
       expect(result.via).not.toContain('teams')
+    })
+  })
+
+  // ==========================================================================
+  // PRD aip-qozi slice aip-9l4r — Worker Dispatcher Port (notify)
+  // ==========================================================================
+  //
+  // These tests exercise the unified seam: a Worker target carries a
+  // `notify` dispatcher and `digital-workers.notify` routes through it
+  // instead of channel delivery. The Agent-as-Worker and Person-as-Worker
+  // adapters live in Layer 5 packages; here we use minimal in-test
+  // dispatchers so the tests stay self-contained.
+  describe('Worker dispatch port — notify (PRD aip-9l4r)', () => {
+    it('routes through a Worker dispatcher when present (Person filler)', async () => {
+      const notifyFn = vi.fn().mockResolvedValue({ sent: true })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        notify: notifyFn,
+      }
+      const personWorker: Worker = {
+        id: 'person_priya_worker',
+        name: 'Priya (Person Worker)',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await notify(personWorker, 'Deployment complete', {
+        priority: 'high',
+        metadata: { version: '2.1.0' },
+      })
+
+      expect(notifyFn).toHaveBeenCalledOnce()
+      expect(notifyFn).toHaveBeenCalledWith({
+        message: 'Deployment complete',
+        priority: 'high',
+        metadata: { version: '2.1.0' },
+      })
+      expect(result.sent).toBe(true)
+      // No `via` channels populated when dispatched (the dispatcher delivers).
+      expect(result.via).toEqual([])
+      // recipients still derived from the Worker for audit.
+      expect(result.recipients?.[0]?.id).toBe('person_priya_worker')
+      expect(result.messageId).toBeDefined()
+    })
+
+    it('routes through a Worker dispatcher when present (Agent filler log/no-op)', async () => {
+      const notifyFn = vi
+        .fn()
+        .mockResolvedValue({ sent: true, notes: 'agent acknowledged via log' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        notify: notifyFn,
+      }
+      const agentWorker: Worker = {
+        id: 'agent_bot',
+        name: 'Deploy Bot',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await notify(agentWorker, 'New deployment requested')
+      expect(result.sent).toBe(true)
+      expect(result.recipients?.[0]?.id).toBe('agent_bot')
+      expect(result.recipients?.[0]?.type).toBe('agent')
+    })
+
+    it('reflects dispatcher sent=false in the result', async () => {
+      const notifyFn = vi.fn().mockResolvedValue({ sent: false, notes: 'no surface' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        notify: notifyFn,
+      }
+      const worker: Worker = {
+        id: 'silent',
+        name: 'Silent',
+        type: 'human',
+        status: 'offline',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await notify(worker, 'Hello')
+      expect(result.sent).toBe(false)
+    })
+
+    it('resolves a Role target to its current filler at dispatch time', async () => {
+      const notifyFn = vi.fn().mockResolvedValue({ sent: true })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        notify: notifyFn,
+      }
+      const ceoFiller: Worker = {
+        id: 'person_priya',
+        name: 'Priya',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const resolveWorker = vi.fn().mockResolvedValue(ceoFiller)
+      const ceoRole: RoleTarget = {
+        $type: 'Role',
+        name: 'CEO',
+        resolveWorker,
+      }
+
+      const result = await notify(ceoRole, 'Board meeting in 10 minutes')
+
+      expect(resolveWorker).toHaveBeenCalledOnce()
+      expect(notifyFn).toHaveBeenCalledOnce()
+      expect(result.sent).toBe(true)
+      expect(result.recipients?.[0]?.id).toBe('person_priya')
+    })
+
+    it('falls back to channel routing when a Worker has no notify dispatcher', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+      }
+      const worker: Worker = {
+        id: 'partial',
+        name: 'Partial',
+        type: 'human',
+        status: 'available',
+        contacts: { slack: '@partial' },
+        dispatch: dispatcher,
+      }
+
+      const result = await notify(worker, 'Hello', { via: 'slack' })
+      expect(result.via).toContain('slack')
+      expect(result.sent).toBe(true)
+    })
+
+    it('falls back to channel routing when a Worker has no dispatcher at all', async () => {
+      const w: Worker = {
+        id: 'no_dispatch',
+        name: 'No Dispatch',
+        type: 'human',
+        status: 'available',
+        contacts: { email: 'test@example.com' },
+      }
+      const result = await notify(w, 'Hello', { via: 'email' })
+      expect(result.via).toContain('email')
     })
   })
 })
