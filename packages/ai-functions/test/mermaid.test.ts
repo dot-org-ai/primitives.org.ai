@@ -25,13 +25,15 @@ const VALID_DIAGRAM = `stateDiagram-v2
   running --> idle : STOP
   running --> [*]`
 
-// A composite state — unsupported by the flat-subset parser, so it throws a
-// MermaidParseError. Used to force the retry path deterministically.
+// A fork pseudostate — unsupported by the parser (fork/join still throw a
+// MermaidParseError even with full composite/parallel/history coverage), so it
+// reliably forces the retry path. (Composite states are now valid, so they no
+// longer serve as "invalid" input.)
 const INVALID_DIAGRAM = `stateDiagram-v2
-  [*] --> Review
-  state Review {
-    [*] --> pending
-  }`
+  state f <<fork>>
+  [*] --> f
+  f --> s1
+  f --> s2`
 
 describe('mermaid() — offline retry path (no live model)', () => {
   it('retries on parse failure, feeds the error back, and returns the valid result', async () => {
@@ -57,7 +59,7 @@ describe('mermaid() — offline retry path (no live model)', () => {
     expect(firstCall.attempt).toBe(0)
     expect(retryCall.attempt).toBe(1)
     expect(retryCall.prompt).toContain('failed to parse')
-    expect(retryCall.prompt).toContain('Composite') // the specific parser error
+    expect(retryCall.prompt).toContain('fork') // the specific parser error
     // The original prompt is preserved across the retry.
     expect(retryCall.prompt).toContain('a process that can be idle or running')
   })
@@ -85,7 +87,7 @@ describe('mermaid() — offline retry path (no live model)', () => {
     const generate = vi.fn(async () => INVALID_DIAGRAM)
 
     await expect(mermaid('always invalid', { maxRetries: 2, generate })).rejects.toThrow(
-      /Composite/
+      /fork/
     )
     // maxRetries: 2 → 3 total attempts.
     expect(generate).toHaveBeenCalledTimes(3)
