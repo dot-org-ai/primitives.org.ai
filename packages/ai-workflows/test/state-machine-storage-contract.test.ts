@@ -19,7 +19,9 @@ import {
   createDurableObjectStateMachineStorage,
   type DurableObjectStorageLike,
 } from '../src/state-machine/durable-object-adapter.js'
+import { createPostgresStateMachineStorage } from '../src/state-machine/postgres-adapter.js'
 import { runStateMachineStorageContract } from './helpers/state-machine-storage-contract.js'
+import { FakeStateMachineStore, makeFakeStateMachineExecutor } from './helpers/fake-pg-executor.js'
 
 // =============================================================================
 // In-process Durable Object storage stub
@@ -77,6 +79,19 @@ runStateMachineStorageContract('in-memory', () => ({
 runStateMachineStorageContract('durable-object (in-process stub)', () => ({
   storage: createDurableObjectStateMachineStorage(createFakeDurableObjectStorage()),
 }))
+
+// The Postgres adapter runs OFFLINE here against a fake PgExecutor that
+// interprets the SQL family the adapter emits (the repo's established
+// offline-pg pattern from ai-database's pg-adapter.test.ts) — no live database,
+// no new dependency. Proving it satisfies the same contract is the seam's point.
+runStateMachineStorageContract('postgres (fake executor, offline)', () => {
+  const store = new FakeStateMachineStore()
+  return {
+    storage: createPostgresStateMachineStorage({
+      executor: makeFakeStateMachineExecutor(store),
+    }),
+  }
+})
 
 // =============================================================================
 // DO-specific: alarm arming/clearing (beyond the shared contract)

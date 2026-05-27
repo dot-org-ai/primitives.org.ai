@@ -47,6 +47,23 @@ export {
   type StateMachineBootOptions,
 } from './durable-object-adapter.js'
 
+// Postgres storage adapter + scheduler + run/replay helpers (via injected
+// PgExecutor — no ai-database import; see postgres-adapter.ts layering note)
+export {
+  createPostgresStateMachineStorage,
+  createPostgresStateMachineScheduler,
+  bootstrapStateMachineSchema,
+  runStoredMachine,
+  replayMachine,
+  type PgExecutor,
+  type PostgresStateMachineStorage,
+  type PostgresStateMachineStorageOptions,
+  type PostgresStateMachineTables,
+  type PostgresStateMachineScheduler,
+  type DueTimer,
+  type RunStoredMachineOptions,
+} from './postgres-adapter.js'
+
 // Storage port + in-memory adapter
 export {
   createInMemoryStateMachineStorage,
