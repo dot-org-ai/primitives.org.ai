@@ -14,8 +14,12 @@
  *     (flat subset). Produces a `MachineConfig` whose guards / actions are
  *     string names the caller provides at machine-creation time.
  *
- * Later slices add the rest of the mermaid wire format (`toMermaid`, composite
- * / parallel / history parsing), the event bridge, and the DO / pg storage
+ *   - {@link toMermaid} — the mermaid `stateDiagram-v2` renderer (flat subset).
+ *     The exact inverse of {@link fromMermaid}; emits a diagram from a
+ *     `MachineConfig` (with an optional active-state highlight).
+ *
+ * Later slices add the rest of the mermaid wire format (composite / parallel /
+ * history parsing + rendering), the event bridge, and the DO / pg storage
  * adapters; their exports land here.
  *
  * @packageDocumentation
@@ -47,3 +51,11 @@ export type { MachineConfig } from 'xstate'
 
 // Mermaid wire format - parser (flat subset).
 export { fromMermaid, MermaidParseError, type ParsedMachineConfig } from './mermaid-parser.js'
+
+// Mermaid wire format - renderer (flat subset). The exact inverse of the parser.
+export {
+  toMermaid,
+  MermaidRenderError,
+  type RenderableMachineConfig,
+  type ToMermaidOptions,
+} from './mermaid-renderer.js'

@@ -237,6 +237,8 @@ export {
   createMachine as createStateMachine,
   fromMermaid,
   MermaidParseError,
+  toMermaid,
+  MermaidRenderError,
   type RunnableMachine,
   type RunMachineOptions,
   type MachineHandle,
@@ -248,6 +250,8 @@ export {
   type ScheduledTimer,
   type MachineConfig,
   type ParsedMachineConfig,
+  type RenderableMachineConfig,
+  type ToMermaidOptions,
 } from './state-machine/index.js'
 
 // Types
