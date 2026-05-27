@@ -140,6 +140,9 @@ importers:
       ai-providers:
         specifier: workspace:^
         version: link:../ai-providers
+      ai-workflows:
+        specifier: workspace:*
+        version: link:../ai-workflows
       digital-objects:
         specifier: workspace:^
         version: link:../digital-objects

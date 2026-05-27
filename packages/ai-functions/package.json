@@ -49,6 +49,7 @@
     "ai": "^6.0.0",
     "ai-evaluate": "workspace:^",
     "ai-providers": "workspace:^",
+    "ai-workflows": "workspace:*",
     "digital-objects": "workspace:^",
     "language-models": "workspace:*",
     "yaml": "^2.8.0",
