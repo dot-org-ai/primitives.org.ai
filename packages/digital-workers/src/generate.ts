@@ -33,7 +33,16 @@
 
 import { generateObject, generateText } from 'ai-functions'
 import type { SimpleSchema } from 'ai-functions'
-import type { GenerateResult, GenerateOptions } from './types.js'
+import type { GenerateResult, GenerateOptions, Worker, ActionTarget, RoleTarget } from './types.js'
+
+/**
+ * A target for `generate` — concrete `ActionTarget` or `RoleTarget`.
+ *
+ * The legacy 2-arg form `generate(prompt, options)` keeps its LLM-direct
+ * behaviour. The 3-arg form `generate(target, prompt, options)` routes
+ * through the resolved Worker's `dispatch.generate` port. PRD: aip-2q19.
+ */
+export type GenerateTarget = ActionTarget | RoleTarget
 
 /**
  * Generate content with rich metadata and multiple content type support.
@@ -97,8 +106,55 @@ import type { GenerateResult, GenerateOptions } from './types.js'
  */
 export async function generate<T = string>(
   prompt: string,
-  options: GenerateOptions = {}
+  options?: GenerateOptions
+): Promise<GenerateResult<T>>
+export async function generate<T = string>(
+  target: GenerateTarget,
+  prompt: string,
+  options?: GenerateOptions
+): Promise<GenerateResult<T>>
+export async function generate<T = string>(
+  promptOrTarget: string | GenerateTarget,
+  promptOrOptions?: string | GenerateOptions,
+  maybeOptions?: GenerateOptions
 ): Promise<GenerateResult<T>> {
+  // Normalize overloads.
+  let prompt: string
+  let options: GenerateOptions
+  let target: GenerateTarget | undefined
+  if (typeof promptOrTarget === 'string' && typeof promptOrOptions !== 'string') {
+    prompt = promptOrTarget
+    options = (promptOrOptions as GenerateOptions | undefined) ?? {}
+    target = undefined
+  } else {
+    target = promptOrTarget as GenerateTarget
+    prompt = promptOrOptions as string
+    options = maybeOptions ?? {}
+  }
+
+  // If a target is supplied, try its `generate` dispatcher first.
+  if (target !== undefined) {
+    const resolved = await resolveRoleTarget(target)
+    const dispatcher = getDispatcher(resolved)
+    if (dispatcher && dispatcher.generate) {
+      const startTime = Date.now()
+      const out = await dispatcher.generate<T>({
+        prompt,
+        ...(options.schema !== undefined && { schema: options.schema }),
+        ...(options.instructions !== undefined && { system: options.instructions }),
+      })
+      return {
+        content: out.content,
+        type: options.type ?? 'text',
+        metadata: {
+          model: options.model ?? 'sonnet',
+          duration: Date.now() - startTime,
+        },
+      }
+    }
+    // No dispatcher available — fall through to the legacy LLM path.
+  }
+
   const { type = 'text', schema, instructions, model = 'sonnet' } = options
 
   const startTime = Date.now()
@@ -395,4 +451,31 @@ generate.refine = async <T = string>(
   }
 
   return result
+}
+
+// ============================================================================
+// Internal Helpers — Worker dispatch (PRD aip-2q19)
+// ============================================================================
+
+function isRoleTarget(target: GenerateTarget): target is RoleTarget {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    (target as { $type?: unknown }).$type === 'Role' &&
+    typeof (target as RoleTarget).resolveWorker === 'function'
+  )
+}
+
+async function resolveRoleTarget(target: GenerateTarget): Promise<ActionTarget> {
+  if (isRoleTarget(target)) {
+    return target.resolveWorker()
+  }
+  return target as ActionTarget
+}
+
+function getDispatcher(target: ActionTarget) {
+  if (typeof target === 'object' && target !== null && 'dispatch' in target) {
+    return (target as Worker).dispatch
+  }
+  return undefined
 }

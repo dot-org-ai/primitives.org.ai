@@ -10,8 +10,15 @@
  * Tests are skipped if AI_GATEWAY_URL is not configured.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { is } from '../src/index.js'
+import type {
+  Worker,
+  WorkerDispatcher,
+  WorkerIsInput,
+  WorkerIsOutput,
+  RoleTarget,
+} from '../src/types.js'
 
 // Skip tests if no gateway configured
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
@@ -282,6 +289,95 @@ describe('is() - Type Validation Primitive', () => {
       )
       expect(result).toBeDefined()
       // The AI should attempt to coerce '30' to 30 and 'yes' to true
+    })
+  })
+
+  // ==========================================================================
+  // PRD aip-2q19 — Worker dispatch port (Agent / Person / Role) for `is`
+  // ==========================================================================
+  describe('Worker dispatch port (PRD aip-2q19)', () => {
+    it('routes through a Worker dispatcher when present (Agent filler)', async () => {
+      const dispatcherIs = vi
+        .fn<(input: WorkerIsInput) => Promise<WorkerIsOutput>>()
+        .mockResolvedValue({ valid: true })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        is: dispatcherIs,
+      }
+      const worker: Worker = {
+        id: 'agent_validator',
+        name: 'Validator',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await is(worker, 'foo@bar.com', 'email')
+
+      expect(dispatcherIs).toHaveBeenCalledOnce()
+      expect(dispatcherIs).toHaveBeenCalledWith({ value: 'foo@bar.com', type: 'email' })
+      expect(result.valid).toBe(true)
+    })
+
+    it('forwards schema-typed checks to the dispatcher', async () => {
+      const dispatcherIs = vi
+        .fn<(input: WorkerIsInput) => Promise<WorkerIsOutput>>()
+        .mockResolvedValue({ valid: false })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        is: dispatcherIs,
+      }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const schema = { name: 'Full name', age: 'Age (number)' }
+      const value = { name: 'Alice' }
+      const result = await is(worker, value, schema)
+
+      expect(dispatcherIs).toHaveBeenCalledWith({ value, type: schema })
+      expect(result.valid).toBe(false)
+    })
+
+    it('resolves a Role target to its filler before dispatching', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        is: async () => ({ valid: true }),
+      }
+      const filler: Worker = {
+        id: 'person_priya',
+        name: 'Priya',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+      const resolveWorker = vi.fn().mockResolvedValue(filler)
+      const role: RoleTarget = {
+        $type: 'Role',
+        name: 'CEO',
+        resolveWorker,
+      }
+
+      const result = await is(role, 42, 'positive integer')
+
+      expect(resolveWorker).toHaveBeenCalledOnce()
+      expect(result.valid).toBe(true)
+    })
+
+    it('falls back to legacy validation path when first arg is a value (not a target)', async () => {
+      // The 3-arg overload `is(value, type, options)` must still work — a
+      // plain string value is not a target. Built-in 'string' type uses a
+      // synchronous check (no LLM), so this verifies the routing without
+      // hitting the network.
+      const result = await is('hello world', 'string')
+      expect(result.valid).toBe(true)
     })
   })
 })

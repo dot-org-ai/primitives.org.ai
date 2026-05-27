@@ -412,3 +412,139 @@ describe('personAsWorker.dispatch.notify — channel delivery (PRD aip-9l4r)', (
     warnSpy.mockRestore()
   })
 })
+
+// ============================================================================
+// PRD aip-2q19 — LLM-shape verbs (do / decide / generate / is)
+// ============================================================================
+describe('personAsWorker.dispatch.do — Human task lifecycle (PRD aip-2q19)', () => {
+  it('walks the do lifecycle and resolves with the human-supplied result', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async ({ item }) => {
+        expect(item.kind).toBe('do')
+        expect(item.doPayload?.instructions).toBe('Review the PR')
+        return 'PR reviewed: looks good'
+      },
+    })
+
+    const result = await worker.dispatch!.do!({ task: 'Review the PR' })
+    expect(result.result).toBe('PR reviewed: looks good')
+    expect(result.doneBy?.id).toBe('person_priya')
+    expect(result.doneBy?.type).toBe('human')
+
+    const items = await store.list()
+    expect(items).toHaveLength(1)
+    expect(items[0]?.status).toBe('completed')
+    expect(items[0]?.resolution?.verb).toBe('done')
+  })
+
+  it('escalates on resolver failure', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => {
+        throw new Error('reviewer unavailable')
+      },
+    })
+
+    await expect(worker.dispatch!.do!({ task: 'Review' })).rejects.toThrow('reviewer unavailable')
+    const items = await store.list()
+    expect(items[0]?.status).toBe('escalated')
+  })
+})
+
+describe('personAsWorker.dispatch.decide — Human decision lifecycle (PRD aip-2q19)', () => {
+  it('walks the decide lifecycle with the option list on decidePayload', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async ({ item }) => {
+        expect(item.kind).toBe('decide')
+        expect(item.decidePayload?.options).toEqual(['canary', 'rolling', 'blue-green'])
+        return 'canary'
+      },
+    })
+
+    const result = await worker.dispatch!.decide!({
+      options: ['canary', 'rolling', 'blue-green'],
+    })
+    expect(result.decision).toBe('canary')
+    expect(result.decidedBy?.id).toBe('person_priya')
+
+    const items = await store.list()
+    expect(items[0]?.resolution?.verb).toBe('decided')
+  })
+
+  it('serialises non-string context onto the artifact', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async () => 'A',
+    })
+
+    await worker.dispatch!.decide!({
+      options: ['A', 'B'],
+      context: { risk: 'high', users: 100000 },
+    })
+    const items = await store.list()
+    expect(items[0]?.artifact.context).toEqual({ risk: 'high', users: 100000 })
+  })
+})
+
+describe('personAsWorker.dispatch.generate — Human task lifecycle (PRD aip-2q19)', () => {
+  it('models generate as a do task — matches helpers.generate → defaultHuman.do', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async ({ item }) => {
+        // generate is mapped onto the `do` lifecycle (per helpers.generate).
+        expect(item.kind).toBe('do')
+        expect(item.doPayload?.instructions).toBe('Write a blog post')
+        expect(item.artifact.kind).toBe('Generation')
+        return '# My blog post'
+      },
+    })
+
+    const result = await worker.dispatch!.generate!({ prompt: 'Write a blog post' })
+    expect(result.content).toBe('# My blog post')
+    expect(result.generatedBy?.id).toBe('person_priya')
+
+    const items = await store.list()
+    expect(items[0]?.resolution?.verb).toBe('done')
+  })
+})
+
+describe('personAsWorker.dispatch.is — Human binary decision (PRD aip-2q19)', () => {
+  it('models is as a binary decide(true|false) — matches helpers.is mapping', async () => {
+    const store = new LifecycleStoreMemory()
+    const worker = personAsWorker(makePerson(), {
+      store,
+      resolve: async ({ item }) => {
+        expect(item.kind).toBe('decide')
+        expect(item.decidePayload?.options).toEqual(['true', 'false'])
+        return 'true'
+      },
+    })
+
+    const result = await worker.dispatch!.is!({ value: 'foo@bar.com', type: 'email' })
+    expect(result.valid).toBe(true)
+    expect(result.checkedBy?.id).toBe('person_priya')
+
+    const items = await store.list()
+    expect(items[0]?.artifact.context).toMatchObject({
+      value: 'foo@bar.com',
+      type: 'email',
+    })
+    expect(items[0]?.resolution?.verb).toBe('decided')
+  })
+
+  it('returns valid=false when the human picks "false"', async () => {
+    const worker = personAsWorker(makePerson(), {
+      resolve: async () => 'false',
+    })
+
+    const result = await worker.dispatch!.is!({ value: 'not-an-email', type: 'email' })
+    expect(result.valid).toBe(false)
+  })
+})

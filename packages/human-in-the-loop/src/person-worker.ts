@@ -32,6 +32,14 @@ import type {
   WorkerApproveOutput,
   WorkerNotifyInput,
   WorkerNotifyOutput,
+  WorkerDoInput,
+  WorkerDoOutput,
+  WorkerDecideInput,
+  WorkerDecideOutput,
+  WorkerGenerateInput,
+  WorkerGenerateOutput,
+  WorkerIsInput,
+  WorkerIsOutput,
 } from 'digital-workers'
 import type { Human } from './types.js'
 import type {
@@ -260,11 +268,22 @@ export function personAsWorker(person: Human, options: PersonWorkerAdapterOption
 /**
  * Build the lifecycle-backed `WorkerDispatcher` for a Person filler.
  *
- * The `ask` verb walks the Human lifecycle:
+ * Each verb walks the Human lifecycle:
  *   create (pending) → deliver → claim → startProgress → resolve (completed)
  * obtaining the answer via the injected `resolve` callback. On resolver
  * failure the item is escalated (active → escalated) before the error
  * re-throws, surfacing the escalation transition.
+ *
+ * **Per-verb mapping** (PRD aip-2q19):
+ *  - `ask`      → `RequestKind = 'ask'`, `askPayload.question`
+ *  - `do`       → `RequestKind = 'do'`, `doPayload.instructions`
+ *  - `decide`   → `RequestKind = 'decide'`, `decidePayload.options`
+ *  - `generate` → `RequestKind = 'do'` (treat content generation as a task —
+ *                 matches the prior `human-in-the-loop.generate` mapping in
+ *                 `helpers.ts` which delegates to `defaultHuman.do`)
+ *  - `is`       → `RequestKind = 'decide'` with `['true', 'false']` options
+ *                 (matches the prior `human-in-the-loop.is` mapping in
+ *                 `helpers.ts`)
  */
 function personDispatcher(
   person: Human,
@@ -277,74 +296,175 @@ function personDispatcher(
   const priority = options.priority ?? 'normal'
   const assignee = options.assignee ?? person.id
 
+  /**
+   * Walk the lifecycle for any verb: create → deliver → claim → in_progress →
+   * resolve. Returns the answer string from the injected resolver.
+   */
+  const runLifecycle = async (params: {
+    title: string
+    question: string
+    kind: RequestKind
+    artifactKind: string
+    timeout?: number
+    payload?: Pick<LifecycleItem, 'askPayload' | 'decidePayload' | 'doPayload'>
+    context?: Record<string, unknown>
+    resolveVerb: string
+  }): Promise<string> => {
+    const now = new Date()
+    const artifact: ArtifactRef = {
+      kind: params.artifactKind,
+      id: `a_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+      title: params.title,
+      ...(params.context !== undefined && { context: params.context }),
+    }
+
+    const item: LifecycleItem = {
+      id: `hf_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+      kind: params.kind,
+      ...(params.payload ?? {}),
+      status: 'pending',
+      priority,
+      title: params.title,
+      artifact,
+      assignee,
+      createdAt: now,
+      slaDeadline: new Date(now.getTime() + (params.timeout ?? slaMs)),
+      updatedAt: now,
+    }
+
+    // 1. Persist the pending Function.
+    const created = await store.create(item)
+
+    // 2. Deliver to the human via the configured channel (best-effort).
+    if (options.channelAdapter) {
+      try {
+        await options.channelAdapter.deliver(created, store)
+      } catch (err) {
+        console.warn(`[human-in-the-loop] channel delivery failed for ${created.id}:`, err)
+      }
+    }
+
+    // 3. Claim the Function on behalf of the assignee, then start progress.
+    let current = await store.update(created.id, {
+      status: 'claimed',
+      claimedBy: assignee,
+      claimedAt: new Date(),
+    })
+    current = await store.update(current.id, { status: 'in_progress' })
+
+    // 4. Obtain the human's answer (the channel-inbound seam). On failure,
+    //    escalate the Function before surfacing the error.
+    let answerText: string
+    try {
+      answerText = await options.resolve({ item: current, question: params.question, person })
+    } catch (err) {
+      await store.escalate(current.id, assignee)
+      throw err
+    }
+
+    // 5. Resolve the Function (in_progress → completed).
+    await store.complete(current.id, {
+      verb: params.resolveVerb,
+      resolvedBy: assignee,
+      comments: answerText,
+      data: { answer: answerText },
+    })
+
+    return answerText
+  }
+
+  const personRef = { id, type: 'human' as const, name }
+
   const dispatcher: WorkerDispatcher = {
     async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
-      const now = new Date()
-      const kind: RequestKind = 'ask'
-      const artifact: ArtifactRef = {
-        kind: 'Question',
-        id: `q_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+      const answer = await runLifecycle({
         title: input.question,
+        question: input.question,
+        kind: 'ask',
+        artifactKind: 'Question',
+        ...(input.timeout !== undefined && { timeout: input.timeout }),
+        payload: { askPayload: { question: input.question } },
         ...(input.context !== undefined && { context: input.context }),
-      }
-
-      const item: LifecycleItem = {
-        id: `hf_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
-        kind,
-        askPayload: { question: input.question },
-        status: 'pending',
-        priority,
-        title: input.question,
-        artifact,
-        assignee,
-        createdAt: now,
-        slaDeadline: new Date(now.getTime() + (input.timeout ?? slaMs)),
-        updatedAt: now,
-      }
-
-      // 1. Persist the pending Function.
-      const created = await store.create(item)
-
-      // 2. Deliver to the human via the configured channel (best-effort).
-      if (options.channelAdapter) {
-        try {
-          await options.channelAdapter.deliver(created, store)
-        } catch (err) {
-          // Delivery failures must not break the caller's flow.
-          console.warn(`[human-in-the-loop] channel delivery failed for ${created.id}:`, err)
-        }
-      }
-
-      // 3. Claim the Function on behalf of the assignee, then start progress.
-      let current = await store.update(created.id, {
-        status: 'claimed',
-        claimedBy: assignee,
-        claimedAt: new Date(),
+        resolveVerb: 'answered',
       })
-      current = await store.update(current.id, { status: 'in_progress' })
+      return { answer: answer as unknown as T, answeredBy: personRef }
+    },
 
-      // 4. Obtain the human's answer (the channel-inbound seam). On failure,
-      //    escalate the Function before surfacing the error.
-      let answerText: string
-      try {
-        answerText = await options.resolve({ item: current, question: input.question, person })
-      } catch (err) {
-        await store.escalate(current.id, assignee)
-        throw err
-      }
+    // ----- LLM-shape verbs (PRD aip-2q19) -----
 
-      // 5. Resolve the Function (in_progress → completed).
-      await store.complete(current.id, {
-        verb: 'answered',
-        resolvedBy: assignee,
-        comments: answerText,
-        data: { answer: answerText },
+    async do<T = unknown>(input: WorkerDoInput): Promise<WorkerDoOutput<T>> {
+      // `do` is a task execution request — surface the task description as
+      // both the title and the lifecycle `doPayload.instructions`.
+      const answer = await runLifecycle({
+        title: input.task,
+        question: input.task,
+        kind: 'do',
+        artifactKind: 'Task',
+        ...(input.timeout !== undefined && { timeout: input.timeout }),
+        payload: { doPayload: { instructions: input.task } },
+        ...(input.context !== undefined && { context: input.context }),
+        resolveVerb: 'done',
       })
+      // Resolver returns a string; cast through for typed result.
+      return { result: answer as unknown as T, doneBy: personRef }
+    },
 
-      return {
-        answer: answerText as unknown as T,
-        answeredBy: { id, type: 'human', name },
+    async decide<T = string>(input: WorkerDecideInput<T>): Promise<WorkerDecideOutput<T>> {
+      // `decide` is a multi-option request — surface options on decidePayload.
+      const opts = input.options.map((o: unknown) => (typeof o === 'string' ? o : JSON.stringify(o)))
+      const title = `Decide between: ${opts.join(', ')}`
+      const ctxRecord: Record<string, unknown> | undefined =
+        typeof input.context === 'string' ? { context: input.context } : input.context
+      const answer = await runLifecycle({
+        title,
+        question: title,
+        kind: 'decide',
+        artifactKind: 'Decision',
+        ...(input.timeout !== undefined && { timeout: input.timeout }),
+        payload: { decidePayload: { options: opts } },
+        ...(ctxRecord !== undefined && { context: ctxRecord }),
+        resolveVerb: 'decided',
+      })
+      return { decision: answer as unknown as T, decidedBy: personRef }
+    },
+
+    async generate<T = unknown>(input: WorkerGenerateInput): Promise<WorkerGenerateOutput<T>> {
+      // `generate` is a content-creation request — modelled as a `do` task
+      // (matches `human-in-the-loop.helpers.generate` → `defaultHuman.do`).
+      const answer = await runLifecycle({
+        title: input.prompt,
+        question: input.prompt,
+        kind: 'do',
+        artifactKind: 'Generation',
+        ...(input.timeout !== undefined && { timeout: input.timeout }),
+        payload: { doPayload: { instructions: input.prompt } },
+        ...(input.context !== undefined && { context: input.context }),
+        resolveVerb: 'done',
+      })
+      return { content: answer as unknown as T, generatedBy: personRef }
+    },
+
+    async is(input: WorkerIsInput): Promise<WorkerIsOutput> {
+      // `is` becomes a binary decision (matches `human-in-the-loop.helpers.is`
+      // which delegates to `defaultHuman.decide({ options: ['true', 'false'] })`).
+      const typeDesc = typeof input.type === 'string' ? input.type : JSON.stringify(input.type)
+      const title = `Is value valid for type: ${typeDesc}`
+      const ctxRecord: Record<string, unknown> = {
+        value: input.value,
+        type: input.type,
+        ...(input.context ?? {}),
       }
+      const answer = await runLifecycle({
+        title,
+        question: title,
+        kind: 'decide',
+        artifactKind: 'TypeCheck',
+        ...(input.timeout !== undefined && { timeout: input.timeout }),
+        payload: { decidePayload: { options: ['true', 'false'] } },
+        context: ctxRecord,
+        resolveVerb: 'decided',
+      })
+      return { valid: answer === 'true', checkedBy: personRef }
     },
   }
 

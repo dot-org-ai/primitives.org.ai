@@ -87,3 +87,194 @@ export async function runAsk<TResult = unknown>(
   const response = result.object as { answer: TResult; reasoning: string }
   return response.answer
 }
+
+// ============================================================================
+// LLM-shape Verbs (PRD aip-2q19) — shared parity builders for do / decide /
+// generate / is. Each `build*GenerateOptions` matches the prior
+// `autonomous-agents.actions.ts` implementation byte-for-byte so the
+// `<verb>-parity.test.ts` snapshot tests pass.
+// ============================================================================
+
+// ---- do --------------------------------------------------------------------
+
+/** Default schema for `do` — matches `autonomous-agents.actions.doAction`. */
+export const DEFAULT_DO_SCHEMA: SimpleSchema = { result: 'The result of the task' }
+
+/** Default system prompt for `do` — matches `actions.doAction`. */
+export const DEFAULT_DO_SYSTEM =
+  'You are a helpful AI assistant. Execute tasks accurately and thoroughly.'
+
+/**
+ * Build the exact `generateObject` arguments the historical
+ * `autonomous-agents.doAction` produced.
+ */
+export function buildDoGenerateOptions(
+  task: string,
+  context?: unknown,
+  options?: AIGenerateOptions
+): {
+  model: string
+  schema: SimpleSchema
+  system: string
+  prompt: string
+  temperature: number
+} {
+  return {
+    model: options?.model || 'sonnet',
+    schema: (options?.schema as SimpleSchema) || DEFAULT_DO_SCHEMA,
+    system: options?.system || DEFAULT_DO_SYSTEM,
+    prompt: `Task: ${task}\n\nContext: ${JSON.stringify(context || {})}`,
+    temperature: options?.temperature ?? 0.7,
+  }
+}
+
+/**
+ * Run the parity-preserving `do` and return the agent's result. Matches the
+ * historical `autonomous-agents.doAction` contract — return value is
+ * `obj.result ?? obj` from `generateObject`.
+ */
+export async function runDo<TResult = unknown>(
+  task: string,
+  context?: unknown,
+  options?: AIGenerateOptions
+): Promise<TResult> {
+  const result = await generateObject(buildDoGenerateOptions(task, context, options))
+  return (result.object as { result: TResult }).result || (result.object as TResult)
+}
+
+// ---- decide ----------------------------------------------------------------
+
+/** Default system prompt for `decide` — matches `actions.decide`. */
+export const DEFAULT_DECIDE_SYSTEM =
+  'You are a strategic decision-maker. Evaluate options carefully and provide clear reasoning.'
+
+/**
+ * Build the exact `generateObject` arguments the historical
+ * `autonomous-agents.decide` produced.
+ *
+ * The schema embeds the option union into the `decision` field exactly as
+ * the prior implementation did.
+ */
+export function buildDecideGenerateOptions<T extends string>(
+  options: T[],
+  context?: string,
+  settings?: AIGenerateOptions
+): {
+  model: string
+  schema: SimpleSchema
+  system: string
+  prompt: string
+  temperature: number
+} {
+  return {
+    model: settings?.model || 'sonnet',
+    schema: {
+      decision: options.join(' | '),
+      reasoning: 'Reasoning for this decision',
+      confidence: 'Confidence level 0-100 (number)',
+    } as SimpleSchema,
+    system: settings?.system || DEFAULT_DECIDE_SYSTEM,
+    prompt: `Make a decision between these options:\n${options
+      .map((o, i) => `${i + 1}. ${o}`)
+      .join('\n')}\n\nContext: ${context || 'No additional context'}`,
+    temperature: settings?.temperature ?? 0.7,
+  }
+}
+
+/**
+ * Run the parity-preserving `decide` and return the chosen option.
+ */
+export async function runDecide<T extends string>(
+  options: T[],
+  context?: string,
+  settings?: AIGenerateOptions
+): Promise<T> {
+  const result = await generateObject(buildDecideGenerateOptions(options, context, settings))
+  const response = result.object as unknown as {
+    decision: T
+    reasoning: string
+    confidence: number
+  }
+  return response.decision
+}
+
+// ---- generate --------------------------------------------------------------
+
+/** Default schema for `generate` — matches `actions.generate`. */
+export const DEFAULT_GENERATE_SCHEMA: SimpleSchema = { result: 'Generated content' }
+
+/** Default system prompt for `generate` — matches `actions.generate`. */
+export const DEFAULT_GENERATE_SYSTEM =
+  'You are a creative AI assistant. Generate high-quality content.'
+
+/**
+ * Build the exact `generateObject` arguments the historical
+ * `autonomous-agents.generate` produced.
+ */
+export function buildGenerateGenerateOptions(options: AIGenerateOptions): {
+  model: string
+  schema: SimpleSchema
+  system: string
+  prompt: string
+  temperature: number
+} {
+  return {
+    model: options.model || 'sonnet',
+    schema: (options.schema || DEFAULT_GENERATE_SCHEMA) as SimpleSchema,
+    system: options.system || DEFAULT_GENERATE_SYSTEM,
+    prompt: options.prompt || '',
+    temperature: options.temperature ?? 0.8,
+  }
+}
+
+/**
+ * Run the parity-preserving `generate` and return the full object.
+ */
+export async function runGenerate<TResult = unknown>(options: AIGenerateOptions): Promise<TResult> {
+  const result = await generateObject(buildGenerateGenerateOptions(options))
+  return result.object as TResult
+}
+
+// ---- is --------------------------------------------------------------------
+
+/** Default system prompt for `is` — matches `actions.is`. */
+export const DEFAULT_IS_SYSTEM =
+  'You are a type validator. Determine if the value matches the expected type or schema.'
+
+/**
+ * Build the exact `generateObject` arguments the historical
+ * `autonomous-agents.is` produced.
+ */
+export function buildIsGenerateOptions(
+  value: unknown,
+  type: string | SimpleSchema
+): {
+  model: string
+  schema: SimpleSchema
+  system: string
+  prompt: string
+  temperature: number
+} {
+  const schema =
+    typeof type === 'string'
+      ? { isValid: `Is this value a valid ${type}? (boolean)`, reason: 'Explanation' }
+      : { isValid: 'Does this value match the schema? (boolean)', reason: 'Explanation' }
+
+  return {
+    model: 'sonnet',
+    schema,
+    system: DEFAULT_IS_SYSTEM,
+    prompt: `Value: ${JSON.stringify(value)}\n\nExpected type: ${
+      typeof type === 'string' ? type : JSON.stringify(type)
+    }`,
+    temperature: 0,
+  }
+}
+
+/**
+ * Run the parity-preserving `is` and return the boolean validity.
+ */
+export async function runIs(value: unknown, type: string | SimpleSchema): Promise<boolean> {
+  const result = await generateObject(buildIsGenerateOptions(value, type))
+  return (result.object as unknown as { isValid: boolean; reason: string }).isValid
+}

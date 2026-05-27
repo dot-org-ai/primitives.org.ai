@@ -27,7 +27,16 @@
  */
 
 import { generateObject } from 'ai-functions'
-import type { Decision, DecideOptions } from './types.js'
+import type { Decision, DecideOptions, Worker, ActionTarget, RoleTarget } from './types.js'
+
+/**
+ * A target for `decide` — concrete `ActionTarget` or `RoleTarget`.
+ *
+ * The legacy 1-arg form `decide(options)` keeps its LLM-direct behaviour. The
+ * 2-arg form `decide(target, options)` routes through the resolved Worker's
+ * `dispatch.decide` port. PRD: aip-2q19.
+ */
+export type DecideTarget = ActionTarget | RoleTarget
 
 /**
  * Make a structured decision with criteria evaluation and optional human routing.
@@ -87,8 +96,46 @@ import type { Decision, DecideOptions } from './types.js'
  *
  * @see {@link ai-functions#decide} for LLM-as-judge option comparison
  */
-export async function decide<T = string>(options: DecideOptions<T>): Promise<Decision<T>> {
-  const { options: choices, context, criteria = [], includeReasoning = true } = options
+export async function decide<T = string>(options: DecideOptions<T>): Promise<Decision<T>>
+export async function decide<T = string>(
+  target: DecideTarget,
+  options: DecideOptions<T>
+): Promise<Decision<T>>
+export async function decide<T = string>(
+  targetOrOptions: DecideTarget | DecideOptions<T>,
+  maybeOptions?: DecideOptions<T>
+): Promise<Decision<T>> {
+  // Normalize overloads — sniff target vs options.
+  let target: DecideTarget | undefined
+  let opts: DecideOptions<T>
+  if (maybeOptions !== undefined) {
+    target = targetOrOptions as DecideTarget
+    opts = maybeOptions
+  } else {
+    target = undefined
+    opts = targetOrOptions as DecideOptions<T>
+  }
+
+  // If a target is supplied, try its `decide` dispatcher first.
+  if (target !== undefined) {
+    const resolved = await resolveRoleTarget(target)
+    const dispatcher = getDispatcher(resolved)
+    if (dispatcher && dispatcher.decide) {
+      const out = await dispatcher.decide<T>({
+        options: opts.options,
+        ...(opts.context !== undefined && { context: opts.context }),
+      })
+      return {
+        choice: out.decision,
+        reasoning: '',
+        confidence: 1,
+        alternatives: [],
+      }
+    }
+    // No dispatcher available — fall through to the legacy LLM path.
+  }
+
+  const { options: choices, context, criteria = [], includeReasoning = true } = opts
 
   // Format context for the prompt
   const contextStr =
@@ -338,4 +385,31 @@ decide.withApproval = async <T = string>(
     approved: approval.approved,
     ...(approvedBy !== undefined && { approvedBy }),
   }
+}
+
+// ============================================================================
+// Internal Helpers — Worker dispatch (PRD aip-2q19)
+// ============================================================================
+
+function isRoleTarget(target: DecideTarget): target is RoleTarget {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    (target as { $type?: unknown }).$type === 'Role' &&
+    typeof (target as RoleTarget).resolveWorker === 'function'
+  )
+}
+
+async function resolveRoleTarget(target: DecideTarget): Promise<ActionTarget> {
+  if (isRoleTarget(target)) {
+    return target.resolveWorker()
+  }
+  return target as ActionTarget
+}
+
+function getDispatcher(target: ActionTarget) {
+  if (typeof target === 'object' && target !== null && 'dispatch' in target) {
+    return (target as Worker).dispatch
+  }
+  return undefined
 }

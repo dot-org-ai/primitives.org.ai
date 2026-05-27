@@ -10,8 +10,15 @@
  * Tests are skipped if AI_GATEWAY_URL is not configured.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { generate } from '../src/index.js'
+import type {
+  Worker,
+  WorkerDispatcher,
+  WorkerGenerateInput,
+  WorkerGenerateOutput,
+  RoleTarget,
+} from '../src/types.js'
 
 // Skip tests if no gateway configured
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
@@ -314,6 +321,90 @@ describe('generate() - Content Generation Primitive', () => {
       await expect(generate('Generate audio', { type: 'audio' })).rejects.toThrow(
         'not yet implemented'
       )
+    })
+  })
+
+  // ==========================================================================
+  // PRD aip-2q19 — Worker dispatch port (Agent / Person / Role) for `generate`
+  // ==========================================================================
+  describe('Worker dispatch port (PRD aip-2q19)', () => {
+    it('routes through a Worker dispatcher when present (Agent filler)', async () => {
+      const dispatcherGenerate = vi
+        .fn<(input: WorkerGenerateInput) => Promise<WorkerGenerateOutput<string>>>()
+        .mockResolvedValue({ content: 'A haiku about code' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        generate: dispatcherGenerate,
+      }
+      const worker: Worker = {
+        id: 'agent_writer',
+        name: 'Writer',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await generate(worker, 'Write a haiku')
+
+      expect(dispatcherGenerate).toHaveBeenCalledOnce()
+      expect(dispatcherGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'Write a haiku' })
+      )
+      expect(result.content).toBe('A haiku about code')
+    })
+
+    it('forwards schema and instructions to the dispatcher input', async () => {
+      const dispatcherGenerate = vi
+        .fn<(input: WorkerGenerateInput) => Promise<WorkerGenerateOutput<string>>>()
+        .mockResolvedValue({ content: 'ok' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        generate: dispatcherGenerate,
+      }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const schema = { title: 'Title' }
+      await generate(worker, 'prompt', { schema, instructions: 'be terse' })
+
+      expect(dispatcherGenerate).toHaveBeenCalledWith({
+        prompt: 'prompt',
+        schema,
+        system: 'be terse',
+      })
+    })
+
+    it('resolves a Role target to its filler before dispatching', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        generate: async () => ({ content: 'CEO-authored content' }),
+      }
+      const filler: Worker = {
+        id: 'person_priya',
+        name: 'Priya',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+      const resolveWorker = vi.fn().mockResolvedValue(filler)
+      const role: RoleTarget = {
+        $type: 'Role',
+        name: 'CEO',
+        resolveWorker,
+      }
+
+      const result = await generate(role, 'Write Q1 vision')
+
+      expect(resolveWorker).toHaveBeenCalledOnce()
+      expect(result.content).toBe('CEO-authored content')
     })
   })
 })

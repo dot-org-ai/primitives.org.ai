@@ -9,8 +9,15 @@
  * Tests are skipped if AI_GATEWAY_URL is not configured.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { do as doTask } from '../src/index.js'
+import type {
+  Worker,
+  WorkerDispatcher,
+  WorkerDoInput,
+  WorkerDoOutput,
+  RoleTarget,
+} from '../src/types.js'
 
 // Skip tests if no gateway configured
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
@@ -139,6 +146,111 @@ describe('do() - Task Execution Primitive', () => {
       expect(result).toBeDefined()
       // Background tasks still return a result
       expect(result.success).toBeDefined()
+    })
+  })
+
+  // ==========================================================================
+  // PRD aip-2q19 — Worker dispatch port (Agent / Person / Role) for `do`
+  // ==========================================================================
+  describe('Worker dispatch port (PRD aip-2q19)', () => {
+    it('routes through a Worker dispatcher when present (Agent filler)', async () => {
+      const dispatcherDo = vi
+        .fn<(input: WorkerDoInput) => Promise<WorkerDoOutput<string>>>()
+        .mockResolvedValue({ result: 'agent did the task' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        do: dispatcherDo,
+      }
+      const agentWorker: Worker = {
+        id: 'agent_doer',
+        name: 'Doer Agent',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await doTask<string>(agentWorker, 'Calculate 2+2')
+
+      expect(dispatcherDo).toHaveBeenCalledOnce()
+      expect(dispatcherDo).toHaveBeenCalledWith(expect.objectContaining({ task: 'Calculate 2+2' }))
+      expect(result.success).toBe(true)
+      expect(result.result).toBe('agent did the task')
+    })
+
+    it('forwards context and timeout to the dispatcher input', async () => {
+      const dispatcherDo = vi
+        .fn<(input: WorkerDoInput) => Promise<WorkerDoOutput<string>>>()
+        .mockResolvedValue({ result: 'ok' })
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        do: dispatcherDo,
+      }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      await doTask(worker, 'task', { context: { foo: 'bar' }, timeout: 5000 })
+
+      expect(dispatcherDo).toHaveBeenCalledWith({
+        task: 'task',
+        context: { foo: 'bar' },
+        timeout: 5000,
+      })
+    })
+
+    it('resolves a Role target to its filler before dispatching', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        do: async () => ({ result: 'role filler did it' }),
+      }
+      const ceoFiller: Worker = {
+        id: 'person_priya',
+        name: 'Priya',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+      const resolveWorker = vi.fn().mockResolvedValue(ceoFiller)
+      const ceoRole: RoleTarget = {
+        $type: 'Role',
+        name: 'CEO',
+        resolveWorker,
+      }
+
+      const result = await doTask<string>(ceoRole, 'execute Q1 plan')
+
+      expect(resolveWorker).toHaveBeenCalledOnce()
+      expect(result.success).toBe(true)
+      expect(result.result).toBe('role filler did it')
+    })
+
+    it('marks the result failed when the dispatcher throws', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'noop' }),
+        do: async () => {
+          throw new Error('dispatcher boom')
+        },
+      }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await doTask(worker, 'task')
+
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('dispatcher boom')
     })
   })
 })
