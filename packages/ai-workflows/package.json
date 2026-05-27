@@ -32,7 +32,8 @@
   },
   "dependencies": {
     "@org.ai/types": "workspace:*",
-    "digital-objects": "workspace:*"
+    "digital-objects": "workspace:*",
+    "xstate": "^5.31.1"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

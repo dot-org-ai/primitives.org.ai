@@ -229,6 +229,24 @@ export {
   type DatabaseConnection,
 } from './worker/state-adapter.js'
 
+// State Machine workflows - hierarchical statecharts via xstate (ADR-0011).
+// Runs as a peer to the DAG WorkflowBuilder above; existing exports unaffected.
+export {
+  runMachine,
+  createInMemoryStateMachineStorage,
+  createMachine as createStateMachine,
+  type RunnableMachine,
+  type RunMachineOptions,
+  type MachineHandle,
+  type StateMachineStorage,
+  type StateMachineStorageKind,
+  type InMemoryStateMachineStorage,
+  type PersistedMachineSnapshot,
+  type MachineEventLogEntry,
+  type ScheduledTimer,
+  type MachineConfig,
+} from './state-machine/index.js'
+
 // Types
 export type {
   EventHandler,
