@@ -82,6 +82,12 @@ _Avoid_: Job, ticket, work item.
 **Channel Adapter**: A concrete way a Worker is reached — Vercel Chat SDK (default for humans), web, mobile (Expo), email, Slack, agent runtime. Satisfies the Worker `dispatch` port.
 _Avoid_: Transport, integration.
 
+**Workflow**: A durable orchestration of Actions over time. Two computational shapes are first-class: **DAG workflows** (sequential / parallel / conditional / loop) authored via the `ai-workflows` `WorkflowBuilder` DSL; and **State Machine workflows** (hierarchical states with event-driven transitions) authored as mermaid `stateDiagram-v2` or xstate `MachineConfig`. Both run on the same `DurableExecutionAdapter` port and share the same event bus (`on` / `send` / `every` / `track`).
+_Avoid_: Pipeline, job graph, flow (used generically elsewhere).
+
+**State Machine**: A hierarchical statechart with states, transitions, guards, entry/exit actions, parallel regions, and history. Runtime is xstate (`createMachine` / `createActor`); wire formats are mermaid `stateDiagram-v2` (LLM/human surface) and xstate `MachineConfig` (typed developer surface). Both wire formats round-trip through a bidirectional parser/renderer. Persists via the `StateMachineStorage` port (Durable Object default; Postgres alternative via `ai-database`). Transitions subscribe to the workflow event bus; state entries can emit onto it.
+_Avoid_: Workflow (use **Workflow** for the surrounding concept), FSM (we mean the hierarchical variant), graph.
+
 ## Relationships
 
 - A **Verb** declares a **Frame** of roles it accepts.

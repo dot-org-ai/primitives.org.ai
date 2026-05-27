@@ -26,13 +26,15 @@
     "test:coverage": "vitest run --coverage",
     "test:workers": "vitest --config vitest.workers.config.ts",
     "test:workers:coverage": "vitest run --config vitest.workers.config.ts --coverage",
+    "test:sm-workers": "vitest run --config vitest.sm-workers.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@org.ai/types": "workspace:*",
-    "digital-objects": "workspace:*"
+    "digital-objects": "workspace:*",
+    "xstate": "^5.31.1"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.8.0",

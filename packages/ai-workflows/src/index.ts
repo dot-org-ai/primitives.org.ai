@@ -76,7 +76,13 @@ export {
 } from './runtime.js'
 
 // Standalone event handling (for global registration)
-export { on, registerEventHandler, getEventHandlers, clearEventHandlers } from './on.js'
+export {
+  on,
+  registerEventHandler,
+  removeEventHandler,
+  getEventHandlers,
+  clearEventHandlers,
+} from './on.js'
 
 // Standalone scheduling (for global registration)
 export {
@@ -228,6 +234,57 @@ export {
   type SnapshotInfo,
   type DatabaseConnection,
 } from './worker/state-adapter.js'
+
+// State Machine workflows - hierarchical statecharts via xstate (ADR-0011).
+// Runs as a peer to the DAG WorkflowBuilder above; existing exports unaffected.
+export {
+  runMachine,
+  createInMemoryStateMachineStorage,
+  createDurableObjectStateMachineStorage,
+  createPostgresStateMachineStorage,
+  createPostgresStateMachineScheduler,
+  bootstrapStateMachineSchema,
+  runStoredMachine,
+  replayMachine,
+  StateMachineDurableObject,
+  createMachine as createStateMachine,
+  fromMermaid,
+  MermaidParseError,
+  bridgeMachineToEventBus,
+  toMermaid,
+  MermaidRenderError,
+  type RunnableMachine,
+  type RunMachineOptions,
+  type MachineHandle,
+  type ActorClock,
+  type StateMachineStorage,
+  type StateMachineStorageKind,
+  type InMemoryStateMachineStorage,
+  type DurableObjectStateMachineStorage,
+  type PgExecutor,
+  type PostgresStateMachineStorage,
+  type PostgresStateMachineStorageOptions,
+  type PostgresStateMachineTables,
+  type PostgresStateMachineScheduler,
+  type DueTimer,
+  type RunStoredMachineOptions,
+  type DurableObjectStorageLike,
+  type DurableObjectStateLike,
+  type StateMachineBootOptions,
+  type PersistedMachineSnapshot,
+  type MachineEventLogEntry,
+  type ScheduledTimer,
+  type MachineConfig,
+  type ParsedMachineConfig,
+  type MachineEventBusConfig,
+  type InboundMapping,
+  type OutboundMapping,
+  type BridgeMachineToEventBusOptions,
+  type EventBusPort,
+  type BridgeDisposer,
+  type RenderableMachineConfig,
+  type ToMermaidOptions,
+} from './state-machine/index.js'
 
 // Types
 export type {

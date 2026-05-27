@@ -175,6 +175,11 @@ export {
 // Also export 'ai' primitive as 'aiPrompt' for convenience
 export { ai as aiPrompt } from './primitives.js'
 
+// Export the mermaid() state-machine authoring primitive (ADR-0011). LLM-backed,
+// validated against the ai-workflows mermaid parser, with bounded retry on
+// parse failure.
+export { mermaid, type MermaidOptions, type MermaidGenerateFn } from './mermaid.js'
+
 // Export embedding utilities (not in ai-core)
 export * from './embeddings.js'
 

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, defaultExclude } from 'vitest/config'
 
 export default defineConfig({
   test: {
@@ -11,6 +11,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['test/**/*.test.ts', 'src/**/*.test.ts'],
+    // The state-machine Durable Object integration test needs the real Workers
+    // runtime (`cloudflare:test` + Miniflare DO/alarms); it runs under
+    // vitest.sm-workers.config.ts, not this Node pool.
+    exclude: [...defaultExclude, 'test/worker/state-machine-durable-object.test.ts'],
     testTimeout: 30000,
     hookTimeout: 15000,
 

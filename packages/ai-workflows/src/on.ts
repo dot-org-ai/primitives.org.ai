@@ -59,6 +59,31 @@ export function registerEventHandler(
 }
 
 /**
+ * Remove a previously-registered event handler from the global registry.
+ *
+ * This is the inverse of {@link registerEventHandler}: it removes a single
+ * handler by identity, leaving every other registration intact. It exists so
+ * subscriptions can be torn down individually — `clearEventHandlers()` is a
+ * global reset and removes everyone's handlers, which is too blunt for callers
+ * (such as the state-machine event bridge) that must unsubscribe just their
+ * own listeners on dispose without leaking and without disturbing the rest of
+ * the bus.
+ *
+ * Matches on `noun`, `event`, and handler reference identity. Returns `true`
+ * if a registration was removed, `false` if no matching one was found.
+ * Idempotent — removing an already-removed handler is a no-op.
+ */
+export function removeEventHandler(noun: string, event: string, handler: EventHandler): boolean {
+  const index = eventRegistry.findIndex(
+    (registration) =>
+      registration.noun === noun && registration.event === event && registration.handler === handler
+  )
+  if (index === -1) return false
+  eventRegistry.splice(index, 1)
+  return true
+}
+
+/**
  * Handler registration callback type
  * Used by createTypedOnProxy to customize handler registration
  */
