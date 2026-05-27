@@ -99,6 +99,25 @@ export interface RunMachineOptions {
    * runtime records events as they are sent so a failed run can be replayed.
    */
   logEvents?: boolean
+
+  /**
+   * Optional xstate `Clock` for scheduling delayed (`after X`) transitions.
+   * Durable backends (the Durable Object adapter) supply a clock that routes
+   * delays through their native scheduler — DO `setAlarm` — so timer-driven
+   * transitions survive restarts. When omitted, xstate's default clock
+   * (`setTimeout`/`clearTimeout`) is used, which is fine for in-process runs.
+   */
+  clock?: ActorClock
+}
+
+/**
+ * The xstate `Clock` shape: `setTimeout` returns an opaque handle and
+ * `clearTimeout` cancels by it. Re-declared here so callers and adapters need
+ * not import it from xstate's internals.
+ */
+export interface ActorClock {
+  setTimeout(fn: (...args: unknown[]) => void, timeoutMs: number): unknown
+  clearTimeout(handle: unknown): void
 }
 
 // =============================================================================
@@ -210,7 +229,14 @@ export async function runMachine(
     snapshot = options.resume
   }
 
-  const actor: AnyActor = snapshot ? createActor(machine, { snapshot }) : createActor(machine)
+  // Pass the optional clock through to xstate so durable backends can route
+  // `after X` delays through their native scheduler (DO alarms). xstate's
+  // `ActorOptions.clock` is typed as its internal `Clock`; our `ActorClock`
+  // mirror is structurally identical.
+  const actorOptions: Parameters<typeof createActor>[1] = {}
+  if (snapshot) actorOptions.snapshot = snapshot
+  if (options.clock) actorOptions.clock = options.clock as never
+  const actor: AnyActor = createActor(machine, actorOptions)
 
   // Persist a snapshot on every transition. xstate fires the subscriber
   // synchronously after each microstep settles; `getPersistedSnapshot()`

@@ -1,0 +1,19 @@
+{
+  // Wrangler config for the state-machine Durable Object adapter tests.
+  // Used by @cloudflare/vitest-pool-workers (vitest.sm-workers.config.ts).
+  //
+  // Binds the StateMachineTestDO fixture (a StateMachineDurableObject subclass)
+  // so the Miniflare integration test can drive the actor via fetch() and the
+  // alarm() timer path against a real DO with state.storage + alarms.
+
+  "name": "ai-workflows-sm-do",
+  "main": "test/worker/fixtures/state-machine-worker.ts",
+  "compatibility_date": "2025-01-20",
+  "compatibility_flags": ["nodejs_compat_v2"],
+
+  "durable_objects": {
+    "bindings": [{ "name": "STATE_MACHINE_DO", "class_name": "StateMachineTestDO" }]
+  },
+
+  "migrations": [{ "tag": "v1", "new_classes": ["StateMachineTestDO"] }]
+}

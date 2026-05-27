@@ -23,7 +23,18 @@ export {
   type RunnableMachine,
   type RunMachineOptions,
   type MachineHandle,
+  type ActorClock,
 } from './runtime.js'
+
+// Durable Object storage adapter + host DO class
+export {
+  createDurableObjectStateMachineStorage,
+  StateMachineDurableObject,
+  type DurableObjectStateMachineStorage,
+  type DurableObjectStorageLike,
+  type DurableObjectStateLike,
+  type StateMachineBootOptions,
+} from './durable-object-adapter.js'
 
 // Storage port + in-memory adapter
 export {
