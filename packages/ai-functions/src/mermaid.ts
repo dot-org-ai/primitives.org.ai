@@ -17,9 +17,18 @@
  * import { fromMermaid, createStateMachine } from 'ai-workflows'
  *
  * const source = await mermaid('a traffic light: red, green, yellow')
- * const config = fromMermaid(source) // guaranteed to parse
+ * const config = fromMermaid(source) // guaranteed to parse + build a machine
  * const machine = createStateMachine(config)
  * ```
+ *
+ * Note: the returned source is guaranteed to parse AND to build a machine via
+ * `createStateMachine` (this primitive validates both). It is NOT guaranteed to
+ * *run* on its own — any guards/actions the diagram references by name (e.g. a
+ * `[guard]` on a transition, or a `<<choice>>` branch) must be supplied at
+ * creation time via `setup({ guards, actions }).createMachine(config)` or
+ * `createStateMachine(config).provide({ guards, actions })`. xstate throws at
+ * evaluation/entry time if it reaches a referenced guard/action that was never
+ * provided.
  *
  * @packageDocumentation
  */

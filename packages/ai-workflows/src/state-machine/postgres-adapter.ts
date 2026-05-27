@@ -48,7 +48,7 @@
  *   event      jsonb NOT NULL,
  *   created_at timestamptz NOT NULL DEFAULT now(),
  *   ts_ms      bigint NOT NULL,
- *   CONSTRAINT state_machine_events_pk PRIMARY KEY (machine_id, seq)
+ *   PRIMARY KEY (machine_id, seq)
  * );
  *
  * CREATE TABLE IF NOT EXISTS state_machine_timers (
@@ -56,7 +56,7 @@
  *   id         text NOT NULL,
  *   fire_at    bigint NOT NULL,
  *   event      jsonb NOT NULL,
- *   CONSTRAINT state_machine_timers_pk PRIMARY KEY (machine_id, id)
+ *   PRIMARY KEY (machine_id, id)
  * );
  * CREATE INDEX IF NOT EXISTS state_machine_timers_fire_at_idx
  *   ON state_machine_timers (fire_at);
@@ -243,9 +243,12 @@ export function createPostgresStateMachineStorage(
     async appendEvent(machineId, event) {
       const timestamp = Date.now()
       // Assign seq atomically as COALESCE(max(seq)+1, 0) for this machine. A
-      // single round-trip INSERT…SELECT keeps the seq monotonic and 0-based
-      // even under concurrent appends (the (machine_id, seq) PK rejects a
-      // duplicate, surfacing a retryable conflict rather than a gap).
+      // single round-trip INSERT…SELECT keeps the seq monotonic and 0-based.
+      // This assumes a single writer per machineId (the owning DO/actor) — the
+      // real deployment shape. The (machine_id, seq) PK still rejects a
+      // concurrent duplicate (no gap), but the conflict is surfaced to the
+      // caller, not retried here; a multi-writer setup would need a bounded
+      // retry around this call.
       const rows = await executor(
         `INSERT INTO ${tables.events} (machine_id, seq, type, event, ts_ms)
          SELECT $1, COALESCE(MAX(seq) + 1, 0), $2, $3::jsonb, $4
@@ -282,11 +285,14 @@ export function createPostgresStateMachineStorage(
     },
 
     async scheduleTimer(machineId, timer) {
-      // Re-scheduling an existing id replaces it (ON CONFLICT DO UPDATE).
+      // Re-scheduling an existing id replaces it (ON CONFLICT DO UPDATE). Use
+      // the column form (not a named constraint) so a caller-overridden table
+      // name can't collide on a hardcoded constraint name — matching the
+      // instances upsert's `ON CONFLICT (machine_id)`.
       await executor(
         `INSERT INTO ${tables.timers} (machine_id, id, fire_at, event)
          VALUES ($1, $2, $3, $4::jsonb)
-         ON CONFLICT ON CONSTRAINT state_machine_timers_pk
+         ON CONFLICT (machine_id, id)
          DO UPDATE SET fire_at = EXCLUDED.fire_at, event = EXCLUDED.event`,
         [machineId, timer.id, timer.fireAt, JSON.stringify(timer.event)]
       )
@@ -361,7 +367,7 @@ export async function bootstrapStateMachineSchema(
       event      jsonb NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now(),
       ts_ms      bigint NOT NULL,
-      CONSTRAINT state_machine_events_pk PRIMARY KEY (machine_id, seq)
+      PRIMARY KEY (machine_id, seq)
     )`
   )
 
@@ -371,7 +377,7 @@ export async function bootstrapStateMachineSchema(
       id         text NOT NULL,
       fire_at    bigint NOT NULL,
       event      jsonb NOT NULL,
-      CONSTRAINT state_machine_timers_pk PRIMARY KEY (machine_id, id)
+      PRIMARY KEY (machine_id, id)
     )`
   )
   await executor(

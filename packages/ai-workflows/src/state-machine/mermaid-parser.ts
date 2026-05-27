@@ -43,10 +43,13 @@
  * names at machine-creation time, so the caller supplies the implementations
  * via `setup({ guards, actions }).createMachine(config)` or
  * `createMachine(config).provide({ guards, actions })`. A `MachineConfig` whose
- * guards/actions are unprovided still creates; an unprovided guard evaluates
- * falsy (the transition does not fire) and an unprovided action is a no-op.
- * This keeps the wire format implementation-free — the renderer and any caller
- * round-trip against names alone.
+ * guards/actions are unprovided still *creates*, but xstate THROWS at
+ * evaluation/entry time if it reaches a referenced guard or action that was
+ * never provided (`Guard 'X' is not implemented` — and for a `<<choice>>`
+ * transient state this fires synchronously on entry). So `fromMermaid` validates
+ * *structure* only; the parsed config is not runnable until every referenced
+ * guard/action is supplied. This keeps the wire format implementation-free — the
+ * renderer and any caller round-trip against names alone.
  *
  * ## Choice-pseudostate mapping (the least-obvious one)
  *
