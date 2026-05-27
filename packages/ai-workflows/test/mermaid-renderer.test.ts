@@ -300,48 +300,119 @@ describe('toMermaid - active-state highlight', () => {
 })
 
 // ============================================================================
-// 5. Unsupported constructs - loud rejection (symmetric with the parser)
+// 5. Full statechart constructs are now SUPPORTED (slice aip-4fay)
+//
+// These cases previously asserted the flat-subset renderer THREW on composite /
+// parallel / history. aip-4fay makes the renderer the exact inverse of the
+// widened parser, so they now assert the emitted source. Full round-trip + run
+// coverage lives in mermaid-full-coverage.test.ts.
 // ============================================================================
 
-describe('toMermaid - unsupported constructs (later slice aip-4fay)', () => {
-  it('throws naming composite (nested) states', () => {
-    expect(() =>
-      toMermaid({
-        initial: 'Review',
-        states: {
-          Review: { states: { awaiting: {} } } as never,
-        },
-      })
-    ).toThrow(/Composite \(nested\) state/)
+describe('toMermaid - full statechart constructs (slice aip-4fay)', () => {
+  it('renders a composite (nested) state as `state Foo { ... }`', () => {
+    const out = toMermaid({
+      initial: 'Review',
+      states: {
+        Review: {
+          initial: 'awaiting',
+          states: { awaiting: { on: { APPROVE: 'approved' } }, approved: {} },
+        } as never,
+      },
+    })
+    expect(canonMermaid(out)).toBe(
+      canonMermaid(`
+        stateDiagram-v2
+        [*] --> Review
+        state Review {
+          [*] --> awaiting
+          awaiting --> approved : APPROVE
+          state approved
+        }
+      `)
+    )
   })
 
-  it('throws naming a parallel state', () => {
-    expect(() =>
-      toMermaid({
-        initial: 'root',
-        states: {
-          root: { type: 'parallel' } as never,
-        },
-      })
-    ).toThrow(/Parallel state/)
+  it('renders a parallel state with `--`-separated regions', () => {
+    const out = toMermaid({
+      initial: 'Working',
+      states: {
+        Working: {
+          type: 'parallel',
+          states: {
+            Coding: { initial: 'writing', states: { writing: {} } },
+            Watching: { initial: 'idle', states: { idle: {} } },
+          },
+        } as never,
+      },
+    })
+    expect(canonMermaid(out)).toBe(
+      canonMermaid(`
+        stateDiagram-v2
+        [*] --> Working
+        state Working {
+          state Coding {
+            [*] --> writing
+            state writing
+          }
+          --
+          state Watching {
+            [*] --> idle
+            state idle
+          }
+        }
+      `)
+    )
   })
 
-  it('throws naming a top-level parallel machine', () => {
-    expect(() => toMermaid({ type: 'parallel', states: {} } as never)).toThrow(/Parallel machines/)
+  it('renders a history target as `--> [H]` and never declares the history node', () => {
+    const out = toMermaid({
+      initial: 'Active',
+      states: {
+        Active: {
+          initial: 'running',
+          states: {
+            running: { on: { PAUSE: 'paused' } },
+            paused: { on: { RESUME: 'hist' } },
+            hist: { type: 'history', history: 'shallow' },
+          },
+        } as never,
+      },
+    })
+    expect(out).toContain('paused --> [H] : RESUME')
+    expect(out).not.toContain('state hist')
   })
 
-  it('throws naming history states', () => {
-    expect(() =>
-      toMermaid({
-        initial: 'a',
-        states: { a: { type: 'history' } as never },
-      })
-    ).toThrow(/History state/)
+  it('renders a deep-history target as `--> [H*]`', () => {
+    const out = toMermaid({
+      initial: 'A',
+      states: {
+        A: {
+          initial: 'x',
+          states: { x: { on: { R: 'dh' } }, dh: { type: 'history', history: 'deep' } },
+        } as never,
+      },
+    })
+    expect(out).toContain('x --> [H*] : R')
   })
 
-  it('errors are MermaidRenderError instances', () => {
+  it('renders a choice node as `state c <<choice>>` plus guarded branches', () => {
+    const out = toMermaid({
+      initial: 'inspect',
+      states: {
+        inspect: { on: { DONE: 'decide' } },
+        decide: { always: [{ target: 'big', guard: 'isBig' }, { target: 'small' }] } as never,
+        big: {},
+        small: {},
+      },
+    })
+    expect(out).toContain('state decide <<choice>>')
+    expect(out).toContain('decide --> big : [isBig]')
+    expect(out).toContain('decide --> small : [else]')
+  })
+
+  it('still throws (MermaidRenderError) on an inline (non-string) action', () => {
     try {
-      toMermaid({ initial: 'a', states: { a: { type: 'history' } as never } })
+      toMermaid({ initial: 'a', states: { a: { entry: [() => {}] } as never } })
       expect.unreachable('should have thrown')
     } catch (err) {
       expect(err).toBeInstanceOf(MermaidRenderError)
