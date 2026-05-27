@@ -297,52 +297,90 @@ describe('fromMermaid - preprocessing', () => {
 })
 
 // ============================================================================
-// 6. Unsupported constructs - loud rejection naming the construct
+// 6. Full statechart constructs are now SUPPORTED (slice aip-4fay)
+//
+// These four cases previously asserted the flat subset THREW on composite /
+// parallel / history / choice. aip-4fay widens the parser to full Harel
+// coverage, so they now assert the parsed shape. End-to-end behaviour (run +
+// resume + multi-active) is covered in mermaid-full-coverage.test.ts.
 // ============================================================================
 
-describe('fromMermaid - unsupported constructs (later slice aip-4fay)', () => {
-  it('throws naming composite (nested) states', () => {
-    expect(() =>
-      fromMermaid(`
-        stateDiagram-v2
-          [*] --> Review
-          state Review {
-            [*] --> awaiting
-            awaiting --> approved : APPROVE
+describe('fromMermaid - full statechart constructs (slice aip-4fay)', () => {
+  it('parses composite (nested) states into nested `states` + `initial`', () => {
+    const config = fromMermaid(`
+      stateDiagram-v2
+        [*] --> Review
+        state Review {
+          [*] --> awaiting
+          awaiting --> approved : APPROVE
+        }
+    `)
+    expect(config.initial).toBe('Review')
+    const review = (config.states as Record<string, { initial?: string; states?: object }>).Review
+    expect(review.initial).toBe('awaiting')
+    expect(review.states).toHaveProperty('awaiting')
+    expect(review.states).toHaveProperty('approved')
+  })
+
+  it('parses `--` separators into a `type: "parallel"` node with child regions', () => {
+    const config = fromMermaid(`
+      stateDiagram-v2
+        [*] --> Working
+        state Working {
+          state Coding {
+            [*] --> writing
           }
-      `)
-    ).toThrow(/Composite \(nested\) states are not supported/)
-  })
-
-  it('throws naming parallel regions (`--`)', () => {
-    expect(() =>
-      fromMermaid(`
-        stateDiagram-v2
-          [*] --> working
           --
-          [*] --> watching
-      `)
-    ).toThrow(/Parallel regions/)
+          state Watching {
+            [*] --> idle
+          }
+        }
+    `)
+    const working = (config.states as Record<string, { type?: string; states?: object }>).Working
+    expect(working.type).toBe('parallel')
+    expect(working.states).toHaveProperty('Coding')
+    expect(working.states).toHaveProperty('Watching')
   })
 
-  it('throws naming history pseudostates', () => {
+  it('parses a `[H]` history target into a shallow-history node', () => {
+    const config = fromMermaid(`
+      stateDiagram-v2
+        [*] --> Active
+        state Active {
+          [*] --> running
+          running --> paused : PAUSE
+          paused --> [H] : RESUME
+        }
+    `)
+    const active = (config.states as Record<string, { states: Record<string, never> }>).Active
+    const states = active.states as Record<string, { type?: string; history?: string }>
+    expect(states.hist.type).toBe('history')
+    expect(states.hist.history).toBe('shallow')
+    const paused = states.paused as { on?: Record<string, unknown> }
+    expect(paused.on).toEqual({ RESUME: 'hist' })
+  })
+
+  it('parses a `<<choice>>` pseudostate into a transient `always` node', () => {
+    const config = fromMermaid(`
+      stateDiagram-v2
+        [*] --> inspect
+        state decide <<choice>>
+        inspect --> decide : DONE
+        decide --> big : [isBig]
+        decide --> small : [else]
+    `)
+    const decide = (config.states as Record<string, { always?: unknown }>).decide
+    expect(decide.always).toEqual([{ target: 'big', guard: 'isBig' }, { target: 'small' }])
+  })
+
+  it('still rejects `<<fork>>` / `<<join>>` loudly (different concurrency model)', () => {
     expect(() =>
       fromMermaid(`
         stateDiagram-v2
-          [*] --> Review
-          Review --> [H]
+          state f <<fork>>
+          [*] --> f
       `)
-    ).toThrow(/History pseudostates/)
-  })
-
-  it('throws naming choice pseudostates', () => {
-    expect(() =>
-      fromMermaid(`
-        stateDiagram-v2
-          state decide <<choice>>
-          [*] --> decide
-      `)
-    ).toThrow(/Choice\/fork\/join pseudostates/)
+    ).toThrow(/<<fork>>/)
   })
 
   it('errors are MermaidParseError instances carrying a line number', () => {
