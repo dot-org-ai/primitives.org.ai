@@ -76,7 +76,13 @@ export {
 } from './runtime.js'
 
 // Standalone event handling (for global registration)
-export { on, registerEventHandler, getEventHandlers, clearEventHandlers } from './on.js'
+export {
+  on,
+  registerEventHandler,
+  removeEventHandler,
+  getEventHandlers,
+  clearEventHandlers,
+} from './on.js'
 
 // Standalone scheduling (for global registration)
 export {
@@ -237,6 +243,7 @@ export {
   createMachine as createStateMachine,
   fromMermaid,
   MermaidParseError,
+  bridgeMachineToEventBus,
   type RunnableMachine,
   type RunMachineOptions,
   type MachineHandle,
@@ -248,6 +255,12 @@ export {
   type ScheduledTimer,
   type MachineConfig,
   type ParsedMachineConfig,
+  type MachineEventBusConfig,
+  type InboundMapping,
+  type OutboundMapping,
+  type BridgeMachineToEventBusOptions,
+  type EventBusPort,
+  type BridgeDisposer,
 } from './state-machine/index.js'
 
 // Types
