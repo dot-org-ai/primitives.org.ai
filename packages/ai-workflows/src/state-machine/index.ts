@@ -10,9 +10,13 @@
  *     event-log append, timer schedule/cancel) plus the in-memory adapter.
  *   - A re-export of xstate's `createMachine` and the `MachineConfig` type so
  *     callers author typed statecharts without a direct xstate import.
+ *   - {@link fromMermaid} — the mermaid `stateDiagram-v2` wire format parser
+ *     (flat subset). Produces a `MachineConfig` whose guards / actions are
+ *     string names the caller provides at machine-creation time.
  *
- * Later slices add the mermaid wire format (`fromMermaid` / `toMermaid`), the
- * event bridge, and the DO / pg storage adapters; their exports land here.
+ * Later slices add the rest of the mermaid wire format (`toMermaid`, composite
+ * / parallel / history parsing), the event bridge, and the DO / pg storage
+ * adapters; their exports land here.
  *
  * @packageDocumentation
  */
@@ -40,3 +44,6 @@ export {
 // importing xstate directly.
 export { createMachine } from 'xstate'
 export type { MachineConfig } from 'xstate'
+
+// Mermaid wire format - parser (flat subset).
+export { fromMermaid, MermaidParseError, type ParsedMachineConfig } from './mermaid-parser.js'

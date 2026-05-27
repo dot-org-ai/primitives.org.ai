@@ -235,6 +235,8 @@ export {
   runMachine,
   createInMemoryStateMachineStorage,
   createMachine as createStateMachine,
+  fromMermaid,
+  MermaidParseError,
   type RunnableMachine,
   type RunMachineOptions,
   type MachineHandle,
@@ -245,6 +247,7 @@ export {
   type MachineEventLogEntry,
   type ScheduledTimer,
   type MachineConfig,
+  type ParsedMachineConfig,
 } from './state-machine/index.js'
 
 // Types
