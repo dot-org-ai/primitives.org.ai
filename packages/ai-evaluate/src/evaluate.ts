@@ -1,8 +1,8 @@
 /**
  * Evaluate code in a sandboxed environment
  *
- * Uses Cloudflare worker_loaders for secure code execution.
- * For Node.js/local development, import from 'ai-evaluate/node' instead.
+ * Uses Cloudflare Dynamic Workers (the `worker_loaders` binding) for secure
+ * code execution. For Node.js/local development, import from 'ai-evaluate/node'.
  *
  * Requires:
  * - LOADER binding (worker_loaders)
@@ -18,7 +18,7 @@ import type {
 } from './types.js'
 import { generateWorkerCode } from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
-import { COMPATIBILITY_DATE, normalizeImport, extractPackageName } from './shared.js'
+import { COMPATIBILITY_DATE, generateSandboxId, normalizeImport, extractPackageName } from './shared.js'
 
 /**
  * Generate a minimal worker for simple script execution
@@ -244,7 +244,7 @@ async function evaluateSimple(
     ...(options.imports !== undefined && { imports: options.imports }),
   })
 
-  const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const id = generateSandboxId(workerCode)
 
   const worker = loader.get(
     id,
@@ -288,7 +288,7 @@ async function evaluateWithWorkerLoader(
     ...(options.imports !== undefined && { imports: options.imports }),
     ...(options.fetch !== undefined && { fetch: options.fetch }),
   })
-  const id = `sandbox-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const id = generateSandboxId(workerCode)
 
   const worker = loader.get(
     id,
