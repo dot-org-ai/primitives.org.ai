@@ -17,6 +17,38 @@ import { Human } from './human.js'
  */
 const defaultHuman = Human()
 
+// ============================================================================
+// One-time deprecation notice tracker (PRD aip-qozi, Phase 1)
+// ============================================================================
+
+/**
+ * One-time deprecation notice tracker. Each deprecated export logs its notice
+ * at most once per process.
+ *
+ * @internal
+ */
+const deprecationNotified = new Set<string>()
+
+/**
+ * Log a deprecation notice once per process for the given key.
+ *
+ * @internal exported for testing.
+ */
+export function warnDeprecatedOnce(key: string, message: string): void {
+  if (deprecationNotified.has(key)) return
+  deprecationNotified.add(key)
+  console.warn(message)
+}
+
+/**
+ * Reset the one-time deprecation tracker (test-only).
+ *
+ * @internal
+ */
+export function __resetDeprecationNotices(): void {
+  deprecationNotified.clear()
+}
+
 /**
  * Define a human role
  *
@@ -72,7 +104,13 @@ export function defineGoals(goals: GoalType[]): GoalType[] {
 }
 
 /**
- * Request approval from a human
+ * Request approval from a human.
+ *
+ * @deprecated Import `approve` from `digital-workers` and dispatch through
+ * `personAsWorker(person)` instead. The Verb actions are now dispatched
+ * through the unified Worker port; this re-export keeps the existing
+ * `human-in-the-loop` lifecycle semantics but will be removed in the next
+ * minor release. PRD: route Layer 5 through digital-workers (aip-qozi).
  *
  * @example
  * ```ts
@@ -105,20 +143,28 @@ export async function approve<TData = unknown>(params: {
   approvers?: string[]
   metadata?: Record<string, unknown>
 }): Promise<ApprovalResponse> {
+  warnDeprecatedOnce(
+    'human-in-the-loop.approve',
+    "[human-in-the-loop] DEPRECATED: `approve` is now dispatched through the unified Worker port. Import `approve` from 'digital-workers' and dispatch through `personAsWorker(person)`. This re-export will be removed in the next minor release."
+  )
   return defaultHuman.approve(params)
 }
 
 /**
- * Ask a question to a human
+ * Ask a question to a human.
+ *
+ * @deprecated Import `ask` from `digital-workers` and dispatch through
+ * `personAsWorker(person)` instead. The Verb actions are now dispatched
+ * through the unified Worker port; this re-export keeps the existing
+ * `human-in-the-loop` lifecycle semantics but will be removed in the next
+ * minor release. PRD: route Layer 5 through digital-workers (aip-qozi).
  *
  * @example
  * ```ts
- * const answer = await ask({
- *   title: 'Product naming',
- *   question: 'What should we name the new feature?',
- *   context: { feature: 'AI Assistant' },
- *   assignee: 'product-manager@example.com',
- * })
+ * import { ask } from 'digital-workers'
+ * import { personAsWorker } from 'human-in-the-loop'
+ *
+ * const answer = await ask(personAsWorker(priya, { resolve }), 'Approve refund?')
  * ```
  */
 export async function ask(params: {
@@ -133,6 +179,10 @@ export async function ask(params: {
   suggestions?: string[]
   metadata?: Record<string, unknown>
 }): Promise<string> {
+  warnDeprecatedOnce(
+    'human-in-the-loop.ask',
+    "[human-in-the-loop] DEPRECATED: `ask` is now dispatched through the unified Worker port. Import `ask` from 'digital-workers' and dispatch through `personAsWorker(person)`. This re-export will be removed in the next minor release."
+  )
   return defaultHuman.ask(params)
 }
 
@@ -164,6 +214,10 @@ export async function do_<TInput = unknown, TOutput = unknown>(params: {
   estimatedEffort?: string
   metadata?: Record<string, unknown>
 }): Promise<TOutput> {
+  warnDeprecatedOnce(
+    'human-in-the-loop.do',
+    "[human-in-the-loop] DEPRECATED: `do` is now dispatched through the unified Worker port. Import `do` from 'digital-workers' and dispatch through `personAsWorker(person)`. This re-export will be removed in the next minor release."
+  )
   return defaultHuman.do(params)
 }
 
@@ -196,6 +250,10 @@ export async function decide<TOptions extends string = string>(params: {
   criteria?: string[]
   metadata?: Record<string, unknown>
 }): Promise<TOptions> {
+  warnDeprecatedOnce(
+    'human-in-the-loop.decide',
+    "[human-in-the-loop] DEPRECATED: `decide` is now dispatched through the unified Worker port. Import `decide` from 'digital-workers' and dispatch through `personAsWorker(person)`. This re-export will be removed in the next minor release."
+  )
   return defaultHuman.decide(params)
 }
 
@@ -225,6 +283,10 @@ export async function generate<TInput = unknown>(params: {
   timeout?: number
   metadata?: Record<string, unknown>
 }): Promise<string> {
+  warnDeprecatedOnce(
+    'human-in-the-loop.generate',
+    "[human-in-the-loop] DEPRECATED: `generate` is now dispatched through the unified Worker port. Import `generate` from 'digital-workers' and dispatch through `personAsWorker(person)`. This re-export will be removed in the next minor release."
+  )
   return defaultHuman.do<TInput, string>(params)
 }
 
@@ -254,6 +316,10 @@ export async function is(params: {
   timeout?: number
   metadata?: Record<string, unknown>
 }): Promise<boolean> {
+  warnDeprecatedOnce(
+    'human-in-the-loop.is',
+    "[human-in-the-loop] DEPRECATED: `is` is now dispatched through the unified Worker port. Import `is` from 'digital-workers' and dispatch through `personAsWorker(person)`. This re-export will be removed in the next minor release."
+  )
   const result = await defaultHuman.decide<'true' | 'false'>({
     title: params.title,
     description: params.question,
@@ -293,6 +359,10 @@ export async function notify(params: {
   priority?: 'low' | 'normal' | 'high' | 'critical'
   data?: unknown
 }): Promise<void> {
+  warnDeprecatedOnce(
+    'human-in-the-loop.notify',
+    "[human-in-the-loop] DEPRECATED: `notify` is now dispatched through the unified Worker port. Import `notify` from 'digital-workers' and dispatch through `personAsWorker(person)`. This re-export will be removed in the next minor release."
+  )
   await defaultHuman.notify(params)
 }
 

@@ -10,9 +10,9 @@
  * Tests are skipped if AI_GATEWAY_URL is not configured.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { ask } from '../src/index.js'
-import type { Worker, WorkerRef, WorkerTeam } from '../src/types.js'
+import type { Worker, WorkerRef, WorkerTeam, WorkerDispatcher, RoleTarget } from '../src/types.js'
 
 // Skip tests if no gateway configured
 const hasGateway = !!process.env.AI_GATEWAY_URL || !!process.env.ANTHROPIC_API_KEY
@@ -269,6 +269,158 @@ describe('ask() - Question Routing Primitive', () => {
 
       expect(result).toBeDefined()
       expect(result.answeredBy?.id).toBe('alice')
+    })
+  })
+
+  // ==========================================================================
+  // PRD aip-qozi — Worker Dispatcher Port (Agent / Person / Role / Team)
+  // ==========================================================================
+  //
+  // These tests exercise the unified seam: a Worker target carries a
+  // `dispatch` port, and `ask` routes through it instead of channel delivery.
+  // The Agent-as-Worker and Person-as-Worker adapters live in Layer 5
+  // packages; here we exercise the SEAM contract using minimal in-test
+  // dispatchers so the tests do not pull Cloudflare bindings.
+  describe('Worker dispatch port (PRD aip-qozi)', () => {
+    it('routes through a Worker dispatcher when present (Agent filler)', async () => {
+      const dispatcherAsk = vi.fn().mockResolvedValue({ answer: 'agent says yes' })
+      const dispatcher: WorkerDispatcher = { ask: dispatcherAsk }
+      const agentWorker: Worker = {
+        id: 'agent_reviewer',
+        name: 'Reviewer Agent',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await ask<string>(agentWorker, 'Is this safe to merge?')
+
+      expect(dispatcherAsk).toHaveBeenCalledOnce()
+      expect(dispatcherAsk).toHaveBeenCalledWith(
+        expect.objectContaining({ question: 'Is this safe to merge?' })
+      )
+      expect(result.answer).toBe('agent says yes')
+      // No `via` is set when the dispatcher is used — there's no channel.
+      expect(result.via).toBeUndefined()
+      // answeredBy falls back to the worker ref when the dispatcher omits it.
+      expect(result.answeredBy?.id).toBe('agent_reviewer')
+      expect(result.answeredBy?.type).toBe('agent')
+    })
+
+    it('honours dispatcher-supplied answeredBy (Person filler attributes the resolver)', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({
+          answer: 'priya says approve',
+          answeredBy: { id: 'person_priya', type: 'human', name: 'Priya' },
+        }),
+      }
+      const personWorker: Worker = {
+        id: 'person_priya_worker',
+        name: 'Priya (Person Worker)',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const result = await ask<string>(personWorker, 'Approve the refund?')
+
+      expect(result.answer).toBe('priya says approve')
+      expect(result.answeredBy?.id).toBe('person_priya')
+      expect(result.answeredBy?.name).toBe('Priya')
+    })
+
+    it('forwards schema / context / timeout to the dispatcher input', async () => {
+      const dispatcherAsk = vi.fn().mockResolvedValue({ answer: 'ok' })
+      const dispatcher: WorkerDispatcher = { ask: dispatcherAsk }
+      const worker: Worker = {
+        id: 'w',
+        name: 'W',
+        type: 'agent',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const schema = { answer: 'string', confidence: 'number' }
+      const context = { project: 'web' }
+
+      await ask(worker, 'q', { schema, context, timeout: 5000 })
+
+      expect(dispatcherAsk).toHaveBeenCalledWith({
+        question: 'q',
+        schema,
+        context,
+        timeout: 5000,
+      })
+    })
+
+    it('resolves a Role target to its current filler at dispatch time', async () => {
+      const dispatcher: WorkerDispatcher = {
+        ask: async () => ({ answer: 'CEO says go' }),
+      }
+      const ceoFiller: Worker = {
+        id: 'person_priya',
+        name: 'Priya',
+        type: 'human',
+        status: 'available',
+        contacts: {},
+        dispatch: dispatcher,
+      }
+
+      const resolveWorker = vi.fn().mockResolvedValue(ceoFiller)
+      const ceoRole: RoleTarget = {
+        $type: 'Role',
+        name: 'CEO',
+        resolveWorker,
+      }
+
+      const result = await ask(ceoRole, 'Should we ship Q1 launch this week?')
+
+      // Role resolver was invoked exactly once at dispatch time.
+      expect(resolveWorker).toHaveBeenCalledOnce()
+      expect(result.answer).toBe('CEO says go')
+      // The resolved filler is the attribution target.
+      expect(result.answeredBy?.id).toBe('person_priya')
+    })
+
+    it('routes a Team target to its lead through channels (no dispatcher needed)', async () => {
+      const lead: Worker = {
+        id: 'alice_lead',
+        name: 'Alice',
+        type: 'human',
+        status: 'available',
+        contacts: { slack: '@alice' },
+      }
+      const team: WorkerTeam = {
+        id: 'eng',
+        name: 'Engineering',
+        members: [lead],
+        contacts: { slack: '#engineering' },
+        lead,
+      }
+
+      const result = await ask(team, 'What is the sprint status?', { via: 'slack' })
+
+      // Team without a Worker `dispatch` falls back to channel routing; the
+      // lead's WorkerRef becomes the attribution target. This preserves the
+      // existing load-balancing/Team semantics from `digital-workers`.
+      expect(result.via).toBe('slack')
+      expect(result.answeredBy?.id).toBe('alice_lead')
+    })
+
+    it('falls back to channel routing when a Worker has no dispatcher', async () => {
+      const w: Worker = {
+        id: 'no_dispatch',
+        name: 'No Dispatch',
+        type: 'human',
+        status: 'available',
+        contacts: { email: 'test@example.com' },
+      }
+      const result = await ask(w, 'Hello?', { via: 'email' })
+      expect(result.via).toBe('email')
+      expect(result.answeredBy?.id).toBe('no_dispatch')
     })
   })
 })

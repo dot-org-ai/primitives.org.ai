@@ -31,8 +31,13 @@ import type {
   Contacts,
   ContactPreferences,
   IdentityRef,
+  WorkerDispatcher,
+  WorkerAskInput,
+  WorkerAskOutput,
 } from 'digital-workers'
 import type { Agent as AutonomousAgent } from './types.js'
+import type { AIGenerateOptions, JSONSchema } from 'ai-functions'
+import { runAsk } from './ask-dispatch.js'
 
 // ==================== Types ====================
 
@@ -877,6 +882,14 @@ export interface AgentWorkerAdapterOptions {
   skills?: string[]
   /** Free-form metadata stored on the Worker. */
   metadata?: Record<string, unknown>
+  /**
+   * Default generation options applied by the attached `dispatch.ask` port
+   * (model / system / temperature / schema). Per-call `schema` and `context`
+   * from `WorkerAskInput` take precedence over these. Defaults fall back to
+   * the agent's own `config.model` / `config.temperature` / `config.system`,
+   * preserving parity with the prior `autonomous-agents.ask` semantics.
+   */
+  askOptions?: AIGenerateOptions
 }
 
 /**
@@ -890,24 +903,31 @@ export interface AgentWorkerAdapterOptions {
  * goal/memory management, etc.), import the `Agent` from
  * `autonomous-agents` directly.
  *
- * The returned object satisfies `Worker`. Runtime methods on `Worker` from
- * the SVO co-design (`resolve()`/`do()`/`assign()`) are intentionally NOT
- * synthesized here — those depend on broker integration and digital-tools
- * dispatch, which are out of scope for this adapter (see the SVO plan).
+ * The returned object satisfies `Worker` AND carries a `dispatch` port so
+ * `digital-workers.ask(worker, question, …)` routes through
+ * `ai-functions.generateObject` with parity-preserving prompt + schema
+ * construction (see `ask-dispatch.ts`). This is what makes the agent the
+ * **Agent filler** of the Worker port. PRD: route Layer 5 through
+ * digital-workers (aip-qozi).
+ *
+ * Other runtime methods on `Worker` from the SVO co-design
+ * (`resolve()`/`assign()`) are intentionally NOT synthesized here — those
+ * depend on broker integration and digital-tools dispatch, which are out of
+ * scope for this adapter (see the SVO plan).
  *
  * @example
  * ```ts
  * import { Agent } from 'autonomous-agents'
  * import { agentAsWorker } from 'autonomous-agents/worker'
+ * import { ask } from 'digital-workers'
  *
  * const reviewer = Agent({ name: 'CodeReviewer', role: seniorEng })
  * const worker = agentAsWorker(reviewer, {
  *   id: 'agent_reviewer',
- *   contacts: { api: { endpoint: 'https://api.internal/reviewer' } },
  *   identity: 'did:web:example.com:agents:reviewer',
  * })
- * // `worker` is a `Worker` from digital-workers — pass it to anything that
- * // takes a Worker (notify, ask, approve, withWorkers, …).
+ * // Routes through generateObject (no channel needed):
+ * const { answer } = await ask(worker, 'Is this PR safe to merge?')
  * ```
  */
 export function agentAsWorker(
@@ -924,6 +944,7 @@ export function agentAsWorker(
     status: options.status ?? 'available',
     contacts: options.contacts ?? {},
     skills: options.skills ?? agent.config.role.skills,
+    dispatch: agentDispatcher(agent, id, name, options.askOptions),
   }
 
   if (options.preferences !== undefined) worker.preferences = options.preferences
@@ -931,6 +952,42 @@ export function agentAsWorker(
   if (options.metadata !== undefined) worker.metadata = options.metadata
 
   return worker
+}
+
+/**
+ * Build the `WorkerDispatcher` for an Agent filler.
+ *
+ * The `ask` verb routes through the shared {@link runAsk} builder so its
+ * `generateObject` call is byte-for-byte identical to the prior
+ * `autonomous-agents.ask`. Per-call `schema` / `context` from the
+ * `WorkerAskInput` take precedence over the adapter's default `askOptions`,
+ * which themselves default to the agent's own `config.model` /
+ * `config.temperature` / `config.system`.
+ */
+function agentDispatcher(
+  agent: AutonomousAgent,
+  id: string,
+  name: string,
+  askOptions?: AIGenerateOptions
+): WorkerDispatcher {
+  return {
+    async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
+      // Compose generation options: per-call schema wins, then explicit
+      // adapter askOptions, then the agent's own config.
+      const options: AIGenerateOptions = {
+        ...(agent.config.model !== undefined && { model: agent.config.model }),
+        ...(agent.config.temperature !== undefined && { temperature: agent.config.temperature }),
+        ...(agent.config.system !== undefined && { system: agent.config.system }),
+        ...askOptions,
+      }
+      if (input.schema !== undefined) {
+        options.schema = input.schema as unknown as JSONSchema
+      }
+
+      const answer = await runAsk<T>(input.question, input.context, options)
+      return { answer, answeredBy: { id, type: 'agent', name } }
+    },
+  }
 }
 
 /**

@@ -279,7 +279,78 @@ export interface Worker {
    * PaymentBroker. SVO co-design step 4 (aip-ttfk).
    */
   identity?: IdentityRef
+  /**
+   * Optional Verb-dispatch port. When present, `digital-workers` action
+   * verbs (`ask`, …) route to this dispatcher INSTEAD of channel delivery.
+   *
+   * This is the seam that lets Layer 5 packages fill the Worker port:
+   *   - `autonomous-agents.agentAsWorker(agent)` attaches a dispatcher that
+   *     routes `ask` through `ai-functions.generateObject` with the Agent's
+   *     role/goals as system context (preserving the prior
+   *     `autonomous-agents.ask` semantics).
+   *   - `human-in-the-loop.personAsWorker(person)` attaches a dispatcher that
+   *     surfaces the Human lifecycle (claim / progress / resolve / escalate)
+   *     plus channel delivery.
+   *
+   * When absent, the verbs fall back to channel routing (the original
+   * behaviour). A `Role` target resolves to its current filler's dispatcher
+   * at dispatch time. PRD: route-layer5-through-digital-workers (aip-qozi).
+   */
+  dispatch?: WorkerDispatcher
   metadata?: Record<string, unknown>
+}
+
+// ============================================================================
+// Worker Dispatch Port (PRD: route Layer 5 through digital-workers — aip-qozi)
+// ============================================================================
+
+/**
+ * Input to a Worker dispatcher's `ask` verb.
+ *
+ * Carries the same payload `digital-workers.ask` resolves from its
+ * `(target, question, options)` arguments, so a dispatcher receives exactly
+ * what the caller intended without re-deriving it.
+ */
+export interface WorkerAskInput {
+  /** The question to route to the Worker. */
+  question: string
+  /** Optional structured-response schema (forwarded to the LLM / lifecycle). */
+  schema?: SimpleSchema
+  /** Optional context object (becomes system context for an Agent filler). */
+  context?: Record<string, unknown>
+  /** Optional timeout in milliseconds. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `ask` verb.
+ */
+export interface WorkerAskOutput<T = string> {
+  /** The Worker's answer. */
+  answer: T
+  /**
+   * Who actually answered. For an Agent filler this is the agent Worker; for
+   * a Role this is the resolved filler. `digital-workers.ask` uses this to
+   * populate `AskResult.answeredBy` when the dispatcher supplies it.
+   */
+  answeredBy?: WorkerRef
+}
+
+/**
+ * WorkerDispatcher — the runtime Verb-dispatch port a Worker filler satisfies.
+ *
+ * This is the **contract that the Agent-as-Worker and Person-as-Worker
+ * adapters implement**. Slices that follow this tracer (`do`, `decide`,
+ * `approve`, `notify`, `generate`, `is`) extend this interface with their
+ * corresponding verbs; the tracer formalises `ask` only.
+ *
+ * A dispatcher is a thin, kind-specific strategy: `digital-workers` owns the
+ * target/channel-resolution pipeline and the `AskResult` shaping; the
+ * dispatcher owns *how the answer is produced* (LLM call vs. Human lifecycle).
+ */
+export interface WorkerDispatcher {
+  /** Route a question to the underlying filler and await its answer. */
+  ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>>
 }
 
 /**
@@ -870,9 +941,44 @@ export interface WorkerOKR {
 // ============================================================================
 
 /**
- * Target for an action - Worker, Team, or reference
+ * RoleTarget — an org-structure slot that resolves to its current filler at
+ * dispatch time (per `CONTEXT.md`: "A Role is filled by a Person or Agent; a
+ * Worker referencing a Role resolves to its current filler at invocation
+ * time").
+ *
+ * `digital-workers.ask(role, …)` calls `resolveWorker()` once, at dispatch,
+ * then dispatches to the resolved filler Worker. This keeps org-structure
+ * changes from breaking callsites. The resolver may be sync or async.
+ *
+ * The `$type: 'Role'` discriminant lets `resolveTarget` distinguish a Role
+ * from a plain `Worker`/`Team` without structural ambiguity.
+ */
+export interface RoleTarget {
+  $type: 'Role'
+  /** Display name of the slot (e.g. 'CEO', 'PDM'). */
+  name?: string
+  /** Resolve the slot to its current filler Worker at dispatch time. */
+  resolveWorker(): Worker | Promise<Worker>
+}
+
+/**
+ * Target for an action - Worker, Team, or reference.
+ *
+ * A `Worker` carrying a `dispatch` port (e.g. an Agent or Person filler from a
+ * Layer 5 adapter) routes through that port; everything else falls back to
+ * channel routing.
  */
 export type ActionTarget = Worker | Team | WorkerRef | string
+
+/**
+ * Target accepted by the `ask` verb — an `ActionTarget` plus a `RoleTarget`
+ * slot that resolves to its current filler at dispatch time.
+ *
+ * `ask` is the tracer for the Layer-5-through-digital-workers PRD (aip-qozi);
+ * Role resolution is wired here first. The other verbs widen to `RoleTarget`
+ * in subsequent slices.
+ */
+export type AskTarget = ActionTarget | RoleTarget
 
 /**
  * Union of all action data types

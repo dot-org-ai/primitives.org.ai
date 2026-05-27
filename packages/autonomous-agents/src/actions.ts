@@ -7,13 +7,21 @@
  * @packageDocumentation
  */
 
-import { generateObject, type AIGenerateOptions, type SimpleSchema } from 'ai-functions'
+import {
+  generateObject,
+  type AIGenerateOptions,
+  type SimpleSchema,
+  type JSONSchema,
+} from 'ai-functions'
+import { ask as askWorker } from 'digital-workers'
+import type { Worker, WorkerDispatcher, WorkerAskInput, WorkerAskOutput } from 'digital-workers'
 import type {
   ApprovalRequest,
   ApprovalResult,
   ApprovalStatus,
   NotificationOptions,
 } from './types.js'
+import { runAsk } from './ask-dispatch.js'
 
 /**
  * Execute a task using AI
@@ -45,16 +53,65 @@ export async function doAction<TResult = unknown>(
 }
 
 /**
- * Ask a question and get an answer
+ * One-time deprecation notice tracker. Each deprecated export logs its notice
+ * at most once per process.
+ */
+const deprecationNotified = new Set<string>()
+
+/**
+ * Log a deprecation notice once per process for the given key.
+ * @internal exported for testing.
+ */
+export function warnDeprecatedOnce(key: string, message: string): void {
+  if (deprecationNotified.has(key)) return
+  deprecationNotified.add(key)
+  console.warn(message)
+}
+
+/**
+ * Reset the one-time deprecation tracker (test-only).
+ * @internal
+ */
+export function __resetDeprecationNotices(): void {
+  deprecationNotified.clear()
+}
+
+/**
+ * A context-only Worker dispatcher that preserves the EXACT prior
+ * `autonomous-agents.ask` behaviour: it passes only the caller-supplied
+ * `options` (model / schema / system / temperature) into the shared
+ * {@link runAsk} builder — no agent config is injected. Used by the deprecated
+ * standalone `ask` so its delegation through `digital-workers.ask` is parity-
+ * preserving.
+ */
+function contextOnlyAskDispatcher(options?: AIGenerateOptions): WorkerDispatcher {
+  return {
+    async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
+      const merged: AIGenerateOptions = { ...options }
+      if (input.schema !== undefined) {
+        merged.schema = input.schema as unknown as JSONSchema
+      }
+      const answer = await runAsk<T>(input.question, input.context, merged)
+      return { answer }
+    },
+  }
+}
+
+/**
+ * Ask a question and get an answer.
+ *
+ * @deprecated Import `ask` from `digital-workers` instead. The action verbs
+ * are now dispatched through the unified Worker port. This export delegates to
+ * `digital-workers.ask` (routing through `ai-functions.generateObject` with
+ * identical prompt + schema construction) and will be removed in the next
+ * minor release. PRD: route Layer 5 through digital-workers (aip-qozi).
  *
  * @example
  * ```ts
- * import { ask } from 'autonomous-agents'
+ * import { ask } from 'digital-workers'
+ * import { agentAsWorker } from 'autonomous-agents/worker'
  *
- * const answer = await ask('What are the key benefits of our product?', {
- *   product: 'AI Assistant',
- *   features: ['smart automation', 'natural language', 'context awareness'],
- * })
+ * const answer = await ask(agentAsWorker(myAgent), 'What are the key benefits?')
  * ```
  */
 export async function ask<TResult = unknown>(
@@ -62,20 +119,29 @@ export async function ask<TResult = unknown>(
   context?: unknown,
   options?: AIGenerateOptions
 ): Promise<TResult> {
-  const result = await generateObject({
-    model: options?.model || 'sonnet',
-    schema: options?.schema || {
-      answer: 'The answer to the question',
-      reasoning: 'Supporting reasoning',
-    },
-    system:
-      options?.system || 'You are a knowledgeable AI assistant. Provide clear, accurate answers.',
-    prompt: `Question: ${question}\n\nContext: ${JSON.stringify(context || {})}`,
-    temperature: options?.temperature ?? 0.7,
+  warnDeprecatedOnce(
+    'autonomous-agents.ask',
+    "[autonomous-agents] DEPRECATED: `ask` is now dispatched through the unified Worker port. Import `ask` from 'digital-workers' (e.g. `ask(agentAsWorker(agent), question)`). This re-export will be removed in the next minor release."
+  )
+
+  // Delegate to the canonical digital-workers.ask via a context-only Worker.
+  // The dispatcher routes through the shared runAsk builder, so the
+  // generateObject prompt + schema match the prior implementation exactly.
+  const worker: Worker = {
+    id: 'autonomous-agents:ask',
+    name: 'autonomous-agents ask',
+    type: 'agent',
+    status: 'available',
+    contacts: {},
+    dispatch: contextOnlyAskDispatcher(options),
+  }
+
+  const result = await askWorker<TResult>(worker, question, {
+    ...(context !== undefined && { context: context as Record<string, unknown> }),
+    ...(options?.schema !== undefined && { schema: options.schema as SimpleSchema }),
   })
 
-  const response = result.object as { answer: TResult; reasoning: string }
-  return response.answer
+  return result.answer
 }
 
 /**

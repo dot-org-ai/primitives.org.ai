@@ -31,6 +31,8 @@ import type {
   Team,
   WorkerRef,
   ActionTarget,
+  AskTarget,
+  RoleTarget,
   ContactChannel,
   AskResult,
   AskOptions,
@@ -75,14 +77,41 @@ import type {
  * @see {@link ai-functions#ask} for LLM-generated human interaction content
  */
 export async function ask<T = string>(
-  target: ActionTarget,
+  target: AskTarget,
   question: string,
   options: AskOptions = {}
 ): Promise<AskResult<T>> {
   const { via, schema, timeout, context } = options
 
+  // Resolve a Role slot to its current filler before dispatching. Per
+  // CONTEXT.md, a Role resolves to its Person/Agent filler at invocation time.
+  const resolved = await resolveRoleTarget(target)
+
+  // If the resolved target is a Worker filling the Worker port (e.g. an Agent
+  // or Person adapter from a Layer 5 package), route through its dispatcher.
+  // This is the unified seam: the dispatcher decides HOW the answer is
+  // produced (LLM via generateObject for an Agent, Human lifecycle for a
+  // Person) while digital-workers owns target resolution + result shaping.
+  const dispatcher = getDispatcher(resolved)
+  if (dispatcher) {
+    const recipient = workerToRef(resolved as Worker)
+    const out = await dispatcher.ask<T>({
+      question,
+      ...(schema !== undefined && { schema }),
+      ...(context !== undefined && { context }),
+      ...(timeout !== undefined && { timeout }),
+    })
+
+    return {
+      answer: out.answer,
+      answeredBy: out.answeredBy ?? recipient,
+      answeredAt: new Date(),
+    }
+  }
+
+  // Otherwise fall back to channel routing (the original behaviour).
   // Resolve target to get contacts and recipient info
-  const { contacts, recipient } = resolveTarget(target)
+  const { contacts, recipient } = resolveTarget(resolved)
 
   // Determine which channel to use
   const channel = resolveChannel(via, contacts)
@@ -168,7 +197,7 @@ ask.ai = async <T = string>(
  * ```
  */
 ask.batch = async <T = string>(
-  target: ActionTarget,
+  target: AskTarget,
   questions: string[],
   options: AskOptions = {}
 ): Promise<Array<AskResult<T>>> => {
@@ -184,7 +213,7 @@ ask.batch = async <T = string>(
  * ```
  */
 ask.clarify = async (
-  target: ActionTarget,
+  target: AskTarget,
   topic: string,
   options: AskOptions = {}
 ): Promise<AskResult<string>> => {
@@ -205,7 +234,7 @@ ask.clarify = async (
  * ```
  */
 ask.yesNo = async (
-  target: ActionTarget,
+  target: AskTarget,
   question: string,
   options: AskOptions = {}
 ): Promise<AskResult<'yes' | 'no'>> => {
@@ -229,7 +258,7 @@ ask.yesNo = async (
  * ```
  */
 ask.choose = async <T extends string>(
-  target: ActionTarget,
+  target: AskTarget,
   question: string,
   choices: T[],
   options: AskOptions = {}
@@ -250,7 +279,52 @@ ask.choose = async <T extends string>(
 // ============================================================================
 
 /**
- * Resolve an action target to contacts and recipient
+ * Type guard: is this target a Role slot that must resolve to a filler?
+ */
+function isRoleTarget(target: AskTarget): target is RoleTarget {
+  return (
+    typeof target === 'object' &&
+    target !== null &&
+    (target as { $type?: unknown }).$type === 'Role' &&
+    typeof (target as RoleTarget).resolveWorker === 'function'
+  )
+}
+
+/**
+ * Resolve a Role slot to its current filler Worker at dispatch time. Any other
+ * target kind passes through unchanged. The result is a plain `ActionTarget`
+ * (Role slots are always resolved to their filler Worker here).
+ */
+async function resolveRoleTarget(target: AskTarget): Promise<ActionTarget> {
+  if (isRoleTarget(target)) {
+    return target.resolveWorker()
+  }
+  return target
+}
+
+/**
+ * Return the dispatcher attached to a Worker target, if any. Only `Worker`
+ * objects carry a `dispatch` port; strings, refs, and teams never do.
+ */
+function getDispatcher(target: ActionTarget) {
+  if (typeof target === 'object' && target !== null && 'dispatch' in target) {
+    return (target as Worker).dispatch
+  }
+  return undefined
+}
+
+/**
+ * Build a lightweight WorkerRef from a Worker for result attribution.
+ */
+function workerToRef(worker: Worker): WorkerRef {
+  return { id: worker.id, type: worker.type, name: worker.name }
+}
+
+/**
+ * Resolve an action target to contacts and recipient.
+ *
+ * Called only after `resolveRoleTarget`, so the input is never a `RoleTarget`
+ * (a Role has already been resolved to its filler Worker by this point).
  */
 function resolveTarget(target: ActionTarget): {
   contacts: Contacts

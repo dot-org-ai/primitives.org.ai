@@ -37,6 +37,8 @@ export {
   KPI,
   OKR,
   Entitlement,
+  warnDeprecatedOnce,
+  __resetDeprecationNotices,
 } from './helpers.js'
 
 // Export all types
