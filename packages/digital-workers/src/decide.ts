@@ -125,6 +125,11 @@ export async function decide<T = string>(
         options: opts.options,
         ...(opts.context !== undefined && { context: opts.context }),
       })
+      // NOTE: the dispatcher contract (WorkerDecideOutput) currently surfaces
+      // only `decision`. `reasoning`/`confidence`/`alternatives` are placeholder
+      // values; callers that depend on those fields should NOT route through a
+      // dispatcher today. Widening WorkerDecideOutput to carry them is a future
+      // enhancement (would require dispatchers to surface them too).
       return {
         choice: out.decision,
         reasoning: '',

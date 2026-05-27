@@ -502,28 +502,19 @@ export interface WorkerIsOutput {
 /**
  * WorkerDispatcher — the runtime Verb-dispatch port a Worker filler satisfies.
  *
- * This is the **contract that the Agent-as-Worker and Person-as-Worker
- * adapters implement**. Slices that follow the tracer (`do`, `decide`,
- * `generate`, `is`) extend this interface further with their corresponding
- * verbs; this version formalises `ask`, `approve`, and `notify`.
+ * The **contract that the Agent-as-Worker and Person-as-Worker adapters
+ * implement**. A dispatcher is a thin, kind-specific strategy: `digital-workers`
+ * owns the target/channel-resolution pipeline and the verb-specific result
+ * shaping; the dispatcher owns *how the answer/decision/delivery is produced*
+ * (LLM call vs. Human lifecycle).
  *
- * A dispatcher is a thin, kind-specific strategy: `digital-workers` owns the
- * target/channel-resolution pipeline and the verb-specific result shaping;
- * the dispatcher owns *how the answer/decision/delivery is produced* (LLM
- * call vs. Human lifecycle).
- *
- * `approve` and `notify` are OPTIONAL on the contract so callers that only
- * implement `ask` (the tracer) keep type-checking. `digital-workers.approve`
- * and `digital-workers.notify` fall back to channel routing when the
- * dispatcher does not implement the verb.
- * adapters implement**. The tracer slice (aip-qozi) formalised `ask`; the
- * LLM-shape verbs slice (aip-2q19) extends with `do`, `decide`, `generate`,
- * and `is`. All four are optional so existing dispatchers (and tests that
- * stub only `ask`) keep working.
- *
- * A dispatcher is a thin, kind-specific strategy: `digital-workers` owns the
- * target/channel-resolution pipeline and the result shaping; the dispatcher
- * owns *how the answer is produced* (LLM call vs. Human lifecycle).
+ * Verbs were added in slices: the tracer (aip-qozi) formalised `ask`; the
+ * channel-verbs slice (aip-9l4r) added `approve` + `notify`; the LLM-shape
+ * verbs slice (aip-2q19) added `do` + `decide` + `generate` + `is`. Every verb
+ * other than `ask` is OPTIONAL on the contract so callers carrying older
+ * dispatchers (and tests that stub only the verbs they need) keep
+ * type-checking; `digital-workers.<verb>` falls back to its legacy routing
+ * when the dispatcher does not implement the verb.
  */
 export interface WorkerDispatcher {
   /** Route a question to the underlying filler and await its answer. */

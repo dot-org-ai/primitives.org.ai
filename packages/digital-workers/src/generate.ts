@@ -147,7 +147,11 @@ export async function generate<T = string>(
         content: out.content,
         type: options.type ?? 'text',
         metadata: {
-          model: options.model ?? 'sonnet',
+          // The dispatcher owns model resolution (e.g. agent.config.model);
+          // honour an explicit caller override if supplied, else omit the field
+          // rather than lie. The dispatcher does not currently surface the
+          // model it actually used.
+          ...(options.model !== undefined && { model: options.model }),
           duration: Date.now() - startTime,
         },
       }
