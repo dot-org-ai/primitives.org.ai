@@ -337,20 +337,130 @@ export interface WorkerAskOutput<T = string> {
 }
 
 /**
+ * Input to a Worker dispatcher's `do` verb.
+ *
+ * Carries the payload `digital-workers.do` resolves from its
+ * `(task, options)` arguments.
+ */
+export interface WorkerDoInput {
+  /** The task description. */
+  task: string
+  /** Optional context object (passed into the LLM / lifecycle). */
+  context?: Record<string, unknown>
+  /** Optional structured-response schema. */
+  schema?: SimpleSchema
+  /** Optional timeout in milliseconds. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `do` verb.
+ */
+export interface WorkerDoOutput<T = unknown> {
+  /** The task result. */
+  result: T
+  /** Who actually executed the task. */
+  doneBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `decide` verb.
+ */
+export interface WorkerDecideInput<T = string> {
+  /** The options to choose between. */
+  options: T[]
+  /** Optional context, passed into the LLM / lifecycle. */
+  context?: string | Record<string, unknown>
+  /** Optional structured-response schema (override). */
+  schema?: SimpleSchema
+  /** Optional timeout in milliseconds. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `decide` verb.
+ */
+export interface WorkerDecideOutput<T = string> {
+  /** The chosen option. */
+  decision: T
+  /** Who made the decision. */
+  decidedBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `generate` verb.
+ */
+export interface WorkerGenerateInput {
+  /** The generation prompt. */
+  prompt: string
+  /** Optional structured-response schema. */
+  schema?: SimpleSchema
+  /** Optional system prompt override. */
+  system?: string
+  /** Optional context. */
+  context?: Record<string, unknown>
+  /** Optional timeout. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `generate` verb.
+ */
+export interface WorkerGenerateOutput<T = unknown> {
+  /** The generated content. */
+  content: T
+  /** Who generated it. */
+  generatedBy?: WorkerRef
+}
+
+/**
+ * Input to a Worker dispatcher's `is` verb.
+ */
+export interface WorkerIsInput {
+  /** The value being checked. */
+  value: unknown
+  /** Type name or schema to validate against. */
+  type: string | SimpleSchema
+  /** Optional context. */
+  context?: Record<string, unknown>
+  /** Optional timeout. */
+  timeout?: number
+}
+
+/**
+ * Result returned by a Worker dispatcher's `is` verb.
+ */
+export interface WorkerIsOutput {
+  /** Whether the value matches the type. */
+  valid: boolean
+  /** Who made the determination. */
+  checkedBy?: WorkerRef
+}
+
+/**
  * WorkerDispatcher — the runtime Verb-dispatch port a Worker filler satisfies.
  *
  * This is the **contract that the Agent-as-Worker and Person-as-Worker
- * adapters implement**. Slices that follow this tracer (`do`, `decide`,
- * `approve`, `notify`, `generate`, `is`) extend this interface with their
- * corresponding verbs; the tracer formalises `ask` only.
+ * adapters implement**. The tracer slice (aip-qozi) formalised `ask`; the
+ * LLM-shape verbs slice (aip-2q19) extends with `do`, `decide`, `generate`,
+ * and `is`. All four are optional so existing dispatchers (and tests that
+ * stub only `ask`) keep working.
  *
  * A dispatcher is a thin, kind-specific strategy: `digital-workers` owns the
- * target/channel-resolution pipeline and the `AskResult` shaping; the
- * dispatcher owns *how the answer is produced* (LLM call vs. Human lifecycle).
+ * target/channel-resolution pipeline and the result shaping; the dispatcher
+ * owns *how the answer is produced* (LLM call vs. Human lifecycle).
  */
 export interface WorkerDispatcher {
   /** Route a question to the underlying filler and await its answer. */
   ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>>
+  /** Route a task to the underlying filler for execution. */
+  do?<T = unknown>(input: WorkerDoInput): Promise<WorkerDoOutput<T>>
+  /** Route a multi-option decision to the underlying filler. */
+  decide?<T = string>(input: WorkerDecideInput<T>): Promise<WorkerDecideOutput<T>>
+  /** Route a content-generation request to the underlying filler. */
+  generate?<T = unknown>(input: WorkerGenerateInput): Promise<WorkerGenerateOutput<T>>
+  /** Route a type-check request to the underlying filler. */
+  is?(input: WorkerIsInput): Promise<WorkerIsOutput>
 }
 
 /**

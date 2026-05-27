@@ -13,11 +13,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('ai-functions', () => ({
   generateObject: vi.fn().mockResolvedValue({
-    object: { answer: 'mocked', reasoning: 'mocked' },
+    object: {
+      answer: 'mocked',
+      reasoning: 'mocked',
+      result: 'mocked',
+      decision: 'mocked',
+      isValid: true,
+      reason: 'mocked',
+    },
   }),
 }))
 
-import { ask, __resetDeprecationNotices } from '../src/actions.js'
+import { ask, doAction, decide, generate, is, __resetDeprecationNotices } from '../src/actions.js'
 
 describe('autonomous-agents.ask — deprecation notice (PRD aip-qozi)', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
@@ -25,6 +32,7 @@ describe('autonomous-agents.ask — deprecation notice (PRD aip-qozi)', () => {
   beforeEach(() => {
     __resetDeprecationNotices()
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    warnSpy.mockClear()
   })
 
   it('logs the deprecation notice exactly once per process', async () => {
@@ -40,5 +48,74 @@ describe('autonomous-agents.ask — deprecation notice (PRD aip-qozi)', () => {
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('digital-workers'))
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('DEPRECATED'))
+  })
+})
+
+// ============================================================================
+// PRD aip-2q19 — deprecation notices for do / decide / generate / is
+// ============================================================================
+describe('autonomous-agents LLM-shape verbs — deprecation notices (PRD aip-2q19)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    __resetDeprecationNotices()
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    warnSpy.mockClear()
+  })
+
+  it('do fires exactly once and points at digital-workers', async () => {
+    await doAction('t1')
+    await doAction('t2')
+
+    const doCalls = warnSpy.mock.calls.filter((c) =>
+      String(c[0]).includes('`do` is now dispatched')
+    )
+    expect(doCalls).toHaveLength(1)
+    expect(String(doCalls[0]?.[0])).toContain('digital-workers')
+    expect(String(doCalls[0]?.[0])).toContain('agentAsWorker')
+  })
+
+  it('decide fires exactly once and points at digital-workers', async () => {
+    await decide(['A', 'B'])
+    await decide(['X', 'Y'])
+
+    const calls = warnSpy.mock.calls.filter((c) =>
+      String(c[0]).includes('`decide` is now dispatched')
+    )
+    expect(calls).toHaveLength(1)
+    expect(String(calls[0]?.[0])).toContain('digital-workers')
+  })
+
+  it('generate fires exactly once and points at digital-workers', async () => {
+    await generate({ prompt: 'p1' })
+    await generate({ prompt: 'p2' })
+
+    const calls = warnSpy.mock.calls.filter((c) =>
+      String(c[0]).includes('`generate` is now dispatched')
+    )
+    expect(calls).toHaveLength(1)
+    expect(String(calls[0]?.[0])).toContain('digital-workers')
+  })
+
+  it('is fires exactly once and points at digital-workers', async () => {
+    await is('a', 'email')
+    await is('b', 'email')
+
+    const calls = warnSpy.mock.calls.filter((c) => String(c[0]).includes('`is` is now dispatched'))
+    expect(calls).toHaveLength(1)
+    expect(String(calls[0]?.[0])).toContain('digital-workers')
+  })
+
+  it('each verb tracks its deprecation independently', async () => {
+    await doAction('t')
+    await decide(['A', 'B'])
+    await generate({ prompt: 'p' })
+    await is('v', 'email')
+
+    const verbs = ['`do` is now', '`decide` is now', '`generate` is now', '`is` is now']
+    for (const verb of verbs) {
+      const matches = warnSpy.mock.calls.filter((c) => String(c[0]).includes(verb))
+      expect(matches).toHaveLength(1)
+    }
   })
 })

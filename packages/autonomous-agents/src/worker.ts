@@ -34,10 +34,18 @@ import type {
   WorkerDispatcher,
   WorkerAskInput,
   WorkerAskOutput,
+  WorkerDoInput,
+  WorkerDoOutput,
+  WorkerDecideInput,
+  WorkerDecideOutput,
+  WorkerGenerateInput,
+  WorkerGenerateOutput,
+  WorkerIsInput,
+  WorkerIsOutput,
 } from 'digital-workers'
 import type { Agent as AutonomousAgent } from './types.js'
 import type { AIGenerateOptions, JSONSchema } from 'ai-functions'
-import { runAsk } from './ask-dispatch.js'
+import { runAsk, runDo, runDecide, runGenerate, runIs } from './ask-dispatch.js'
 
 // ==================== Types ====================
 
@@ -970,22 +978,74 @@ function agentDispatcher(
   name: string,
   askOptions?: AIGenerateOptions
 ): WorkerDispatcher {
+  /**
+   * Compose generation options the way `ask` does: agent config defaults,
+   * then explicit adapter askOptions, then per-call schema. Used by all four
+   * LLM-shape verbs so they share the same option-precedence rules.
+   */
+  const composeOptions = (perCallSchema?: unknown): AIGenerateOptions => {
+    const options: AIGenerateOptions = {
+      ...(agent.config.model !== undefined && { model: agent.config.model }),
+      ...(agent.config.temperature !== undefined && { temperature: agent.config.temperature }),
+      ...(agent.config.system !== undefined && { system: agent.config.system }),
+      ...askOptions,
+    }
+    if (perCallSchema !== undefined) {
+      options.schema = perCallSchema as unknown as JSONSchema
+    }
+    return options
+  }
+
+  const agentRef = { id, type: 'agent' as const, name }
+
   return {
     async ask<T = string>(input: WorkerAskInput): Promise<WorkerAskOutput<T>> {
-      // Compose generation options: per-call schema wins, then explicit
-      // adapter askOptions, then the agent's own config.
-      const options: AIGenerateOptions = {
-        ...(agent.config.model !== undefined && { model: agent.config.model }),
-        ...(agent.config.temperature !== undefined && { temperature: agent.config.temperature }),
-        ...(agent.config.system !== undefined && { system: agent.config.system }),
-        ...askOptions,
-      }
-      if (input.schema !== undefined) {
-        options.schema = input.schema as unknown as JSONSchema
-      }
-
+      const options = composeOptions(input.schema)
       const answer = await runAsk<T>(input.question, input.context, options)
-      return { answer, answeredBy: { id, type: 'agent', name } }
+      return { answer, answeredBy: agentRef }
+    },
+
+    // ----- LLM-shape verbs (PRD aip-2q19) -----
+
+    async do<T = unknown>(input: WorkerDoInput): Promise<WorkerDoOutput<T>> {
+      const options = composeOptions(input.schema)
+      const result = await runDo<T>(input.task, input.context, options)
+      return { result, doneBy: agentRef }
+    },
+
+    async decide<T = string>(input: WorkerDecideInput<T>): Promise<WorkerDecideOutput<T>> {
+      // `runDecide` is typed for `T extends string` — autonomous-agents.decide
+      // historically embeds the options as a string union into the schema. The
+      // dispatcher widens to `T = string` to match the digital-workers verb
+      // surface; non-string T is cast through (the LLM still receives the
+      // stringified options).
+      const ctx =
+        typeof input.context === 'string'
+          ? input.context
+          : input.context !== undefined
+          ? JSON.stringify(input.context)
+          : undefined
+      const options = composeOptions()
+      const decision = await runDecide<string>(input.options as unknown as string[], ctx, options)
+      return { decision: decision as unknown as T, decidedBy: agentRef }
+    },
+
+    async generate<T = unknown>(input: WorkerGenerateInput): Promise<WorkerGenerateOutput<T>> {
+      // Build a flat AIGenerateOptions from the dispatcher input — the prior
+      // `autonomous-agents.generate(options)` took the whole shape, so we
+      // forward it here with per-call schema/system overrides taking precedence.
+      const merged: AIGenerateOptions = {
+        ...composeOptions(input.schema),
+        prompt: input.prompt,
+        ...(input.system !== undefined && { system: input.system }),
+      }
+      const content = await runGenerate<T>(merged)
+      return { content, generatedBy: agentRef }
+    },
+
+    async is(input: WorkerIsInput): Promise<WorkerIsOutput> {
+      const valid = await runIs(input.value, input.type)
+      return { valid, checkedBy: agentRef }
     },
   }
 }
