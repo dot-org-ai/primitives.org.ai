@@ -108,6 +108,9 @@ describe('PostgresStateMachineStorage - snapshot persist + resume from a row', (
     first.send('TIMER')
     first.send('TIMER')
     expect(first.getState()).toBe('red')
+    // Drain the serialised durable-write tail so the 'red' snapshot has landed
+    // before we stop and resume from it.
+    await first.whenWritesSettled()
     first.stop()
 
     // A snapshot row exists for this machine.
@@ -140,6 +143,9 @@ describe('PostgresStateMachineStorage - event-log append + replay reproduces sta
     handle.send('TIMER') // green -> yellow
     handle.send('TIMER') // yellow -> red
     expect(handle.getState()).toBe('red')
+    // Durable writes are serialised onto a per-machine tail (pg adapter); drain
+    // it before reading storage directly.
+    await handle.whenWritesSettled()
     handle.stop()
 
     // The log captured both events in arrival order with monotonic seq.
@@ -162,6 +168,7 @@ describe('PostgresStateMachineStorage - event-log append + replay reproduces sta
     const machineId = 'payload-fidelity'
     const handle = await runMachine(trafficLight(), storage, { machineId })
     handle.send({ type: 'TIMER', reason: 'sensor', meta: { lane: 3 } })
+    await handle.whenWritesSettled()
     handle.stop()
 
     const log = await storage.getEvents(machineId)
@@ -234,6 +241,71 @@ describe('PostgresStateMachineScheduler - a due timer fires an `after` transitio
     expect(handle.getState()).toBe('escalated')
     expect(await storage.getTimers(machineId)).toEqual([])
     handle.stop()
+  })
+
+  /**
+   * REGRESSION (durable `after` survives resume): a machine in an `after`-armed
+   * state is reconstructed from ONLY its durable rows — a brand-new storage
+   * adapter, a brand-new actor, and NO surviving in-memory clock callback
+   * (simulating a process restart / hibernation). The still-pending `after`
+   * timer must fire via the scheduler path against the *resumed* actor.
+   *
+   * This is the gate for MUST-FIX #1 on the pg adapter: before the fix the
+   * stored timer carried a synthetic event type that a resumed actor ignored,
+   * and `runStoredMachine` did not re-arm timers — so the `after` transition was
+   * permanently lost after a restart.
+   */
+  it('reconstruct → resume → still-pending after-timer fires via the scheduler', async () => {
+    const machineId = 'esc-resume'
+
+    // --- Run #1: enter the `after`-armed state, then "crash" (stop the actor,
+    //     drop the storage adapter + its in-memory write tail). The durable rows
+    //     in `store` survive. runStoredMachine arms the durable timer from the
+    //     actor's pending after-transition with xstate's REAL delay-event type.
+    {
+      const storage = freshStorage()
+      const handle = await runStoredMachine(escalationMachine(), storage, { machineId })
+      expect(handle.getState()).toBe('idle') // armed: after 1000ms → escalated
+
+      const timers = await storage.getTimers(machineId)
+      expect(timers).toHaveLength(1)
+      // The durable timer carries xstate's real delay-event type, not a synthetic.
+      expect(timers[0]!.id).toBe('xstate.after.1000.escalation.idle')
+      expect(timers[0]!.event).toEqual({ type: 'xstate.after.1000.escalation.idle' })
+
+      await handle.whenWritesSettled() // ensure the armed snapshot has landed.
+      handle.stop() // drop the in-memory actor + any clock state.
+    }
+
+    // --- Reconstruct: a FRESH storage adapter (new executor) over the SAME
+    //     durable store, and a FRESH actor via runStoredMachine. There is NO
+    //     surviving in-memory callback — only the durable snapshot + timer rows.
+    const storage2 = freshStorage()
+    const handle2 = await runStoredMachine(escalationMachine(), storage2, { machineId })
+    expect(handle2.getState()).toBe('idle') // resumed to the armed state.
+
+    // The timer is still durably pending after reconstruction (NOT deleted).
+    const pending = await storage2.getTimers(machineId)
+    expect(pending).toHaveLength(1)
+    expect(pending[0]!.id).toBe('xstate.after.1000.escalation.idle')
+
+    // --- Fire it via the scheduler path: poll due timers and deliver each
+    //     timer's stored event into the RESUMED actor. The actor responds to the
+    //     real delay-event type and takes the `after` transition to `escalated`.
+    const scheduler = createPostgresStateMachineScheduler(storage2)
+    const due = await scheduler.pollDueTimers(Date.now() + 10_000)
+    expect(due).toHaveLength(1)
+
+    for (const { machineId: mId, timer } of due) {
+      expect(mId).toBe(machineId)
+      handle2.send(timer.event as { type: string }) // deliver the real after-event
+      await storage2.cancelTimer(mId, timer.id)
+    }
+
+    // The reconstructed actor transitioned via the durable timer alone.
+    expect(handle2.getState()).toBe('escalated')
+    expect(await storage2.getTimers(machineId)).toEqual([])
+    handle2.stop()
   })
 
   it('pollDueTimers spans machines; pollDueTimersFor scopes to one', async () => {

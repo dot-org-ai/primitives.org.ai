@@ -1,4 +1,5 @@
 import { defineWorkersConfig } from '@cloudflare/vitest-pool-workers/config'
+import { defaultExclude } from 'vitest/config'
 
 export default defineWorkersConfig({
   test: {
@@ -24,6 +25,12 @@ export default defineWorkersConfig({
 
     // Only include worker-specific tests
     include: ['test/worker/**/*.test.ts'],
+    // The state-machine Durable Object test needs the STATE_MACHINE_DO binding,
+    // which this config's wrangler.jsonc does not declare — it runs under
+    // vitest.sm-workers.config.ts (wrangler.sm.jsonc) via `test:sm-workers`.
+    // Excluding it here keeps `test:workers` green (otherwise its DO namespace is
+    // undefined and every case errors with "Cannot read properties of undefined").
+    exclude: [...defaultExclude, 'test/worker/state-machine-durable-object.test.ts'],
     testTimeout: 60000,
     hookTimeout: 30000,
 

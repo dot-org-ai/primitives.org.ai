@@ -24,7 +24,7 @@
  * @packageDocumentation
  */
 
-import { fromMermaid } from 'ai-workflows'
+import { fromMermaid, createStateMachine } from 'ai-workflows'
 import { generateObject } from './generate.js'
 import { traced } from './telemetry.js'
 
@@ -191,10 +191,16 @@ async function mermaidImpl(prompt: string, options: MermaidOptions = {}): Promis
     const source = stripFence(raw)
 
     try {
-      // The parser is the validator: a clean parse means the source is a
-      // runnable MachineConfig. We discard the config and return the source —
-      // the source is the wire format callers store / render / re-parse.
-      fromMermaid(source)
+      // The parser is the first validator: a clean parse yields a MachineConfig.
+      // But a config can parse and still be rejected by xstate when it is
+      // assembled into a runnable machine (e.g. a cross-boundary `Composite[H]`
+      // history target whose composite never declares `[H]` → createMachine
+      // throws "Child state 'hist' does not exist"). So we ALSO run
+      // createStateMachine(config) — only a config that both parses AND builds a
+      // runnable machine is genuinely valid. Either failure feeds the retry loop
+      // identically, so the model corrects parse errors and build errors alike.
+      const config = fromMermaid(source)
+      createStateMachine(config)
       return source
     } catch (error) {
       lastError = error

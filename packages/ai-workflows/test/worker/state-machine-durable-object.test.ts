@@ -140,6 +140,53 @@ describe('StateMachineDurableObject (Miniflare)', () => {
     })
   })
 
+  it('reconstruct → resume → still-pending after-timer fires via alarm() (hibernation)', async () => {
+    const stub = stubFor('timer-hibernation')
+
+    // Enter `armed`, which arms an `after: { 50 }` transition. The DO schedules a
+    // durable timer whose stored event is xstate's REAL delay-event type.
+    await sendEvent(stub, { type: 'PING' })
+    await sendEvent(stub, { type: 'ARM' })
+    expect((await getState(stub)).state).toBe('armed')
+
+    // Inspect the durable timer: its id + event carry xstate's real
+    // `xstate.after.<delay>.<stateId>` type — NOT a synthetic `xstate.after:<n>`
+    // that a resumed actor would ignore. Then DROP all in-memory state to
+    // simulate hibernation/eviction (the actor + its closures are gone; only
+    // state.storage survives).
+    await runInDurableObject(stub, async (instance, state) => {
+      const timers = (await state.storage.get('sm:sm-do-test-instance:timers')) as Array<{
+        id: string
+        event: { type: string }
+      }>
+      expect(timers).toHaveLength(1)
+      expect(timers[0]!.id).toBe('xstate.after.50.sm-do-test.armed')
+      expect(timers[0]!.event).toEqual({ type: 'xstate.after.50.sm-do-test.armed' })
+
+      // Simulate hibernation: forget the running actor + any in-memory callbacks.
+      ;(instance as unknown as { simulateHibernation(): void }).simulateHibernation()
+    })
+
+    // After reconstruction there is NO surviving in-memory timer callback. The
+    // alarm() path must rebuild a FRESH actor from the durable snapshot and fire
+    // the still-pending `after` timer by sending its REAL delay-event into that
+    // reconstructed actor.
+    const ran = await runDurableObjectAlarm(stub)
+    expect(ran).toBe(true)
+
+    // The reconstructed actor transitioned via the durable timer alone — the
+    // core durability defect is fixed.
+    expect((await getState(stub)).state).toBe('firedByTimer')
+
+    // The fired timer was cleared from durable storage.
+    await runInDurableObject(stub, async (_instance, state) => {
+      const timers = (await state.storage.get('sm:sm-do-test-instance:timers')) as
+        | unknown[]
+        | undefined
+      expect(timers === undefined || timers.length === 0).toBe(true)
+    })
+  })
+
   it('logs external events to the durable event log', async () => {
     const stub = stubFor('event-log')
     await sendEvent(stub, { type: 'PING' })

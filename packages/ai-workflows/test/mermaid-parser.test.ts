@@ -360,6 +360,39 @@ describe('fromMermaid - full statechart constructs (slice aip-4fay)', () => {
     expect(paused.on).toEqual({ RESUME: 'hist' })
   })
 
+  it('rejects a user state named `hist` colliding with the synthetic `[H]` node', () => {
+    // A state literally named `hist` in the SAME composite that uses `[H]`: the
+    // synthetic history node generated for `[H]` is also named `hist`, so without
+    // collision detection the two merge into one node that is both a history
+    // pseudostate and a real state (a self-targeting initial → createMachine
+    // stack-overflow). The parser must reject this loudly. (aip-8nc5 nit.)
+    expect(() =>
+      fromMermaid(`
+        stateDiagram-v2
+          [*] --> Active
+          state Active {
+            [*] --> hist
+            hist --> paused : PAUSE
+            paused --> [H] : RESUME
+          }
+      `)
+    ).toThrow(/collides with the synthetic history/)
+  })
+
+  it('rejects a user state named `deepHist` colliding with the synthetic `[H*]` node', () => {
+    expect(() =>
+      fromMermaid(`
+        stateDiagram-v2
+          [*] --> Active
+          state Active {
+            [*] --> deepHist
+            deepHist --> paused : PAUSE
+            paused --> [H*] : RESUME
+          }
+      `)
+    ).toThrow(/collides with the synthetic history/)
+  })
+
   it('parses a `<<choice>>` pseudostate into a transient `always` node', () => {
     const config = fromMermaid(`
       stateDiagram-v2

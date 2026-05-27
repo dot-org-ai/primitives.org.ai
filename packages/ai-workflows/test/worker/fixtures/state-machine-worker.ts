@@ -46,6 +46,16 @@ export class StateMachineTestDO extends StateMachineDurableObject {
   protected describeMachine(): StateMachineBootOptions {
     return { machine: testMachine, machineId: 'sm-do-test-instance' }
   }
+
+  /**
+   * Test seam: simulate DO hibernation/eviction by dropping all in-memory state
+   * (the running actor + any closures) while durable `state.storage` survives.
+   * The next `fetch()` / `alarm()` reconstructs a fresh actor from storage —
+   * proving an `after` timer survives reconstruction with no in-memory callback.
+   */
+  simulateHibernation(): void {
+    this.forgetInMemoryState()
+  }
 }
 
 interface Env {

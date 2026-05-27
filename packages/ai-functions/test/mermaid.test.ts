@@ -35,6 +35,21 @@ const INVALID_DIAGRAM = `stateDiagram-v2
   f --> s1
   f --> s2`
 
+// A diagram that PARSES cleanly via fromMermaid but is REJECTED by
+// createMachine: a cross-boundary history target `Work[H]` whose composite never
+// declares a `[H]` child, so the emitted `Work.hist` target points at a
+// non-existent child → createMachine throws "Child state 'hist' does not exist".
+// This is the validator gap mermaid() must close: parse-only validation would
+// return this unrunnable diagram. (aip-8nc5 SHOULD-FIX #3.)
+const PARSES_BUT_NOT_RUNNABLE = `stateDiagram-v2
+  [*] --> Work
+  state Work {
+    [*] --> a
+    a --> b : NEXT
+  }
+  Work --> Paused : PAUSE
+  Paused --> Work[H] : RESUME`
+
 describe('mermaid() — offline retry path (no live model)', () => {
   it('retries on parse failure, feeds the error back, and returns the valid result', async () => {
     // First call returns invalid mermaid; second call returns valid.
@@ -64,6 +79,31 @@ describe('mermaid() — offline retry path (no live model)', () => {
     expect(retryCall.prompt).toContain('a process that can be idle or running')
   })
 
+  it('retries when a diagram parses but createMachine rejects it (runnable-validation gap)', async () => {
+    // First response parses cleanly via fromMermaid but createMachine rejects it
+    // (cross-boundary `Work[H]` with no `[H]` child). mermaid() must catch the
+    // createMachine throw, feed it back, and retry — returning the runnable one.
+    const generate = vi
+      .fn<Parameters<MermaidGenerateFn>, ReturnType<MermaidGenerateFn>>()
+      .mockResolvedValueOnce(PARSES_BUT_NOT_RUNNABLE)
+      .mockResolvedValueOnce(VALID_DIAGRAM)
+
+    const result = await mermaid('a resumable work process', { generate })
+
+    // Sanity: the first candidate genuinely parses (so this exercises the
+    // createMachine gate, not the parser) yet is not runnable.
+    expect(() => fromMermaid(PARSES_BUT_NOT_RUNNABLE)).not.toThrow()
+
+    // The primitive retried past the unrunnable candidate to the valid one.
+    expect(result).toBe(VALID_DIAGRAM)
+    expect(generate).toHaveBeenCalledTimes(2)
+
+    // The retry fed the createMachine rejection back to the model.
+    const retryCall = generate.mock.calls[1]![0]
+    expect(retryCall.attempt).toBe(1)
+    expect(retryCall.prompt).toMatch(/does not exist|Child state/i)
+  })
+
   it('returns immediately when the first generation is valid (no retry)', async () => {
     const generate = vi.fn(async () => VALID_DIAGRAM)
 
@@ -86,9 +126,7 @@ describe('mermaid() — offline retry path (no live model)', () => {
   it('throws the final parse error after exhausting retries', async () => {
     const generate = vi.fn(async () => INVALID_DIAGRAM)
 
-    await expect(mermaid('always invalid', { maxRetries: 2, generate })).rejects.toThrow(
-      /fork/
-    )
+    await expect(mermaid('always invalid', { maxRetries: 2, generate })).rejects.toThrow(/fork/)
     // maxRetries: 2 → 3 total attempts.
     expect(generate).toHaveBeenCalledTimes(3)
   })

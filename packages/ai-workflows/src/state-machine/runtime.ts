@@ -120,6 +120,24 @@ export interface ActorClock {
   clearTimeout(handle: unknown): void
 }
 
+/**
+ * One `after` (delayed) transition pending in an actor's active-state
+ * configuration. Surfaced by {@link MachineHandle.pendingAfterTransitions} and
+ * {@link pendingAfterTransitions} so durable adapters can schedule a timer whose
+ * stored event is xstate's **real** delay-event type.
+ */
+export interface PendingAfterTransition {
+  /** Resolved delay in milliseconds. */
+  readonly delay: number
+  /**
+   * xstate's generated delay-event type for this transition — the exact event a
+   * resumed actor responds to (e.g. `xstate.after.50.machine.armed`). Verified
+   * empirically against xstate v5: a reconstructed actor fired from a persisted
+   * snapshot takes the `after` transition only when sent **this** event type.
+   */
+  readonly eventType: string
+}
+
 // =============================================================================
 // Handle
 // =============================================================================
@@ -156,6 +174,20 @@ export interface MachineHandle {
   getPersistedSnapshot(): PersistedMachineSnapshot
 
   /**
+   * The `after` (delayed) transitions pending in the actor's *current* active
+   * state configuration, as `{ delay, eventType }` pairs. `delay` is the
+   * resolved delay in milliseconds; `eventType` is xstate's **real** generated
+   * delay-event type (e.g. `xstate.after.50.machine.armed`) — the exact event a
+   * resumed actor responds to to take that transition.
+   *
+   * Durable adapters use this to (re-)schedule timers whose stored event is the
+   * real delay-event type, so a reconstructed actor (post-hibernation) fires the
+   * transition when the alarm/scheduler delivers it. See
+   * {@link pendingAfterTransitions}.
+   */
+  pendingAfterTransitions(): PendingAfterTransition[]
+
+  /**
    * Subscribe to snapshot changes. Returns a {@link Subscription}; call
    * `unsubscribe()` to stop. Mirrors `actor.subscribe`.
    */
@@ -166,6 +198,16 @@ export interface MachineHandle {
 
   /** Stop the actor and release its transition subscription. */
   stop(): void
+
+  /**
+   * Resolve once all durable writes queued so far (snapshot persists, event-log
+   * appends) have settled. Durable writes are serialised per machine onto a
+   * promise tail so they land in order even on a pooled async backend; this
+   * awaits that tail. Callers that read storage directly right after `send()`
+   * (e.g. assert the event log) should `await handle.whenWritesSettled()` first
+   * so the asynchronous writes are visible.
+   */
+  whenWritesSettled(): Promise<void>
 }
 
 // =============================================================================
@@ -181,6 +223,40 @@ let machineSeq = 0
  */
 function isCreatedMachine(input: RunnableMachine): input is AnyStateMachine {
   return typeof (input as AnyStateMachine).transition === 'function'
+}
+
+/**
+ * Extract the `after` (delayed) transitions pending in a snapshot's current
+ * active-state configuration. Walks the snapshot's resolved active state nodes
+ * (`_nodes`) — each carries an `after` array of `{ delay, eventType }` where
+ * `eventType` is xstate's real generated delay-event type.
+ *
+ * This is the linchpin of durable `after`-timer survival across resume: xstate's
+ * `getPersistedSnapshot()` does NOT persist pending `after` timers and
+ * `createActor(machine, { snapshot })` does NOT re-arm them, but the resolved
+ * active nodes of the rehydrated actor DO still declare those transitions. A
+ * durable adapter reads them here, schedules durable timers keyed on the real
+ * `eventType`, and delivers `eventType` to the resumed actor when the timer is
+ * due — at which point the actor takes the transition normally.
+ */
+export function pendingAfterTransitions(snapshot: AnyMachineSnapshot): PendingAfterTransition[] {
+  // xstate v5 exposes the resolved active state nodes as `_nodes`. Each node's
+  // `after` is the list of delayed transitions armed while that node is active.
+  const nodes = (snapshot as unknown as { _nodes?: readonly AfterNode[] })._nodes ?? []
+  const out: PendingAfterTransition[] = []
+  for (const node of nodes) {
+    for (const t of node.after ?? []) {
+      if (typeof t.delay === 'number' && typeof t.eventType === 'string') {
+        out.push({ delay: t.delay, eventType: t.eventType })
+      }
+    }
+  }
+  return out
+}
+
+/** The subset of an xstate state node the {@link pendingAfterTransitions} walk reads. */
+interface AfterNode {
+  after?: ReadonlyArray<{ delay: unknown; eventType: unknown }>
 }
 
 /**
@@ -238,12 +314,36 @@ export async function runMachine(
   if (options.clock) actorOptions.clock = options.clock as never
   const actor: AnyActor = createActor(machine, actorOptions)
 
+  // Serialise durable writes per machine. A pooled async backend (pg, DO) can
+  // complete writes out of order if two are in flight at once; chaining each
+  // write onto a per-machine promise tail makes the next start only after the
+  // previous settles, preserving snapshot/event order.
+  //
+  // The in-memory adapter mutates synchronously, cannot reorder, and is the
+  // canonical reference for observable ordering — so it BYPASSES the tail and
+  // runs the op inline (the "keep the in-memory path synchronous" requirement),
+  // preserving the prior behaviour where a `send()` records its event before
+  // control returns. Persisting backends go through the tail; callers that read
+  // storage directly right after a write await `handle.whenWritesSettled()`.
+  const serialise = storage.kind !== 'in-memory'
+  let writeTail: Promise<unknown> | undefined
+  const enqueueWrite = (op: () => Promise<unknown>): Promise<unknown> => {
+    if (!serialise) return op()
+    const next = writeTail ? writeTail.then(op, op) : op()
+    // Track the in-flight tail; swallow rejection so one failed write does not
+    // poison the chain (callers awaiting the returned promise still see it).
+    writeTail = Promise.resolve(next).catch(() => undefined)
+    return next
+  }
+
   // Persist a snapshot on every transition. xstate fires the subscriber
   // synchronously after each microstep settles; `getPersistedSnapshot()`
   // returns the serialisable form that captures the full active-state
-  // configuration (parallel regions + history slots).
+  // configuration (parallel regions + history slots). The write is serialised
+  // onto the per-machine tail so snapshots land in transition order.
   actor.subscribe(() => {
-    void storage.setSnapshot(machineId, actor.getPersistedSnapshot())
+    const snap = actor.getPersistedSnapshot()
+    void enqueueWrite(() => storage.setSnapshot(machineId, snap))
   })
 
   if (autoStart) {
@@ -251,7 +351,7 @@ export async function runMachine(
     // Persist the initial snapshot too — `subscribe` does not fire for the
     // initial state on a fresh start, so capture it explicitly. (On resume the
     // snapshot already exists; re-writing it is harmless and idempotent.)
-    await storage.setSnapshot(machineId, actor.getPersistedSnapshot())
+    await enqueueWrite(() => storage.setSnapshot(machineId, actor.getPersistedSnapshot()))
   }
 
   function normaliseEvent(event: string | EventObject): EventObject {
@@ -265,7 +365,9 @@ export async function runMachine(
     send(event) {
       const evt = normaliseEvent(event)
       if (logEvents) {
-        void storage.appendEvent(machineId, { ...evt })
+        // Serialise the append onto the per-machine tail so events log in the
+        // order they were sent even on a pooled async backend.
+        void enqueueWrite(() => storage.appendEvent(machineId, { ...evt }))
       }
       actor.send(evt)
     },
@@ -282,6 +384,10 @@ export async function runMachine(
       return actor.getPersistedSnapshot()
     },
 
+    pendingAfterTransitions() {
+      return pendingAfterTransitions(actor.getSnapshot() as AnyMachineSnapshot)
+    },
+
     subscribe(observer) {
       return actor.subscribe((snap) => observer(snap as AnyMachineSnapshot))
     },
@@ -292,6 +398,10 @@ export async function runMachine(
 
     stop() {
       actor.stop()
+    },
+
+    async whenWritesSettled() {
+      await (writeTail ?? Promise.resolve())
     },
   }
 }

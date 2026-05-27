@@ -231,12 +231,18 @@ export interface StateMachineBootOptions {
  *   - **Resume on boot** — reads the stored snapshot (if any) and rehydrates the
  *     actor via `runMachine(..., { resume: true })`, restoring the full
  *     active-state configuration.
- *   - **Timers via alarms** — supplies xstate a {@link ClockLike} whose
- *     `setTimeout` records a durable timer (through the storage adapter, which
- *     arms `state.storage.setAlarm`) and remembers the delayed-event callback;
- *     `clearTimeout` cancels the timer. The DO `alarm()` resolves which timers
- *     are due, invokes their callbacks (delivering the delay event to the
- *     actor), then reschedules to the next-earliest.
+ *   - **Durable timers that survive resume** — xstate's `getPersistedSnapshot()`
+ *     does NOT persist pending `after` timers, and `createActor(..., { snapshot })`
+ *     does NOT re-arm them. So the host does NOT rely on xstate's clock or any
+ *     in-memory callback to fire `after` transitions. Instead, after the actor
+ *     starts (fresh OR resumed from a reconstructed DO), it reconciles durable
+ *     timers against the actor's *current* pending `after` transitions
+ *     ({@link MachineHandle.pendingAfterTransitions}), storing each timer keyed
+ *     on xstate's REAL delay-event type (e.g. `xstate.after.50.machine.armed`).
+ *     The DO `alarm()` resolves which timers are due and **sends each timer's
+ *     real event** into the actor, which then takes the transition normally. The
+ *     xstate clock supplied here is a no-op so xstate's own `setTimeout` never
+ *     fires — all `after` firing flows through durable timers + DO alarms.
  *   - **External events via fetch** — `fetch()` accepts an event POST, sends it
  *     into the running actor, and persists the resulting snapshot.
  *
@@ -267,16 +273,6 @@ export abstract class StateMachineDurableObject {
   /** Resolved boot config (machine + machineId). */
   private boot: StateMachineBootOptions | undefined
 
-  /**
-   * Live delayed-event callbacks keyed by their durable timer id. xstate's
-   * clock hands us the callback when it schedules a delayed transition; the
-   * alarm handler invokes it to deliver the delay event into the actor.
-   */
-  private readonly timerCallbacks = new Map<string, () => void>()
-
-  /** Monotonic source of unique timer ids within this instance. */
-  private timerSeq = 0
-
   constructor(state: DurableObjectStateLike, env: unknown) {
     this.state = state
     this.env = env
@@ -290,31 +286,59 @@ export abstract class StateMachineDurableObject {
   protected abstract describeMachine(): StateMachineBootOptions
 
   /**
-   * The xstate {@link ClockLike} that routes delayed transitions through durable
-   * timers and the DO alarm. Each `setTimeout(fn, delayMs)` records a timer with
-   * `fireAt = now + delayMs` and remembers `fn`; the alarm fires it.
+   * A no-op xstate {@link ClockLike}. The host does NOT use xstate's clock to
+   * fire `after` transitions — those flow through durable timers + DO alarms,
+   * reconciled by {@link syncTimers}. This clock simply prevents xstate's own
+   * `setTimeout` from firing in the DO (DOs have no long-lived event loop across
+   * hibernation anyway), so the durable path is the single source of truth.
    */
-  private makeClock(machineId: string): ClockLike {
-    // Arrow functions keep `this` bound to the host instance (no aliasing).
+  private noopClock(): ClockLike {
     return {
-      setTimeout: (fn: (...args: unknown[]) => void, timeoutMs: number): unknown => {
-        const id = `after:${++this.timerSeq}`
-        const fireAt = Date.now() + timeoutMs
-        this.timerCallbacks.set(id, () => fn())
-        // The delay event is xstate-internal; we persist the timer with a
-        // synthetic record so the durable log shows a pending after-transition.
-        void this.storage.scheduleTimer(machineId, {
-          id,
-          fireAt,
-          event: { type: `xstate.after:${id}` },
-        })
-        return id
-      },
-      clearTimeout: (handle: unknown): void => {
-        const id = String(handle)
-        this.timerCallbacks.delete(id)
-        void this.storage.cancelTimer(machineId, id)
-      },
+      setTimeout: (): unknown => undefined,
+      clearTimeout: (): void => undefined,
+    }
+  }
+
+  /**
+   * Reconcile durable timers against the actor's *current* pending `after`
+   * transitions. This is the durability fix: xstate does not persist or re-arm
+   * `after` timers across resume, but the rehydrated actor's active states still
+   * declare them ({@link MachineHandle.pendingAfterTransitions}, carrying
+   * xstate's real delay-event type). We schedule a durable timer per pending
+   * transition keyed on that real event type, and cancel any durable timer that
+   * is no longer pending (the state was left before it fired).
+   *
+   * A durable timer's id is its real delay-event type — stable across resume —
+   * so re-running this is idempotent: the same pending transition maps to the
+   * same timer id. `nowMs` (default wall-clock) anchors `fireAt`; on resume we
+   * cannot recover the original arm time, so the remaining delay is measured
+   * from now (an `after X` survives as "X from when the machine came back up",
+   * which is the correct durable-resume semantics — a hibernated DO that wakes
+   * re-arms its outstanding deadline).
+   */
+  private async syncTimers(handle: MachineHandle, nowMs: number = Date.now()): Promise<void> {
+    const machineId = handle.machineId
+    const pending = handle.pendingAfterTransitions()
+    const wanted = new Map(pending.map((t) => [t.eventType, t] as const))
+
+    // Cancel durable timers that are no longer pending (state left before fire),
+    // but never cancel a still-pending one (that is the resume defect this fixes).
+    for (const existing of await this.storage.getTimers(machineId)) {
+      if (!wanted.has(existing.id)) {
+        await this.storage.cancelTimer(machineId, existing.id)
+      }
+    }
+
+    // Schedule a durable timer per pending after-transition, keyed on xstate's
+    // real delay-event type so a resumed actor responds when we deliver it.
+    const current = new Map((await this.storage.getTimers(machineId)).map((t) => [t.id, t]))
+    for (const [eventType, t] of wanted) {
+      if (current.has(eventType)) continue // already armed; keep its fireAt
+      await this.storage.scheduleTimer(machineId, {
+        id: eventType,
+        fireAt: nowMs + t.delay,
+        event: { type: eventType },
+      })
     }
   }
 
@@ -327,30 +351,42 @@ export abstract class StateMachineDurableObject {
     const boot = (this.boot ??= this.describeMachine())
     const existing = await this.storage.getSnapshot(boot.machineId)
 
-    // On resume, xstate re-schedules every still-pending `after` transition via
-    // our clock when the rehydrated actor starts (it persists `_scheduledEvents`
-    // in the snapshot and re-arms them with fresh clock handles). Clear the prior
-    // run's durable timer records first so they don't accumulate as stale entries
-    // — the starting actor re-arms exactly the delays it still needs.
-    if (existing) {
-      for (const timer of await this.storage.getTimers(boot.machineId)) {
-        await this.storage.cancelTimer(boot.machineId, timer.id)
-      }
-    }
-
     this.handle = await runMachine(boot.machine, this.storage, {
       machineId: boot.machineId,
       resume: existing ? true : false,
-      clock: this.makeClock(boot.machineId),
+      clock: this.noopClock(),
     })
+
+    // Reconcile durable timers against the actor's pending `after` transitions.
+    // On a FRESH start this arms the initial state's timers; on RESUME (after
+    // hibernation/eviction) this re-arms still-pending timers that xstate did
+    // not restore — the core durability fix. Pending durable timers are never
+    // deleted here, only reconciled.
+    await this.syncTimers(this.handle)
     return this.handle
   }
 
   /**
+   * Drop the in-memory actor + handle so the next `ensureStarted()` rebuilds a
+   * FRESH actor from durable storage — simulating DO hibernation / eviction,
+   * where all in-memory state (the actor, any closures) is lost while
+   * `state.storage` (snapshot, events, timers) survives. The durable rows are
+   * untouched. Intended for tests that must prove an `after` timer fires after
+   * reconstruction without relying on any surviving in-memory callback.
+   */
+  protected forgetInMemoryState(): void {
+    this.handle?.stop()
+    this.handle = undefined
+  }
+
+  /**
    * Cloudflare DO `alarm()` handler. Resolves which timers are due (`fireAt <=
-   * now`), invokes their delayed-event callbacks (delivering the after-transition
-   * event into the actor), removes the fired timers, then reschedules the alarm
-   * to the next-earliest pending timer.
+   * now`) and **sends each timer's real delay-event into the actor** (xstate's
+   * generated `xstate.after.*` event), which then takes the `after` transition
+   * normally — even when the actor was just reconstructed and no in-memory
+   * callback survives. After delivery it reconciles timers against the actor's
+   * new pending set (arming any newly-entered state's delays, dropping fired
+   * ones) and reschedules the alarm.
    */
   async alarm(): Promise<void> {
     const handle = await this.ensureStarted()
@@ -368,13 +404,16 @@ export abstract class StateMachineDurableObject {
     const due = timers.filter((t) => t.fireAt <= threshold)
 
     for (const timer of due) {
-      const cb = this.timerCallbacks.get(timer.id)
-      // Remove the durable timer record (also reschedules the alarm).
+      // Remove the fired durable timer first (at-most-once delivery for this
+      // deadline), then deliver xstate's real delay-event into the actor.
       await this.storage.cancelTimer(machineId, timer.id)
-      this.timerCallbacks.delete(timer.id)
-      // Fire the delayed transition into the actor.
-      if (cb) cb()
+      handle.send(timer.event as { type: string } & Record<string, unknown>)
     }
+
+    // Reconcile timers against the post-transition active states: the `after`
+    // transition may have entered a new state with its own `after` delays, and
+    // the fired transitions' timers are gone. This also re-arms the DO alarm.
+    await this.syncTimers(handle)
 
     // Persist the post-alarm snapshot (the actor's subscription persists on
     // transition, but capture once more to be safe / for cases that no-op).
@@ -415,6 +454,10 @@ export abstract class StateMachineDurableObject {
     }
 
     handle.send(body)
+    // An external event may enter a state with `after` delays (or leave one),
+    // so reconcile durable timers against the new active states. This arms the
+    // DO alarm for any newly-pending `after` transition.
+    await this.syncTimers(handle)
     // The actor's transition subscription persists asynchronously; capture the
     // post-send snapshot explicitly so the response and storage agree.
     await this.storage.setSnapshot(handle.machineId, handle.getPersistedSnapshot())

@@ -494,10 +494,72 @@ export interface RunStoredMachineOptions {
 }
 
 /**
+ * A no-op {@link ActorClock}. The pg backend fires `after` transitions through
+ * the {@link PostgresStateMachineScheduler} (durable timer rows + a poller), not
+ * through xstate's in-process clock — so when no clock is supplied we install
+ * this no-op so xstate's own `setTimeout` never fires the transition behind the
+ * scheduler's back. All `after` firing flows through durable timers.
+ */
+const noopClock: ActorClock = {
+  setTimeout: () => undefined,
+  clearTimeout: () => undefined,
+}
+
+/**
+ * Reconcile durable timer rows against an actor's *current* pending `after`
+ * transitions. This is the pg analogue of the DO adapter's `syncTimers` and the
+ * core durability fix: xstate's `getPersistedSnapshot()` does NOT persist
+ * pending `after` timers and `createActor(..., { snapshot })` does NOT re-arm
+ * them, but the rehydrated actor's active states still declare them (carrying
+ * xstate's real delay-event type via {@link MachineHandle.pendingAfterTransitions}).
+ *
+ * Each pending transition is scheduled as a timer row keyed on (and carrying)
+ * xstate's REAL delay-event type, so the scheduler can later send that exact
+ * event into the resumed actor to take the transition. Timers no longer pending
+ * (their state was left) are cancelled; still-pending ones are NEVER deleted.
+ *
+ * On resume the original arm time is unrecoverable, so `fireAt` is measured from
+ * `nowMs` — an `after X` survives as "X from when the machine was resumed", the
+ * correct durable-resume semantics.
+ */
+export async function syncPostgresTimers(
+  handle: MachineHandle,
+  storage: PostgresStateMachineStorage,
+  nowMs: number = Date.now()
+): Promise<void> {
+  const machineId = handle.machineId
+  const pending = handle.pendingAfterTransitions()
+  const wanted = new Map(pending.map((t) => [t.eventType, t] as const))
+
+  for (const existing of await storage.getTimers(machineId)) {
+    if (!wanted.has(existing.id)) {
+      await storage.cancelTimer(machineId, existing.id)
+    }
+  }
+
+  const current = new Map((await storage.getTimers(machineId)).map((t) => [t.id, t]))
+  for (const [eventType, t] of wanted) {
+    if (current.has(eventType)) continue
+    await storage.scheduleTimer(machineId, {
+      id: eventType,
+      fireAt: nowMs + t.delay,
+      event: { type: eventType },
+    })
+  }
+}
+
+/**
  * Read the persisted snapshot for `machineId` and resume a running actor from
  * it (`runMachine(..., { resume: true })`). If no snapshot exists yet the
  * machine starts fresh from its initial state, so this is also the right entry
  * point for a first run on pg-backed storage.
+ *
+ * After starting (fresh OR resumed), it reconciles durable timer rows against
+ * the actor's pending `after` transitions ({@link syncPostgresTimers}) so a
+ * machine reconstructed from a stored snapshot re-arms its still-pending `after`
+ * timers with xstate's real delay-event type — the scheduler then fires them.
+ * This is the core durability fix: xstate does not restore `after` timers across
+ * resume, so the adapter re-arms them from the rehydrated active states.
  *
  * @example
  * ```ts
@@ -513,11 +575,19 @@ export async function runStoredMachine(
   options: RunStoredMachineOptions
 ): Promise<MachineHandle> {
   const existing = await storage.getSnapshot(options.machineId)
-  return runMachine(machine, storage, {
+  const handle = await runMachine(machine, storage, {
     machineId: options.machineId,
     resume: existing ? true : false,
-    ...(options.clock ? { clock: options.clock } : {}),
+    clock: options.clock ?? noopClock,
   })
+  // Re-arm durable timers from the actor's pending after-transitions. On resume
+  // this restores timers xstate did not; on a fresh start it arms the initial
+  // state's delays. Skipped when a caller supplies their own clock (they own
+  // timer routing — e.g. the deterministic-clock test that mirrors timers itself).
+  if (!options.clock) {
+    await syncPostgresTimers(handle, storage)
+  }
+  return handle
 }
 
 /**

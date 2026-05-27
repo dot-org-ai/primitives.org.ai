@@ -123,6 +123,14 @@ interface StateNode {
   initial?: string
   /** Private marker: this state is a `<<choice>>` pseudostate. */
   _choice?: true
+  /**
+   * Private marker: this node was materialised as a SYNTHETIC history node from
+   * an `[H]` / `[H*]` pseudostate (its name is the generated `hist` / `deepHist`).
+   * Used to detect a name collision with a user state literally named
+   * `hist` / `deepHist` — without it the two merge into one corrupt node. Dropped
+   * from the emitted config.
+   */
+  _synthHistory?: true
 }
 
 // =============================================================================
@@ -372,6 +380,19 @@ function regionToNode(region: Scope): StateNode {
   if (region.states.size > 0) {
     node.states = {}
     for (const [name, child] of region.states) {
+      // A synthetic history node (`hist` / `deepHist` from `[H]` / `[H*]`) must
+      // not also carry user-state content. If a user state was literally named
+      // `hist` / `deepHist` in the same scope, `nodeFor` merged the two into one
+      // corrupt node — `materialiseHistoryNode` throws when the user content came
+      // FIRST; this catches the reverse order (user content added after the `[H]`).
+      // Either way the merged node would make a history pseudostate also a real
+      // state (e.g. a self-targeting initial → `createMachine` stack-overflow).
+      if (child._synthHistory && hasUserStateContent(child)) {
+        throw new MermaidParseError(
+          `State name "${name}" collides with the synthetic history pseudostate ` +
+            `name generated for \`[H]\`/\`[H*]\` in the same composite. Rename "${name}".`
+        )
+      }
       ;(node.states as Record<string, StateNode>)[name] = child
     }
   }
@@ -602,9 +623,7 @@ function tryHistoryDeclaration(
       )
     }
     const meta = historyTarget(line.text)!
-    const node = nodeFor(meta.name)
-    node.type = 'history'
-    node.history = meta.history
+    materialiseHistoryNode(nodeFor(meta.name), meta, line)
     return true
   }
 
@@ -640,8 +659,7 @@ function tryHistoryDeclaration(
 
   const meta = historyTarget(source)!
   const node = nodeFor(meta.name)
-  node.type = 'history'
-  node.history = meta.history
+  materialiseHistoryNode(node, meta, line)
   node.target = target
   nodeFor(target) // ensure the default target state exists
   return true
@@ -786,11 +804,10 @@ function wireTransition(
 ): boolean {
   const node = nodeFor(source)
 
-  // Materialise a history node target in this scope when needed.
+  // Materialise a history node target in this scope when needed (throwing on a
+  // name collision with a user state literally named `hist` / `deepHist`).
   if (history) {
-    const hist = nodeFor(history.name)
-    hist.type = 'history'
-    hist.history = history.history
+    materialiseHistoryNode(nodeFor(history.name), history, line)
   }
 
   // Choice pseudostate: outgoing transitions are eventless guarded branches.
@@ -830,6 +847,54 @@ function wireTransition(
 /** Is `token` a history pseudostate token (`[H]` or `[H*]`)? */
 function isHistoryToken(token: string): boolean {
   return token === '[H]' || token === '[H*]'
+}
+
+/**
+ * Does this node carry user-authored (non-history) content? A synthetic history
+ * node has only `type`/`history`/`target` (+ the `_synthHistory` marker); any of
+ * these signals a real user state declaration touched the node.
+ */
+function hasUserStateContent(node: StateNode): boolean {
+  return (
+    node.on !== undefined ||
+    node.always !== undefined ||
+    node.entry !== undefined ||
+    node.exit !== undefined ||
+    node.states !== undefined ||
+    node.initial !== undefined ||
+    node._choice !== undefined ||
+    node.type === 'final' ||
+    node.type === 'parallel'
+  )
+}
+
+/**
+ * Materialise a SYNTHETIC history node (`hist` / `deepHist`) for an `[H]` / `[H*]`
+ * pseudostate, throwing a clear {@link MermaidParseError} if its generated name
+ * collides with a user state of the same name. Without this guard the synthetic
+ * node and the user node merge via `nodeFor`, producing a node that is both a
+ * history pseudostate and a real state — which yields a self-targeting initial
+ * and a `createMachine` stack-overflow.
+ */
+function materialiseHistoryNode(
+  node: StateNode,
+  meta: { name: string; history: 'shallow' | 'deep' },
+  line: SourceLine
+): void {
+  // Collision: the node already exists as a user-authored state (or the synthetic
+  // history node was already created and a user state then added content to it).
+  if (hasUserStateContent(node)) {
+    throw new MermaidParseError(
+      `State name "${meta.name}" collides with the synthetic history pseudostate ` +
+        `name generated for \`${meta.history === 'deep' ? '[H*]' : '[H]'}\`. ` +
+        `Rename the "${meta.name}" state — \`${meta.name}\` is reserved when ` +
+        `\`[H]\`/\`[H*]\` is used in the same composite.`,
+      line.number
+    )
+  }
+  node.type = 'history'
+  node.history = meta.history
+  node._synthHistory = true
 }
 
 /**
