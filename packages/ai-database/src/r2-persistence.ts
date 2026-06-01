@@ -7,7 +7,9 @@
 
 /// <reference types="@cloudflare/workers-types" />
 
-import type { DigitalObjectsProvider, Noun, Verb, Thing, Action } from './types.js'
+// Note: digital-objects exports the entity TYPE as `NounType` (the bare `Noun`
+// export is the deprecated factory function). Alias back to `Noun` locally.
+import type { DigitalObjectsProvider, NounType as Noun, Verb, Thing, Action } from 'digital-objects'
 
 /**
  * Snapshot data structure

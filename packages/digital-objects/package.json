@@ -10,14 +10,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./ns": {
-      "types": "./dist/ns-exports.d.ts",
-      "import": "./dist/ns-exports.js"
-    },
-    "./worker": {
-      "types": "./dist/worker-exports.d.ts",
-      "import": "./dist/worker-exports.js"
-    },
     "./client": {
       "import": "./dist/client.js",
       "types": "./dist/client.d.ts"

@@ -1,15 +1,15 @@
 /**
- * digital-objects - Unified storage primitive for AI primitives
+ * digital-objects - the SVO runtime ontology layer (over @graphdl/core)
  *
  * Core concepts:
  * - **Nouns**: Entity type definitions (singular/plural/schema)
- * - **Verbs**: Action definitions (conjugations, reverse forms)
+ * - **Verbs**: Action definitions (conjugations, reverse forms, SVO Frame)
  * - **Things**: Entity instances (the actual data)
  * - **Actions**: Events + Relationships + Audit Trail (unified graph edges)
  *
- * Providers:
- * - `MemoryProvider`: In-memory for tests
- * - `NS`: SQLite in Cloudflare Durable Objects (import from 'digital-objects/ns')
+ * Storage is NOT owned here — it lives behind the `DigitalObjectsProvider`
+ * port, implemented by `ai-database` (pg+ch + DO-SQLite, ADR-0003). A
+ * `MemoryProvider` is provided for tests. See ADR-0012.
  *
  * @packageDocumentation
  */
@@ -66,24 +66,6 @@ export {
   toGerund,
   toResult,
 } from './linguistic.js'
-
-// NS Client (for HTTP access to NS Durable Object)
-export { NSClient, createNSClient } from './ns-client.js'
-export type { NSClientOptions } from './ns-client.js'
-
-// R2 Persistence (backup/restore to Cloudflare R2)
-export {
-  createSnapshot,
-  restoreSnapshot,
-  appendWAL,
-  replayWAL,
-  compactWAL,
-  exportJSONL,
-  importJSONL,
-  exportToR2,
-  importFromR2,
-} from './r2-persistence.js'
-export type { Snapshot, WALEntry, SnapshotOptions, SnapshotResult } from './r2-persistence.js'
 
 // ai-database Adapter
 export { createDBProviderAdapter } from './ai-database-adapter.js'
