@@ -159,17 +159,24 @@ export interface ExecCtx<TIn, TOut> {
  * VERIFICATION port — drives the `QUALITY_REVIEW` phase: runs the acceptance
  * Metric through the 3-rater panel and rolls the verdicts up.
  *
+ * The cascade's typed `output` is threaded in (the thing being judged): the
+ * panel rates the delivered `TOut` against the acceptance Metric, not an empty
+ * envelope. The verifier is generic over `TOut` so a real rater can read the
+ * delivered shape.
+ *
  * awaits aip-cnks.5 — the real verifier dispatches the 3 raters (and binds to
  * the acceptance predicates from the OutcomeContract). The default
  * {@link stubVerifier} returns a single deterministic `auto-promote` verdict at
  * the requested `assurance` — a pass-through, not a real panel.
  */
-export interface Verifier {
-  verify(ctx: VerifyCtx): Promise<VerificationVerdict>
+export interface Verifier<TOut = unknown> {
+  verify(ctx: VerifyCtx<TOut>): Promise<VerificationVerdict>
 }
 
 /** The context a {@link Verifier} runs against. */
-export interface VerifyCtx {
+export interface VerifyCtx<TOut = unknown> {
+  /** The cascade result to judge against the acceptance Metric. */
+  output: TOut
   metric: string
   assurance: Assurance
 }
@@ -178,14 +185,41 @@ export interface VerifyCtx {
  * SETTLEMENT port — drives the terminal `ACCEPTED` / `REFUNDED` phases: charges
  * or refunds via the finance firmware.
  *
+ * `charge` now carries the full economic context the finance firmware needs: the
+ * gating `basis` (the rung settlement gates at), the `amount` of {@link Money} to
+ * capture, the `buyer` to bill, and an optional caller `ref`. It returns a
+ * {@link Settlement} that carries the charge id — the handle RETAINS that id so a
+ * later `refund` can reference it. `refund` takes that retained `chargeId` (and
+ * an optional partial `amount`).
+ *
  * awaits aip-cnks.5 — the real settler calls the `business-as-code/finance`
  * Merchant / FinanceProvider ports against the OutcomeContract + RefundContract.
  * The default {@link stubSettler} returns the matching `Settlement` shape with a
  * zero `Money` capture — a no-op, not a real charge.
  */
 export interface Settler {
-  charge(basis: PricingBasis): Promise<Settlement>
-  refund(): Promise<Settlement>
+  charge(args: ChargeArgs): Promise<Settlement>
+  refund(args: RefundArgs): Promise<Settlement>
+}
+
+/** Arguments to {@link Settler.charge} — the full economic context for a capture. */
+export interface ChargeArgs {
+  /** The gating rung settlement gates at (the assurance→basis ceiling). */
+  basis: PricingBasis
+  /** The {@link Money} to capture (resolved from the Offer/contract at ORDER). */
+  amount: Money
+  /** The buyer to bill (from {@link OrderOpts}/{@link CreateHandleOpts}). */
+  buyer: string
+  /** Optional caller-supplied reference (e.g. an idempotency key). */
+  ref?: string
+}
+
+/** Arguments to {@link Settler.refund} — references the retained charge. */
+export interface RefundArgs {
+  /** The charge id retained from the prior {@link Settler.charge}. */
+  chargeId: string
+  /** Optional partial-refund {@link Money}; absent ⇒ full refund. */
+  amount?: Money
 }
 
 const ZERO_MONEY: Money = { amount: 0n, currency: 'USD' }
@@ -201,10 +235,11 @@ function stubExecutor<TIn, TOut>(seed: TOut): CascadeExecutor<TIn, TOut> {
 }
 
 /** Default pass-through verifier — one deterministic `auto-promote` verdict. */
-function stubVerifier(): Verifier {
+function stubVerifier<TOut>(): Verifier<TOut> {
   return {
-    async verify(ctx: VerifyCtx): Promise<VerificationVerdict> {
+    async verify(ctx: VerifyCtx<TOut>): Promise<VerificationVerdict> {
       // awaits aip-cnks.5 — no real 3-rater panel; a single auto-promote stub.
+      // `ctx.output` (the judged cascade result) is accepted but not inspected.
       const pass = {
         rater: 'stub',
         verdict: 'pass' as const,
@@ -223,15 +258,48 @@ function stubVerifier(): Verifier {
 /** Default no-op settler — zero-Money charge / refund of the matching shape. */
 function stubSettler(): Settler {
   return {
-    async charge(basis: PricingBasis): Promise<Settlement> {
+    async charge(args: ChargeArgs): Promise<Settlement> {
       // awaits aip-cnks.5 — no real finance capture; a zero-Money charge stub.
-      return { outcome: 'charged', captured: ZERO_MONEY, basis, contract: 'stub:outcome-contract' }
+      // The charge id is deterministic so a later refund can reference it.
+      return {
+        outcome: 'charged',
+        chargeId: 'stub:charge',
+        captured: args.amount ?? ZERO_MONEY,
+        basis: args.basis,
+        contract: 'stub:outcome-contract',
+      }
     },
-    async refund(): Promise<Settlement> {
+    async refund(args: RefundArgs): Promise<Settlement> {
       // awaits aip-cnks.5 — no real finance refund; a zero-Money refund stub.
-      return { outcome: 'refunded', amount: ZERO_MONEY, per: 'stub:refund-contract' }
+      return {
+        outcome: 'refunded',
+        amount: args.amount ?? ZERO_MONEY,
+        per: 'stub:refund-contract',
+        chargeId: args.chargeId,
+      }
     },
   }
+}
+
+/**
+ * Resolve the {@link Money} amount to charge from the Offer's price, gated by the
+ * settlement `basis`. Today only a `SinglePrice` Offer carries a machine price;
+ * all other shapes (Tiered/UsageMeter/SuccessFee/Gainshare/CustomQuote) resolve
+ * to zero {@link Money} here and await the finance firmware's pricing engine
+ * (aip-cnks.5). An explicit `override` (from {@link CreateHandleOpts.amount})
+ * always wins.
+ */
+export function resolveAmount(
+  offer: OfferOf<unknown>,
+  _basis: PricingBasis,
+  override?: Money
+): Money {
+  if (override) return override
+  const spec = (offer as { priceSpecification?: { structure?: string; price?: Money } })
+    .priceSpecification
+  if (spec && spec.structure === 'SinglePrice' && spec.price) return spec.price
+  // awaits aip-cnks.5 — non-single-price shapes need the finance pricing engine.
+  return { ...ZERO_MONEY }
 }
 
 // ============================================================================
@@ -260,9 +328,18 @@ export interface CreateHandleOpts<TIn, TOut> {
    */
   seedOutput?: TOut
 
+  /**
+   * The {@link Money} to capture at `accept()`. When omitted, it is resolved
+   * from the Offer's `priceSpecification` (a single-price Offer) via
+   * {@link resolveAmount}; falls back to zero {@link Money} for free Offers.
+   */
+  amount?: Money
+  /** The buyer billed at settlement (threaded into {@link Settler.charge}). */
+  buyer?: string
+
   // ── injected ports (default to in-memory stubs; awaits aip-cnks.5) ──
   executor?: CascadeExecutor<TIn, TOut>
-  verifier?: Verifier
+  verifier?: Verifier<TOut>
   settler?: Settler
   /**
    * Auto-drive the happy path on creation: ORDERED→…→DELIVERED. The buyer then
@@ -329,15 +406,23 @@ export function createInvocationHandle<TIn, TOut>(
 ): InvocationHandle<TOut> {
   const id = opts.id ?? mintInvocationId()
   const executor = opts.executor ?? stubExecutor<TIn, TOut>(opts.seedOutput as TOut)
-  const verifier = opts.verifier ?? stubVerifier()
+  const verifier: Verifier<TOut> = opts.verifier ?? stubVerifier<TOut>()
   const settler = opts.settler ?? stubSettler()
   const metric = opts.metric ?? 'stub:metric'
   const assurance: Assurance = opts.assurance ?? 'unverifiable'
   const autoStart = opts.autoStart ?? true
 
+  // The economic context threaded into settlement: the buyer to bill and the
+  // Money to capture (resolved from the Offer's price, gated by the ceiling).
+  const buyer = opts.buyer ?? opts.orderOpts?.buyer ?? 'anonymous'
+  const amount = resolveAmount(opts.offer, opts.ceiling, opts.amount)
+
   // ── mutable runtime state ──
   let state: InvocationState = 'ORDERED'
   let cost: Money = { ...ZERO_MONEY }
+  // The charge id retained from accept()'s settler.charge — threaded into a
+  // later settler.refund so the firmware can reverse the exact capture.
+  let chargeId: string | undefined
   const log: InvocationEvent<TOut>[] = []
   const previewAcc: Partial<TOut> = {}
   const subs = new Set<Subscription<TOut>>()
@@ -392,12 +477,14 @@ export function createInvocationHandle<TIn, TOut>(
       go('ACTIVE', 'onboarding-complete')
       go('DELIVERING', 'cascade-start')
 
-      // DELIVERING — cascade EXECUTION via injected port (awaits aip-cnks.5).
+      // DELIVERING — cascade EXECUTION via injected port (real executor:
+      // `makeCascadeExecutor`; default: in-memory stub).
       const output = await executor.execute({ input: opts.input, emit, cost })
 
-      // QUALITY_REVIEW — 3-rater VERIFICATION via injected port (awaits aip-cnks.5).
+      // QUALITY_REVIEW — 3-rater VERIFICATION via injected port. The delivered
+      // `output` is threaded in as the thing being judged against the Metric.
       go('QUALITY_REVIEW', 'cascade-complete')
-      const panel = await verifier.verify({ metric, assurance })
+      const panel = await verifier.verify({ output, metric, assurance })
       emit({ kind: 'evaluator-signoff', panel })
 
       // DELIVERED — the buyer now drives accept() / dispute().
@@ -428,7 +515,9 @@ export function createInvocationHandle<TIn, TOut>(
   const drive = {
     async accept(): Promise<Settlement> {
       go('ACCEPTED', 'buyer-accept')
-      const settlement = await settler.charge(opts.ceiling)
+      const settlement = await settler.charge({ basis: opts.ceiling, amount, buyer })
+      // Retain the charge id so a later refund can reference the exact capture.
+      if (settlement.outcome === 'charged') chargeId = settlement.chargeId
       emit({ kind: 'settled', settlement })
       return settlement
     },
@@ -458,9 +547,12 @@ export function createInvocationHandle<TIn, TOut>(
         emit({ kind: 'settled', settlement })
         return settlement
       }
-      // refund
+      // refund — reference the retained charge id when a charge happened; this
+      // escalation path refunds PRE-charge (no accept() ran yet), so fall back to
+      // a `no-prior-charge` sentinel meaning "reverse the guarantee, nothing was
+      // captured". A real firmware treats the sentinel as a zero-amount reversal.
       go('REFUNDED', 'escalation-refund')
-      const settlement = await settler.refund()
+      const settlement = await settler.refund({ chargeId: chargeId ?? 'no-prior-charge' })
       emit({ kind: 'settled', settlement })
       return settlement
     },

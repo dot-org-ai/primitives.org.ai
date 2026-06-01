@@ -93,6 +93,7 @@ export {
   reconcileHandle,
   attach,
 } from './invoke.js'
+export { resolveAmount } from './invoke.js'
 export type {
   CreateHandleOpts,
   CascadeExecutor,
@@ -100,7 +101,30 @@ export type {
   Verifier,
   VerifyCtx,
   Settler,
+  ChargeArgs,
+  RefundArgs,
 } from './invoke.js'
+
+// Surface #2 — the DELIVERING-phase cascade EXECUTOR (the real step-walker that
+// drives `binding.cascade` via an injected FunctionRunner; aip-cnks.10).
+export {
+  makeCascadeExecutor,
+  aiFunctionsRunner,
+  resolveRefs,
+  isCascadeRef,
+  CascadeRefError,
+} from './execute.js'
+export type {
+  CascadeStep,
+  CascadeRef,
+  StateBag,
+  FunctionRunner,
+  RunnerCtx,
+  RunnerResult,
+  HumanChannel,
+  AiFunctionsRunnerOpts,
+  MakeCascadeExecutorDeps,
+} from './execute.js'
 
 // Surface #3 — graph discovery (the discovery TYPES stay in `./types.ts`; the
 // projector + lenses + match-or-mint runtime live in `./graph.ts`).

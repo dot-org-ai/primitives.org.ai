@@ -250,6 +250,7 @@ describe('v4 handle scaffold — createInvocationHandle', () => {
     expect(isTerminal(handle.state())).toBe(true)
     expect(settlement).toEqual({
       outcome: 'charged',
+      chargeId: 'stub:charge',
       captured: { amount: 0n, currency: 'USD' },
       basis: 'access',
       contract: 'stub:outcome-contract',
@@ -390,11 +391,13 @@ describe('v4 handle scaffold — escalation verbs', () => {
 
     const settlement = await handle.resolve('refund')
     expect(handle.state()).toBe('REFUNDED')
-    // the stub settler.refund() shape (zero-Money refund).
+    // the stub settler.refund() shape (zero-Money refund). This escalation path
+    // refunds PRE-charge, so the chargeId is the `no-prior-charge` sentinel.
     expect(settlement).toEqual({
       outcome: 'refunded',
       amount: { amount: 0n, currency: 'USD' },
       per: 'stub:refund-contract',
+      chargeId: 'no-prior-charge',
     })
     // the same settlement is observable via settled().
     await expect(handle.settled()).resolves.toEqual(settlement)

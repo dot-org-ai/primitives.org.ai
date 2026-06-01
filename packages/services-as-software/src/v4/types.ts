@@ -34,6 +34,11 @@ import type {
 } from 'business-as-code'
 import type { Money } from 'business-as-code/finance'
 
+// The v4 cascade-step shape lives in the DELIVERING-phase executor (`./execute.ts`)
+// — `binding.cascade` is typed as `CascadeStep[]` here. Type-only import keeps the
+// types↔executor edge erased at runtime (no value cycle).
+import type { CascadeStep } from './execute.js'
+
 // ============================================================================
 // Re-exports — the canonical economic primitives originate in business-as-code
 // ============================================================================
@@ -176,9 +181,11 @@ export interface ImplementationLayer {
   functions: ReadonlyArray<FunctionDef>
   /**
    * carriage `runCascade` over JSON steps with `$ref` resolution (executes via
-   * ai-evaluate, ADR-0010). "Binding is data."
+   * ai-evaluate, ADR-0010). "Binding is data." The step shape is
+   * {@link CascadeStep} (defined in `./execute.ts`, the DELIVERING-phase
+   * executor); `makeCascadeExecutor` walks this array.
    */
-  binding?: { cascade: unknown }
+  binding?: { cascade: readonly CascadeStep[] }
 }
 
 /** Layer 3 — the dependencies: recursively composes sub-Deliverables. */
@@ -264,7 +271,8 @@ export interface ServiceSpec {
   /** pull defaults from the seed catalog. */
   archetype?: string
   functions?: ReadonlyArray<FunctionDef>
-  cascade?: unknown
+  /** JSON cascade steps with `$ref` resolution — see {@link CascadeStep}. */
+  cascade?: readonly CascadeStep[]
 
   // DEPENDENCIES (flat)
   composes?: ReadonlyArray<Deliverable>
@@ -353,8 +361,15 @@ export interface VerificationVerdict {
 }
 
 export type Settlement =
-  | { outcome: 'charged'; captured: Money; basis: PricingBasis; contract: OutcomeContractRef }
-  | { outcome: 'refunded'; amount: Money; per: RefundContractRef }
+  | {
+      outcome: 'charged'
+      /** The finance-firmware charge id — retained so a later refund can reference it. */
+      chargeId: string
+      captured: Money
+      basis: PricingBasis
+      contract: OutcomeContractRef
+    }
+  | { outcome: 'refunded'; amount: Money; per: RefundContractRef; chargeId?: string }
   | { outcome: 'noop'; reason: 'free' | 'cancelled-pre-charge' }
 
 export interface ClarificationRequest {
@@ -388,6 +403,8 @@ export interface OrderOpts {
   autoAccept?: boolean | ((v: VerificationVerdict) => boolean)
   /** requested rung; rejected if above the ceiling. */
   gateAt?: PricingBasis
+  /** the buyer billed at settlement (threaded into `Settler.charge`). */
+  buyer?: string
 }
 
 export interface InvocationHandle<TOut> {
