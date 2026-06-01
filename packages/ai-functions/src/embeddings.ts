@@ -22,7 +22,12 @@ export type {
 export { cloudflare, cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from 'ai-providers/cloudflare'
 
 import { embed as aiEmbed, embedMany as aiEmbedMany } from 'ai'
+import type { EmbeddingModel } from 'ai'
 import { cloudflareEmbedding, DEFAULT_CF_EMBEDDING_MODEL } from 'ai-providers/cloudflare'
+import { applyStrategyPrefix, type EmbeddingMode } from './find-ladder.js'
+
+// Re-export the embeddings socket (modes, cosine, RRF, PredicateSpec, madlib).
+export * from './find-ladder.js'
 
 /**
  * Get the default embedding model (Cloudflare @cf/baai/bge-m3)
@@ -32,20 +37,40 @@ export function getDefaultEmbeddingModel() {
 }
 
 /**
- * Embed a single value using the default Cloudflare model
+ * Embed a single value, optionally in a specific {@link EmbeddingMode}.
+ *
+ * When a `mode` is supplied, the mode's strategy prefix is applied to the text
+ * BEFORE embedding (`applyStrategyPrefix`) and the mode's `postProcess` hook (e.g.
+ * mean-centering for COLLAPSE) is applied to the resulting vector. Without a mode
+ * this behaves exactly as before — bare text, default Cloudflare model, raw
+ * vector — so the original `embedText(value)` signature is preserved.
+ *
+ * The two modes (`MATCH_MODE` / `COLLAPSE_MODE`) must NEVER be globally flipped —
+ * see `find-ladder.ts`. The vector tier of the findOrCreate gate runs in exactly
+ * one of them, picked by the call site, not flipped globally.
  *
  * @example
  * ```ts
- * import { embedText } from 'ai-functions'
+ * import { embedText, MATCH_MODE } from 'ai-functions'
  *
- * const { embedding } = await embedText('hello world')
+ * const { embedding } = await embedText('hello world')               // legacy
+ * const { embedding } = await embedText('soybeans', MATCH_MODE)      // mode-aware
  * ```
  */
-export async function embedText(value: string) {
-  return aiEmbed({
-    model: getDefaultEmbeddingModel(),
-    value
+export async function embedText(
+  value: string,
+  mode?: EmbeddingMode,
+  options?: { model?: EmbeddingModel }
+) {
+  const text = mode ? applyStrategyPrefix(value, mode) : value
+  const result = await aiEmbed({
+    model: options?.model ?? getDefaultEmbeddingModel(),
+    value: text,
   })
+  if (mode?.postProcess) {
+    return { ...result, embedding: mode.postProcess(result.embedding) }
+  }
+  return result
 }
 
 /**
