@@ -239,10 +239,14 @@ PARALLEL TRACK B ── services-as-software consumable surface (pure shapes) �
   source: carriage (derive*/ServiceDefinition), startup-builder (envelope/listing), services-builder (FSM)
   test surface: carriage deletes its shims; sync: cascade-runtime wiring (later)
 
-OPTIONAL TRACK D ── digital-objects cleanup (independent, L0) ────────────────
-  strip ~2,951 LOC dormant CF DO/SQLite storage (ns, ns-client, r2-persistence,
-  worker, memory-provider, ai-database-adapter); keep tech-agnostic SVO ontology;
-  resolve DO()/.do/Durable-Object naming collision
+TRACK D ── digital-objects ⊃ graphdl seam (DONE — aip-cnks.8) ────────────────
+  digital-objects depends on @graphdl/core, dedupes linguistics (−265 LOC), Verb
+  extends graphdl's Verb; new Ontology() factory (pure SVO vocabulary) supersedes
+  DO()/Noun() (kept as deprecated shims) → dissolves the DO()/.do/Durable-Object
+  naming collision. CORRECTION to the earlier premise: the CF/SQLite storage
+  (ns/ns-client/r2-persistence/worker) is NOT dormant — it is published API
+  (./ns + ./worker subpaths, ~200 tests); removing it is a deliberate breaking
+  change, deferred (aip-q6tc), not a cleanup.
 ```
 
 Tracks A, B, D are mutually independent and touch the main session only at named seams.
