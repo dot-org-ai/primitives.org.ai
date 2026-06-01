@@ -79,7 +79,26 @@ export type {
   EscalationReason,
   EscalationResolution,
 } from './types.js'
-export { VALID_TRANSITIONS, canTransition, isTerminal, attach } from './types.js'
+// Surface #2 — invocation runtime (the FSM values + the in-memory handle
+// scaffold live in `./invoke.ts`; the pure TYPES stay in `./types.ts`).
+export {
+  VALID_TRANSITIONS,
+  canTransition,
+  isTerminal,
+  assertTransition,
+  IllegalTransitionError,
+  createInvocationHandle,
+  reconcileHandle,
+  attach,
+} from './invoke.js'
+export type {
+  CreateHandleOpts,
+  CascadeExecutor,
+  ExecCtx,
+  Verifier,
+  VerifyCtx,
+  Settler,
+} from './invoke.js'
 
 // Surface #3 — graph discovery
 export type { Discovery, Lens, LensCtx, Match } from './types.js'

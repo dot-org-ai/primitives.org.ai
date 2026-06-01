@@ -339,11 +339,9 @@ export type InvocationState =
 
 export type Terminal = 'ACCEPTED' | 'CANCELLED' | 'REFUNDED'
 
-export declare const VALID_TRANSITIONS: Readonly<
-  Record<InvocationState, readonly InvocationState[]>
->
-export declare function canTransition(from: InvocationState, to: InvocationState): boolean
-export declare function isTerminal(s: InvocationState): s is Terminal
+// NOTE: the FSM *values* (`VALID_TRANSITIONS`, `canTransition`, `isTerminal`,
+// `assertTransition`) live in `./invoke.ts` (the runtime, aip-cnks.7.4) and are
+// re-exported through `./index.ts`. types.ts keeps only the pure TYPES.
 
 export interface RaterVerdict {
   rater: string
@@ -431,8 +429,8 @@ export interface Settled<TOut> {
   settlement: Settlement
 }
 
-/** Reconnect to a durable run; the handle is a thin view over the server FSM. */
-export declare function attach<TOut>(id: string): Promise<InvocationHandle<TOut>>
+// NOTE: `attach()` (reconnect to a durable run) lives in `./invoke.ts` and is
+// re-exported through `./index.ts`.
 
 // ============================================================================
 // SURFACE #3 — Graph discovery (match Demand→Offer; derive/project lenses)
