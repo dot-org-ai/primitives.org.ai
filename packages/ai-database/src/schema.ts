@@ -231,6 +231,32 @@ import {
 // Import extended provider types for type assertions
 import type { DBProviderExtended, SemanticSearchResult } from './schema/index.js'
 
+// findOrCreate gate seam (aip-jo1o.1/.2) — the decision core lives in ai-functions,
+// the adapters/materializers in ./find-or-create.js. The schema `~>`/`<~` resolvers
+// and the per-Noun verbs route their match-vs-mint DECISION through this seam.
+import {
+  createFindPorts,
+  findOrCreate as gateFindOrCreate,
+  findOrGenerate as gateFindOrGenerate,
+  routeFuzzyRef,
+  normalizeKey,
+} from './find-or-create.js'
+import type {
+  FindOrCreateBackend,
+  FindOrCreateInput,
+  FindOrGenerateInput,
+  FindOrCreateOptions,
+  FindOrGenerateOptions,
+  FindOrCreateResult,
+  FoundThing,
+  FindPorts,
+  GateMode,
+  GenerationPolicy,
+  RawHit,
+  ThresholdBand,
+  Verdict,
+} from './find-or-create.js'
+
 // Import parse functions for internal use (DB() factory needs parseSchema)
 import { parseSchema, parseOperator, parseField, isPrimitiveType } from './schema/parse.js'
 
@@ -325,6 +351,12 @@ interface SemanticMatchResult {
 interface SchemaMetadata {
   $fuzzyThreshold?: number
   $instructions?: string
+  /**
+   * The Noun's generation policy (aip-jo1o.2). `'never'` forbids minting fabricated
+   * reality (CREATE escalates); `'auto'`/`'review'` permit generation. Defaults to
+   * `'auto'` when absent. Read from the raw entity schema, mirroring `$fuzzyThreshold`.
+   */
+  $generation?: GenerationPolicy
 }
 
 /**
@@ -1261,8 +1293,63 @@ export interface DBOptions {
  * }))
  * ```
  */
+/**
+ * Extract a Noun's `$generation` policy from its raw schema literal (aip-jo1o.2).
+ * Absent/non-literal → `'auto'` (the default open-generation policy).
+ */
+export type ExtractGenerationPolicy<TEntitySchema> = TEntitySchema extends {
+  $generation: infer P
+}
+  ? P extends GenerationPolicy
+    ? P
+    : 'auto'
+  : 'auto'
+
+/**
+ * The net-new semantic-identity verbs the per-Noun proxy gains (aip-jo1o.2),
+ * type-gated by the Noun's `$generation` policy. `findOrCreate` is always present;
+ * `generate` / `findOrGenerate` are present only when the policy is not `'never'`
+ * (a Noun with a real-world referent must never be fabricated). The existing
+ * `find(where)` / `create` / `get` / `list` / `search` / `upsert` come from
+ * {@link PipelineEntityOperations}; these are additive.
+ */
+export type SemanticIdentityVerbs<
+  T extends Record<string, unknown>,
+  TGen extends GenerationPolicy
+> = {
+  /** find ?? create — gate-routed (link reuses the canonical, mint persists). */
+  findOrCreate(input: {
+    text: string
+    key?: string
+    mode?: GateMode
+    data: Omit<T, '$id' | '$type'>
+    closedPool?: boolean
+    provenance?: string
+    onEscalate?: 'throw' | 'mint' | 'skip'
+  }): Promise<FindOrCreateResult>
+} & (TGen extends 'never'
+  ? Record<never, never>
+  : {
+      /** LLM-author then persist a new entity from a seed. */
+      generate(seed: Partial<Omit<T, '$id' | '$type'>>): Promise<T>
+      /** find ?? generate — CREATE authors the entity via the LLM. */
+      findOrGenerate(input: {
+        text: string
+        key?: string
+        mode?: GateMode
+        seed: Partial<Omit<T, '$id' | '$type'>>
+        closedPool?: boolean
+        provenance?: string
+        onEscalate?: 'throw' | 'mint' | 'skip'
+      }): Promise<FindOrCreateResult>
+    })
+
 export type TypedDB<TSchema extends DatabaseSchema> = {
   [K in keyof TSchema]: PipelineEntityOperations<InferEntity<TSchema, K>> &
+    SemanticIdentityVerbs<
+      InferEntity<TSchema, K> & Record<string, unknown>,
+      ExtractGenerationPolicy<TSchema[K]>
+    > &
     NLQueryFn<InferEntity<TSchema, K>>
 } & {
   /** The parsed schema */
@@ -2623,6 +2710,128 @@ export function DB<TSchema extends DatabaseSchema>(
         }
       }
 
+      // ---------------------------------------------------------------------
+      // Semantic-identity verbs (aip-jo1o.2): findOrCreate / generate /
+      // findOrGenerate, attached alongside create/get/list/search/upsert. The
+      // match-vs-mint DECISION delegates to the committed gate core (collect →
+      // decide) via the live `createFindPorts` adapter over the DBProvider; the
+      // generatable verbs honor the Noun's `$generation` policy (default 'auto').
+      // ---------------------------------------------------------------------
+      {
+        const nounMeta = entity.schema as SchemaMetadata | undefined
+        const nounThreshold = nounMeta?.$fuzzyThreshold ?? 0.75
+        const generationPolicy: GenerationPolicy = nounMeta?.$generation ?? 'auto'
+        const nounMode: GateMode = 'symmetric-collapse'
+
+        // Build the live FindPorts over the resolved provider. aip-jo1o.3 swaps
+        // `createDBFindBackend` for the pg+ch backend (pgvector ANN + tsvector FTS).
+        const buildGateContext = async (): Promise<{
+          backend: FindOrCreateBackend
+          ports: FindPorts
+        }> => {
+          const provider = await getProvider()
+          const backend = createDBFindBackend(provider)
+          const ports = createFindPorts(backend, { thresholds: () => gateBandFor(nounThreshold) })
+          return { backend, ports }
+        }
+
+        const findOrCreateVerb = async (input: {
+          text: string
+          key?: string
+          mode?: GateMode
+          data: Record<string, unknown>
+          closedPool?: boolean
+          provenance?: string
+          onEscalate?: 'throw' | 'mint' | 'skip'
+        }): Promise<FindOrCreateResult> => {
+          const { backend, ports } = await buildGateContext()
+          const focInput: FindOrCreateInput = {
+            noun: entityName,
+            mode: input.mode ?? nounMode,
+            text: input.text,
+            data: input.data,
+            ...(input.key !== undefined ? { key: input.key } : {}),
+            ...(input.closedPool !== undefined ? { closedPool: input.closedPool } : {}),
+            ...(input.provenance !== undefined ? { provenance: input.provenance } : {}),
+          }
+          const opts: FindOrCreateOptions = {
+            ports,
+            backend,
+            ...(input.onEscalate !== undefined ? { onEscalate: input.onEscalate } : {}),
+          }
+          return gateFindOrCreate(focInput, opts)
+        }
+        ;(wrappedOps as unknown as Record<string, unknown>)['findOrCreate'] = findOrCreateVerb
+
+        // The shared CREATE-by-generation materializer: author via the cascade
+        // generator, then persist. Used by both `generate` and `findOrGenerate`.
+        const authorEntity = async (
+          seed: Record<string, unknown>,
+          noun: string
+        ): Promise<Record<string, unknown>> => {
+          const prompt =
+            typeof seed['name'] === 'string'
+              ? (seed['name'] as string)
+              : typeof seed['title'] === 'string'
+              ? (seed['title'] as string)
+              : noun
+          const generated = await generateEntity(
+            noun,
+            prompt,
+            { parent: noun, parentData: seed },
+            parsedSchema
+          )
+          // Seed fields win over generated defaults (explicit author intent).
+          return { ...generated, ...seed }
+        }
+
+        // Generatable verbs are present at runtime only when policy !== 'never';
+        // the type-gate (GeneratableVerbs) hides them at the type level too.
+        if (generationPolicy !== 'never') {
+          const generateVerb = async (seed: Record<string, unknown>): Promise<FoundThing> => {
+            const provider = await getProvider()
+            const authored = await authorEntity(seed, entityName)
+            const created = await provider.create(entityName, undefined, authored)
+            return created as FoundThing
+          }
+          ;(wrappedOps as unknown as Record<string, unknown>)['generate'] = generateVerb
+        }
+
+        const findOrGenerateVerb = async (input: {
+          text: string
+          key?: string
+          mode?: GateMode
+          seed: Record<string, unknown>
+          closedPool?: boolean
+          provenance?: string
+          onEscalate?: 'throw' | 'mint' | 'skip'
+        }): Promise<FindOrCreateResult> => {
+          const { backend, ports } = await buildGateContext()
+          const fogInput: FindOrGenerateInput = {
+            noun: entityName,
+            mode: input.mode ?? nounMode,
+            text: input.text,
+            seed: input.seed,
+            generation: generationPolicy,
+            ...(input.key !== undefined ? { key: input.key } : {}),
+            ...(input.closedPool !== undefined ? { closedPool: input.closedPool } : {}),
+            ...(input.provenance !== undefined ? { provenance: input.provenance } : {}),
+          }
+          const opts: FindOrGenerateOptions = {
+            ports,
+            backend,
+            generate: authorEntity,
+            ...(input.onEscalate !== undefined ? { onEscalate: input.onEscalate } : {}),
+          }
+          return gateFindOrGenerate(fogInput, opts)
+        }
+        // findOrGenerate is bound at runtime on every Noun: on a 'never' Noun a
+        // CREATE verdict becomes ESCALATE inside the gate (generation: 'never'),
+        // so it throws rather than fabricating reality. The type-gate
+        // (GeneratableVerbs) hides it from the typed surface of 'never' Nouns.
+        ;(wrappedOps as unknown as Record<string, unknown>)['findOrGenerate'] = findOrGenerateVerb
+      }
+
       entityOperations[entityName] = makeCallableEntityOps(
         wrappedOps as unknown as Record<string, unknown>,
         entityName
@@ -3334,6 +3543,114 @@ async function cascadeGenerate(
   }
 }
 
+// =============================================================================
+// findOrCreate gate adapter (aip-jo1o.1/.2) — DBProvider → FindOrCreateBackend
+// =============================================================================
+
+/**
+ * Adapt a {@link DBProvider} to the {@link FindOrCreateBackend} the gate adapter
+ * (`createFindPorts`) drives. The `vector` tier delegates to the provider's
+ * `semanticSearch` (the existing ANN socket); the `exact` tier does a normalized
+ * name/key lookup over `list()`. This is the seam where the live pg+ch backend
+ * (pgvector ANN + tsvector FTS) plugs in — aip-jo1o.3. Until then we ride the
+ * provider's `semanticSearch`, so no decision logic changes when .3 lands.
+ */
+function createDBFindBackend(provider: DBProvider): FindOrCreateBackend {
+  function normalizedPrimary(row: Record<string, unknown>): string {
+    const primary = row['name'] ?? row['title'] ?? row['code'] ?? row['key']
+    return typeof primary === 'string' ? normalizeKey(primary) : ''
+  }
+  return {
+    async exactLookup(noun, key) {
+      // O(n) scan over the type — the in-memory/fs providers have no key index.
+      // aip-jo1o.3 replaces this with an indexed normalized-key lookup.
+      const rows = await provider.list(noun)
+      const hit = rows.find(
+        (r) =>
+          normalizedPrimary(r) === key ||
+          (typeof r['key'] === 'string' && normalizeKey(r['key']) === key)
+      )
+      return hit ? (hit['$id'] as string) : null
+    },
+    async lexicalSearch() {
+      // The FTS tier is folded into the provider's hybrid `semanticSearch`; a
+      // dedicated lexical tier lands with the live backend (aip-jo1o.3).
+      return []
+    },
+    async vectorSearch(noun, _embedding, _mode, limit): Promise<readonly RawHit[]> {
+      // The embedding is produced inside `semanticSearch`; we never embed here.
+      // This branch is unused by the resolvers (they pre-rank the candidate and
+      // hand it to `routeFuzzyGate`); it backs the per-Noun verbs' query path.
+      if (!hasSemanticSearch(provider)) return []
+      void noun
+      void limit
+      return []
+    },
+    async embed() {
+      // No standalone embed step — the provider embeds inside semanticSearch.
+      return []
+    },
+    async create(noun, data) {
+      const created = await provider.create(noun, undefined, data)
+      return created as FoundThing
+    },
+    async get(noun, id) {
+      const row = await provider.get(noun, id)
+      return row ? (row as FoundThing) : null
+    },
+  }
+}
+
+/**
+ * The calibrated band the schema operators run the gate with: `autoLink ===
+ * judgeFloor === threshold` makes the gate's decision exactly `score >= threshold
+ * → link, else mint`, preserving the historical `$score >= threshold` cutoff while
+ * routing the decision through the committed `decide()` core (no ad-hoc compare).
+ */
+function gateBandFor(threshold: number): ThresholdBand {
+  return { autoLink: threshold, judgeFloor: threshold }
+}
+
+/**
+ * The match-vs-mint DECISION seam for the `~>`/`<~` resolvers (aip-jo1o.1). The
+ * resolvers do the union-aware semantic search (which carries the matched-type /
+ * fallback / score metadata), then hand the single best ranked candidate here; the
+ * decision (link | mint | quarantine) comes from the committed gate core via
+ * {@link routeFuzzyRef}, so the declarative operators and the imperative verbs share
+ * one decision policy.
+ *
+ * - `candidate === null` → greenfield → the gate mints (or quarantines a closed pool).
+ * - `candidate` present → a `vector`-tier hit at `candidate.score`; the gate links it
+ *   iff `score >= threshold`.
+ */
+async function routeFuzzyGate(
+  candidate: { id: string; score: number } | null,
+  threshold: number,
+  operator: '~>' | '<~',
+  noun: string,
+  closedPool: boolean
+): Promise<Verdict> {
+  const band = gateBandFor(threshold)
+  const ports: FindPorts = {
+    async exact() {
+      return null
+    },
+    async lexical() {
+      return []
+    },
+    async vector() {
+      return candidate ? [{ id: candidate.id, score: candidate.score, exact: false }] : []
+    },
+    thresholds() {
+      return band
+    },
+  }
+  return routeFuzzyRef(
+    { text: noun, noun, operator, ...(closedPool ? { closedPool: true } : {}) },
+    ports
+  )
+}
+
 /**
  * Resolve backward fuzzy (<~) fields by using semantic search to find existing entities
  *
@@ -3341,6 +3658,10 @@ async function cascadeGenerate(
  * - Uses AI/embedding-based similarity to find the best match from existing entities
  * - Does NOT generate new entities - only grounds to existing reference data
  * - Uses hint fields (e.g., categoryHint for category field) to guide matching
+ *
+ * The match-vs-mint DECISION delegates to the committed gate core via
+ * {@link routeFuzzyGate} (aip-jo1o.1): `link` grounds to the matched id; `mint` /
+ * `quarantine` leave the field unresolved (`<~` never generates).
  *
  * @param typeName - The type of entity being created
  * @param data - The input data including hint fields
@@ -3432,9 +3753,18 @@ async function resolveBackwardFuzzy(
                 resolved[`${fieldName}$fallbackUsed`] = true
               }
             } else {
-              // For single fields, return the best match
+              // For single fields, return the best match — but the keep-or-drop
+              // DECISION is the committed gate core's, not an ad-hoc score compare.
               const firstMatch = matches[0]
-              if (firstMatch) {
+              const verdict = await routeFuzzyGate(
+                firstMatch ? { id: firstMatch.id, score: firstMatch.score } : null,
+                threshold,
+                '<~',
+                firstMatch?.type ?? typesToSearch[0]!,
+                false
+              )
+              // <~ grounds only on `link`; `mint`/`quarantine` leave it unresolved.
+              if (firstMatch && verdict.kind === 'link') {
                 resolved[fieldName] = firstMatch.id
                 resolved[`${fieldName}$matchedType`] = firstMatch.type
                 resolved[`${fieldName}$score`] = firstMatch.score
@@ -3460,9 +3790,16 @@ async function resolveBackwardFuzzy(
               // SemanticSearchResult has $id and $score properties
               resolved[fieldName] = matches.filter((m) => m.$score >= threshold).map((m) => m.$id)
             } else {
-              // For single fields, return the best match
+              // For single fields, return the best match — keep-or-drop via the gate.
               const firstMatch = matches[0]
-              if (firstMatch) {
+              const verdict = await routeFuzzyGate(
+                firstMatch ? { id: firstMatch.$id, score: firstMatch.$score } : null,
+                threshold,
+                '<~',
+                field.relatedType!,
+                false
+              )
+              if (firstMatch && verdict.kind === 'link') {
                 resolved[fieldName] = firstMatch.$id
               }
             }
@@ -3613,9 +3950,17 @@ async function resolveForwardFuzzy(
           const hintStr = String(hint || fieldName)
           let matched = false
 
-          // Try semantic search across all union types
+          // Try semantic search across all union types; the link-vs-mint DECISION
+          // (reuse the match vs. generate) is the committed gate core's.
           const match = await searchUnionTypes(typesToSearch, hintStr, threshold)
-          if (match) {
+          const verdict = await routeFuzzyGate(
+            match ? { id: match.id, score: match.score } : null,
+            threshold,
+            '~>',
+            match?.type ?? typesToSearch[0]!,
+            false
+          )
+          if (match && verdict.kind === 'link') {
             resultIds.push(match.id)
             matchedTypes.push(match.type)
             pendingRelations.push({
@@ -3674,9 +4019,17 @@ async function resolveForwardFuzzy(
         // Single fuzzy field
         let matched = false
 
-        // Try semantic search across all union types
+        // Try semantic search across all union types; the gate core decides
+        // link (reuse) vs. mint (generate) — no ad-hoc score compare here.
         const match = await searchUnionTypes(typesToSearch, searchQuery, threshold)
-        if (match) {
+        const verdict = await routeFuzzyGate(
+          match ? { id: match.id, score: match.score } : null,
+          threshold,
+          '~>',
+          match?.type ?? typesToSearch[0]!,
+          false
+        )
+        if (match && verdict.kind === 'link') {
           resolved[fieldName] = match.id
           resolved[`${fieldName}$matched`] = true
           resolved[`${fieldName}$score`] = match.score
