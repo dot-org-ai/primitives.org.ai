@@ -94,6 +94,7 @@ export {
   attach,
 } from './invoke.js'
 export { resolveAmount } from './invoke.js'
+export { NoDurableStoreError, InvocationNotFoundError } from './invoke.js'
 export type {
   CreateHandleOpts,
   CascadeExecutor,
@@ -103,7 +104,17 @@ export type {
   Settler,
   ChargeArgs,
   RefundArgs,
+  DurableStore,
+  PersistedInvocation,
 } from './invoke.js'
+
+// Surface #2 — the QUALITY_REVIEW-phase VERIFIER adapter (the EvaluatorPanel →
+// VerificationVerdict mapping; aip-cnks.10) and the ACCEPTED/REFUNDED-phase
+// SETTLER adapter (the FinanceProvider → Settlement mapping; aip-cnks.10).
+export { makeEvaluatorPanelVerifier, fromSpec } from './verify.js'
+export type { EvaluatorPanelVerifierOpts } from './verify.js'
+export { makeFinanceSettler, stubFinanceProvider } from './settle.js'
+export type { StubFinanceProvider } from './settle.js'
 
 // Surface #2 — the DELIVERING-phase cascade EXECUTOR (the real step-walker that
 // drives `binding.cascade` via an injected FunctionRunner; aip-cnks.10).

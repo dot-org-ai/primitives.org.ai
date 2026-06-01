@@ -475,29 +475,42 @@ export function createInvocationHandle<TIn, TOut>(
     try {
       go('ONBOARDING', 'order-accepted')
       go('ACTIVE', 'onboarding-complete')
-      go('DELIVERING', 'cascade-start')
-
-      // DELIVERING — cascade EXECUTION via injected port (real executor:
-      // `makeCascadeExecutor`; default: in-memory stub).
-      const output = await executor.execute({ input: opts.input, emit, cost })
-
-      // QUALITY_REVIEW — 3-rater VERIFICATION via injected port. The delivered
-      // `output` is threaded in as the thing being judged against the Metric.
-      go('QUALITY_REVIEW', 'cascade-complete')
-      const panel = await verifier.verify({ output, metric, assurance })
-      emit({ kind: 'evaluator-signoff', panel })
-
-      // DELIVERED — the buyer now drives accept() / dispute().
-      go('DELIVERED', panel.rollup === 'auto-promote' ? 'evaluators-approved' : 'evaluators-queued')
-      emit({ kind: 'delivered', output, assurance: panel.assuranceAchieved })
-
-      // autoAccept convenience (boolean true or a predicate over the verdict).
-      const auto = opts.orderOpts?.autoAccept
-      const shouldAuto = typeof auto === 'function' ? auto(panel) : auto === true
-      if (shouldAuto && state === 'DELIVERED') await drive.accept()
+      await deliverFromActive('cascade-start')
     } catch (err) {
       fail(err)
     }
+  }
+
+  /**
+   * The re-runnable DELIVERY TAIL: drive ACTIVE → DELIVERING (cascade EXECUTION)
+   * → QUALITY_REVIEW (3-rater VERIFICATION) → DELIVERED, then honour
+   * `autoAccept`. Entered from {@link start} on the happy path AND from
+   * `resolve('resume')` after an ESCALATED→ACTIVE re-drive — so the tail is a
+   * single source of truth for "deliver from ACTIVE". Caller MUST be in `ACTIVE`.
+   */
+  async function deliverFromActive(deliverTrigger: string): Promise<void> {
+    go('DELIVERING', deliverTrigger)
+
+    // DELIVERING — cascade EXECUTION via injected port (real executor:
+    // `makeCascadeExecutor`; default: in-memory stub).
+    const output = await executor.execute({ input: opts.input, emit, cost })
+
+    // QUALITY_REVIEW — 3-rater VERIFICATION via injected port. The delivered
+    // `output` is threaded in as the thing being judged against the Metric.
+    go('QUALITY_REVIEW', 'cascade-complete')
+    const panel = await verifier.verify({ output, metric, assurance })
+    emit({ kind: 'evaluator-signoff', panel })
+
+    // DELIVERED — the buyer now drives accept() / dispute(). On a resume re-drive
+    // `result`/`quality` may already have settled from the first pass; the
+    // `!settled` guards in `emit` make the re-emit idempotent.
+    go('DELIVERED', panel.rollup === 'auto-promote' ? 'evaluators-approved' : 'evaluators-queued')
+    emit({ kind: 'delivered', output, assurance: panel.assuranceAchieved })
+
+    // autoAccept convenience (boolean true or a predicate over the verdict).
+    const auto = opts.orderOpts?.autoAccept
+    const shouldAuto = typeof auto === 'function' ? auto(panel) : auto === true
+    if (shouldAuto && state === 'DELIVERED') await drive.accept()
   }
 
   /** Route a thrown cascade error into the ERROR state + a `failed` event. */
@@ -531,15 +544,26 @@ export function createInvocationHandle<TIn, TOut>(
     },
     async resolve(r: EscalationResolution): Promise<Settlement> {
       if (r === 'resume') {
+        // Take the ESCALATED→ACTIVE edge, then RE-DRIVE the delivery tail
+        // (ACTIVE→DELIVERING via the executor → QUALITY_REVIEW via the verifier
+        // → DELIVERED). Now that a real executor exists (aip-cnks.10), the tail
+        // is re-runnable: `deliverFromActive` is the same loop `start()` uses,
+        // so a resumed invocation completes exactly like a fresh one. Auto-accept
+        // is honoured inside the tail; if it didn't auto-settle, we settle here
+        // so the contract (resolve returns a `Settlement`) holds.
         go('ACTIVE', 'escalation-resume')
-        // The FSM edge ESCALATED→ACTIVE is taken, but re-driving the delivery
-        // tail from ACTIVE (cascade → verify → settle) is not wired here — it
-        // needs the resumable durable cascade. Rather than hand back a promise
-        // that never resolves, REJECT explicitly (same `awaits aip-cnks.5`
-        // pattern as attach() / Service.load()). cancel/refund resolve fully.
-        return Promise.reject(
-          new Error('resolve("resume") awaits aip-cnks.5 — resumable delivery tail not yet wired')
-        )
+        try {
+          await deliverFromActive('cascade-resume')
+        } catch (err) {
+          fail(err)
+          throw err instanceof Error ? err : new Error(String(err))
+        }
+        // If autoAccept already settled, hand back the same settlement; else
+        // drive the terminal accept() now (resume implies the buyer is satisfied
+        // the escalation is cleared and the re-delivery should settle).
+        if (settledD.settled) return settledD.promise
+        if (state === 'DELIVERED') return drive.accept()
+        return settledD.promise
       }
       if (r === 'cancel') {
         go('CANCELLED', 'escalation-cancel')
@@ -670,16 +694,163 @@ export async function reconcileHandle<TOut>(
 }
 
 // ============================================================================
-// attach — reconnect to a durable run (awaits aip-cnks.5)
+// attach — reconnect to a durable run (an INJECTED DurableStore seam)
 // ============================================================================
 
 /**
- * Reconnect to a durable invocation by id. awaits aip-cnks.5 — the durable
- * server-side FSM (CF Workflows per ADR-0004) is not wired; this is the thin
- * view seam the durable adapter will back.
+ * The minimal persisted shape a {@link DurableStore} hands back: enough to
+ * re-mint an {@link InvocationHandle} view over a run that already exists in a
+ * durable backend (CF Workflows per ADR-0004, a DB row, …). It is intentionally
+ * thin — the durable FSM itself is server-side; this is the reconnection
+ * envelope, not the full run record. The concrete durable adapter (aip-cnks.5)
+ * implements {@link DurableStore.load} against its backend; here `attach`
+ * depends only on the abstract port, so it is a clean injected seam (not a
+ * hardcoded stub).
  */
-export function attach<TOut>(id: string): Promise<InvocationHandle<TOut>> {
-  return Promise.reject(
-    new Error(`attach(${id}) awaits aip-cnks.5 — durable FSM adapter not yet wired`)
-  )
+export interface PersistedInvocation<TOut = unknown> {
+  /** Stable invocation `$id`. */
+  id: string
+  /** The Offer the run was ordered against. */
+  offer: OfferOf<TOut>
+  /** The assurance→gatingBasis ceiling computed at ORDER. */
+  ceiling: PricingBasis
+  /** The last-persisted FSM state. */
+  state: InvocationState
+  /** The replayable event spine (empty when the backend keeps no history). */
+  history?: readonly InvocationEvent<TOut>[]
+}
+
+/**
+ * The durable-reconnection port `attach` walks through. Tests inject a fake
+ * (an in-memory map); a concrete durable adapter (CF Workflows / DB) backs it
+ * in production. `load` resolves `null` when no run with `id` exists.
+ */
+export interface DurableStore {
+  load<TOut = unknown>(id: string): Promise<PersistedInvocation<TOut> | null>
+}
+
+/** Thrown by {@link attach} when no {@link DurableStore} is wired. */
+export class NoDurableStoreError extends Error {
+  constructor(id: string) {
+    super(
+      `attach(${id}) requires an injected DurableStore — pass attach(id, store). ` +
+        `No durable backend is wired by default (the FSM scaffold is in-memory).`
+    )
+    this.name = 'NoDurableStoreError'
+  }
+}
+
+/** Thrown by {@link attach} when the {@link DurableStore} has no such run. */
+export class InvocationNotFoundError extends Error {
+  constructor(id: string) {
+    super(`attach(${id}) — no persisted invocation with that id in the DurableStore`)
+    this.name = 'InvocationNotFoundError'
+  }
+}
+
+/**
+ * Reconnect to a durable invocation by id through an INJECTED
+ * {@link DurableStore}. This is a clean injected seam: with no `store`, it
+ * rejects with {@link NoDurableStoreError} (the in-memory scaffold has no
+ * durable backend); with a `store`, it loads the {@link PersistedInvocation}
+ * and re-mints a read-only {@link InvocationHandle} view over it. Rejects with
+ * {@link InvocationNotFoundError} when the store has no such run.
+ *
+ * The re-minted handle is a VIEW: it replays the persisted state + history and
+ * exposes the observe surface, but its drive verbs (which would mutate the
+ * durable run) await the durable adapter's write path (aip-cnks.5). For now the
+ * view is enough to reconnect, read state/history, and await a terminal.
+ */
+export async function attach<TOut>(
+  id: string,
+  store?: DurableStore
+): Promise<InvocationHandle<TOut>> {
+  if (!store) throw new NoDurableStoreError(id)
+  const persisted = await store.load<TOut>(id)
+  if (!persisted) throw new InvocationNotFoundError(id)
+  return makeAttachedView<TOut>(persisted)
+}
+
+/**
+ * Re-mint a read-only {@link InvocationHandle} view from a
+ * {@link PersistedInvocation}. The view serves the persisted state + history
+ * and resolves the derived promises from the replayed spine; the drive verbs
+ * reject pending the durable write path.
+ */
+function makeAttachedView<TOut>(p: PersistedInvocation<TOut>): InvocationHandle<TOut> {
+  const log: readonly InvocationEvent<TOut>[] = p.history ?? []
+  const state = p.state
+
+  // Derive the observable promises from the replayed spine.
+  const delivered = log.find((e) => e.kind === 'delivered') as
+    | Extract<InvocationEvent<TOut>, { kind: 'delivered' }>
+    | undefined
+  const signoff = log.find((e) => e.kind === 'evaluator-signoff') as
+    | Extract<InvocationEvent<TOut>, { kind: 'evaluator-signoff' }>
+    | undefined
+  const settledEv = log.find((e) => e.kind === 'settled') as
+    | Extract<InvocationEvent<TOut>, { kind: 'settled' }>
+    | undefined
+
+  const driveRejected = (verb: string): Promise<never> =>
+    Promise.reject(
+      new Error(`attached view of '${p.id}' is read-only — '${verb}' awaits the durable write path`)
+    )
+
+  // Build the derived promises eagerly but attach inert catch handlers so an
+  // absent-event rejection (e.g. a run that never `delivered`) does not surface
+  // as an unhandled rejection before a consumer attaches. Real awaiters still
+  // observe the rejection.
+  const resultP: Promise<TOut> = delivered
+    ? Promise.resolve(delivered.output)
+    : Promise.reject(new Error(`attached view of '${p.id}' has no delivered output`))
+  const qualityP: Promise<VerificationVerdict> = signoff
+    ? Promise.resolve(signoff.panel)
+    : Promise.reject(new Error(`attached view of '${p.id}' has no verification verdict`))
+  resultP.catch(() => {})
+  qualityP.catch(() => {})
+
+  return {
+    id: p.id,
+    offer: p.offer,
+    ceiling: p.ceiling,
+
+    state: () => state,
+    events: {
+      [Symbol.asyncIterator](): AsyncIterator<InvocationEvent<TOut>> {
+        // Replay the persisted spine, then close.
+        let i = 0
+        return {
+          next() {
+            if (i < log.length) return Promise.resolve({ value: log[i++]!, done: false })
+            return Promise.resolve({ value: undefined as never, done: true })
+          },
+        }
+      },
+    },
+    watch: (...states: InvocationState[]) =>
+      Promise.resolve(states.includes(state) ? state : state),
+    costSoFar: () => {
+      const last = [...log].reverse().find((e) => e.kind === 'cost-incurred') as
+        | Extract<InvocationEvent<TOut>, { kind: 'cost-incurred' }>
+        | undefined
+      return last?.cumulative ?? { ...ZERO_MONEY }
+    },
+    previews: () => ({}),
+    history: () => log.slice(),
+
+    result: resultP,
+    quality: qualityP,
+    settled: () =>
+      settledEv
+        ? Promise.resolve(settledEv.settlement)
+        : Promise.reject(new Error(`attached view of '${p.id}' has not settled`)),
+
+    clarify: () => driveRejected('clarify'),
+    accept: () => driveRejected('accept'),
+    dispute: () => driveRejected('dispute'),
+    escalate: () => driveRejected('escalate'),
+    resolve: () => driveRejected('resolve'),
+    cancel: () => driveRejected('cancel'),
+  }
 }

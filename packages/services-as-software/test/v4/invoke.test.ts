@@ -13,7 +13,13 @@
 
 import { describe, it, expect } from 'vitest'
 
-import type { InvocationEvent, InvocationState, OfferOf } from '../../src/v4/index.js'
+import type {
+  DurableStore,
+  InvocationEvent,
+  InvocationState,
+  OfferOf,
+  PersistedInvocation,
+} from '../../src/v4/index.js'
 import {
   VALID_TRANSITIONS,
   canTransition,
@@ -23,6 +29,8 @@ import {
   createInvocationHandle,
   reconcileHandle,
   attach,
+  NoDurableStoreError,
+  InvocationNotFoundError,
 } from '../../src/v4/index.js'
 
 // ============================================================================
@@ -415,14 +423,66 @@ describe('v4 handle scaffold — escalation verbs', () => {
     expect(isTerminal(handle.state())).toBe(true)
   })
 
-  it("resolve('resume') takes the ESCALATED→ACTIVE edge but rejects (awaits aip-cnks.5)", async () => {
-    const handle = await liveInDelivering()
-    await handle.escalate('evaluator-deadlock')
+  it("resolve('resume') RE-DRIVES the delivery tail to a charged settlement", async () => {
+    // Mint a handle whose executor PARKS on the first pass (so we can escalate
+    // mid-delivery) but RESOLVES on the resume re-drive. A one-shot gate flips
+    // after the first call so the second `execute` returns a real output.
+    let firstPass = true
+    const handle = createInvocationHandle<unknown, Out>({
+      offer: stubOffer(),
+      ceiling: 'access',
+      input: {},
+      executor: {
+        execute: () => {
+          if (firstPass) {
+            firstPass = false
+            return new Promise<Out>(() => {}) // park — never resolves on pass 1
+          }
+          return Promise.resolve({ report: 'resumed' })
+        },
+      },
+    })
 
-    // The FSM edge is taken (ESCALATED→ACTIVE) but the resumable delivery tail
-    // is not wired — resolve('resume') REJECTS rather than hanging forever.
-    await expect(handle.resolve('resume')).rejects.toThrow(/aip-cnks\.5/)
-    expect(handle.state()).toBe('ACTIVE')
+    await handle.watch('DELIVERING')
+    await handle.escalate('evaluator-deadlock')
+    expect(handle.state()).toBe('ESCALATED')
+
+    // resolve('resume') takes ESCALATED→ACTIVE, re-drives the delivery tail via
+    // the (now-resolving) executor, and settles with a real charge.
+    const settlement = await handle.resolve('resume')
+    expect(handle.state()).toBe('ACCEPTED')
+    expect(settlement.outcome).toBe('charged')
+
+    // the re-driven output + verdict are observable.
+    await expect(handle.result).resolves.toEqual({ report: 'resumed' })
+    const quality = await handle.quality
+    expect(quality.rollup).toBe('auto-promote')
+    await expect(handle.settled()).resolves.toEqual(settlement)
+  })
+
+  it("resolve('resume') with autoAccept re-drives straight to ACCEPTED", async () => {
+    let firstPass = true
+    const handle = createInvocationHandle<unknown, Out>({
+      offer: stubOffer(),
+      ceiling: 'access',
+      input: {},
+      orderOpts: { autoAccept: true },
+      executor: {
+        execute: () => {
+          if (firstPass) {
+            firstPass = false
+            return new Promise<Out>(() => {})
+          }
+          return Promise.resolve({ report: 'auto-resumed' })
+        },
+      },
+    })
+
+    await handle.watch('DELIVERING')
+    await handle.escalate('evaluator-deadlock')
+    const settlement = await handle.resolve('resume')
+    expect(handle.state()).toBe('ACCEPTED')
+    expect(settlement.outcome).toBe('charged')
   })
 })
 
@@ -447,11 +507,56 @@ describe('v4 reconcileHandle', () => {
 })
 
 // ============================================================================
-// 2c. attach — awaits aip-cnks.5
+// 2c. attach — an injected DurableStore seam
 // ============================================================================
 
 describe('v4 attach', () => {
-  it('rejects pending the durable adapter (aip-cnks.5)', async () => {
-    await expect(attach('inv:durable-1')).rejects.toThrow(/aip-cnks\.5/)
+  it('rejects with NoDurableStoreError when no store is wired', async () => {
+    await expect(attach('inv:durable-1')).rejects.toBeInstanceOf(NoDurableStoreError)
+    await expect(attach('inv:durable-1')).rejects.toThrow(/no durable backend is wired/i)
+  })
+
+  it('rejects with InvocationNotFoundError when the store has no such run', async () => {
+    const store: DurableStore = { load: async () => null }
+    await expect(attach('inv:missing', store)).rejects.toBeInstanceOf(InvocationNotFoundError)
+  })
+
+  it('returns a read-only handle view from a fake store', async () => {
+    const persisted: PersistedInvocation<Out> = {
+      id: 'inv:durable-2',
+      offer: stubOffer(),
+      ceiling: 'access',
+      state: 'ACCEPTED',
+      history: [
+        { kind: 'delivered', output: { report: 'persisted' }, assurance: 'instrumented' },
+        {
+          kind: 'settled',
+          settlement: {
+            outcome: 'charged',
+            chargeId: 'charge:1',
+            captured: { amount: 0n, currency: 'USD' },
+            basis: 'access',
+            contract: 'charge:1',
+          },
+        },
+      ],
+    }
+    const store: DurableStore = {
+      load: async <T>(id: string) =>
+        id === 'inv:durable-2' ? (persisted as unknown as PersistedInvocation<T>) : null,
+    }
+
+    const handle = await attach<Out>('inv:durable-2', store)
+    expect(handle.id).toBe('inv:durable-2')
+    expect(handle.state()).toBe('ACCEPTED')
+    expect(handle.ceiling).toBe('access')
+    // the replayed spine serves the derived promises.
+    await expect(handle.result).resolves.toEqual({ report: 'persisted' })
+    const settlement = await handle.settled()
+    expect(settlement.outcome).toBe('charged')
+    // the view replays history.
+    expect(handle.history()).toHaveLength(2)
+    // drive verbs are read-only on an attached view.
+    await expect(handle.accept()).rejects.toThrow(/read-only/)
   })
 })
