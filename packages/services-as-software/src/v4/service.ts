@@ -39,6 +39,7 @@ import type { Money } from 'business-as-code/finance'
 
 import { createInvocationHandle, reconcileHandle } from './invoke.js'
 import type { CascadeExecutor } from './invoke.js'
+import { makeCascadeExecutor, aiFunctionsRunner } from './execute.js'
 import { makeDiscovery } from './graph.js'
 import type {
   Assurance,
@@ -544,15 +545,33 @@ function build<TIn, TOut>(spec: ServiceSpec): Deliverable<TIn, TOut> {
     offer,
 
     invoke(input: TIn, opts?: OrderOpts) {
-      // #2 — open a runtime invocation against the primary Offer. The `run`
-      // shorthand becomes a CascadeExecutor that runs DURING the FSM's
-      // `DELIVERING` phase (so the handle is returned synchronously at ORDERED,
-      // before the first transition). verify / settle keep the in-memory stubs
-      // (awaits aip-cnks.5). With no `run`, the stub executor returns no output.
+      // #2 — open a runtime invocation against the primary Offer. The executor
+      // runs DURING the FSM's `DELIVERING` phase (so the handle is returned
+      // synchronously at ORDERED, before the first transition). verify / settle
+      // keep the in-memory stubs (awaits aip-cnks.5).
+      //
+      // Executor PRECEDENCE (highest → lowest), so the declarative cascade is
+      // wired through the front door (aip-cnks.10 last-mile):
+      //   1. an injected `opts.executor` (test/app supplies a built executor);
+      //   2. the Deliverable's declarative `binding.cascade` (a `CascadeStep[]`)
+      //      → `makeCascadeExecutor({ cascade, runner })`, dispatched through the
+      //      injected `opts.runner` (a FAKE in tests) or the real
+      //      `aiFunctionsRunner()` default;
+      //   3. the `run` shorthand → a one-shot executor;
+      //   4. nothing → the stub executor returns no output (seedOutput undefined).
+      const cascade = implementation.binding?.cascade
       const run = spec.run
-      const executor: CascadeExecutor<TIn, TOut> | undefined = run
-        ? { execute: (ctx) => run(ctx.input) as Promise<TOut> }
-        : undefined
+      let executor: CascadeExecutor<TIn, TOut> | undefined
+      if (opts?.executor !== undefined) {
+        executor = opts.executor as CascadeExecutor<TIn, TOut>
+      } else if (cascade !== undefined && cascade.length > 0) {
+        executor = makeCascadeExecutor<TIn, TOut>({
+          cascade,
+          runner: opts?.runner ?? aiFunctionsRunner(),
+        })
+      } else if (run) {
+        executor = { execute: (ctx) => run(ctx.input) as Promise<TOut> }
+      }
       const handle = makeLazyHandle<TIn, TOut>({
         offer: offers[0],
         ceiling,

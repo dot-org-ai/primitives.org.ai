@@ -93,6 +93,8 @@ export {
   reconcileHandle,
   attach,
 } from './invoke.js'
+export { resolveAmount } from './invoke.js'
+export { NoDurableStoreError, InvocationNotFoundError } from './invoke.js'
 export type {
   CreateHandleOpts,
   CascadeExecutor,
@@ -100,7 +102,40 @@ export type {
   Verifier,
   VerifyCtx,
   Settler,
+  ChargeArgs,
+  RefundArgs,
+  DurableStore,
+  PersistedInvocation,
 } from './invoke.js'
+
+// Surface #2 — the QUALITY_REVIEW-phase VERIFIER adapter (the EvaluatorPanel →
+// VerificationVerdict mapping; aip-cnks.10) and the ACCEPTED/REFUNDED-phase
+// SETTLER adapter (the FinanceProvider → Settlement mapping; aip-cnks.10).
+export { makeEvaluatorPanelVerifier, fromSpec } from './verify.js'
+export type { EvaluatorPanelVerifierOpts } from './verify.js'
+export { makeFinanceSettler, stubFinanceProvider, ZeroChargeError } from './settle.js'
+export type { StubFinanceProvider } from './settle.js'
+
+// Surface #2 — the DELIVERING-phase cascade EXECUTOR (the real step-walker that
+// drives `binding.cascade` via an injected FunctionRunner; aip-cnks.10).
+export {
+  makeCascadeExecutor,
+  aiFunctionsRunner,
+  resolveRefs,
+  isCascadeRef,
+  CascadeRefError,
+} from './execute.js'
+export type {
+  CascadeStep,
+  CascadeRef,
+  StateBag,
+  FunctionRunner,
+  RunnerCtx,
+  RunnerResult,
+  HumanChannel,
+  AiFunctionsRunnerOpts,
+  MakeCascadeExecutorDeps,
+} from './execute.js'
 
 // Surface #3 — graph discovery (the discovery TYPES stay in `./types.ts`; the
 // projector + lenses + match-or-mint runtime live in `./graph.ts`).

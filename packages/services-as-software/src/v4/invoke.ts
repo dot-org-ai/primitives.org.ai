@@ -159,17 +159,24 @@ export interface ExecCtx<TIn, TOut> {
  * VERIFICATION port — drives the `QUALITY_REVIEW` phase: runs the acceptance
  * Metric through the 3-rater panel and rolls the verdicts up.
  *
+ * The cascade's typed `output` is threaded in (the thing being judged): the
+ * panel rates the delivered `TOut` against the acceptance Metric, not an empty
+ * envelope. The verifier is generic over `TOut` so a real rater can read the
+ * delivered shape.
+ *
  * awaits aip-cnks.5 — the real verifier dispatches the 3 raters (and binds to
  * the acceptance predicates from the OutcomeContract). The default
  * {@link stubVerifier} returns a single deterministic `auto-promote` verdict at
  * the requested `assurance` — a pass-through, not a real panel.
  */
-export interface Verifier {
-  verify(ctx: VerifyCtx): Promise<VerificationVerdict>
+export interface Verifier<TOut = unknown> {
+  verify(ctx: VerifyCtx<TOut>): Promise<VerificationVerdict>
 }
 
 /** The context a {@link Verifier} runs against. */
-export interface VerifyCtx {
+export interface VerifyCtx<TOut = unknown> {
+  /** The cascade result to judge against the acceptance Metric. */
+  output: TOut
   metric: string
   assurance: Assurance
 }
@@ -178,14 +185,41 @@ export interface VerifyCtx {
  * SETTLEMENT port — drives the terminal `ACCEPTED` / `REFUNDED` phases: charges
  * or refunds via the finance firmware.
  *
+ * `charge` now carries the full economic context the finance firmware needs: the
+ * gating `basis` (the rung settlement gates at), the `amount` of {@link Money} to
+ * capture, the `buyer` to bill, and an optional caller `ref`. It returns a
+ * {@link Settlement} that carries the charge id — the handle RETAINS that id so a
+ * later `refund` can reference it. `refund` takes that retained `chargeId` (and
+ * an optional partial `amount`).
+ *
  * awaits aip-cnks.5 — the real settler calls the `business-as-code/finance`
  * Merchant / FinanceProvider ports against the OutcomeContract + RefundContract.
  * The default {@link stubSettler} returns the matching `Settlement` shape with a
  * zero `Money` capture — a no-op, not a real charge.
  */
 export interface Settler {
-  charge(basis: PricingBasis): Promise<Settlement>
-  refund(): Promise<Settlement>
+  charge(args: ChargeArgs): Promise<Settlement>
+  refund(args: RefundArgs): Promise<Settlement>
+}
+
+/** Arguments to {@link Settler.charge} — the full economic context for a capture. */
+export interface ChargeArgs {
+  /** The gating rung settlement gates at (the assurance→basis ceiling). */
+  basis: PricingBasis
+  /** The {@link Money} to capture (resolved from the Offer/contract at ORDER). */
+  amount: Money
+  /** The buyer to bill (from {@link OrderOpts}/{@link CreateHandleOpts}). */
+  buyer: string
+  /** Optional caller-supplied reference (e.g. an idempotency key). */
+  ref?: string
+}
+
+/** Arguments to {@link Settler.refund} — references the retained charge. */
+export interface RefundArgs {
+  /** The charge id retained from the prior {@link Settler.charge}. */
+  chargeId: string
+  /** Optional partial-refund {@link Money}; absent ⇒ full refund. */
+  amount?: Money
 }
 
 const ZERO_MONEY: Money = { amount: 0n, currency: 'USD' }
@@ -201,10 +235,11 @@ function stubExecutor<TIn, TOut>(seed: TOut): CascadeExecutor<TIn, TOut> {
 }
 
 /** Default pass-through verifier — one deterministic `auto-promote` verdict. */
-function stubVerifier(): Verifier {
+function stubVerifier<TOut>(): Verifier<TOut> {
   return {
-    async verify(ctx: VerifyCtx): Promise<VerificationVerdict> {
+    async verify(ctx: VerifyCtx<TOut>): Promise<VerificationVerdict> {
       // awaits aip-cnks.5 — no real 3-rater panel; a single auto-promote stub.
+      // `ctx.output` (the judged cascade result) is accepted but not inspected.
       const pass = {
         rater: 'stub',
         verdict: 'pass' as const,
@@ -223,15 +258,73 @@ function stubVerifier(): Verifier {
 /** Default no-op settler — zero-Money charge / refund of the matching shape. */
 function stubSettler(): Settler {
   return {
-    async charge(basis: PricingBasis): Promise<Settlement> {
+    async charge(args: ChargeArgs): Promise<Settlement> {
       // awaits aip-cnks.5 — no real finance capture; a zero-Money charge stub.
-      return { outcome: 'charged', captured: ZERO_MONEY, basis, contract: 'stub:outcome-contract' }
+      // The charge id is deterministic so a later refund can reference it.
+      return {
+        outcome: 'charged',
+        chargeId: 'stub:charge',
+        captured: args.amount ?? ZERO_MONEY,
+        basis: args.basis,
+        contract: 'stub:outcome-contract',
+      }
     },
-    async refund(): Promise<Settlement> {
+    async refund(args: RefundArgs): Promise<Settlement> {
       // awaits aip-cnks.5 — no real finance refund; a zero-Money refund stub.
-      return { outcome: 'refunded', amount: ZERO_MONEY, per: 'stub:refund-contract' }
+      return {
+        outcome: 'refunded',
+        amount: args.amount ?? ZERO_MONEY,
+        per: 'stub:refund-contract',
+        chargeId: args.chargeId,
+      }
     },
   }
+}
+
+/**
+ * Resolve the {@link Money} amount to charge from the Offer's price, gated by the
+ * settlement `basis`. An explicit `override` (from {@link CreateHandleOpts.amount})
+ * always wins. Otherwise the Offer's `priceSpecification.structure` decides:
+ *
+ *   - `SinglePrice` → its `price` (the one concrete amount).
+ *   - `Tiered`      → the FIRST tier's `price` (the selection rule: the lead
+ *     tier is the default offer; a richer tier-selection path arrives with the
+ *     finance pricing engine in aip-cnks.5). A Tiered Offer carries a concrete
+ *     `price: Money` per tier, so it MUST resolve to that — never zero.
+ *
+ * For genuinely ORDER-TIME-UNRESOLVABLE structures (`UsageMeter` / `SuccessFee` /
+ * `Gainshare` / `CustomQuote`) the amount is known only POST-DELIVERY (metered
+ * usage, a realised invoice, a delta over a baseline, or an RFQ) and so resolves
+ * to {@link ZERO_MONEY} here, awaiting the finance pricing engine (aip-cnks.5).
+ * Returning ZERO is acceptable ONLY because a LIVE settler refuses to act on it:
+ * {@link makeFinanceSettler}'s `charge` throws `ZeroChargeError` on a zero/negative
+ * amount, so a real $0 capture can never silently happen. The in-memory
+ * `stubSettler` (a separate test-only path) is unaffected.
+ */
+export function resolveAmount(
+  offer: OfferOf<unknown>,
+  _basis: PricingBasis,
+  override?: Money
+): Money {
+  if (override) return override
+  const spec = (
+    offer as {
+      priceSpecification?: {
+        structure?: string
+        price?: Money
+        tiers?: ReadonlyArray<{ name: string; price: Money }>
+      }
+    }
+  ).priceSpecification
+  if (spec && spec.structure === 'SinglePrice' && spec.price) return spec.price
+  // Tiered carries a concrete `price: Money` per tier — resolve the first
+  // (lead/default) tier rather than zeroing it.
+  if (spec && spec.structure === 'Tiered' && spec.tiers && spec.tiers.length > 0) {
+    return spec.tiers[0]!.price
+  }
+  // UsageMeter/SuccessFee/Gainshare/CustomQuote are order-time-unresolvable —
+  // see the docblock. A live settler refuses to act on the zero (ZeroChargeError).
+  return { ...ZERO_MONEY }
 }
 
 // ============================================================================
@@ -260,9 +353,18 @@ export interface CreateHandleOpts<TIn, TOut> {
    */
   seedOutput?: TOut
 
+  /**
+   * The {@link Money} to capture at `accept()`. When omitted, it is resolved
+   * from the Offer's `priceSpecification` (a single-price Offer) via
+   * {@link resolveAmount}; falls back to zero {@link Money} for free Offers.
+   */
+  amount?: Money
+  /** The buyer billed at settlement (threaded into {@link Settler.charge}). */
+  buyer?: string
+
   // ── injected ports (default to in-memory stubs; awaits aip-cnks.5) ──
   executor?: CascadeExecutor<TIn, TOut>
-  verifier?: Verifier
+  verifier?: Verifier<TOut>
   settler?: Settler
   /**
    * Auto-drive the happy path on creation: ORDERED→…→DELIVERED. The buyer then
@@ -329,15 +431,23 @@ export function createInvocationHandle<TIn, TOut>(
 ): InvocationHandle<TOut> {
   const id = opts.id ?? mintInvocationId()
   const executor = opts.executor ?? stubExecutor<TIn, TOut>(opts.seedOutput as TOut)
-  const verifier = opts.verifier ?? stubVerifier()
+  const verifier: Verifier<TOut> = opts.verifier ?? stubVerifier<TOut>()
   const settler = opts.settler ?? stubSettler()
   const metric = opts.metric ?? 'stub:metric'
   const assurance: Assurance = opts.assurance ?? 'unverifiable'
   const autoStart = opts.autoStart ?? true
 
+  // The economic context threaded into settlement: the buyer to bill and the
+  // Money to capture (resolved from the Offer's price, gated by the ceiling).
+  const buyer = opts.buyer ?? opts.orderOpts?.buyer ?? 'anonymous'
+  const amount = resolveAmount(opts.offer, opts.ceiling, opts.amount)
+
   // ── mutable runtime state ──
   let state: InvocationState = 'ORDERED'
   let cost: Money = { ...ZERO_MONEY }
+  // The charge id retained from accept()'s settler.charge — threaded into a
+  // later settler.refund so the firmware can reverse the exact capture.
+  let chargeId: string | undefined
   const log: InvocationEvent<TOut>[] = []
   const previewAcc: Partial<TOut> = {}
   const subs = new Set<Subscription<TOut>>()
@@ -390,27 +500,42 @@ export function createInvocationHandle<TIn, TOut>(
     try {
       go('ONBOARDING', 'order-accepted')
       go('ACTIVE', 'onboarding-complete')
-      go('DELIVERING', 'cascade-start')
-
-      // DELIVERING — cascade EXECUTION via injected port (awaits aip-cnks.5).
-      const output = await executor.execute({ input: opts.input, emit, cost })
-
-      // QUALITY_REVIEW — 3-rater VERIFICATION via injected port (awaits aip-cnks.5).
-      go('QUALITY_REVIEW', 'cascade-complete')
-      const panel = await verifier.verify({ metric, assurance })
-      emit({ kind: 'evaluator-signoff', panel })
-
-      // DELIVERED — the buyer now drives accept() / dispute().
-      go('DELIVERED', panel.rollup === 'auto-promote' ? 'evaluators-approved' : 'evaluators-queued')
-      emit({ kind: 'delivered', output, assurance: panel.assuranceAchieved })
-
-      // autoAccept convenience (boolean true or a predicate over the verdict).
-      const auto = opts.orderOpts?.autoAccept
-      const shouldAuto = typeof auto === 'function' ? auto(panel) : auto === true
-      if (shouldAuto && state === 'DELIVERED') await drive.accept()
+      await deliverFromActive('cascade-start')
     } catch (err) {
       fail(err)
     }
+  }
+
+  /**
+   * The re-runnable DELIVERY TAIL: drive ACTIVE → DELIVERING (cascade EXECUTION)
+   * → QUALITY_REVIEW (3-rater VERIFICATION) → DELIVERED, then honour
+   * `autoAccept`. Entered from {@link start} on the happy path AND from
+   * `resolve('resume')` after an ESCALATED→ACTIVE re-drive — so the tail is a
+   * single source of truth for "deliver from ACTIVE". Caller MUST be in `ACTIVE`.
+   */
+  async function deliverFromActive(deliverTrigger: string): Promise<void> {
+    go('DELIVERING', deliverTrigger)
+
+    // DELIVERING — cascade EXECUTION via injected port (real executor:
+    // `makeCascadeExecutor`; default: in-memory stub).
+    const output = await executor.execute({ input: opts.input, emit, cost })
+
+    // QUALITY_REVIEW — 3-rater VERIFICATION via injected port. The delivered
+    // `output` is threaded in as the thing being judged against the Metric.
+    go('QUALITY_REVIEW', 'cascade-complete')
+    const panel = await verifier.verify({ output, metric, assurance })
+    emit({ kind: 'evaluator-signoff', panel })
+
+    // DELIVERED — the buyer now drives accept() / dispute(). On a resume re-drive
+    // `result`/`quality` may already have settled from the first pass; the
+    // `!settled` guards in `emit` make the re-emit idempotent.
+    go('DELIVERED', panel.rollup === 'auto-promote' ? 'evaluators-approved' : 'evaluators-queued')
+    emit({ kind: 'delivered', output, assurance: panel.assuranceAchieved })
+
+    // autoAccept convenience (boolean true or a predicate over the verdict).
+    const auto = opts.orderOpts?.autoAccept
+    const shouldAuto = typeof auto === 'function' ? auto(panel) : auto === true
+    if (shouldAuto && state === 'DELIVERED') await drive.accept()
   }
 
   /** Route a thrown cascade error into the ERROR state + a `failed` event. */
@@ -428,7 +553,9 @@ export function createInvocationHandle<TIn, TOut>(
   const drive = {
     async accept(): Promise<Settlement> {
       go('ACCEPTED', 'buyer-accept')
-      const settlement = await settler.charge(opts.ceiling)
+      const settlement = await settler.charge({ basis: opts.ceiling, amount, buyer })
+      // Retain the charge id so a later refund can reference the exact capture.
+      if (settlement.outcome === 'charged') chargeId = settlement.chargeId
       emit({ kind: 'settled', settlement })
       return settlement
     },
@@ -442,14 +569,32 @@ export function createInvocationHandle<TIn, TOut>(
     },
     async resolve(r: EscalationResolution): Promise<Settlement> {
       if (r === 'resume') {
+        // Take the ESCALATED→ACTIVE edge, then RE-DRIVE the delivery tail
+        // (ACTIVE→DELIVERING via the executor → QUALITY_REVIEW via the verifier
+        // → DELIVERED). Now that a real executor exists (aip-cnks.10), the tail
+        // is re-runnable: `deliverFromActive` is the same loop `start()` uses,
+        // so a resumed invocation completes exactly like a fresh one. Auto-accept
+        // is honoured inside the tail; if it didn't auto-settle, we settle here
+        // so the contract (resolve returns a `Settlement`) holds.
         go('ACTIVE', 'escalation-resume')
-        // The FSM edge ESCALATED→ACTIVE is taken, but re-driving the delivery
-        // tail from ACTIVE (cascade → verify → settle) is not wired here — it
-        // needs the resumable durable cascade. Rather than hand back a promise
-        // that never resolves, REJECT explicitly (same `awaits aip-cnks.5`
-        // pattern as attach() / Service.load()). cancel/refund resolve fully.
-        return Promise.reject(
-          new Error('resolve("resume") awaits aip-cnks.5 — resumable delivery tail not yet wired')
+        try {
+          await deliverFromActive('cascade-resume')
+        } catch (err) {
+          fail(err)
+          throw err instanceof Error ? err : new Error(String(err))
+        }
+        // If autoAccept already settled, hand back the same settlement; else
+        // drive the terminal accept() now (resume implies the buyer is satisfied
+        // the escalation is cleared and the re-delivery should settle).
+        if (settledD.settled) return settledD.promise
+        if (state === 'DELIVERED') return drive.accept()
+        // Neither settled NOR DELIVERED after a resume re-drive — REJECT loudly
+        // rather than returning a never-resolving `settledD.promise` that would
+        // hang the caller forever (e.g. the re-drive auto-failed into ERROR, or
+        // the buyer disputed before this returned).
+        throw new Error(
+          `resume reached an unexpected non-delivered/non-settled state ('${state}') — ` +
+            `the escalation re-drive neither settled nor reached DELIVERED`
         )
       }
       if (r === 'cancel') {
@@ -458,9 +603,12 @@ export function createInvocationHandle<TIn, TOut>(
         emit({ kind: 'settled', settlement })
         return settlement
       }
-      // refund
+      // refund — reference the retained charge id when a charge happened; this
+      // escalation path refunds PRE-charge (no accept() ran yet), so fall back to
+      // a `no-prior-charge` sentinel meaning "reverse the guarantee, nothing was
+      // captured". A real firmware treats the sentinel as a zero-amount reversal.
       go('REFUNDED', 'escalation-refund')
-      const settlement = await settler.refund()
+      const settlement = await settler.refund({ chargeId: chargeId ?? 'no-prior-charge' })
       emit({ kind: 'settled', settlement })
       return settlement
     },
@@ -578,16 +726,163 @@ export async function reconcileHandle<TOut>(
 }
 
 // ============================================================================
-// attach — reconnect to a durable run (awaits aip-cnks.5)
+// attach — reconnect to a durable run (an INJECTED DurableStore seam)
 // ============================================================================
 
 /**
- * Reconnect to a durable invocation by id. awaits aip-cnks.5 — the durable
- * server-side FSM (CF Workflows per ADR-0004) is not wired; this is the thin
- * view seam the durable adapter will back.
+ * The minimal persisted shape a {@link DurableStore} hands back: enough to
+ * re-mint an {@link InvocationHandle} view over a run that already exists in a
+ * durable backend (CF Workflows per ADR-0004, a DB row, …). It is intentionally
+ * thin — the durable FSM itself is server-side; this is the reconnection
+ * envelope, not the full run record. The concrete durable adapter (aip-cnks.5)
+ * implements {@link DurableStore.load} against its backend; here `attach`
+ * depends only on the abstract port, so it is a clean injected seam (not a
+ * hardcoded stub).
  */
-export function attach<TOut>(id: string): Promise<InvocationHandle<TOut>> {
-  return Promise.reject(
-    new Error(`attach(${id}) awaits aip-cnks.5 — durable FSM adapter not yet wired`)
-  )
+export interface PersistedInvocation<TOut = unknown> {
+  /** Stable invocation `$id`. */
+  id: string
+  /** The Offer the run was ordered against. */
+  offer: OfferOf<TOut>
+  /** The assurance→gatingBasis ceiling computed at ORDER. */
+  ceiling: PricingBasis
+  /** The last-persisted FSM state. */
+  state: InvocationState
+  /** The replayable event spine (empty when the backend keeps no history). */
+  history?: readonly InvocationEvent<TOut>[]
+}
+
+/**
+ * The durable-reconnection port `attach` walks through. Tests inject a fake
+ * (an in-memory map); a concrete durable adapter (CF Workflows / DB) backs it
+ * in production. `load` resolves `null` when no run with `id` exists.
+ */
+export interface DurableStore {
+  load<TOut = unknown>(id: string): Promise<PersistedInvocation<TOut> | null>
+}
+
+/** Thrown by {@link attach} when no {@link DurableStore} is wired. */
+export class NoDurableStoreError extends Error {
+  constructor(id: string) {
+    super(
+      `attach(${id}) requires an injected DurableStore — pass attach(id, store). ` +
+        `No durable backend is wired by default (the FSM scaffold is in-memory).`
+    )
+    this.name = 'NoDurableStoreError'
+  }
+}
+
+/** Thrown by {@link attach} when the {@link DurableStore} has no such run. */
+export class InvocationNotFoundError extends Error {
+  constructor(id: string) {
+    super(`attach(${id}) — no persisted invocation with that id in the DurableStore`)
+    this.name = 'InvocationNotFoundError'
+  }
+}
+
+/**
+ * Reconnect to a durable invocation by id through an INJECTED
+ * {@link DurableStore}. This is a clean injected seam: with no `store`, it
+ * rejects with {@link NoDurableStoreError} (the in-memory scaffold has no
+ * durable backend); with a `store`, it loads the {@link PersistedInvocation}
+ * and re-mints a read-only {@link InvocationHandle} view over it. Rejects with
+ * {@link InvocationNotFoundError} when the store has no such run.
+ *
+ * The re-minted handle is a VIEW: it replays the persisted state + history and
+ * exposes the observe surface, but its drive verbs (which would mutate the
+ * durable run) await the durable adapter's write path (aip-cnks.5). For now the
+ * view is enough to reconnect, read state/history, and await a terminal.
+ */
+export async function attach<TOut>(
+  id: string,
+  store?: DurableStore
+): Promise<InvocationHandle<TOut>> {
+  if (!store) throw new NoDurableStoreError(id)
+  const persisted = await store.load<TOut>(id)
+  if (!persisted) throw new InvocationNotFoundError(id)
+  return makeAttachedView<TOut>(persisted)
+}
+
+/**
+ * Re-mint a read-only {@link InvocationHandle} view from a
+ * {@link PersistedInvocation}. The view serves the persisted state + history
+ * and resolves the derived promises from the replayed spine; the drive verbs
+ * reject pending the durable write path.
+ */
+function makeAttachedView<TOut>(p: PersistedInvocation<TOut>): InvocationHandle<TOut> {
+  const log: readonly InvocationEvent<TOut>[] = p.history ?? []
+  const state = p.state
+
+  // Derive the observable promises from the replayed spine.
+  const delivered = log.find((e) => e.kind === 'delivered') as
+    | Extract<InvocationEvent<TOut>, { kind: 'delivered' }>
+    | undefined
+  const signoff = log.find((e) => e.kind === 'evaluator-signoff') as
+    | Extract<InvocationEvent<TOut>, { kind: 'evaluator-signoff' }>
+    | undefined
+  const settledEv = log.find((e) => e.kind === 'settled') as
+    | Extract<InvocationEvent<TOut>, { kind: 'settled' }>
+    | undefined
+
+  const driveRejected = (verb: string): Promise<never> =>
+    Promise.reject(
+      new Error(`attached view of '${p.id}' is read-only — '${verb}' awaits the durable write path`)
+    )
+
+  // Build the derived promises eagerly but attach inert catch handlers so an
+  // absent-event rejection (e.g. a run that never `delivered`) does not surface
+  // as an unhandled rejection before a consumer attaches. Real awaiters still
+  // observe the rejection.
+  const resultP: Promise<TOut> = delivered
+    ? Promise.resolve(delivered.output)
+    : Promise.reject(new Error(`attached view of '${p.id}' has no delivered output`))
+  const qualityP: Promise<VerificationVerdict> = signoff
+    ? Promise.resolve(signoff.panel)
+    : Promise.reject(new Error(`attached view of '${p.id}' has no verification verdict`))
+  resultP.catch(() => {})
+  qualityP.catch(() => {})
+
+  return {
+    id: p.id,
+    offer: p.offer,
+    ceiling: p.ceiling,
+
+    state: () => state,
+    events: {
+      [Symbol.asyncIterator](): AsyncIterator<InvocationEvent<TOut>> {
+        // Replay the persisted spine, then close.
+        let i = 0
+        return {
+          next() {
+            if (i < log.length) return Promise.resolve({ value: log[i++]!, done: false })
+            return Promise.resolve({ value: undefined as never, done: true })
+          },
+        }
+      },
+    },
+    watch: (...states: InvocationState[]) =>
+      Promise.resolve(states.includes(state) ? state : state),
+    costSoFar: () => {
+      const last = [...log].reverse().find((e) => e.kind === 'cost-incurred') as
+        | Extract<InvocationEvent<TOut>, { kind: 'cost-incurred' }>
+        | undefined
+      return last?.cumulative ?? { ...ZERO_MONEY }
+    },
+    previews: () => ({}),
+    history: () => log.slice(),
+
+    result: resultP,
+    quality: qualityP,
+    settled: () =>
+      settledEv
+        ? Promise.resolve(settledEv.settlement)
+        : Promise.reject(new Error(`attached view of '${p.id}' has not settled`)),
+
+    clarify: () => driveRejected('clarify'),
+    accept: () => driveRejected('accept'),
+    dispute: () => driveRejected('dispute'),
+    escalate: () => driveRejected('escalate'),
+    resolve: () => driveRejected('resolve'),
+    cancel: () => driveRejected('cancel'),
+  }
 }
