@@ -15,7 +15,25 @@
  * ```
  */
 
-import type { RpcPromise } from './noun-types.js'
+/**
+ * A pipelineable promise: a `PromiseLike<T>` that also supports `.pipe()` to
+ * chain a transform without forcing resolution (Cap'n-Proto-style pipelining).
+ * (Relocated here from the retired `noun-types.ts` — its natural home.)
+ */
+export interface RpcPromise<T> extends PromiseLike<T> {
+  /**
+   * Chain a transform without forcing resolution. The transform runs when the
+   * promise settles, but the return type remains an RpcPromise so further
+   * pipelining is possible.
+   */
+  pipe<U>(fn: (value: T) => U | PromiseLike<U>): RpcPromise<U>
+
+  /** Standard Promise interop — allows await and .then() chains. */
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+  ): PromiseLike<TResult1 | TResult2>
+}
 
 /**
  * Create an RpcPromise<T> from a plain Promise<T> or PromiseLike<T>.

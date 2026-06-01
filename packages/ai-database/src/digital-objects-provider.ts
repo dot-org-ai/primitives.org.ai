@@ -25,7 +25,7 @@
  * @packageDocumentation
  */
 
-import { createDBProviderAdapter, createMemoryProvider } from 'digital-objects'
+import { createDBProviderAdapter, createMemoryProvider } from 'digital-objects/testing'
 import type { DBProvider } from './schema/provider.js'
 
 /**

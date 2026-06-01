@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createMemoryProvider, type DigitalObjectsProvider } from 'digital-objects'
+import { createMemoryProvider } from 'digital-objects/testing'
+import type { DigitalObjectsProvider } from 'digital-objects'
 import {
   createDigitalObjectsAdapter,
   createSimpleAdapter,

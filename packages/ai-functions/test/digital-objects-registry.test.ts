@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createMemoryProvider } from 'digital-objects'
+import { createMemoryProvider } from 'digital-objects/testing'
 import type { DigitalObjectsProvider } from 'digital-objects'
 import {
   createDigitalObjectsRegistry,

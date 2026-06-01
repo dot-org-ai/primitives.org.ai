@@ -533,7 +533,9 @@ export type { ProviderCapabilities } from './provider-capabilities.js'
 
 // Re-export digital-objects types
 export type {
-  Noun as DigitalNoun,
+  // digital-objects exports the entity TYPE as `NounType` (the bare `Noun` was
+  // the retired factory). Re-export the type under the existing DigitalNoun alias.
+  NounType as DigitalNoun,
   NounDefinition,
   Verb as DigitalVerb,
   VerbDefinition,
@@ -543,7 +545,7 @@ export type {
   DigitalObjectsProvider,
 } from 'digital-objects'
 
-export { createMemoryProvider as createDigitalObjectsMemoryProvider } from 'digital-objects'
+export { createMemoryProvider as createDigitalObjectsMemoryProvider } from 'digital-objects/testing'
 
 // =============================================================================
 // Shared Constants
