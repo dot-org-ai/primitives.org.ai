@@ -41,6 +41,12 @@ import { createNounProxy } from './noun-proxy.js'
  * const provider = new DONounProvider({ endpoint: 'https://db.headless.ly/~acme' })
  * const Contact = Noun('Contact', { name: 'string!' }, { provider })
  * ```
+ *
+ * @deprecated Prefer `Ontology()` for defining a domain's vocabulary
+ * (nouns/verbs/frames) in a storage-agnostic way. `Noun()` remains the
+ * event-sourced instance-proxy factory and is still used across the monorepo;
+ * its vocabulary layer is being consolidated onto `@graphdl/core` via
+ * `Ontology()`. Full caller migration is a follow-up.
  */
 export function Noun<T extends NounDefinitionInput>(
   name: string,

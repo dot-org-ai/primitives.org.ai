@@ -137,6 +137,7 @@ export {
   isVowel,
   splitCamelCase,
   toKebabCase,
+  shouldDoubleConsonant,
   toPastParticiple,
   toActor,
   toPresent,
