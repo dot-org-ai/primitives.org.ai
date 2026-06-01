@@ -19,6 +19,11 @@ export default defineWorkersConfig({
     },
 
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+    // *.integration.test.ts read the model catalog via require('../data/...'),
+    // which is unsupported in the Miniflare/Workers runtime. They run under the
+    // node config (vitest.config.js) instead. The catalog-free driver unit
+    // tests (run.test.ts) run in both pools.
+    exclude: ['**/node_modules/**', '**/*.integration.test.ts'],
     testTimeout: 60000, // AI calls can take time
     hookTimeout: 30000,
 

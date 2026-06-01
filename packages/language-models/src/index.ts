@@ -41,6 +41,24 @@ export {
   type ErrorMapping,
 } from './policy.js'
 
+// Multi-provider selection + quota-fallback policy (pure / L0).
+// The declarative half of the multi-provider abstraction: turns a model spec
+// into an ordered provider-candidate chain, classifies quota errors, steps the
+// chain, and produces a batch-dispatch plan that NAMES (never re-implements)
+// the ai-functions BatchProvider adapter. The execution half (runWithFallback)
+// lives in `ai-providers`.
+export {
+  isQuotaError,
+  selectionFor,
+  nextCandidate,
+  batchProviderFor,
+  batchPlanFor,
+  type ProviderCandidate,
+  type SelectionOptions,
+  type BatchProvider,
+  type BatchPlan,
+} from './selection.js'
+
 // =============================================================================
 // Pricing (consolidated from former @primitives/llm-pricing — see
 // `./pricing/` for the source. Also re-exported under the subpath

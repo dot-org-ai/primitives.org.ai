@@ -26,7 +26,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run",
+    "test:node": "vitest run --config vitest.config.js test/run.integration.test.ts",
+    "test": "vitest run --config vitest.config.js test/run.integration.test.ts && vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "clean": "rm -rf dist",

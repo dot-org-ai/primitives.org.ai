@@ -7,7 +7,18 @@
  * - Action definitions (Verbs) and instances (Actions)
  * - Graph relationships through Actions
  * - Event sourcing and audit trails
+ *
+ * Relationship to `@graphdl/core` (the static schema/vocabulary DSL):
+ * digital-objects is the SVO RUNTIME layer that sits on top of graphdl. Its
+ * `Verb` EXTENDS graphdl's static `Verb` vocabulary type (gaining
+ * `action`/`actor?`/`act?`/`activity?`/`result?`/`reverse?`/`inverse?`) and
+ * adds the runtime-specific facts graphdl has no concept of: a stable `name`,
+ * the past-participle `event` (the event-bus key), the flat
+ * `reverseBy`/`reverseAt`/`reverseIn` accessors, `createdAt`, and the SVO
+ * co-design fields `frame`/`source`/`canonical`.
  */
+
+import type { Verb as GraphdlVerb } from '@graphdl/core'
 
 /**
  * Query limit constants to prevent memory exhaustion
@@ -135,27 +146,49 @@ export interface Frame {
 export type VerbSource = 'verbs.org.ai' | 'apqc' | 'onet' | 'domain'
 
 /**
- * Verb - Action definition with all conjugations
+ * Verb - Action definition with all conjugations (digital-objects RUNTIME verb)
  *
- * Carries:
- * - linguistic conjugations (action/act/activity/event)
- * - reverse forms (reverseBy/reverseAt/reverseIn)
- * - optional Frame declaring complement-role types (SVO co-design)
- * - optional provenance (source) and canonicality flag
+ * EXTENDS graphdl's static `Verb` vocabulary type. From graphdl it inherits the
+ * static-vocabulary forms (`action`, optional `actor`/`act`/`activity`/
+ * `result`/`inverse`/`description`, and the nested
+ * `reverse?: { at, by, in, for }` interop representation). On top of that it
+ * carries the runtime facts graphdl does not model:
  *
- * `frame`, `source`, and `canonical` are optional for backward
- * compatibility. Verbs defined without a frame are treated as permissive
- * (effectively `{ subject: 'any' }`) by tools that consume frames.
+ * - `name` — stable verb identifier in the runtime registry
+ * - `event` — past participle; the canonical event-bus key + audit-trail form
+ * - flat `reverseBy`/`reverseAt`/`reverseIn` — the runtime reverse-form
+ *   accessors (the CANONICAL representation used across the providers, the
+ *   event bus, and r2-persistence; graphdl's nested `reverse` map is available
+ *   via inheritance purely for static-vocabulary interop)
+ * - `createdAt` — when the verb was registered
+ * - `frame` / `source` / `canonical` — SVO co-design (complement-role
+ *   declaration, provenance, canonicality)
+ *
+ * `act`/`activity` are required here (they are optional in graphdl). `frame`,
+ * `source`, and `canonical` are optional for backward compatibility. Verbs
+ * defined without a frame are treated as permissive (effectively
+ * `{ subject: 'any' }`) by tools that consume frames.
+ *
+ * Verb.reverse reconciliation (aip-cnks.8): the runtime keeps the FLAT
+ * `reverseBy`/`reverseAt`/`reverseIn` + `event` shape as its canonical
+ * representation; graphdl's nested `reverse: { at, by, in, for }` + `result`/
+ * `actor` shape is inherited (and thus assignable) for interop, but is not the
+ * driving representation in the runtime. Full migration of the runtime to
+ * graphdl's nested shape is deferred (see report).
  */
-export interface Verb {
+export interface Verb extends Omit<GraphdlVerb, 'inverse' | 'description'> {
   name: string // 'create', 'publish'
-  action: string // 'create' (imperative)
-  act: string // 'creates' (3rd person)
-  activity: string // 'creating' (gerund)
+  action: string // 'create' (imperative) — narrows graphdl's required `action`
+  act: string // 'creates' (3rd person) — required (optional in graphdl)
+  activity: string // 'creating' (gerund) — required (optional in graphdl)
   event: string // 'created' (past participle)
   reverseBy?: string | undefined // 'createdBy'
   reverseAt?: string | undefined // 'createdAt'
   reverseIn?: string | undefined // 'createdIn'
+  // `inverse`/`description` are redeclared with explicit `| undefined`: the
+  // runtime sets them from optional VerbDefinition fields under
+  // exactOptionalPropertyTypes. graphdl declares them as bare `string`, so they
+  // are Omit-ed from the base and re-added here.
   inverse?: string | undefined // 'delete'
   description?: string | undefined
   frame?: Frame | undefined // Complement-role declaration (SVO co-design)
