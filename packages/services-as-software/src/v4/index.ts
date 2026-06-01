@@ -92,6 +92,10 @@ export {
   createInvocationHandle,
   reconcileHandle,
   attach,
+  // order-time gateAt ceiling — backstop #3 (ADR-0011 §3)
+  ceilingForAssurance,
+  exceedsCeiling,
+  GateAboveCeilingError,
 } from './invoke.js'
 export type {
   CreateHandleOpts,
@@ -104,7 +108,7 @@ export type {
 
 // Surface #3 — graph discovery (the discovery TYPES stay in `./types.ts`; the
 // projector + lenses + match-or-mint runtime live in `./graph.ts`).
-export type { Discovery, Lens, LensCtx, Match } from './types.js'
+export type { Discovery, Lens, LensCtx, Match, MatchOpts } from './types.js'
 export { makeDiscovery, discovery, envelope, inMemoryMatcher, ENVELOPE_API } from './graph.js'
 export type { DiscoveryPorts, Matcher, EnvelopeOpts } from './graph.js'
 

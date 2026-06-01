@@ -447,14 +447,46 @@ export interface Match<TOut> {
   score: number
   ratified: boolean
   minted: boolean
+  /**
+   * The gate ESCALATED rather than reusing or minting — the marginal/uncertain
+   * band the `find-or-create` core (ai-functions) refuses to auto-resolve: a
+   * ratify-reject, a sub-threshold hit, a closed-pool miss, or a
+   * `$generation:'review'` Demand. No stub Offer is minted; a human (HITL)
+   * decides. When `true`, `offer` is `null` and `minted`/`ratified` are `false`.
+   */
+  escalated?: boolean
+  /** Why the gate escalated (the `Verdict.reason` / mechanism). Set iff `escalated`. */
+  reason?: string
+}
+
+/**
+ * Options for the {@link Discovery.match} match-or-mint surface.
+ *
+ * `threshold`/`ratify` tune the find ladder; `closedPool`/`generation` carry the
+ * two ESCALATE signals the `find-or-create` gate (ai-functions) honors:
+ *   - `closedPool` — the sought Service is a closed reference/enum Noun: a miss
+ *     must never mint a spurious member; it escalates.
+ *   - `generation: 'review'` — the Demand itself is flagged for human review
+ *     (HITL): the gate refuses to auto-resolve and escalates regardless of score.
+ */
+export interface MatchOpts {
+  threshold?: number
+  ratify?: 'auto' | 'manual'
+  /** The sought Service is a closed pool — a miss escalates rather than minting. */
+  closedPool?: boolean
+  /** `'review'` forces the gate to escalate to a human (HITL) regardless of score. */
+  generation?: 'auto' | 'review'
 }
 
 export interface Discovery {
-  /** match-or-mint: Demand→Offer via pgvector ANN + ratify; mints a stub if none. */
-  match<TOut>(
-    demand: Demand,
-    opts?: { threshold?: number; ratify?: 'auto' | 'manual' }
-  ): Promise<Match<TOut>>
+  /**
+   * match-or-mint: Demand→Offer via the injected ANN + ratifier, with the
+   * DECISION routed through the shared `find-or-create` gate (ai-functions
+   * `decide`). A ratified hit reuses the Offer; an open-pool miss mints a stub;
+   * the uncertain band (ratify-reject / closed-pool miss / `generation:'review'`)
+   * ESCALATES — `offer: null`, `escalated: true`, no stub minted.
+   */
+  match<TOut>(demand: Demand, opts?: MatchOpts): Promise<Match<TOut>>
   /** pure projection over the Offer's node + edges → the locked wire envelope. */
   derive: { [L in Lens]: (offer: Offer, ctx: LensCtx) => ResponseEnvelope }
   /** generic projection. */

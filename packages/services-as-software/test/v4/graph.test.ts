@@ -320,7 +320,10 @@ describe('match — the match-or-mint surface', () => {
     expect(m.offer?.gatingBasis).toBe('access')
   })
 
-  it('a hit that fails ratify also mints (ratified gate is real)', async () => {
+  it('a hit that FAILS ratify ESCALATES (the gate never auto-mints on uncertainty)', async () => {
+    // The `find-or-create` gate (ai-functions) refuses to mint a spurious Offer
+    // when a strong candidate was rejected by the ratifier — that marginal band
+    // is escalated to a human, not silently minted.
     const matcher: Matcher = {
       async nearest() {
         return { offer: fixtureOffer(), score: 0.92 }
@@ -331,8 +334,46 @@ describe('match — the match-or-mint surface', () => {
     }
     const discovery = makeDiscovery({ matcher })
     const m = await discovery.match<Out>(demand)
-    expect(m.minted).toBe(true)
+    expect(m.escalated).toBe(true)
+    expect(m.minted).toBe(false)
     expect(m.ratified).toBe(false)
+    expect(m.offer).toBeNull()
+    expect(m.reason).toBeTruthy()
+  })
+
+  it('a closed-pool MISS ESCALATES (never mints a spurious member)', async () => {
+    // A sub-threshold hit into a CLOSED reference/enum Service must escalate,
+    // not mint — minting would invent an off-rail member of the closed pool.
+    const matcher: Matcher = {
+      async nearest() {
+        return { offer: fixtureOffer(), score: 0.1 }
+      },
+      async ratify() {
+        return true
+      },
+    }
+    const discovery = makeDiscovery({ matcher })
+    const m = await discovery.match<Out>(demand, { closedPool: true })
+    expect(m.escalated).toBe(true)
+    expect(m.minted).toBe(false)
+    expect(m.offer).toBeNull()
+  })
+
+  it("generation:'review' forces HITL escalate even on a clean ratified hit", async () => {
+    const matcher: Matcher = {
+      async nearest() {
+        return { offer: fixtureOffer(), score: 0.92 }
+      },
+      async ratify() {
+        return true
+      },
+    }
+    const discovery = makeDiscovery({ matcher })
+    const m = await discovery.match<Out>(demand, { generation: 'review' })
+    expect(m.escalated).toBe(true)
+    expect(m.minted).toBe(false)
+    expect(m.ratified).toBe(false)
+    expect(m.offer).toBeNull()
   })
 
   it('the default in-memory matcher scores a seeded pool (hit over overlap)', async () => {

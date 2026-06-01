@@ -217,6 +217,43 @@ describe('Service() — wired affordances', () => {
 })
 
 // ============================================================================
+// Order-time gateAt ceiling — backstop #3 (ADR-0011 §3) through Service().invoke()
+// ============================================================================
+
+describe('Service().invoke() — order-time gateAt ceiling (backstop #3)', () => {
+  // An `unverifiable` Deliverable (no metric) tops out at `access`.
+  const unverified = Service({
+    name: 'Vibes report',
+    output: { note: 'string' },
+    run: async () => ({ note: 'ok' }),
+  })
+
+  // A `deterministic` Deliverable unlocks the full ladder up to `outcome`.
+  const verified = Service({
+    name: 'GAAP recon order',
+    metric: { name: 'unmatched', verify: 'deterministic' },
+    price: { per: 'outcome', successFee: '$5,000' },
+    run: async () => ({ ok: true }),
+  })
+
+  it('REJECTS the order when gateAt exceeds the assurance ceiling', async () => {
+    await expect(unverified.invoke({}, { gateAt: 'outcome' })).rejects.toThrow(/gateAt/)
+  })
+
+  it('ACCEPTS the order when gateAt is at/below the ceiling', async () => {
+    const atCeiling = await verified.invoke({}, { gateAt: 'outcome' })
+    expect(atCeiling.state()).toBe('ORDERED')
+    const below = await verified.invoke({}, { gateAt: 'usage' })
+    expect(below.state()).toBe('ORDERED')
+  })
+
+  it('ACCEPTS the order when gateAt is omitted', async () => {
+    const handle = await unverified.invoke({})
+    expect(handle.state()).toBe('ORDERED')
+  })
+})
+
+// ============================================================================
 // Batch authoring — Service([...]) → Deliverable[].
 // ============================================================================
 

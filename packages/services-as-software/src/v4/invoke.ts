@@ -129,6 +129,65 @@ export function assertTransition(from: InvocationState, to: InvocationState): vo
 }
 
 // ============================================================================
+// Order-time gateAt ceiling — backstop #3 (ADR-0011 §3)
+// ============================================================================
+
+/**
+ * The value-capture ladder in ascending order. A `gateAt` rung "exceeds" a
+ * ceiling iff its index here is greater than the ceiling's. (`access` < `effort`
+ * < `usage` < `output` < `outcome`.)
+ */
+const PRICING_LADDER: readonly PricingBasis[] = ['access', 'effort', 'usage', 'output', 'outcome']
+
+/**
+ * The runtime mirror of the compile-time {@link import('./types.js').GatingCeiling}
+ * table: the HIGHEST {@link PricingBasis} rung each {@link Assurance} grade may
+ * legally gate at. This is the law where the VALUE and CONTROL spines meet —
+ * *"you may not sell on an outcome you never declared."* `outcome` is unlocked
+ * only by a *verifiable* metric (`counterfactual` / `deterministic`).
+ */
+const ASSURANCE_CEILING: Readonly<Record<Assurance, PricingBasis>> = {
+  unverifiable: 'access',
+  sampled: 'usage',
+  proxy: 'usage',
+  attested: 'output',
+  instrumented: 'output',
+  counterfactual: 'outcome',
+  deterministic: 'outcome',
+}
+
+/** The highest legal {@link PricingBasis} an {@link Assurance} grade may gate at. */
+export function ceilingForAssurance(assurance: Assurance): PricingBasis {
+  return ASSURANCE_CEILING[assurance]
+}
+
+/** True iff `gateAt` sits strictly above `ceiling` on the value-capture ladder. */
+export function exceedsCeiling(gateAt: PricingBasis, ceiling: PricingBasis): boolean {
+  return PRICING_LADDER.indexOf(gateAt) > PRICING_LADDER.indexOf(ceiling)
+}
+
+/**
+ * Thrown at ORDER — *before the FSM opens* — when {@link OrderOpts.gateAt}
+ * requests a rung above the assurance→gatingBasis ceiling (backstop #3). The
+ * order is rejected, never silently downgraded.
+ */
+export class GateAboveCeilingError extends Error {
+  readonly gateAt: PricingBasis
+  readonly ceiling: PricingBasis
+  readonly assurance: Assurance
+  constructor(gateAt: PricingBasis, ceiling: PricingBasis, assurance: Assurance) {
+    super(
+      `order rejected: gateAt '${gateAt}' exceeds the '${ceiling}' ceiling for assurance ` +
+        `'${assurance}' — you may not gate on a rung the Metric's verifiability cannot reach`
+    )
+    this.name = 'GateAboveCeilingError'
+    this.gateAt = gateAt
+    this.ceiling = ceiling
+    this.assurance = assurance
+  }
+}
+
+// ============================================================================
 // Injected ports — the cascade / verify / settle seams (awaits aip-cnks.5)
 // ============================================================================
 
@@ -335,6 +394,20 @@ export function createInvocationHandle<TIn, TOut>(
   const metric = opts.metric ?? 'stub:metric'
   const assurance: Assurance = opts.assurance ?? 'unverifiable'
   const autoStart = opts.autoStart ?? true
+
+  // ── backstop #3 (ADR-0011 §3): order-time gateAt ceiling ──
+  // The buyer may request a settlement rung via `OrderOpts.gateAt`. It is
+  // rejected HERE — before the FSM opens (before `start()` is queued) — if it
+  // exceeds the assurance→gatingBasis ceiling for this Deliverable's Metric
+  // verifiability. This is the runtime sibling of the author-time + edge-time
+  // ceiling guards; the order is rejected, never silently downgraded.
+  const gateAt = opts.orderOpts?.gateAt
+  if (gateAt !== undefined) {
+    const ceilingForGate = ceilingForAssurance(assurance)
+    if (exceedsCeiling(gateAt, ceilingForGate)) {
+      throw new GateAboveCeilingError(gateAt, ceilingForGate, assurance)
+    }
+  }
 
   // ── mutable runtime state ──
   let state: InvocationState = 'ORDERED'

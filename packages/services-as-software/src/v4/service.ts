@@ -38,7 +38,13 @@ import type {
 } from 'business-as-code'
 import type { Money } from 'business-as-code/finance'
 
-import { createInvocationHandle, reconcileHandle } from './invoke.js'
+import {
+  createInvocationHandle,
+  reconcileHandle,
+  ceilingForAssurance,
+  exceedsCeiling,
+  GateAboveCeilingError,
+} from './invoke.js'
 import type { CascadeExecutor } from './invoke.js'
 import { makeDiscovery } from './graph.js'
 import type {
@@ -434,6 +440,18 @@ function toCommercialTuple(
 function makeLazyHandle<TIn, TOut>(
   opts: Omit<Parameters<typeof createInvocationHandle<TIn, TOut>>[0], 'autoStart'>
 ): InvocationHandle<TOut> {
+  // backstop #3 (ADR-0011 §3): reject an over-reaching `gateAt` at ORDER —
+  // EAGERLY, not on first observe — so the order never even reaches ORDERED.
+  // (The real handle re-checks via `createInvocationHandle`; this lifts the
+  // rejection to the `Service().invoke()` boundary, past the lazy seam.)
+  const gateAt = opts.orderOpts?.gateAt
+  if (gateAt !== undefined) {
+    const assurance = opts.assurance ?? 'unverifiable'
+    const ceilingForGate = ceilingForAssurance(assurance)
+    if (exceedsCeiling(gateAt, ceilingForGate)) {
+      throw new GateAboveCeilingError(gateAt, ceilingForGate, assurance)
+    }
+  }
   const id = opts.id ?? `inv:${slugify(opts.offer.$id)}-${Math.random().toString(36).slice(2, 8)}`
   let real: InvocationHandle<TOut> | undefined
   function ensure(): InvocationHandle<TOut> {
@@ -519,16 +537,22 @@ function build<TIn, TOut>(spec: ServiceSpec): Deliverable<TIn, TOut> {
       const executor: CascadeExecutor<TIn, TOut> | undefined = run
         ? { execute: (ctx) => run(ctx.input) as Promise<TOut> }
         : undefined
-      const handle = makeLazyHandle<TIn, TOut>({
-        offer: offers[0],
-        ceiling,
-        input,
-        metric: metricRef,
-        assurance,
-        ...(executor !== undefined ? { executor } : { seedOutput: undefined as TOut }),
-        ...(opts !== undefined ? { orderOpts: opts } : {}),
-      })
-      return Promise.resolve(handle)
+      try {
+        const handle = makeLazyHandle<TIn, TOut>({
+          offer: offers[0],
+          ceiling,
+          input,
+          metric: metricRef,
+          assurance,
+          ...(executor !== undefined ? { executor } : { seedOutput: undefined as TOut }),
+          ...(opts !== undefined ? { orderOpts: opts } : {}),
+        })
+        return Promise.resolve(handle)
+      } catch (err) {
+        // backstop #3: an over-reaching `gateAt` rejects the order as a rejected
+        // promise (the async front-door contract), not a synchronous throw.
+        return Promise.reject(err)
+      }
     },
 
     async reconcile(desired): Promise<Settled<TOut>> {

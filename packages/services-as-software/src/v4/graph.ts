@@ -20,20 +20,28 @@
  *   3. {@link makeDiscovery} — a `Discovery` factory. `match` is the match-or-mint
  *      surface; the real pgvector ANN + ratify lives in `ai-database` and is
  *      INJECTED as a {@link Matcher} port (embed + nearest + ratify), defaulting
- *      to an in-memory stub. `resolve` is the Outcome→Problem (+ bound Metric)
- *      traversal.
+ *      to an in-memory stub. The match DECISION (link | mint | quarantine) is the
+ *      shared `find-or-create` gate core — `decide()` from `ai-functions/find-or-create`
+ *      — so `match` never auto-mints on uncertainty: a ratify-reject, a closed-pool
+ *      miss, or a `generation:'review'` Demand ESCALATES (no stub minted). `resolve`
+ *      is the Outcome→Problem (+ bound Metric) traversal.
  *
  * **What is real here vs. what awaits ai-database.** The projector + lenses are
  * pure data — fully implemented. `match`'s pgvector ANN is the one INJECTED seam:
  * the default {@link inMemoryMatcher} does a deterministic substring/overlap
- * score over a seeded Offer pool so the match-or-mint contract (hit → ratified
- * Offer; miss → minted stub Offer) is exercisable end-to-end in tests. Replace it
- * with the real `ai-database` ANN port when that lands.
+ * score over a seeded Offer pool so the match-or-mint contract (ratified hit →
+ * reused Offer; open-pool miss → minted stub; uncertainty → escalate) is
+ * exercisable end-to-end in tests. The DECISION runs through the shared
+ * `find-or-create` gate (`decide()`); only the embeddings/ANN/ratifier are
+ * injected. Replace {@link inMemoryMatcher} with the real `ai-database` ANN port
+ * when that lands.
  *
  * @packageDocumentation
  */
 
 import type { Offer } from 'business-as-code'
+import { decide } from 'ai-functions/find-or-create'
+import type { Evidence, GateCandidate, ThresholdBand } from 'ai-functions/find-or-create'
 
 import { VALID_TRANSITIONS } from './invoke.js'
 import type {
@@ -44,6 +52,7 @@ import type {
   Lens,
   LensCtx,
   Match,
+  MatchOpts,
   MetricRef,
   OfferOf,
   Outcome,
@@ -429,34 +438,105 @@ export function makeDiscovery(ports: DiscoveryPorts = {}): Discovery {
     holdco: lensProjector('holdco'),
   }
 
-  async function match<TOut>(
-    demand: Demand,
-    opts: { threshold?: number; ratify?: 'auto' | 'manual' } = {}
-  ): Promise<Match<TOut>> {
+  async function match<TOut>(demand: Demand, opts: MatchOpts = {}): Promise<Match<TOut>> {
     const threshold = opts.threshold ?? DEFAULT_THRESHOLD
     const mode = opts.ratify ?? 'auto'
 
-    // injected — ai-database: embed(demand) → pgvector nearest → top candidate.
-    const hit = await matcher.nearest(demand)
-    if (hit && hit.score >= threshold) {
-      const ratified = await matcher.ratify(demand, hit.offer, mode)
-      if (ratified) {
-        return {
-          offer: hit.offer as OfferOf<TOut>,
-          score: hit.score,
-          ratified: true,
-          minted: false,
-        }
+    // A Demand explicitly flagged for review is a HITL escalation regardless of
+    // any candidate's score — the gate never auto-resolves a review-flagged
+    // Demand. This is the `$generation:'review'` signal (ADR-0011 §5 cascade).
+    if (opts.generation === 'review') {
+      return {
+        offer: null,
+        score: 0,
+        ratified: false,
+        minted: false,
+        escalated: true,
+        reason: 'generation-review',
       }
     }
 
-    // or-mint: nothing cleared the threshold (or failed ratify) → mint a stub.
-    const minted = mintOffer(demand)
+    // injected — ai-database: embed(demand) → pgvector nearest → top candidate.
+    const hit = await matcher.nearest(demand)
+
+    // Materialize the ranked candidate(s) for the gate. A pgvector ANN hit is a
+    // FUZZY match (never an exact/normalized-key hit), so `exact: false`.
+    const candidates: GateCandidate[] = hit
+      ? [{ id: hit.offer.$id, score: hit.score, exact: false }]
+      : []
+
+    // The calibrated band. The single `threshold` becomes the `judgeFloor`: every
+    // hit at/above it lands in the ratify band (so the injected `ratify` port
+    // still gates each reuse), and `autoLink` is set unreachable (>1) so the gate
+    // never auto-links without ratifying. This preserves the prior contract
+    // (a hit clears ONLY if the ratifier accepts) while the DECISION moves to
+    // `decide`. The real per-Noun calibrated bands replace this — injected.
+    const band: ThresholdBand = { autoLink: Number.POSITIVE_INFINITY, judgeFloor: threshold }
+
+    // Run the injected ratifier ONLY when a candidate lands in the judge band —
+    // i.e. it cleared the floor (mirrors `collect`'s expensive-tier-last rule).
+    let ratification: Evidence['ratification'] = null
+    if (hit && hit.score >= threshold) {
+      const accept = await matcher.ratify(demand, hit.offer, mode)
+      ratification = { accept, confidence: hit.score }
+    }
+
+    const evidence: Evidence = {
+      mode: 'asymmetric-match',
+      candidates,
+      band,
+      ratification,
+      closedPool: opts.closedPool ?? false,
+    }
+
+    const verdict = decide(evidence)
+
+    if (verdict.kind === 'link') {
+      // reuse the existing Offer (the gate LINKED to a canonical candidate).
+      return {
+        offer: hit!.offer as OfferOf<TOut>,
+        score: hit?.score ?? verdict.confidence,
+        ratified: true,
+        minted: false,
+      }
+    }
+
+    // A `mint` on `ratify-reject` is NOT a greenfield mint: a STRONG candidate
+    // that the ratifier rejected is the marginal/uncertain band — minting a stub
+    // there would be the "auto-mint on uncertainty" this wiring exists to
+    // prevent. Escalate it to a human (HITL) instead. Genuine greenfield /
+    // below-floor / empty-pool mints (nothing strong to reuse) still mint a stub.
+    if (verdict.kind === 'mint' && verdict.mechanism === 'ratify-reject') {
+      return {
+        offer: null,
+        score: hit?.score ?? 0,
+        ratified: false,
+        minted: false,
+        escalated: true,
+        reason: verdict.mechanism,
+      }
+    }
+
+    if (verdict.kind === 'mint') {
+      // or-mint: nothing strong to reuse, pool is open → mint a stub Offer.
+      return {
+        offer: mintOffer(demand) as OfferOf<TOut>,
+        score: hit?.score ?? 0,
+        ratified: false,
+        minted: true,
+      }
+    }
+
+    // quarantine → ESCALATE: the gate refused (an uncalibrated band, an
+    // adjudicator-unavailable judge band, or a closed-pool miss). NO stub is
+    // minted — a human (HITL) decides.
     return {
-      offer: minted as OfferOf<TOut>,
+      offer: null,
       score: hit?.score ?? 0,
       ratified: false,
-      minted: true,
+      minted: false,
+      escalated: true,
+      reason: verdict.reason,
     }
   }
 

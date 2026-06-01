@@ -353,6 +353,81 @@ describe('v4 handle scaffold — createInvocationHandle', () => {
 })
 
 // ============================================================================
+// 2a-bis. Order-time gateAt backstop (ADR-0011 §3 #3)
+// ============================================================================
+
+describe('v4 createInvocationHandle — order-time gateAt ceiling (backstop #3)', () => {
+  it('REJECTS before the FSM opens when gateAt exceeds the assurance ceiling', () => {
+    // `unverifiable` may legally reach only `access`. A request to gate at
+    // `outcome` is rejected at ORDER — before the FSM opens — never silently
+    // downgraded. ("You may not sell on an outcome you never declared.")
+    expect(() =>
+      createInvocationHandle<unknown, Out>({
+        offer: stubOffer(),
+        ceiling: 'access',
+        input: {},
+        assurance: 'unverifiable',
+        seedOutput: { report: 'x' },
+        orderOpts: { gateAt: 'outcome' },
+      })
+    ).toThrow(/gateAt/)
+  })
+
+  it('ACCEPTS when gateAt is at the assurance ceiling', () => {
+    // `deterministic` unlocks the full ladder up to `outcome`.
+    const handle = createInvocationHandle<unknown, Out>({
+      offer: stubOffer(),
+      ceiling: 'outcome',
+      input: {},
+      assurance: 'deterministic',
+      seedOutput: { report: 'x' },
+      orderOpts: { gateAt: 'outcome' },
+      autoStart: false,
+    })
+    expect(handle.state()).toBe('ORDERED')
+  })
+
+  it('ACCEPTS when gateAt is below the assurance ceiling', () => {
+    // `instrumented` reaches `output`; gating at `usage` is well within it.
+    const handle = createInvocationHandle<unknown, Out>({
+      offer: stubOffer(),
+      ceiling: 'output',
+      input: {},
+      assurance: 'instrumented',
+      seedOutput: { report: 'x' },
+      orderOpts: { gateAt: 'usage' },
+      autoStart: false,
+    })
+    expect(handle.state()).toBe('ORDERED')
+  })
+
+  it('ACCEPTS (no rejection) when gateAt is omitted', () => {
+    const handle = createInvocationHandle<unknown, Out>({
+      offer: stubOffer(),
+      ceiling: 'access',
+      input: {},
+      assurance: 'unverifiable',
+      seedOutput: { report: 'x' },
+      autoStart: false,
+    })
+    expect(handle.state()).toBe('ORDERED')
+  })
+
+  it('REJECTS gateAt:output on a proxy metric (proxy tops out at usage)', () => {
+    expect(() =>
+      createInvocationHandle<unknown, Out>({
+        offer: stubOffer(),
+        ceiling: 'usage',
+        input: {},
+        assurance: 'proxy',
+        seedOutput: { report: 'x' },
+        orderOpts: { gateAt: 'output' },
+      })
+    ).toThrow(/gateAt/)
+  })
+})
+
+// ============================================================================
 // 2b. reconcileHandle — fire-and-forget convenience
 // ============================================================================
 
