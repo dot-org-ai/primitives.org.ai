@@ -17,6 +17,10 @@
     "./durable-execution": {
       "import": "./dist/durable-execution.js",
       "types": "./dist/durable-execution.d.ts"
+    },
+    "./cascade": {
+      "import": "./dist/cascade/index.js",
+      "types": "./dist/cascade/index.d.ts"
     }
   },
   "scripts": {
