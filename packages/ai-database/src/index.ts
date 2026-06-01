@@ -743,3 +743,52 @@ export type {
   // Composed port
   DBProviderPort,
 } from './db-provider-port.js'
+
+// =============================================================================
+// findOrCreate — the semantic-identity verb surface + live adapter (aip-cnks.4)
+// =============================================================================
+export {
+  // Live adapter + verbs
+  createFindPorts,
+  findOrCreate,
+  findOrCreateMany,
+  findOrGenerate,
+  routeFuzzyRef,
+  normalizeKey,
+  EscalationRequired,
+  // In-memory test backend (also exported for consumers building fakes)
+  InMemoryFindBackend,
+  // Re-exported committed gate core
+  collect,
+  decide,
+} from './find-or-create.js'
+
+export type {
+  // $generation policy + type-gated verb shapes
+  GenerationPolicy,
+  GeneratableVerbs,
+  BaseSemanticVerbs,
+  GeneratableOnly,
+  FoundThing,
+  // Backend port
+  FindOrCreateBackend,
+  RawHit,
+  // Adapter config
+  FindPortsOptions,
+  RatifyJudge,
+  // Materializer I/O
+  FindOrCreateInput,
+  FindOrCreateOptions,
+  FindOrCreateResult,
+  FindOrGenerateInput,
+  FindOrGenerateOptions,
+  OnEscalate,
+  // Re-exported committed gate-core types
+  Evidence,
+  FindPorts,
+  GateCandidate,
+  GateMode,
+  ResolveInput,
+  ThresholdBand,
+  Verdict,
+} from './find-or-create.js'
