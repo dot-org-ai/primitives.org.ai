@@ -253,7 +253,13 @@ export interface ServiceSpec {
   accept?: string
 
   // IMPLEMENTATION (flat) — exactly one authoring style
-  /** single Agentic/Code Function shorthand. */
+  /**
+   * single Agentic/Code Function shorthand. The param is `any` (not `unknown`)
+   * on purpose: authors hand a NARROWLY-typed run — `(input: { url: string }) =>
+   * …` — and a contravariant `unknown` param would reject that. Author
+   * ergonomics win here over the `no-explicit-any` lint.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- author-facing contravariance
   run?: (input: any) => Promise<any>
   /** pull defaults from the seed catalog. */
   archetype?: string
@@ -473,7 +479,7 @@ export interface Discovery {
  * FSM transitions available from this node. The typed payload rides under its
  * own discriminant key (the `[typedKey: string]` index signature).
  */
-export interface ResponseEnvelope<T = unknown> {
+export interface ResponseEnvelope<_T = unknown> {
   api: { name: string; docs: string; version: string; home: string }
   $context?: string
   $type?: string

@@ -33,7 +33,6 @@ import type { Money } from 'business-as-code/finance'
 
 import type {
   Assurance,
-  ClarificationRequest,
   EscalationReason,
   EscalationResolution,
   InvocationEvent,
@@ -444,8 +443,14 @@ export function createInvocationHandle<TIn, TOut>(
     async resolve(r: EscalationResolution): Promise<Settlement> {
       if (r === 'resume') {
         go('ACTIVE', 'escalation-resume')
-        // Re-drive the delivery tail; awaits aip-cnks.5 for a real resume.
-        return settledD.promise
+        // The FSM edge ESCALATED→ACTIVE is taken, but re-driving the delivery
+        // tail from ACTIVE (cascade → verify → settle) is not wired here — it
+        // needs the resumable durable cascade. Rather than hand back a promise
+        // that never resolves, REJECT explicitly (same `awaits aip-cnks.5`
+        // pattern as attach() / Service.load()). cancel/refund resolve fully.
+        return Promise.reject(
+          new Error('resolve("resume") awaits aip-cnks.5 — resumable delivery tail not yet wired')
+        )
       }
       if (r === 'cancel') {
         go('CANCELLED', 'escalation-cancel')
