@@ -49,6 +49,13 @@ export type Verdict =
   | { readonly kind: 'mint'; readonly mechanism: string; readonly confidence: number }
   | { readonly kind: 'quarantine'; readonly mechanism: string; readonly confidence: number; readonly reason: string }
 
+/** Best fused candidate; ties broken deterministically by id (idempotency). */
+function topCandidate(candidates: readonly GateCandidate[]): GateCandidate {
+  return candidates.reduce((best, c) =>
+    c.score > best.score || (c.score === best.score && c.id < best.id) ? c : best
+  )
+}
+
 export function decide(evidence: Evidence): Verdict {
   const { candidates, band, ratification, closedPool } = evidence
 
@@ -74,10 +81,7 @@ export function decide(evidence: Evidence): Verdict {
     return { kind: 'quarantine', mechanism: 'no-calibrated-band', confidence: 0, reason: 'uncalibrated band' }
   }
 
-  // Best fused candidate; ties broken deterministically by id for idempotency.
-  const top = candidates.reduce((best, c) =>
-    c.score > best.score || (c.score === best.score && c.id < best.id) ? c : best
-  )
+  const top = topCandidate(candidates)
 
   if (top.score >= band.autoLink) {
     return { kind: 'link', canonical: top.id, mechanism: 'auto-link', confidence: top.score }
@@ -96,4 +100,66 @@ export function decide(evidence: Evidence): Verdict {
       : mint('ratify-reject', top.score)
   }
   return mint('below-floor', top.score)
+}
+
+/** What the caller hands the collector: the thing to resolve + its Noun/mode. */
+export interface ResolveInput {
+  readonly text: string
+  readonly key?: string
+  readonly noun: string
+  readonly mode: GateMode
+  readonly closedPool?: boolean
+}
+
+/**
+ * The injected ports the collector drives — the find ladder + the ratifier +
+ * the calibrated bands. In-memory fakes make `collect` unit-testable with no DB,
+ * no embeddings, no LLM. `ratify` is optional — its absence is "no ratifier
+ * available," which the gate treats as a fail-safe escalation.
+ */
+export interface FindPorts {
+  exact(input: ResolveInput): Promise<GateCandidate | null>
+  lexical(input: ResolveInput): Promise<readonly GateCandidate[]>
+  vector(input: ResolveInput): Promise<readonly GateCandidate[]>
+  ratify?(input: ResolveInput, candidate: GateCandidate): Promise<{ accept: boolean; confidence: number }>
+  thresholds(noun: string): ThresholdBand | null
+}
+
+/**
+ * Run the find ladder (exact → FTS → vector, fused) + ratifier and materialize
+ * an Evidence value for `decide`. Cheap tiers short-circuit: an exact hit never
+ * touches the vector tier; the ratifier runs only when the fused top lands in
+ * the judge band.
+ */
+export async function collect(input: ResolveInput, ports: FindPorts): Promise<Evidence> {
+  const band = ports.thresholds(input.noun)
+
+  // Cheapest tier first: an exact hit short-circuits — no FTS, no embed/ANN.
+  const exact = await ports.exact(input)
+  if (exact) {
+    return { mode: input.mode, candidates: [exact], band, ratification: null, closedPool: input.closedPool ?? false }
+  }
+
+  // Lexical (FTS) + vector (embed+ANN); fuse by id, best score wins.
+  const [lexical, vector] = await Promise.all([ports.lexical(input), ports.vector(input)])
+  const byId = new Map<string, GateCandidate>()
+  for (const c of [...lexical, ...vector]) {
+    const prev = byId.get(c.id)
+    if (!prev || c.score > prev.score) byId.set(c.id, c)
+  }
+  const candidates = [...byId.values()]
+  let evidence: Evidence = { mode: input.mode, candidates, band, ratification: null, closedPool: input.closedPool ?? false }
+
+  // Expensive tier last: run the ratifier ONLY when the gate would otherwise
+  // escalate solely for lack of one — i.e. the fused top sits in the judge band.
+  // Reusing `decide` here avoids duplicating the band logic in the collector.
+  if (ports.ratify && candidates.length > 0) {
+    const dry = decide(evidence)
+    if (dry.kind === 'quarantine' && dry.mechanism === 'adjudicator-unavailable') {
+      const ratification = await ports.ratify(input, topCandidate(candidates))
+      evidence = { ...evidence, ratification }
+    }
+  }
+
+  return evidence
 }

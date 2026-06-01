@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { decide } from '../src/find-or-create.js'
+import { decide, collect, type FindPorts } from '../src/find-or-create.js'
 
 const band = { autoLink: 0.92, judgeFloor: 0.8 }
 
@@ -142,5 +142,81 @@ describe('decide — the pure findOrCreate gate core', () => {
 
     expect(decide(args('b', 'a'))).toMatchObject({ kind: 'link', canonical: 'a' })
     expect(decide(args('a', 'b'))).toMatchObject({ kind: 'link', canonical: 'a' })
+  })
+})
+
+describe('collect — the find-ladder collector (fakes for ports)', () => {
+  it('short-circuits on an exact hit — never calls the vector tier', async () => {
+    let vectorCalls = 0
+    const ports: FindPorts = {
+      exact: async () => ({ id: 'co:acme', score: 1, exact: true }),
+      lexical: async () => [],
+      vector: async () => {
+        vectorCalls++
+        return []
+      },
+      thresholds: () => band,
+    }
+
+    const evidence = await collect({ text: 'Acme Inc', noun: 'Company', mode: 'symmetric-collapse' }, ports)
+
+    expect(evidence.candidates).toContainEqual({ id: 'co:acme', score: 1, exact: true })
+    expect(vectorCalls).toBe(0)
+  })
+
+  it('with no exact match, unions and dedups the FTS + vector candidates', async () => {
+    const ports: FindPorts = {
+      exact: async () => null,
+      lexical: async () => [{ id: 'a', score: 0.7, exact: false }],
+      vector: async () => [
+        { id: 'a', score: 0.9, exact: false },
+        { id: 'b', score: 0.6, exact: false },
+      ],
+      thresholds: () => band,
+    }
+
+    const evidence = await collect({ text: 'x', noun: 'N', mode: 'asymmetric-match' }, ports)
+
+    // 'a' deduped to one entry (best score wins), 'b' included
+    expect(evidence.candidates.map((c) => c.id).sort()).toEqual(['a', 'b'])
+    expect(evidence.candidates.find((c) => c.id === 'a')?.score).toBe(0.9)
+  })
+
+  it('runs the ratifier only when the fused top lands in the judge band', async () => {
+    let ratifyCalls = 0
+    const ports: FindPorts = {
+      exact: async () => null,
+      lexical: async () => [],
+      vector: async () => [{ id: 'a', score: 0.85, exact: false }], // judge band [0.8, 0.92)
+      ratify: async () => {
+        ratifyCalls++
+        return { accept: true, confidence: 0.88 }
+      },
+      thresholds: () => band,
+    }
+
+    const evidence = await collect({ text: 'x', noun: 'N', mode: 'asymmetric-match' }, ports)
+
+    expect(ratifyCalls).toBe(1)
+    expect(evidence.ratification).toEqual({ accept: true, confidence: 0.88 })
+  })
+
+  it('does not run the ratifier on a confident match above the autoLink band', async () => {
+    let ratifyCalls = 0
+    const ports: FindPorts = {
+      exact: async () => null,
+      lexical: async () => [],
+      vector: async () => [{ id: 'a', score: 0.97, exact: false }], // above autoLink 0.92
+      ratify: async () => {
+        ratifyCalls++
+        return { accept: true, confidence: 1 }
+      },
+      thresholds: () => band,
+    }
+
+    const evidence = await collect({ text: 'x', noun: 'N', mode: 'asymmetric-match' }, ports)
+
+    expect(ratifyCalls).toBe(0)
+    expect(evidence.ratification).toBeNull()
   })
 })
