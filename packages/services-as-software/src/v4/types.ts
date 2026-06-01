@@ -303,21 +303,11 @@ export type DeliverableOf<S extends ServiceSpec> = Deliverable<
   S['output'] extends Schema<infer O> ? O : unknown
 >
 
-/** The front door. Simple object in, canonical four-layer Deliverable out. */
-export declare function Service<const S extends ServiceSpec>(
-  spec: S & WithinCeiling<S>
-): DeliverableOf<S>
-/** Batch authoring (à la business-as-code `Goals([...])`). */
-export declare function Service<const S extends ServiceSpec>(
-  specs: readonly S[]
-): ReadonlyArray<DeliverableOf<S>>
-
-export declare namespace Service {
-  /** Secondary constructors (existing v3 ergonomics retained). */
-  function define<const S extends ServiceSpec>(spec: S & WithinCeiling<S>): DeliverableOf<S>
-  function fromFunction(fn: (input: any) => Promise<any>, opts?: Partial<ServiceSpec>): Deliverable
-  function load(ref: ServiceRef): Promise<Deliverable>
-}
+// NOTE: the `Service()` front door (the authoring factory + its `define` /
+// `fromFunction` / `load` secondary constructors) is a *value* — it lives in
+// `./service.ts` (aip-cnks.7.3) and is re-exported through `./index.ts`. types.ts
+// keeps only the TYPES it consumes ({@link ServiceSpec}, {@link WithinCeiling},
+// {@link DeliverableOf}, {@link AssuranceOf}, {@link PriceShorthand}).
 
 // ============================================================================
 // SURFACE #2 — Invocation runtime (11-state FSM + event spine + verify + settle)

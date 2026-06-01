@@ -62,7 +62,9 @@ export type {
   WithinCeiling,
   DeliverableOf,
 } from './types.js'
-export { Service } from './types.js'
+// The `Service()` front door is a VALUE — its home is `./service.ts` (the
+// authoring runtime, aip-cnks.7.3), not the type surface.
+export { Service } from './service.js'
 
 // Surface #2 — invocation runtime
 export type {
