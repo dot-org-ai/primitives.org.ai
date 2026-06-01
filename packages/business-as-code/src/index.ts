@@ -175,6 +175,23 @@ export {
   validateService,
 } from './service.js'
 
+// Export the canonical Offer noun (value/type module + factory)
+export {
+  Offer,
+  PRICING_BASES,
+  PRICE_STRUCTURES,
+  isPricingBasis,
+  basisToPricingKind,
+} from './offer.js'
+export type {
+  PricingBasis,
+  PriceSpecification,
+  FundingSource,
+  ItemOfferedRef,
+  MetricRef,
+  OfferSpec,
+} from './offer.js'
+
 // Export process functions
 export {
   Process,
@@ -521,6 +538,7 @@ export {
   // Offerings
   Product as ProductEntity,
   Service as ServiceEntity,
+  Offer as OfferEntity,
   Feature as FeatureEntity,
   PricingPlan as PricingPlanEntity,
   RoadmapItem as RoadmapItemEntity,
