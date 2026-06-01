@@ -111,6 +111,50 @@ workflow('idea-cascade')
 
 Both `ai-database` methods and the `ai-workflows` node are **thin façades** — adapt args → call the injected gate (collector + pure core) → shape the result (a `Thing`, a verdict list, or a flow branch). No decision logic is duplicated.
 
+#### Verb algebra: `find` / `create` / `generate` + the `Or`-compositions
+
+The `Or`-variants are not primitives — they compose three atomic verbs. The gate (`decide → FIND|CREATE|ESCALATE`) is `find()` + threshold bands; the compositions are the gate with `create()` vs `generate()` as the CREATE materializer; the marginal band → ESCALATE.
+
+| verb | does | side effect | LLM | available on |
+|---|---|---|---|---|
+| `find(x)` | **tiered hybrid**: exact key → FTS (lexical) → vector (semantic), fused via RRF → `{ thing, confidence } \| null` | none (read) | embed only if cheap tiers inconclusive | all Nouns |
+| `create(data)` | persist supplied entity (always new) | write | no | all Nouns |
+| `generate(seed)` | LLM-author entity from seed (always new) | write | yes | `$generation !== 'never'` |
+| `findOrCreate(entity)` | `find` ?? `create` | write | no | all Nouns |
+| `findOrGenerate(seed)` | `find` ?? `generate` | write | yes | `$generation !== 'never'` |
+
+- `find()` is a **cost ladder, not vector-only**: exact/normalized-key (O(1), no embed) → FTS/lexical → vector ANN → fuse via RRF → threshold band. Cheap tiers **short-circuit** — an exact phrase match never touches an embedding (the cost difference at 1M scale). Per-Noun config picks which tiers run (`SKU`/`ISBN` → exact-only; `Problem` → full hybrid). The two embedding modes (symmetric-COLLAPSE for entity dedup / asymmetric-MATCH for seed→entity) apply to the **vector tier only**; exact/FTS are lexical and mode-agnostic. Exact-accept is default but a Noun may require vector/judge confirmation for homonym-prone verticals. (`ai-database` already ships `computeRRF` + hybrid search; the matcher already probes exact-first.) The gate's escalating ladder: exact-accept → FTS+vector hybrid → LLM-ratify (marginal band) → ESCALATE.
+- `create`/`generate` don't match on read — they **embed-on-write** so future `find()`s (vector tier) can match them.
+- Slots beside the existing family: `get(id)` exact-by-id · `search(q)` ranked list · `create` persist · `upsert` exact-id find-or-create. `find`/`generate`/`findOrCreate`/`findOrGenerate` are the **semantic-identity** row.
+- **Closes the embeddings loop:** `find()` = *discriminate* (embeddings); `generate()` = *compose* (LLM). The atoms are the two halves of "embeddings discriminate, LLMs compose"; the `Or`-variants wire discrimination → composition. (This is why delta-vectors were doomed — they made `find` do `generate`'s job.)
+
+#### Generatability is a Noun policy, not a per-call choice (`$generation`)
+
+A `Customer`/`Lead`/`Person` has a real-world referent — must never be fabricated. A `BlogPost`/`Product`/`Offer`/`Problem`/`Startup` is a synthesized artifact — generation is its point. So the **Noun declares it once** and the type system enforces it:
+
+```ts
+DB({
+  Customer: { name:'string', email:'string', $generation:'never' },   // real-world → never generate
+  BlogPost: { title:'string', body:'text',   $generation:'auto' },    // content → generate from seed
+  Offer:    { sku:'string', price:'number',  $generation:'review' },  // generate → HITL sign-off
+})
+```
+
+- `'never'` — CREATE may only **persist** supplied data; `generate()`/`findOrGenerate()` are **absent at the type level** (`$.Customers.generate(...)` doesn't compile). Fabrication is structurally impossible, not a discipline.
+- `'auto'` — CREATE generates from a seed and commits.
+- `'review'` — generated draft routes through **human-in-the-loop** before commit (the ESCALATE→human path; home for `Offer`/`Product`).
+
+**Cascade safety invariant:** a `CREATE`/mint decision on a `$generation:'never'` Noun becomes **`ESCALATE`, never generation** — the cascade authors *content*, but must never invent the *real-world entities* (the actual Customer/Lead) that content references; it defers to a human or a real data source (CRM/enrichment API).
+
+```
+gate.decide(ref) →
+  CREATE → Noun.$generation === 'never'  ? ESCALATE (don't fabricate reality)
+         : 'review'                      ? generate draft → HITL → commit
+         : 'auto'                        ? generate → commit  (mint = enqueue in the cascade)
+```
+
+`$generation` is declared on the Noun/schema (`digital-objects` Noun def / `ai-database` schema — the same source of truth as `$id`/`$type`/fields/operators); the gate reads it via the injected registry, `findOrGenerate`/`generate` existence is a conditional type over it, and the cascade + HITL both consult it. One declaration, enforced four places.
+
 ### embeddings socket (`ai-functions`)
 Expose `EmbeddingMode { model, dims, strategy, postProcess, prefixKind }` + `cosine(a,b,{center})`. **Two modes that must NEVER be globally flipped** (flipping was a real bug — compressed cosine to ~0.07–0.11):
 - **`asymmetric`** (query-prefix + bare-doc, NO centering) → retrieval / MATCHING / madlib query-templates. `MATCH_MODE`.
