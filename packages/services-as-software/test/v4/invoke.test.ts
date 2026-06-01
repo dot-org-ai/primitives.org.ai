@@ -353,6 +353,77 @@ describe('v4 handle scaffold — createInvocationHandle', () => {
 })
 
 // ============================================================================
+// 2a. Handle scaffold — the ESCALATION verbs (escalate / resolve)
+// ============================================================================
+
+describe('v4 handle scaffold — escalation verbs', () => {
+  /**
+   * Mint a handle that PARKS in `DELIVERING` (a live, non-terminal state from
+   * which `escalate()` is legal): the injected executor never resolves, so the
+   * FSM advances ORDERED→ONBOARDING→ACTIVE→DELIVERING and stops awaiting it.
+   */
+  async function liveInDelivering() {
+    const handle = createInvocationHandle<unknown, Out>({
+      offer: stubOffer(),
+      ceiling: 'access',
+      input: {},
+      // never resolves — the run parks in DELIVERING awaiting the cascade.
+      executor: { execute: () => new Promise<Out>(() => {}) },
+    })
+    await handle.watch('DELIVERING')
+    expect(handle.state()).toBe('DELIVERING')
+    return handle
+  }
+
+  it('escalate() from a live state → ESCALATED + an escalated event', async () => {
+    const handle = await liveInDelivering()
+    await handle.escalate('evaluator-deadlock')
+    expect(handle.state()).toBe('ESCALATED')
+    const log = handle.history()
+    expect(log.some((e) => e.kind === 'escalated' && e.reason === 'evaluator-deadlock')).toBe(true)
+  })
+
+  it("resolve('refund') → REFUNDED, settling via settler.refund", async () => {
+    const handle = await liveInDelivering()
+    await handle.escalate('authority-boundary')
+    expect(handle.state()).toBe('ESCALATED')
+
+    const settlement = await handle.resolve('refund')
+    expect(handle.state()).toBe('REFUNDED')
+    // the stub settler.refund() shape (zero-Money refund).
+    expect(settlement).toEqual({
+      outcome: 'refunded',
+      amount: { amount: 0n, currency: 'USD' },
+      per: 'stub:refund-contract',
+    })
+    // the same settlement is observable via settled().
+    await expect(handle.settled()).resolves.toEqual(settlement)
+    expect(isTerminal(handle.state())).toBe(true)
+  })
+
+  it("resolve('cancel') → CANCELLED with a noop settlement", async () => {
+    const handle = await liveInDelivering()
+    await handle.escalate('clarification-timeout')
+
+    const settlement = await handle.resolve('cancel')
+    expect(handle.state()).toBe('CANCELLED')
+    expect(settlement).toEqual({ outcome: 'noop', reason: 'cancelled-pre-charge' })
+    await expect(handle.settled()).resolves.toEqual(settlement)
+    expect(isTerminal(handle.state())).toBe(true)
+  })
+
+  it("resolve('resume') takes the ESCALATED→ACTIVE edge but rejects (awaits aip-cnks.5)", async () => {
+    const handle = await liveInDelivering()
+    await handle.escalate('evaluator-deadlock')
+
+    // The FSM edge is taken (ESCALATED→ACTIVE) but the resumable delivery tail
+    // is not wired — resolve('resume') REJECTS rather than hanging forever.
+    await expect(handle.resolve('resume')).rejects.toThrow(/aip-cnks\.5/)
+    expect(handle.state()).toBe('ACTIVE')
+  })
+})
+
+// ============================================================================
 // 2b. reconcileHandle — fire-and-forget convenience
 // ============================================================================
 

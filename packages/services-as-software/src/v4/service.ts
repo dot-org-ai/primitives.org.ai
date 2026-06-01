@@ -30,7 +30,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { Offer as makeOffer } from 'business-as-code'
 import type {
-  Offer,
   PriceSpecification,
   PricingBasis,
   FundingSource,
@@ -185,12 +184,12 @@ function buildContract<TIn, TOut>(spec: ServiceSpec, serviceId: string): Contrac
 }
 
 /**
- * Wrap a single `run` function as one Function. Code vs Agentic is decided by
- * the function's arity/shape isn't knowable here, so the shorthand is modelled
- * as `Agentic` (the most general autonomous Function); a richer authoring path
- * supplies an explicit `functions` array.
+ * Wrap a single `run` shorthand as one {@link FunctionDef}. Whether the body is
+ * deterministic Code or autonomous Agentic is not knowable from the closure
+ * here, so the shorthand defaults to `Agentic` (the most general autonomous
+ * Function); a richer authoring path supplies an explicit `functions` array.
  */
-function runToFunction(serviceId: string, run: (input: any) => Promise<any>): FunctionDef {
+function runToFunction(serviceId: string, run: (input: unknown) => Promise<unknown>): FunctionDef {
   return {
     id: `fn:${serviceId}:run`,
     fnKind: 'Agentic',
@@ -264,6 +263,36 @@ function buildDependencies(spec: ServiceSpec): DependenciesLayer | undefined {
  *   - `per: 'output'`  → `output`  · `UsageMeter`   (per unit produced)
  *   - `per: 'outcome'` → `outcome` · `SuccessFee` | `Gainshare`
  */
+/**
+ * Map an outcome-rung `successFee` shorthand to a concrete success-fee
+ * {@link PriceSpecification}:
+ *
+ *   - a PERCENT (`'10%'`, `'7.5%'`)  → `SuccessFee` of `percent` over the
+ *     realised `invoice-amount` basis ("10% of what you collect").
+ *   - a DOLLAR amount (`'$5,000'`)   → a flat fee. There is no flat-Money
+ *     success-fee shape in the business-as-code `PriceSpecification` union yet,
+ *     so a flat outcome fee is modelled as a `SinglePrice` carrying the parsed
+ *     {@link Money}; the `outcome` gatingBasis (set by the caller) is what marks
+ *     it as conditioned on the outcome. PLACEHOLDER pending a real flat-Money
+ *     outcome-pricing shape (a `SuccessFee { flat: Money }` variant upstream).
+ *   - omitted (`undefined`)          → `SuccessFee` of 100% of `invoice-amount`
+ *     (pure outcome billing of the realised invoice).
+ *
+ * Avoids the prior nonsensical `{ percent: 100, of: '$5,000' }` ("100% of
+ * '$5,000'") by never stuffing a dollar string into the percent `of` slot.
+ */
+function outcomeFeeSpec(successFee: string | undefined): PriceSpecification {
+  if (successFee === undefined) {
+    return { structure: 'SuccessFee', percent: 100, of: 'invoice-amount' }
+  }
+  const pct = /^\s*([0-9]+(?:\.[0-9]+)?)\s*%\s*$/.exec(successFee)
+  if (pct) {
+    return { structure: 'SuccessFee', percent: Number(pct[1]), of: 'invoice-amount' }
+  }
+  // dollar / numeric → a flat fee carried as SinglePrice (placeholder shape).
+  return { structure: 'SinglePrice', price: parsePrice(successFee) }
+}
+
 function priceToSpec(price: PriceShorthand): {
   basis: PricingBasis
   priceSpecification: PriceSpecification
@@ -301,10 +330,10 @@ function priceToSpec(price: PriceShorthand): {
           unit: price.unit,
         },
       }
-    case 'outcome':
+    case 'outcome': {
       // gainshare (% of a delta) takes precedence when supplied; otherwise a
-      // flat success fee. Both gate on the `outcome` rung (the ceiling unlocked
-      // it at compile time via WithinCeiling).
+      // success fee. Both gate on the `outcome` rung (the ceiling unlocked it at
+      // compile time via WithinCeiling).
       if (price.gainsharePct !== undefined) {
         return {
           basis: 'outcome',
@@ -317,12 +346,9 @@ function priceToSpec(price: PriceShorthand): {
       }
       return {
         basis: 'outcome',
-        priceSpecification: {
-          structure: 'SuccessFee',
-          percent: 100,
-          of: price.successFee ?? 'invoice-amount',
-        },
+        priceSpecification: outcomeFeeSpec(price.successFee),
       }
+    }
   }
 }
 
@@ -398,7 +424,9 @@ function buildCommercial<TOut>(
       gating: { basis: ps.basis },
       priceSpecification: ps.priceSpecification,
       fundingSource,
-      offer: { mode: 'inline', promise, seller: undefined as unknown as string },
+      // omit `seller` entirely (no double-cast): under exactOptionalPropertyTypes
+      // the optional key is simply absent, so `'seller' in lens` is honestly false.
+      offer: { mode: 'inline', promise },
     })
   })
 
@@ -440,6 +468,12 @@ function makeLazyHandle<TIn, TOut>(
     if (!real) real = createInvocationHandle<TIn, TOut>({ ...opts, id, autoStart: true })
     return real
   }
+  // START-TRIGGERING observe methods (call `ensure()`, minting + auto-driving the
+  // real handle on first touch): `events`, `watch`, `result`, `quality`,
+  // `settled` (and every drive verb: `clarify`/`accept`/`dispute`/`escalate`/
+  // `resolve`/`cancel`). INERT until something else starts the run: `state()`
+  // reports `'ORDERED'`, `costSoFar()` a zero Money, `previews()` `{}`,
+  // `history()` `[]` — none of these start the FSM.
   const lazy: InvocationHandle<TOut> = {
     id,
     offer: opts.offer,
@@ -548,56 +582,82 @@ function build<TIn, TOut>(spec: ServiceSpec): Deliverable<TIn, TOut> {
 
 // ============================================================================
 // Service — the public front door (overloaded: single spec | batch array)
+//
+// The secondary constructors (`define` / `fromFunction` / `load`) are attached
+// as PROPERTIES of the `Service` function (the idiomatic ES-module form), not a
+// `namespace`. The callable + its properties are described by the
+// {@link ServiceFn} interface so the generic overloads (and `define`'s ceiling
+// generic) survive the conversion.
 // ============================================================================
 
-/** The front door. Simple object in, canonical four-layer Deliverable out. */
-export function Service<const S extends ServiceSpec>(spec: S & WithinCeiling<S>): DeliverableOf<S>
-/** Batch authoring (à la business-as-code `Goals([...])`). */
-export function Service<const S extends ServiceSpec>(
-  specs: readonly S[]
-): ReadonlyArray<DeliverableOf<S>>
-export function Service(spec: ServiceSpec | readonly ServiceSpec[]): unknown {
+/** The overloaded callable + its attached secondary constructors. */
+export interface ServiceFn {
+  /** The front door. Simple object in, canonical four-layer Deliverable out. */
+  <const S extends ServiceSpec>(spec: S & WithinCeiling<S>): DeliverableOf<S>
+  /** Batch authoring (à la business-as-code `Goals([...])`). */
+  <const S extends ServiceSpec>(specs: readonly S[]): ReadonlyArray<DeliverableOf<S>>
+
+  /** Alias of the single-spec front door. */
+  define<const S extends ServiceSpec>(spec: S & WithinCeiling<S>): DeliverableOf<S>
+  /**
+   * Wrap a bare `(input) => Promise<output>` function as a minimal Deliverable.
+   * The param stays `any` (not `unknown`) so authors can hand a NARROWLY-typed
+   * function — `(input: { url: string }) => …` — without a contravariant
+   * mismatch (the same author-ergonomics reason `ServiceSpec.run` is `any`).
+   */
+  fromFunction(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- author-facing contravariance
+    fn: (input: any) => Promise<any>,
+    opts?: Partial<ServiceSpec>
+  ): Deliverable
+  /** Load a persisted Deliverable by ref (awaits persistence; rejects for now). */
+  load(ref: ServiceRef): Promise<Deliverable>
+}
+
+function service(spec: ServiceSpec | readonly ServiceSpec[]): unknown {
   if (Array.isArray(spec)) {
     return spec.map((s) => build(s))
   }
   return build(spec as ServiceSpec)
 }
 
-/**
- * Secondary constructors (the v3 ergonomics retained):
- *   - `Service.define` — alias of `Service()` (single spec).
- *   - `Service.fromFunction` — wrap a bare `(input) => Promise<output>` function.
- *   - `Service.load` — load a persisted Deliverable by ref (awaits persistence).
- */
-export namespace Service {
-  /** Alias of the single-spec front door. */
-  export function define<const S extends ServiceSpec>(
-    spec: S & WithinCeiling<S>
-  ): DeliverableOf<S> {
-    return build(spec as ServiceSpec) as DeliverableOf<S>
-  }
-
-  /** Wrap a bare async function as a minimal Deliverable (the `run` shorthand). */
-  export function fromFunction(
-    fn: (input: any) => Promise<any>,
-    opts?: Partial<ServiceSpec>
-  ): Deliverable {
-    const spec: ServiceSpec = {
-      name: opts?.name ?? fn.name ?? 'anonymous-service',
-      ...opts,
-      run: fn,
-    }
-    return build(spec)
-  }
-
-  /**
-   * Load a persisted Deliverable by {@link ServiceRef}. awaits persistence —
-   * the durable store (ai-database read-path) is not wired here; this is the
-   * thin view seam the persistence adapter will back. Rejects until then.
-   */
-  export function load(ref: ServiceRef): Promise<Deliverable> {
-    return Promise.reject(
-      new Error(`Service.load(${ref}) awaits persistence — durable store adapter not yet wired`)
-    )
-  }
+/** Alias of the single-spec front door. */
+function serviceDefine<const S extends ServiceSpec>(spec: S & WithinCeiling<S>): DeliverableOf<S> {
+  return build(spec as ServiceSpec) as DeliverableOf<S>
 }
+
+/** Wrap a bare async function as a minimal Deliverable (the `run` shorthand). */
+function serviceFromFunction(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- author-facing contravariance
+  fn: (input: any) => Promise<any>,
+  opts?: Partial<ServiceSpec>
+): Deliverable {
+  const spec: ServiceSpec = {
+    name: opts?.name ?? fn.name ?? 'anonymous-service',
+    ...opts,
+    run: fn,
+  }
+  return build(spec)
+}
+
+/**
+ * Load a persisted Deliverable by {@link ServiceRef}. awaits persistence —
+ * the durable store (ai-database read-path) is not wired here; this is the
+ * thin view seam the persistence adapter will back. Rejects until then.
+ */
+function serviceLoad(ref: ServiceRef): Promise<Deliverable> {
+  return Promise.reject(
+    new Error(`Service.load(${ref}) awaits persistence — durable store adapter not yet wired`)
+  )
+}
+
+/**
+ * The public front door. `Service(spec)` (or `Service([...])`) fans a simple
+ * plain object out into a canonical four-layer {@link Deliverable}; the
+ * secondary constructors are attached as properties.
+ */
+export const Service: ServiceFn = Object.assign(service, {
+  define: serviceDefine,
+  fromFunction: serviceFromFunction,
+  load: serviceLoad,
+}) as ServiceFn

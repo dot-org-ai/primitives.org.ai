@@ -44,7 +44,7 @@ describe('Service() — minimal spec → four-layer Deliverable', () => {
     name: 'Reconcile inbox',
     input: { url: 'string' },
     output: { count: 'number' },
-    run: async (input: { url: string }) => ({ count: 1 }),
+    run: async (_input: { url: string }) => ({ count: 1 }),
   })
 
   it('is a service-as-software Deliverable with all four layers present', () => {
@@ -119,7 +119,7 @@ describe('Service() — `price` shorthand → commercial gatingBasis + real Offe
     })
   })
 
-  it('per:outcome WITH a verifiable metric → outcome basis + a SuccessFee Offer', () => {
+  it('per:outcome WITH a verifiable metric → outcome basis + a flat-fee Offer (parsed Money)', () => {
     const svc = Service({
       name: 'GAAP reconciliation',
       metric: { name: 'unmatched', verify: 'deterministic' },
@@ -128,9 +128,55 @@ describe('Service() — `price` shorthand → commercial gatingBasis + real Offe
     expect(primaryLens(svc).gating.basis).toBe('outcome')
     const offer = primaryOffer(svc)
     expect(offer.gatingBasis).toBe('outcome')
-    expect(offer.priceSpecification.structure).toBe('SuccessFee')
+    // a flat-dollar successFee is a flat fee: the parsed Money rides under a
+    // SinglePrice (placeholder shape), NOT a nonsensical `100% of '$5,000'`.
+    expect(offer.priceSpecification).toEqual({
+      structure: 'SinglePrice',
+      price: { amount: 500000n, currency: 'USD' },
+    })
     // the metric verifiability flows into the contract's Outcome
     expect(svc.contract.outcomeContract.outcome.metric.verifiability).toBe('deterministic')
+  })
+
+  it('per:outcome with a PERCENT successFee → a SuccessFee of N% of invoice-amount', () => {
+    const svc = Service({
+      name: 'Collections',
+      metric: { name: 'recovered', verify: 'counterfactual' },
+      price: { per: 'outcome', successFee: '10%' },
+    })
+    const offer = primaryOffer(svc)
+    expect(offer.gatingBasis).toBe('outcome')
+    expect(offer.priceSpecification).toEqual({
+      structure: 'SuccessFee',
+      percent: 10,
+      of: 'invoice-amount',
+    })
+  })
+
+  it('per:outcome with NO successFee → SuccessFee of 100% of invoice-amount', () => {
+    const svc = Service({
+      name: 'Pure outcome billing',
+      metric: { name: 'closed', verify: 'deterministic' },
+      price: { per: 'outcome' },
+    })
+    expect(primaryOffer(svc).priceSpecification).toEqual({
+      structure: 'SuccessFee',
+      percent: 100,
+      of: 'invoice-amount',
+    })
+  })
+
+  it('per:outcome with a gainsharePct → a Gainshare Offer', () => {
+    const svc = Service({
+      name: 'Cost savings program',
+      metric: { name: 'savings', verify: 'deterministic' },
+      price: { per: 'outcome', gainsharePct: 25 },
+    })
+    expect(primaryOffer(svc).priceSpecification).toEqual({
+      structure: 'Gainshare',
+      sharePercent: 25,
+      baseline: 'baseline',
+    })
   })
 })
 

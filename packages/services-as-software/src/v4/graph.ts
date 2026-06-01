@@ -93,7 +93,7 @@ function offerOf(root: Offer | Deliverable): Offer {
 
 /** The MDXLD `$id` of a node (`$id` on an Offer; `$id` on a Deliverable). */
 function nodeId(root: Offer | Deliverable): string {
-  return isDeliverable(root) ? root.$id : root.$id
+  return root.$id
 }
 
 /** The MDXLD `$type` of a node. */
