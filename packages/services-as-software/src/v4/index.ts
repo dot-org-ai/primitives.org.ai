@@ -100,8 +100,11 @@ export type {
   Settler,
 } from './invoke.js'
 
-// Surface #3 — graph discovery
+// Surface #3 — graph discovery (the discovery TYPES stay in `./types.ts`; the
+// projector + lenses + match-or-mint runtime live in `./graph.ts`).
 export type { Discovery, Lens, LensCtx, Match } from './types.js'
+export { makeDiscovery, discovery, envelope, inMemoryMatcher, ENVELOPE_API } from './graph.js'
+export type { DiscoveryPorts, Matcher, EnvelopeOpts } from './graph.js'
 
 // Wire — the locked ResponseEnvelope
 export type { ResponseEnvelope } from './types.js'
