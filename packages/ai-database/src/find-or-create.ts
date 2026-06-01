@@ -171,6 +171,215 @@ export function createFindPorts(
 }
 
 // =============================================================================
+// Live pg+ch FindOrCreateBackend (aip-jo1o.3) — over the real adapter capabilities
+// =============================================================================
+
+/**
+ * The minimal slice of the pg/ch adapter surface the live backend rides. Both
+ * {@link PostgresProvider} and {@link ClickHouseProvider} structurally satisfy it:
+ *
+ *  - `vectorSearch` — Tier-4 pgvector / CH ANN over the `embeddings` table joined
+ *    to `things`. Returns hits whose `score` is already normalized higher-is-better
+ *    (cosine: `1 - distance`).
+ *  - `upsertEmbedding` — embed-on-write so a freshly-minted row is immediately
+ *    findable by the vector tier. Optional: an adapter without it skips the write.
+ *  - `search` — the adapter's keyword path (ILIKE substring over the jsonb-as-text
+ *    representation). Pushed server-side, so the exact/lexical tiers narrow against
+ *    the DB rather than pulling the whole type with `list()`.
+ *  - `list` — a last-resort fallback for the exact tier when `search` is absent.
+ *  - `create` / `get` — Tier-1 CRUD.
+ *
+ * A `RawHit`-shaped vector result is the only structural requirement; we keep the
+ * port loose (`options?: { ... }`) so both adapters' concrete signatures fit.
+ */
+export interface LiveVectorHit {
+  readonly entity: Record<string, unknown> & { $id: string; $type: string }
+  readonly score: number
+}
+
+/** The capability declaration a Tier-4 adapter exposes (sharding + vectorSearch). */
+export interface LiveAdapterCapabilities {
+  readonly adapter: string
+  readonly vectorSearch?: {
+    readonly maxDimensions: number
+    readonly metrics: ReadonlyArray<string>
+    readonly implementation: string
+  }
+  readonly [key: string]: unknown
+}
+
+/** The adapter surface {@link createLiveDBFindBackend} drives. */
+export interface LiveFindAdapter {
+  capabilities?: LiveAdapterCapabilities | (() => LiveAdapterCapabilities)
+  get(type: string, id: string): Promise<Record<string, unknown> | null>
+  list(type: string, options?: unknown): Promise<Record<string, unknown>[]>
+  search?(type: string, query: string, options?: unknown): Promise<Record<string, unknown>[]>
+  create(
+    type: string,
+    id: string | undefined,
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>>
+  upsertEmbedding?(type: string, id: string, embedding: ReadonlyArray<number>): Promise<void>
+  vectorSearch(
+    type: string,
+    queryEmbedding: number[],
+    options?: { metric?: string; limit?: number; minScore?: number }
+  ): Promise<LiveVectorHit[]>
+  addProvenance?(noun: string, id: string, source: string): Promise<void>
+}
+
+/** The text-embedding socket: the ai-functions `embedText`, mode-aware. */
+export type EmbedFn = (text: string, mode: GateMode) => Promise<number[]>
+
+/** Options for {@link createLiveDBFindBackend}. */
+export interface LiveDBFindBackendOptions {
+  /** The pg/ch adapter (must satisfy {@link isLiveVectorAdapter}). */
+  readonly adapter: LiveFindAdapter
+  /**
+   * Mode-aware text embedder. In production this is a thin wrapper over the
+   * ai-functions `embedText(text, mode==='symmetric-collapse' ? COLLAPSE_MODE :
+   * MATCH_MODE)`; in tests it's a deterministic stand-in.
+   */
+  readonly embed: EmbedFn
+  /** ANN metric to query the adapter with (default `'cosine'`). */
+  readonly metric?: string
+}
+
+/**
+ * Capability-detect a live Tier-4 vector adapter: it must expose a `vectorSearch`
+ * METHOD *and* advertise the `vectorSearch` capability — both must agree before we
+ * route the optimized backend (mirrors the adapter-side `hasVectorSearch` guard).
+ */
+export function isLiveVectorAdapter(provider: unknown): provider is LiveFindAdapter {
+  const p = provider as Partial<LiveFindAdapter> | null
+  if (!p || typeof p.vectorSearch !== 'function') return false
+  const raw = p.capabilities
+  const caps = typeof raw === 'function' ? raw() : raw
+  return !!caps && caps.vectorSearch !== undefined
+}
+
+function jaccard(query: Set<string>, candidate: Set<string>): number {
+  if (query.size === 0 || candidate.size === 0) return 0
+  let overlap = 0
+  for (const t of query) if (candidate.has(t)) overlap += 1
+  const union = new Set([...query, ...candidate]).size
+  return union === 0 ? 0 : overlap / union
+}
+
+function rowNormalizedKey(row: Record<string, unknown>): string {
+  const primary = row['name'] ?? row['title'] ?? row['code']
+  return typeof primary === 'string' ? normalizeKey(primary) : ''
+}
+
+function rowExplicitKey(row: Record<string, unknown>): string | null {
+  const k = row['key']
+  return typeof k === 'string' ? normalizeKey(k) : null
+}
+
+function rowText(row: Record<string, unknown>): string {
+  const primary = row['name'] ?? row['title'] ?? row['code']
+  if (typeof primary === 'string') return primary
+  return Object.values(row)
+    .filter((v): v is string => typeof v === 'string')
+    .join(' ')
+}
+
+/**
+ * The optimized live {@link FindOrCreateBackend} over a pg/ch {@link LiveFindAdapter}
+ * (aip-jo1o.3). Each tier rides a concrete adapter capability:
+ *
+ *  - `exactLookup` — `adapter.search(noun, key)` pushes an ILIKE substring filter to
+ *    the DB (server-side narrowing), then verifies the normalized key/name EXACTLY
+ *    client-side over the small candidate set. This is NOT a full `list()` table
+ *    scan; we only fall back to `list()` if the adapter exposes no `search`.
+ *  - `lexicalSearch` — `adapter.search(noun, text)` (the adapter's ILIKE keyword
+ *    path), scored by token-overlap Jaccard. NOTE: the pg/ch adapters do not yet
+ *    expose a dedicated `tsvector` FTS surface; when one lands this tier upgrades to
+ *    `to_tsquery`/`websearch_to_tsquery` with no decision-core change.
+ *  - `embed` — the injected ai-functions embeddings socket, mode-aware.
+ *  - `vectorSearch` — `adapter.vectorSearch(noun, embedding, { metric, limit })`
+ *    (pgvector / CH ANN). The adapter already normalizes cosine to higher-is-better.
+ *  - `create` — `adapter.create` + embed-on-write (`upsertEmbedding`) so a fresh row
+ *    is immediately findable by the vector tier (N references collapse to 1 mint).
+ *  - `get` / `addProvenance` — Tier-1 CRUD / provenance (no-op-safe if unsupported).
+ */
+export function createLiveDBFindBackend(options: LiveDBFindBackendOptions): FindOrCreateBackend {
+  const { adapter, embed } = options
+  const metric = options.metric ?? 'cosine'
+
+  return {
+    async exactLookup(noun: string, normalizedKey: string): Promise<string | null> {
+      if (!normalizedKey) return null
+      // Server-side narrow via the adapter's keyword path (ILIKE substring), then
+      // verify the normalized key EXACTLY — ILIKE is a superset, so we reject
+      // substring-only matches that aren't an exact normalized key/name.
+      const candidates = adapter.search
+        ? await adapter.search(noun, normalizedKey, { limit: 50 })
+        : await adapter.list(noun)
+      const hit = candidates.find(
+        (r) => rowNormalizedKey(r) === normalizedKey || rowExplicitKey(r) === normalizedKey
+      )
+      return hit ? String(hit['$id']) : null
+    },
+
+    async lexicalSearch(noun: string, text: string, limit: number): Promise<readonly RawHit[]> {
+      if (!adapter.search) return []
+      const query = new Set(text.trim().toLowerCase().split(/\s+/).filter(Boolean))
+      if (query.size === 0) return []
+      // ILIKE needs a single substring; we use the longest token as the anchor and
+      // re-rank the returned candidates by full token-overlap. (A true multi-term
+      // tsvector query is a follow-up once the adapters expose FTS.)
+      const anchor = [...query].sort((a, b) => b.length - a.length)[0]!
+      const rows = await adapter.search(noun, anchor, { limit: Math.max(limit, 50) })
+      return rows
+        .map((r) => ({
+          id: String(r['$id']),
+          score: jaccard(query, new Set(rowText(r).toLowerCase().split(/\s+/).filter(Boolean))),
+        }))
+        .filter((h) => h.score > 0)
+        .sort((p, q) => (q.score !== p.score ? q.score - p.score : p.id < q.id ? -1 : 1))
+        .slice(0, limit)
+    },
+
+    async embed(text: string, mode: GateMode): Promise<number[]> {
+      return embed(text, mode)
+    },
+
+    async vectorSearch(
+      noun: string,
+      embedding: readonly number[],
+      _mode: GateMode,
+      limit: number
+    ): Promise<readonly RawHit[]> {
+      if (embedding.length === 0) return []
+      const hits = await adapter.vectorSearch(noun, [...embedding], { metric, limit })
+      return hits.map((h) => ({ id: h.entity.$id, score: h.score }))
+    },
+
+    async create(noun: string, data: Record<string, unknown>): Promise<FoundThing> {
+      const created = (await adapter.create(noun, undefined, data)) as FoundThing
+      // Embed-on-write: a fresh row must be immediately findable by the vector tier.
+      if (adapter.upsertEmbedding) {
+        const vec = await embed(rowText(data), 'symmetric-collapse')
+        if (vec.length > 0) await adapter.upsertEmbedding(noun, created.$id, vec)
+      }
+      return created
+    },
+
+    async get(noun: string, id: string): Promise<FoundThing | null> {
+      const row = await adapter.get(noun, id)
+      return row ? (row as FoundThing) : null
+    },
+
+    async addProvenance(noun: string, id: string, source: string): Promise<void> {
+      if (adapter.addProvenance) await adapter.addProvenance(noun, id, source)
+      // Provenance recording is an adapter capability; absent → silently skipped
+      // (the canonical row is still linked — provenance is additive, never required).
+    },
+  }
+}
+
+// =============================================================================
 // findOrCreate / findOrCreateMany — gate → materialize
 // =============================================================================
 

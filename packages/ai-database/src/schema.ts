@@ -236,11 +236,18 @@ import type { DBProviderExtended, SemanticSearchResult } from './schema/index.js
 // and the per-Noun verbs route their match-vs-mint DECISION through this seam.
 import {
   createFindPorts,
+  createLiveDBFindBackend,
+  isLiveVectorAdapter,
   findOrCreate as gateFindOrCreate,
   findOrGenerate as gateFindOrGenerate,
   routeFuzzyRef,
   normalizeKey,
 } from './find-or-create.js'
+// The ai-functions embeddings socket (aip-jo1o.3): mode-aware text embedding for
+// the live backend's `embed` tier. COLLAPSE for entity-dedup (symmetric), MATCH
+// for relationship resolution (asymmetric). The two modes must never be globally
+// flipped — the call site picks one per query.
+import { embedText, MATCH_MODE, COLLAPSE_MODE } from 'ai-functions/embeddings'
 import type {
   FindOrCreateBackend,
   FindOrCreateInput,
@@ -2723,8 +2730,10 @@ export function DB<TSchema extends DatabaseSchema>(
         const generationPolicy: GenerationPolicy = nounMeta?.$generation ?? 'auto'
         const nounMode: GateMode = 'symmetric-collapse'
 
-        // Build the live FindPorts over the resolved provider. aip-jo1o.3 swaps
-        // `createDBFindBackend` for the pg+ch backend (pgvector ANN + tsvector FTS).
+        // Build the live FindPorts over the resolved provider. `createDBFindBackend`
+        // capability-selects the OPTIMIZED pg+ch backend (pgvector/CH ANN + ILIKE
+        // keyword tier + embed-on-write) when the provider is a live vector adapter
+        // (aip-jo1o.3), else the generic semanticSearch/list() fallback.
         const buildGateContext = async (): Promise<{
           backend: FindOrCreateBackend
           ports: FindPorts
@@ -3544,18 +3553,50 @@ async function cascadeGenerate(
 }
 
 // =============================================================================
-// findOrCreate gate adapter (aip-jo1o.1/.2) — DBProvider → FindOrCreateBackend
+// findOrCreate gate adapter (aip-jo1o.1/.2/.3) — DBProvider → FindOrCreateBackend
 // =============================================================================
 
 /**
+ * The mode-aware embedding socket the live backend's `embed` tier rides
+ * (aip-jo1o.3): COLLAPSE for symmetric entity-dedup, MATCH for asymmetric
+ * relationship resolution. Returns the bare vector (the gate only needs the
+ * embedding, not the usage).
+ */
+async function embedForGate(text: string, mode: GateMode): Promise<number[]> {
+  const { embedding } = await embedText(text, mode === 'symmetric-collapse' ? COLLAPSE_MODE : MATCH_MODE)
+  return embedding
+}
+
+/**
  * Adapt a {@link DBProvider} to the {@link FindOrCreateBackend} the gate adapter
- * (`createFindPorts`) drives. The `vector` tier delegates to the provider's
- * `semanticSearch` (the existing ANN socket); the `exact` tier does a normalized
- * name/key lookup over `list()`. This is the seam where the live pg+ch backend
- * (pgvector ANN + tsvector FTS) plugs in — aip-jo1o.3. Until then we ride the
- * provider's `semanticSearch`, so no decision logic changes when .3 lands.
+ * (`createFindPorts`) drives, capability-selecting the backend (aip-jo1o.3):
+ *
+ *  - When the resolved provider is a live Tier-4 vector adapter (pg+pgvector / CH —
+ *    detected via {@link isLiveVectorAdapter}: a `vectorSearch` method AND an
+ *    advertised `vectorSearch` capability), we return the OPTIMIZED
+ *    {@link createLiveDBFindBackend}: an indexed/server-narrowed exact tier, an
+ *    ILIKE-keyword lexical tier, a pgvector/CH ANN vector tier (over the real
+ *    `embeddings` table), and embed-on-write minting via the ai-functions
+ *    embeddings socket.
+ *  - Otherwise (in-memory / fs / sqlite providers) we fall back to the GENERIC
+ *    backend below: it rides the provider's `semanticSearch` (when present) and an
+ *    O(n) `list()` exact scan. The decision core is identical either way.
  */
 function createDBFindBackend(provider: DBProvider): FindOrCreateBackend {
+  if (isLiveVectorAdapter(provider)) {
+    return createLiveDBFindBackend({ adapter: provider, embed: embedForGate })
+  }
+  return createGenericDBFindBackend(provider)
+}
+
+/**
+ * The generic fallback {@link FindOrCreateBackend} for providers WITHOUT a live
+ * Tier-4 vector adapter. The `exact` tier does a normalized name/key lookup over
+ * `list()`; the `vector` tier is unused by the resolvers (they pre-rank and hand
+ * the candidate to `routeFuzzyGate`). This is the pre-aip-jo1o.3 behavior, retained
+ * for in-memory / fs / sqlite providers.
+ */
+function createGenericDBFindBackend(provider: DBProvider): FindOrCreateBackend {
   function normalizedPrimary(row: Record<string, unknown>): string {
     const primary = row['name'] ?? row['title'] ?? row['code'] ?? row['key']
     return typeof primary === 'string' ? normalizeKey(primary) : ''
