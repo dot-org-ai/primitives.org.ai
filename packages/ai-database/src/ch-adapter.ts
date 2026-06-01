@@ -480,8 +480,15 @@ export class ClickHouseProvider implements DBProviderPort, DBProviderSVO, Vector
     validateSearchOptions(options)
     const limit = options?.limit ?? 100
 
-    // ClickHouse `like` against the JSON-string column. Richer search
-    // (FTS via skipping indexes) is future work.
+    // ClickHouse `like`/ILIKE against the JSON-string column. ClickHouse has
+    // no `tsvector`/`websearch_to_tsquery` equivalent, so — unlike the pg
+    // adapter (aip-j10o) — it deliberately does NOT declare the
+    // `fullTextSearch` capability or expose `fullTextSearch`/`keyLookup`. The
+    // live findOrCreate backend therefore keeps CH's lexical tier on this
+    // substring path (anchor-token ILIKE + Jaccard re-rank) rather than faking
+    // FTS. Ranked CH search (skipping/inverted indexes) is future work; when it
+    // lands, CH can declare `fullTextSearch` and the backend upgrades it with
+    // no decision-core change.
     const pattern = `%${query.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}%`
     const sql = `SELECT id, data FROM ${this.database}.things FINAL
        WHERE ns = ${quote(this.namespace)} AND type = ${quote(type)} AND data ILIKE '${pattern}'

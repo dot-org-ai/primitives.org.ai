@@ -719,6 +719,7 @@ export {
   hasActionRecording,
   hasVerbRegistry,
   hasVectorSearch,
+  hasFullTextSearch,
   hasAnalytics,
 } from './db-provider-port.js'
 
@@ -729,6 +730,7 @@ export type {
   AnalyticsCapability,
   VectorSearchCapability,
   VectorSimilarityMetric,
+  FullTextSearchCapability,
   // SVO surface
   FrameRole,
   SVOAction,
@@ -739,6 +741,8 @@ export type {
   // Tier-3/4 method shapes
   VectorSearchHit,
   VectorSearchPort,
+  FullTextSearchHit,
+  FullTextSearchPort,
   AnalyticsPort,
   // Composed port
   DBProviderPort,

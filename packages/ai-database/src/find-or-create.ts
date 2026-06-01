@@ -86,7 +86,12 @@ export interface FindOrCreateBackend {
   /** Lexical / FTS keyword search. Best-first, scores in [0,1]. */
   lexicalSearch(noun: string, text: string, limit: number): Promise<readonly RawHit[]>
   /** Vector ANN over the given query embedding in the given gate mode. Best-first. */
-  vectorSearch(noun: string, embedding: readonly number[], mode: GateMode, limit: number): Promise<readonly RawHit[]>
+  vectorSearch(
+    noun: string,
+    embedding: readonly number[],
+    mode: GateMode,
+    limit: number
+  ): Promise<readonly RawHit[]>
   /** Embed query/seed text in the given mode (asymmetric-match vs symmetric-collapse). */
   embed(text: string, mode: GateMode): Promise<number[]>
   /** Persist a new entity (embed-on-write so future vector finds can match it). */
@@ -197,6 +202,12 @@ export interface LiveVectorHit {
   readonly score: number
 }
 
+/** A ranked full-text hit from the adapter's `tsvector` FTS surface. */
+export interface LiveFullTextHit {
+  readonly entity: Record<string, unknown> & { $id: string; $type: string }
+  readonly score: number
+}
+
 /** The capability declaration a Tier-4 adapter exposes (sharding + vectorSearch). */
 export interface LiveAdapterCapabilities {
   readonly adapter: string
@@ -204,6 +215,17 @@ export interface LiveAdapterCapabilities {
     readonly maxDimensions: number
     readonly metrics: ReadonlyArray<string>
     readonly implementation: string
+  }
+  /**
+   * Ranked full-text search capability (aip-j10o). Present => the adapter
+   * exposes `fullTextSearch` (ranked `tsvector` FTS) and `keyLookup` (O(1)
+   * normalized-key index); the live backend routes the lexical/exact tiers
+   * through them. Absent => the backend rides the ILIKE `search` baseline.
+   */
+  readonly fullTextSearch?: {
+    readonly implementation: string
+    readonly rankedScores: boolean
+    readonly hasKeyLookup: boolean
   }
   readonly [key: string]: unknown
 }
@@ -214,6 +236,14 @@ export interface LiveFindAdapter {
   get(type: string, id: string): Promise<Record<string, unknown> | null>
   list(type: string, options?: unknown): Promise<Record<string, unknown>[]>
   search?(type: string, query: string, options?: unknown): Promise<Record<string, unknown>[]>
+  /** Ranked `tsvector` FTS (scores normalized to [0,1]). Present on FTS adapters. */
+  fullTextSearch?(
+    type: string,
+    query: string,
+    options?: { limit?: number; minScore?: number }
+  ): Promise<LiveFullTextHit[]>
+  /** O(1) normalized-key index lookup. Present on FTS adapters. */
+  keyLookup?(type: string, normalizedKey: string): Promise<string | null>
   create(
     type: string,
     id: string | undefined,
@@ -258,6 +288,22 @@ export function isLiveVectorAdapter(provider: unknown): provider is LiveFindAdap
   return !!caps && caps.vectorSearch !== undefined
 }
 
+/**
+ * Capability-detect a ranked-FTS adapter: it must expose BOTH the
+ * `fullTextSearch` and `keyLookup` METHODS *and* advertise the
+ * `fullTextSearch` capability — both must agree before the live backend
+ * routes the lexical/exact tiers through the index surface instead of the
+ * ILIKE `search` baseline (mirrors the adapter-side `hasFullTextSearch` guard).
+ */
+export function hasLiveFullTextSearch(adapter: LiveFindAdapter): boolean {
+  if (typeof adapter.fullTextSearch !== 'function' || typeof adapter.keyLookup !== 'function') {
+    return false
+  }
+  const raw = adapter.capabilities
+  const caps = typeof raw === 'function' ? raw() : raw
+  return !!caps && caps.fullTextSearch !== undefined
+}
+
 function jaccard(query: Set<string>, candidate: Set<string>): number {
   if (query.size === 0 || candidate.size === 0) return 0
   let overlap = 0
@@ -288,31 +334,51 @@ function rowText(row: Record<string, unknown>): string {
  * The optimized live {@link FindOrCreateBackend} over a pg/ch {@link LiveFindAdapter}
  * (aip-jo1o.3). Each tier rides a concrete adapter capability:
  *
- *  - `exactLookup` — `adapter.search(noun, key)` pushes an ILIKE substring filter to
- *    the DB (server-side narrowing), then verifies the normalized key/name EXACTLY
- *    client-side over the small candidate set. This is NOT a full `list()` table
- *    scan; we only fall back to `list()` if the adapter exposes no `search`.
- *  - `lexicalSearch` — `adapter.search(noun, text)` (the adapter's ILIKE keyword
- *    path), scored by token-overlap Jaccard. NOTE: the pg/ch adapters do not yet
- *    expose a dedicated `tsvector` FTS surface; when one lands this tier upgrades to
- *    `to_tsquery`/`websearch_to_tsquery` with no decision-core change.
+ *  - `exactLookup` — when the adapter advertises FTS (`hasLiveFullTextSearch`),
+ *    `adapter.keyLookup(noun, key)` is a SINGLE probe of the normalized-key
+ *    expression index (O(1)). Otherwise it falls back to the legacy path:
+ *    `adapter.search(noun, key)` pushes an ILIKE substring filter to the DB
+ *    (server-side narrowing), then verifies the normalized key/name EXACTLY
+ *    client-side — and only if there's no `search` does it `list()`-scan.
+ *  - `lexicalSearch` — when the adapter advertises FTS,
+ *    `adapter.fullTextSearch(noun, text)` is real ranked `tsvector` search
+ *    (`websearch_to_tsquery` + normalized `ts_rank`), scores already in [0,1].
+ *    Otherwise it falls back to `adapter.search(noun, anchorToken)` (ILIKE) +
+ *    token-overlap Jaccard re-rank. ClickHouse (no `tsvector`) stays on the
+ *    fallback by design — see the CH divergence note below.
  *  - `embed` — the injected ai-functions embeddings socket, mode-aware.
  *  - `vectorSearch` — `adapter.vectorSearch(noun, embedding, { metric, limit })`
  *    (pgvector / CH ANN). The adapter already normalizes cosine to higher-is-better.
  *  - `create` — `adapter.create` + embed-on-write (`upsertEmbedding`) so a fresh row
  *    is immediately findable by the vector tier (N references collapse to 1 mint).
  *  - `get` / `addProvenance` — Tier-1 CRUD / provenance (no-op-safe if unsupported).
+ *
+ * CH DIVERGENCE: only Postgres advertises ranked `tsvector` FTS + the
+ * normalized-key index, so only pg routes the optimized lexical/exact tiers.
+ * ClickHouse has no `tsvector` equivalent and deliberately does NOT declare
+ * `fullTextSearch`; its lexical tier stays on the ILIKE-substring + Jaccard
+ * fallback (we never fake FTS). The routing is capability-driven, so a CH
+ * adapter, an FTS-less pg, and the memory backend all transparently take the
+ * fallback — no decision-core change when CH later grows real ranked search.
  */
 export function createLiveDBFindBackend(options: LiveDBFindBackendOptions): FindOrCreateBackend {
   const { adapter, embed } = options
   const metric = options.metric ?? 'cosine'
+  // Resolve the FTS routing decision once: an adapter that advertises ranked
+  // `tsvector` FTS + the normalized-key index gets the indexed lexical/exact
+  // tiers; everything else (ClickHouse, memory, an FTS-less pg) falls back.
+  const fts = hasLiveFullTextSearch(adapter)
 
   return {
     async exactLookup(noun: string, normalizedKey: string): Promise<string | null> {
       if (!normalizedKey) return null
-      // Server-side narrow via the adapter's keyword path (ILIKE substring), then
-      // verify the normalized key EXACTLY — ILIKE is a superset, so we reject
-      // substring-only matches that aren't an exact normalized key/name.
+      // FTS adapter: a single O(1) probe of the normalized-key expression index.
+      if (fts && adapter.keyLookup) {
+        return adapter.keyLookup(noun, normalizedKey)
+      }
+      // Fallback: server-side narrow via the adapter's keyword path (ILIKE
+      // substring), then verify the normalized key EXACTLY — ILIKE is a
+      // superset, so we reject substring-only matches that aren't an exact key.
       const candidates = adapter.search
         ? await adapter.search(noun, normalizedKey, { limit: 50 })
         : await adapter.list(noun)
@@ -323,12 +389,20 @@ export function createLiveDBFindBackend(options: LiveDBFindBackendOptions): Find
     },
 
     async lexicalSearch(noun: string, text: string, limit: number): Promise<readonly RawHit[]> {
+      if (!text.trim()) return []
+      // FTS adapter: real ranked `tsvector` search. `websearch_to_tsquery`
+      // parses the full multi-term query server-side; `ts_rank` is already
+      // normalized to [0,1], so hits map straight into RawHit, best-first.
+      if (fts && adapter.fullTextSearch) {
+        const hits = await adapter.fullTextSearch(noun, text, { limit })
+        return hits.map((h) => ({ id: h.entity.$id, score: h.score }))
+      }
+      // Fallback (ClickHouse / FTS-less pg): ILIKE needs a single substring, so
+      // we anchor on the longest token and re-rank candidates by token-overlap
+      // Jaccard. Less precise than FTS, but term-aware enough for the gate.
       if (!adapter.search) return []
       const query = new Set(text.trim().toLowerCase().split(/\s+/).filter(Boolean))
       if (query.size === 0) return []
-      // ILIKE needs a single substring; we use the longest token as the anchor and
-      // re-rank the returned candidates by full token-overlap. (A true multi-term
-      // tsvector query is a follow-up once the adapters expose FTS.)
       const anchor = [...query].sort((a, b) => b.length - a.length)[0]!
       const rows = await adapter.search(noun, anchor, { limit: Math.max(limit, 50) })
       return rows
@@ -456,7 +530,12 @@ async function materialize(
     if (input.provenance && backend.addProvenance) {
       await backend.addProvenance(noun, verdict.canonical, input.provenance)
     }
-    return { decision: 'linked', thing, confidence: verdict.confidence, mechanism: verdict.mechanism }
+    return {
+      decision: 'linked',
+      thing,
+      confidence: verdict.confidence,
+      mechanism: verdict.mechanism,
+    }
   }
 
   if (verdict.kind === 'mint') {
@@ -464,7 +543,12 @@ async function materialize(
     if (input.provenance && backend.addProvenance) {
       await backend.addProvenance(noun, thing.$id, input.provenance)
     }
-    return { decision: 'minted', thing, confidence: verdict.confidence, mechanism: verdict.mechanism }
+    return {
+      decision: 'minted',
+      thing,
+      confidence: verdict.confidence,
+      mechanism: verdict.mechanism,
+    }
   }
 
   // quarantine
@@ -547,7 +631,10 @@ export interface FindOrGenerateOptions {
   readonly backend: FindOrCreateBackend
   readonly onEscalate?: OnEscalate
   /** LLM authorship: turn a seed into a full entity to persist. */
-  readonly generate: (seed: Record<string, unknown>, noun: string) => Promise<Record<string, unknown>>
+  readonly generate: (
+    seed: Record<string, unknown>,
+    noun: string
+  ) => Promise<Record<string, unknown>>
 }
 
 /**
@@ -579,7 +666,12 @@ export async function findOrGenerate(
   // 'never' Noun: any non-link verdict becomes a quarantine (don't fabricate reality).
   const effective: Verdict =
     escalateOnCreate && verdict.kind === 'mint'
-      ? { kind: 'quarantine', mechanism: 'generation-never', confidence: verdict.confidence, reason: 'CREATE on a $generation:never Noun must escalate, not generate' }
+      ? {
+          kind: 'quarantine',
+          mechanism: 'generation-never',
+          confidence: verdict.confidence,
+          reason: 'CREATE on a $generation:never Noun must escalate, not generate',
+        }
       : verdict
 
   const materializeOpts: FindOrCreateOptions = {
@@ -605,7 +697,9 @@ export async function findOrGenerate(
 export interface BaseSemanticVerbs<TData extends Record<string, unknown>> {
   find(input: { text: string; key?: string; mode?: GateMode }): Promise<FoundThing | null>
   create(data: TData): Promise<FoundThing>
-  findOrCreate(input: Omit<FindOrCreateInput, 'noun' | 'mode'> & { mode?: GateMode }): Promise<FindOrCreateResult>
+  findOrCreate(
+    input: Omit<FindOrCreateInput, 'noun' | 'mode'> & { mode?: GateMode }
+  ): Promise<FindOrCreateResult>
 }
 
 /**
@@ -613,7 +707,10 @@ export interface BaseSemanticVerbs<TData extends Record<string, unknown>> {
  * `generate(seed)` (LLM-author + persist) and `findOrGenerate(seed)` (find ??
  * generate). On a `'never'` Noun these are structurally absent (`never`).
  */
-export interface GeneratableOnly<TData extends Record<string, unknown>, TSeed extends Record<string, unknown>> {
+export interface GeneratableOnly<
+  TData extends Record<string, unknown>,
+  TSeed extends Record<string, unknown>
+> {
   generate(seed: TSeed): Promise<FoundThing>
   findOrGenerate(
     input: Omit<FindOrGenerateInput, 'noun' | 'mode' | 'generation'> & { mode?: GateMode }

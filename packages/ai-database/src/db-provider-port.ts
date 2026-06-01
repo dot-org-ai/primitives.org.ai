@@ -157,6 +157,50 @@ export interface VectorSearchCapability {
 }
 
 // =============================================================================
+// Lexical / full-text search capability declaration
+// =============================================================================
+
+/**
+ * Full-text (lexical) search capability declaration.
+ *
+ * Distinct from the substring `search()` baseline that every adapter
+ * satisfies (ILIKE/LIKE over the jsonb-as-text representation): an adapter
+ * declares this only when it exposes a *ranked* term-aware index —
+ * Postgres `tsvector`/`websearch_to_tsquery` + `ts_rank`, or an equivalent.
+ *
+ * Adapters that declare this MUST implement {@link FullTextSearchPort} and
+ * MUST expose a `keyLookup()` method for O(1) normalized-key resolution
+ * (an expression index on `lower(name)` / a normalized key).
+ *
+ * Per ADR-0003: Postgres has `tsvector` FTS (native, ranked). ClickHouse
+ * does NOT declare this — its lexical tier stays on the `like`/`ILIKE`
+ * substring baseline (skipping-index FTS is future work); callers fall
+ * back to the substring path when this capability is absent.
+ */
+export interface FullTextSearchCapability {
+  /**
+   * The query-construction dialect the adapter's {@link FullTextSearchPort}
+   * understands. `'tsvector'` => Postgres `websearch_to_tsquery` + `ts_rank`.
+   */
+  implementation: 'tsvector'
+
+  /**
+   * True when `fullTextSearch()` returns a relevance `score` normalized to
+   * `[0, 1]` (higher is more relevant), so it composes with the find ladder's
+   * `RawHit.score`. Postgres normalizes `ts_rank` via the `32` normalization
+   * flag (`rank / (rank + 1)`).
+   */
+  rankedScores: boolean
+
+  /**
+   * True when the adapter also exposes an O(1) normalized-key lookup
+   * (`keyLookup()`) backed by an expression index. Used by the
+   * exact-identity tier in place of an ILIKE-narrow + client verify.
+   */
+  hasKeyLookup: boolean
+}
+
+// =============================================================================
 // Tier 3 — Analytics capability declaration
 // =============================================================================
 
@@ -231,6 +275,14 @@ export interface ProviderTierCapabilities {
    * implementation shape.
    */
   vectorSearch?: VectorSearchCapability
+
+  /**
+   * Lexical / full-text search. Absent => only the substring `search()`
+   * baseline (ILIKE/LIKE) is available; callers fall back to it. Present =>
+   * the adapter exposes a ranked, term-aware {@link FullTextSearchPort}
+   * (and, when `hasKeyLookup`, an O(1) normalized-key lookup).
+   */
+  fullTextSearch?: FullTextSearchCapability
 
   /**
    * True if the adapter supports the SVO Action-recording surface
@@ -499,6 +551,51 @@ export interface VectorSearchPort {
 }
 
 /**
+ * A single full-text search hit. Returned by adapters that declare
+ * `capabilities.fullTextSearch`. Shaped to match {@link VectorSearchHit}
+ * so the two ladder tiers map identically into `RawHit`.
+ */
+export interface FullTextSearchHit<T extends Record<string, unknown> = Record<string, unknown>> {
+  /** The matching Thing record (with `$id` / `$type` injected by the adapter). */
+  entity: T & { $id: string; $type: string }
+
+  /** Relevance score in `[0, 1]` (higher is more relevant), normalized `ts_rank`. */
+  score: number
+}
+
+/**
+ * Lexical / full-text search method shape. Adapters that declare
+ * `capabilities.fullTextSearch` MUST implement both methods.
+ *
+ *  - `fullTextSearch` — a ranked, term-aware query (Postgres
+ *    `websearch_to_tsquery` + `ts_rank`), returning hits scored in `[0, 1]`.
+ *  - `keyLookup` — O(1) exact resolution of a normalized key against an
+ *    expression index (`lower(name)` / a normalized key column), returning
+ *    the canonical id or `null`.
+ */
+export interface FullTextSearchPort {
+  /**
+   * Ranked full-text search over the entity's searchable text. The `query`
+   * is parsed by the adapter's FTS dialect (e.g. `websearch_to_tsquery`),
+   * so multi-term / quoted / negated queries are supported natively. Hits
+   * are best-first; `score` is normalized to `[0, 1]`.
+   */
+  fullTextSearch<T extends Record<string, unknown> = Record<string, unknown>>(
+    type: string,
+    query: string,
+    options?: { limit?: number; minScore?: number }
+  ): Promise<FullTextSearchHit<T>[]>
+
+  /**
+   * O(1) exact lookup of a pre-normalized key (lowercased, whitespace-collapsed
+   * `name`/`title`/`code`, or an explicit `key`) against an expression index.
+   * Returns the canonical id or `null`. The caller supplies the *normalized*
+   * key; the adapter's index normalizes the stored side to match.
+   */
+  keyLookup(type: string, normalizedKey: string): Promise<string | null>
+}
+
+/**
  * Tier-3 analytics surface. Concrete shape is intentionally narrow at
  * port level — full schema lives with the analytics adapter
  * (ClickHouse). This declaration exists so callers can detect and
@@ -625,6 +722,23 @@ export function hasVectorSearch(provider: DBProvider): provider is DBProvider & 
   if (typeof p.vectorSearch !== 'function') return false
   const caps = getProviderCapabilities(provider)
   return caps.vectorSearch !== undefined
+}
+
+/**
+ * Type guard: does this provider implement ranked full-text search?
+ *
+ * Checks the runtime methods (`fullTextSearch` + `keyLookup`) *and* requires
+ * the capability declaration to advertise `fullTextSearch` — both must agree
+ * before callers route the lexical/exact tiers through the FTS surface
+ * instead of the substring `search()` baseline.
+ */
+export function hasFullTextSearch(
+  provider: DBProvider
+): provider is DBProvider & FullTextSearchPort {
+  const p = provider as Partial<FullTextSearchPort>
+  if (typeof p.fullTextSearch !== 'function' || typeof p.keyLookup !== 'function') return false
+  const caps = getProviderCapabilities(provider)
+  return caps.fullTextSearch !== undefined
 }
 
 /**

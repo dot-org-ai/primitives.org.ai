@@ -27,7 +27,10 @@ import { createFindPorts, findOrCreate } from '../src/find-or-create.js'
 import {
   createLiveDBFindBackend,
   isLiveVectorAdapter,
+  hasLiveFullTextSearch,
+  normalizeKey,
   type LiveFindAdapter,
+  type LiveFullTextHit,
 } from '../src/find-or-create.js'
 import type { GateMode } from 'ai-functions/find-or-create'
 
@@ -71,7 +74,11 @@ class FakeVectorAdapter implements LiveFindAdapter {
     return {
       adapter: 'fake+pgvector',
       shardingModel: 'unsharded' as const,
-      vectorSearch: { maxDimensions: 8, metrics: ['cosine' as const], implementation: 'native' as const },
+      vectorSearch: {
+        maxDimensions: 8,
+        metrics: ['cosine' as const],
+        implementation: 'native' as const,
+      },
       hasActionRecording: false,
       hasVerbRegistry: false,
     }
@@ -117,7 +124,9 @@ class FakeVectorAdapter implements LiveFindAdapter {
     type: string,
     queryEmbedding: number[],
     options?: { metric?: string; limit?: number; minScore?: number }
-  ): Promise<Array<{ entity: Record<string, unknown> & { $id: string; $type: string }; score: number }>> {
+  ): Promise<
+    Array<{ entity: Record<string, unknown> & { $id: string; $type: string }; score: number }>
+  > {
     this.vectorCalls += 1
     const limit = options?.limit ?? 10
     const hits = this.rows
@@ -128,6 +137,72 @@ class FakeVectorAdapter implements LiveFindAdapter {
       }))
       .sort((p, q) => q.score - p.score)
     return hits.slice(0, limit)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// A fake adapter that ALSO advertises ranked tsvector FTS + the normalized-key
+// index (aip-j10o). It records fullTextSearch / keyLookup vs the substring
+// search/list paths so we can assert the live backend routes the optimized
+// lexical/exact tiers when the capability is present.
+// ---------------------------------------------------------------------------
+class FakeFtsAdapter extends FakeVectorAdapter {
+  ftsCalls: Array<{ type: string; query: string }> = []
+  keyLookupCalls: Array<{ type: string; key: string }> = []
+
+  override get capabilities() {
+    return {
+      ...super.capabilities,
+      adapter: 'fake+pgvector+fts',
+      fullTextSearch: {
+        implementation: 'tsvector' as const,
+        rankedScores: true,
+        hasKeyLookup: true,
+      },
+    }
+  }
+
+  async fullTextSearch(
+    type: string,
+    query: string,
+    options?: { limit?: number; minScore?: number }
+  ): Promise<LiveFullTextHit[]> {
+    this.ftsCalls.push({ type, query })
+    // Mimic websearch_to_tsquery: term-aware overlap, ts_rank normalized to [0,1].
+    const queryTerms = new Set(query.toLowerCase().split(/\s+/).filter(Boolean))
+    const limit = options?.limit ?? 100
+    return this.rows
+      .filter((r) => r.type === type)
+      .map((r) => {
+        const docTerms = new Set(
+          JSON.stringify(r.data)
+            .toLowerCase()
+            .split(/[^a-z0-9]+/)
+            .filter(Boolean)
+        )
+        let overlap = 0
+        for (const t of queryTerms) if (docTerms.has(t)) overlap += 1
+        return {
+          entity: { ...r.data, $id: r.id, $type: r.type },
+          score: overlap === 0 ? 0 : overlap / (overlap + 1),
+        }
+      })
+      .filter((h) => h.score > 0)
+      .sort((p, q) => q.score - p.score)
+      .slice(0, limit)
+  }
+
+  async keyLookup(type: string, normalizedKey: string): Promise<string | null> {
+    this.keyLookupCalls.push({ type, key: normalizedKey })
+    const row = this.rows.find((r) => {
+      const explicit = r.data['key']
+      const k =
+        typeof explicit === 'string'
+          ? normalizeKey(explicit)
+          : normalizeKey(String(r.data['name'] ?? r.data['title'] ?? r.data['code'] ?? ''))
+      return r.type === type && k === normalizedKey
+    })
+    return row ? row.id : null
   }
 }
 
@@ -186,7 +261,12 @@ describe('isLiveVectorAdapter — capability detection', () => {
   it('rejects an adapter with a vectorSearch method but no capability declaration', () => {
     const noCaps = {
       ...new FakeVectorAdapter(),
-      capabilities: { adapter: 'x', shardingModel: 'unsharded' as const, hasActionRecording: false, hasVerbRegistry: false },
+      capabilities: {
+        adapter: 'x',
+        shardingModel: 'unsharded' as const,
+        hasActionRecording: false,
+        hasVerbRegistry: false,
+      },
     }
     expect(isLiveVectorAdapter(noCaps as never)).toBe(false)
   })
@@ -195,7 +275,9 @@ describe('isLiveVectorAdapter — capability detection', () => {
 describe('createLiveDBFindBackend — exact tier (server-side narrowed, not full scan)', () => {
   it('finds an exact normalized-name match via adapter.search, not list()', async () => {
     const adapter = new FakeVectorAdapter()
-    const created = await adapter.create('Problem', undefined, { name: 'Keep audit trails accurate' })
+    const created = await adapter.create('Problem', undefined, {
+      name: 'Keep audit trails accurate',
+    })
     const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
 
     const id = await backend.exactLookup('Problem', 'keep audit trails accurate')
@@ -342,6 +424,161 @@ describe('createLiveDBFindBackend — end-to-end gate (mint then link)', () => {
     )
     expect(dup.decision).toBe('linked')
     expect(dup.thing!.$id).toBe(first.thing!.$id)
+  })
+})
+
+// ===========================================================================
+// aip-j10o — lexical/exact tiers route through FTS + key-index when advertised.
+// ===========================================================================
+
+describe('hasLiveFullTextSearch — capability detection', () => {
+  it('detects an adapter that advertises fullTextSearch capability + methods', () => {
+    expect(hasLiveFullTextSearch(new FakeFtsAdapter())).toBe(true)
+  })
+
+  it('rejects a vector-only adapter (no fullTextSearch capability/methods)', () => {
+    expect(hasLiveFullTextSearch(new FakeVectorAdapter())).toBe(false)
+  })
+
+  it('rejects an adapter with the methods but no capability declaration', () => {
+    const base = new FakeVectorAdapter()
+    const noCap: LiveFindAdapter = {
+      ...base,
+      // vector-only capability (no fullTextSearch), but FTS methods present.
+      capabilities: () => base.capabilities,
+      fullTextSearch: async () => [],
+      keyLookup: async () => null,
+      get: base.get.bind(base),
+      list: base.list.bind(base),
+      search: base.search.bind(base),
+      create: base.create.bind(base),
+      vectorSearch: base.vectorSearch.bind(base),
+    }
+    expect(hasLiveFullTextSearch(noCap)).toBe(false)
+  })
+})
+
+describe('createLiveDBFindBackend — lexical tier routes through tsvector FTS (aip-j10o)', () => {
+  it('calls adapter.fullTextSearch (NOT the ILIKE search path) when FTS is advertised', async () => {
+    const adapter = new FakeFtsAdapter()
+    await adapter.create('Doc', undefined, { name: 'neural network training' })
+    await adapter.create('Doc', undefined, { name: 'neural pasta recipe' })
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+
+    const hits = await backend.lexicalSearch('Doc', 'neural network', 10)
+    expect(adapter.ftsCalls.length).toBe(1)
+    expect(adapter.ftsCalls[0]!.query).toBe('neural network')
+    // The substring search() path was NOT used for the lexical tier.
+    expect(adapter.searchCalls.length).toBe(0)
+    // Ranked FTS hands back normalized scores, best-first.
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+    expect(hits[0]!.score).toBeGreaterThan(0)
+    expect(hits[0]!.score).toBeLessThanOrEqual(1)
+    const top = await adapter.get('Doc', hits[0]!.id)
+    expect(top!['name']).toBe('neural network training')
+  })
+
+  it('passes the multi-term query through verbatim (no anchor-token reduction)', async () => {
+    const adapter = new FakeFtsAdapter()
+    await adapter.create('Doc', undefined, { name: 'keep audit trails accurate' })
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+    await backend.lexicalSearch('Doc', 'audit trails accurate', 10)
+    expect(adapter.ftsCalls[0]!.query).toBe('audit trails accurate')
+  })
+
+  it('returns [] for empty query text without calling the adapter', async () => {
+    const adapter = new FakeFtsAdapter()
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+    expect(await backend.lexicalSearch('Doc', '   ', 10)).toEqual([])
+    expect(adapter.ftsCalls.length).toBe(0)
+  })
+})
+
+describe('createLiveDBFindBackend — exact tier routes through the key index (aip-j10o)', () => {
+  it('calls adapter.keyLookup (single probe, NOT ILIKE-narrow) when FTS is advertised', async () => {
+    const adapter = new FakeFtsAdapter()
+    const created = await adapter.create('Problem', undefined, {
+      name: 'Keep audit trails accurate',
+    })
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+
+    const id = await backend.exactLookup('Problem', 'keep audit trails accurate')
+    expect(id).toBe(created['$id'])
+    expect(adapter.keyLookupCalls.length).toBe(1)
+    expect(adapter.keyLookupCalls[0]!.key).toBe('keep audit trails accurate')
+    // The exact tier did NOT ILIKE-narrow or list-scan.
+    expect(adapter.searchCalls.length).toBe(0)
+    expect(adapter.listCalls).toBe(0)
+  })
+
+  it('returns null (and still uses the index) for a non-exact normalized key', async () => {
+    const adapter = new FakeFtsAdapter()
+    await adapter.create('Problem', undefined, { name: 'Keep audit trails accurate' })
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+    expect(await backend.exactLookup('Problem', 'keep audit trail')).toBeNull()
+    expect(adapter.keyLookupCalls.length).toBe(1)
+  })
+
+  it('short-circuits an empty key without calling keyLookup', async () => {
+    const adapter = new FakeFtsAdapter()
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+    expect(await backend.exactLookup('Problem', '')).toBeNull()
+    expect(adapter.keyLookupCalls.length).toBe(0)
+  })
+})
+
+describe('createLiveDBFindBackend — fallback when FTS is NOT advertised (CH/FTS-less pg)', () => {
+  it('lexical tier falls back to substring search + Jaccard when no FTS capability', async () => {
+    const adapter = new FakeVectorAdapter() // no fullTextSearch capability
+    await adapter.create('Doc', undefined, { name: 'neural network training' })
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+    const hits = await backend.lexicalSearch('Doc', 'neural network', 10)
+    // The ILIKE search() path was used (the fallback), not FTS.
+    expect(adapter.searchCalls.length).toBeGreaterThan(0)
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('exact tier falls back to ILIKE-narrow + client verify when no FTS capability', async () => {
+    const adapter = new FakeVectorAdapter()
+    const created = await adapter.create('Problem', undefined, {
+      name: 'Keep audit trails accurate',
+    })
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+    const id = await backend.exactLookup('Problem', 'keep audit trails accurate')
+    expect(id).toBe(created['$id'])
+    expect(adapter.searchCalls.length).toBeGreaterThan(0)
+  })
+})
+
+describe('createLiveDBFindBackend — end-to-end gate over an FTS adapter (aip-j10o)', () => {
+  it('mints greenfield then links the exact duplicate via the key index', async () => {
+    const adapter = new FakeFtsAdapter()
+    const backend = createLiveDBFindBackend({ adapter, embed: makeEmbed() })
+    const ports = createFindPorts(backend, { thresholds: () => band })
+
+    const first = await findOrCreate(
+      {
+        noun: 'Problem',
+        mode: 'symmetric-collapse',
+        text: 'Keep audit trails accurate',
+        data: { name: 'Keep audit trails accurate' },
+      },
+      { ports, backend }
+    )
+    expect(first.decision).toBe('minted')
+
+    const dup = await findOrCreate(
+      {
+        noun: 'Problem',
+        mode: 'symmetric-collapse',
+        text: 'keep audit trails accurate',
+        data: { name: 'keep audit trails accurate' },
+      },
+      { ports, backend }
+    )
+    expect(dup.decision).toBe('linked')
+    expect(dup.thing!.$id).toBe(first.thing!.$id)
+    expect(adapter.keyLookupCalls.length).toBeGreaterThan(0)
   })
 })
 

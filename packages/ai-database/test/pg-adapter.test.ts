@@ -25,6 +25,7 @@ import {
   createPostgresProvider,
   createNeonHttpExecutor,
   createPgClientExecutor,
+  bootstrapSchema,
   type PgExecutor,
 } from '../src/pg-adapter.js'
 import {
@@ -32,8 +33,39 @@ import {
   hasActionRecording,
   hasVerbRegistry,
   hasVectorSearch,
+  hasFullTextSearch,
   hasAnalytics,
 } from '../src/db-provider-port.js'
+
+// ---------------------------------------------------------------------------
+// FTS test helpers — mirror the adapter's normalizedKeyExpr / searchableTextExpr
+// so the fake executor scores the way Postgres would (close enough for unit).
+// ---------------------------------------------------------------------------
+
+/** Mirror of normalizedKeyExpr: explicit key wins, else name/title/code; normalized. */
+function normalizedKeyOf(data: Record<string, unknown>): string {
+  const raw =
+    (data['key'] as string) ??
+    (data['name'] as string) ??
+    (data['title'] as string) ??
+    (data['code'] as string) ??
+    ''
+  return String(raw).trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Mirror of searchableTextExpr: name/title/code + all jsonb text, tokenized. */
+function searchableTermsOf(data: Record<string, unknown>): Set<string> {
+  const text = `${data['name'] ?? ''} ${data['title'] ?? ''} ${data['code'] ?? ''} ${JSON.stringify(
+    data
+  )}`
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+  )
+}
 
 // =============================================================================
 // Fake PgExecutor — interprets the SQL family the adapter emits
@@ -308,6 +340,41 @@ function queryThingsFromStore(
     const id = String(params[2])
     const row = store.things.get(store.thingKey(ns, id))
     return row ? [{ data: row.data }] : []
+  }
+
+  // keyLookup(): normalized-key expression index probe (regexp_replace(...) = $3)
+  if (/regexp_replace\(.*\)\s*=\s*\$3/is.test(sql) && /SELECT\s+id\s+FROM/i.test(sql)) {
+    const want = String(params[2])
+    const row = [...store.things.values()].find(
+      (t) => t.ns === ns && t.type === type && normalizedKeyOf(t.data) === want
+    )
+    return row ? [{ id: row.id }] : []
+  }
+
+  // fullTextSearch(): ts_rank + websearch_to_tsquery (term-aware, ranked)
+  if (/ts_rank\s*\(/i.test(sql) && /websearch_to_tsquery/i.test(sql)) {
+    const query = String(params[2])
+    const limit = Number(params[3] ?? 100)
+    const queryTerms = new Set(
+      query
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+    )
+    const matches = [...store.things.values()]
+      .filter((t) => t.ns === ns && t.type === type)
+      .map((t) => {
+        const docTerms = searchableTermsOf(t.data)
+        let overlap = 0
+        for (const term of queryTerms) if (docTerms.has(term)) overlap += 1
+        // Mimic ts_rank normalized to [0,1]: rank ~ overlap, score = rank/(rank+1).
+        const rank = overlap
+        return { id: t.id, data: t.data, score: rank === 0 ? 0 : rank / (rank + 1) }
+      })
+      .filter((m) => m.score > 0)
+    matches.sort((a, b) => (b.score !== a.score ? b.score - a.score : a.id < b.id ? -1 : 1))
+    return matches.slice(0, limit).map((m) => ({ id: m.id, data: m.data, score: m.score }))
   }
 
   // search(): ILIKE $3
@@ -614,6 +681,17 @@ describe('PostgresProvider — capability declaration', () => {
 
   it('passes hasVectorSearch type guard (Tier 4 implemented in aip-kh9l)', () => {
     expect(hasVectorSearch(adapter)).toBe(true)
+  })
+
+  it('declares ranked tsvector full-text search + key-lookup (aip-j10o)', () => {
+    const caps = adapter.capabilities
+    expect(caps.fullTextSearch?.implementation).toBe('tsvector')
+    expect(caps.fullTextSearch?.rankedScores).toBe(true)
+    expect(caps.fullTextSearch?.hasKeyLookup).toBe(true)
+  })
+
+  it('passes hasFullTextSearch type guard (method + capability agree)', () => {
+    expect(hasFullTextSearch(adapter)).toBe(true)
   })
 })
 
@@ -1237,5 +1315,168 @@ describe('PostgresProvider — Tier 4 vector search', () => {
     expect(hits[0]?.entity['$type']).toBe('Document')
     expect(hits[0]?.entity['title']).toBe('Alpha')
     expect(hits[0]?.entity['words']).toBe(3)
+  })
+})
+
+// =============================================================================
+// Tests — Lexical / exact tiers (tsvector FTS + normalized-key index, aip-j10o)
+// =============================================================================
+
+describe('PostgresProvider — fullTextSearch (tsvector query construction)', () => {
+  let store: FakeStore
+  let adapter: PostgresProvider
+
+  beforeEach(() => {
+    store = new FakeStore()
+    adapter = new PostgresProvider({ executor: makeFakeExecutor(store), namespace: 'tenant-1' })
+  })
+
+  it('emits websearch_to_tsquery + ts_rank with the configured regconfig', async () => {
+    await adapter.create('Doc', 'd1', { name: 'neural network training' })
+    await adapter.fullTextSearch('Doc', 'neural network')
+    const ftsSql = store.log.find((e) => /ts_rank/i.test(e.sql))
+    expect(ftsSql).toBeDefined()
+    expect(ftsSql!.sql).toMatch(/websearch_to_tsquery\('english'/)
+    expect(ftsSql!.sql).toMatch(/ts_rank\(/)
+    // ts_rank normalization flag 32 => score in [0,1].
+    expect(ftsSql!.sql).toMatch(/,\s*32\)\s*AS score/)
+    // index expression is built with the same to_tsvector(...) the query uses.
+    expect(ftsSql!.sql).toMatch(/to_tsvector\('english'/)
+    expect(ftsSql!.sql).toMatch(/@@/)
+    // user query is a bound param, never interpolated.
+    expect(ftsSql!.params).toContain('neural network')
+    expect(ftsSql!.sql).not.toContain('neural network ')
+  })
+
+  it('honours a custom ftsConfig in both the query and the rank', async () => {
+    const a = new PostgresProvider({ executor: makeFakeExecutor(store), ftsConfig: 'simple' })
+    await a.create('Doc', 'd1', { name: 'audit trails' })
+    await a.fullTextSearch('Doc', 'audit')
+    const ftsSql = store.log.find((e) => /ts_rank/i.test(e.sql))
+    expect(ftsSql!.sql).toMatch(/websearch_to_tsquery\('simple'/)
+    expect(ftsSql!.sql).toMatch(/to_tsvector\('simple'/)
+  })
+
+  it('rejects an injection-shaped ftsConfig at construction', () => {
+    expect(
+      () => new PostgresProvider({ executor: makeFakeExecutor(store), ftsConfig: "x'; --" })
+    ).toThrow(/ftsConfig/)
+  })
+
+  it('ranks multi-term overlap highest and normalizes score into [0,1]', async () => {
+    await adapter.create('Doc', 'd1', { name: 'neural network training' })
+    await adapter.create('Doc', 'd2', { name: 'neural pasta recipe' })
+    const hits = await adapter.fullTextSearch('Doc', 'neural network')
+    expect(hits.length).toBeGreaterThanOrEqual(1)
+    expect(hits[0]!.entity['$id']).toBe('d1')
+    for (const h of hits) {
+      expect(h.score).toBeGreaterThan(0)
+      expect(h.score).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('applies minScore filtering client-side', async () => {
+    await adapter.create('Doc', 'd1', { name: 'neural network training' })
+    await adapter.create('Doc', 'd2', { name: 'pasta neural' })
+    const all = await adapter.fullTextSearch('Doc', 'neural network')
+    const filtered = await adapter.fullTextSearch('Doc', 'neural network', { minScore: 0.6 })
+    expect(filtered.length).toBeLessThanOrEqual(all.length)
+    for (const h of filtered) expect(h.score).toBeGreaterThanOrEqual(0.6)
+  })
+
+  it('passes the limit through as a bound param', async () => {
+    await adapter.create('Doc', 'd1', { name: 'alpha beta' })
+    await adapter.fullTextSearch('Doc', 'alpha', { limit: 5 })
+    const ftsSql = store.log.find((e) => /ts_rank/i.test(e.sql))
+    expect(ftsSql!.params).toContain(5)
+  })
+})
+
+describe('PostgresProvider — keyLookup (normalized-key expression index)', () => {
+  let store: FakeStore
+  let adapter: PostgresProvider
+
+  beforeEach(() => {
+    store = new FakeStore()
+    adapter = new PostgresProvider({ executor: makeFakeExecutor(store), namespace: 'tenant-1' })
+  })
+
+  it('resolves an exact normalized name in a single indexed probe (no ILIKE)', async () => {
+    await adapter.create('Problem', 'p1', { name: 'Keep audit trails accurate' })
+    const id = await adapter.keyLookup('Problem', 'keep audit trails accurate')
+    expect(id).toBe('p1')
+    const probe = store.log.find((e) => /regexp_replace/i.test(e.sql))
+    expect(probe).toBeDefined()
+    expect(probe!.sql).toMatch(/lower\(/)
+    expect(probe!.sql).toMatch(/LIMIT 1/i)
+    // It must NOT be an ILIKE substring narrow.
+    expect(store.log.some((e) => /ILIKE/i.test(e.sql))).toBe(false)
+    // The normalized key is a bound param.
+    expect(probe!.params).toContain('keep audit trails accurate')
+  })
+
+  it('resolves via an explicit normalized key field (key wins over name)', async () => {
+    await adapter.create('SKU', 's1', { code: 'ABC-123', key: 'abc-123' })
+    const id = await adapter.keyLookup('SKU', 'abc-123')
+    expect(id).toBe('s1')
+  })
+
+  it('returns null for a substring that is not an exact normalized key', async () => {
+    await adapter.create('Problem', 'p1', { name: 'Keep audit trails accurate' })
+    expect(await adapter.keyLookup('Problem', 'keep audit trail')).toBeNull()
+  })
+
+  it('returns null for an empty key without touching the executor', async () => {
+    const before = store.log.length
+    expect(await adapter.keyLookup('Problem', '')).toBeNull()
+    expect(store.log.length).toBe(before)
+  })
+})
+
+describe('bootstrapSchema — lexical/exact-tier index DDL (aip-j10o)', () => {
+  function capturingExecutor(): { executor: PgExecutor; sql: string[] } {
+    const sql: string[] = []
+    const executor: PgExecutor = async (text) => {
+      sql.push(text)
+      return []
+    }
+    return { executor, sql }
+  }
+
+  it('creates the FTS GIN index over the same to_tsvector expression the query uses', async () => {
+    const { executor, sql } = capturingExecutor()
+    await bootstrapSchema(executor, { withVector: false })
+    const ddl = sql.find((s) => /things_fts_gin_idx/.test(s))
+    expect(ddl).toBeDefined()
+    expect(ddl!).toMatch(/USING gin/i)
+    expect(ddl!).toMatch(/to_tsvector\('english'/)
+  })
+
+  it('creates the normalized-key expression index', async () => {
+    const { executor, sql } = capturingExecutor()
+    await bootstrapSchema(executor, { withVector: false })
+    const ddl = sql.find((s) => /things_normkey_idx/.test(s))
+    expect(ddl).toBeDefined()
+    expect(ddl!).toMatch(/lower\(/)
+    expect(ddl!).toMatch(/regexp_replace/)
+  })
+
+  it('honours a custom ftsConfig in the FTS index DDL', async () => {
+    const { executor, sql } = capturingExecutor()
+    await bootstrapSchema(executor, { withVector: false, ftsConfig: 'simple' })
+    const ddl = sql.find((s) => /things_fts_gin_idx/.test(s))
+    expect(ddl!).toMatch(/to_tsvector\('simple'/)
+  })
+
+  it('keeps the FTS index best-effort: a failing CREATE does not abort bootstrap', async () => {
+    const sql: string[] = []
+    const executor: PgExecutor = async (text) => {
+      sql.push(text)
+      if (/things_fts_gin_idx/.test(text)) throw new Error('FTS config not available')
+      return []
+    }
+    await expect(bootstrapSchema(executor, { withVector: false })).resolves.toBeUndefined()
+    // bootstrap still ran the later DDL (verbs table) despite the FTS failure.
+    expect(sql.some((s) => /\.verbs/.test(s))).toBe(true)
   })
 })

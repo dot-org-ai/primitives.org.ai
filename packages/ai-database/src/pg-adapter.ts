@@ -116,6 +116,8 @@ import type {
   VectorSearchPort,
   VectorSearchHit,
   VectorSimilarityMetric,
+  FullTextSearchPort,
+  FullTextSearchHit,
 } from './db-provider-port.js'
 import {
   validateTypeName,
@@ -270,6 +272,50 @@ export interface PostgresProviderOptions {
    * the executor factories.
    */
   driver?: 'neon-http' | 'postgres-js' | string
+
+  /**
+   * Postgres text-search configuration (regconfig) used by the `tsvector`
+   * full-text path (`to_tsvector(<config>, ...)` / `websearch_to_tsquery`).
+   * Must match the config the FTS GIN index was built with (see
+   * {@link bootstrapSchema}'s `ftsConfig`).
+   *
+   * @default 'english'
+   */
+  ftsConfig?: string
+}
+
+/** The default Postgres text-search configuration for the `tsvector` FTS path. */
+const DEFAULT_FTS_CONFIG = 'english'
+
+/**
+ * Validate a Postgres text-search config name. It is interpolated into SQL
+ * (regconfigs cannot be bound as `$N`), so we restrict it to a safe identifier
+ * shape to avoid injection.
+ */
+function validateFtsConfig(config: string): void {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(config)) {
+    throw new Error(`Invalid ftsConfig "${config}": must be a simple identifier`)
+  }
+}
+
+/**
+ * The SQL expression that projects a Thing's searchable text out of the jsonb
+ * `data`. Concatenates the common headline fields (name/title/code) with the
+ * full jsonb-as-text so multi-field queries still match. Shared by the FTS
+ * index DDL and the `fullTextSearch` query so the index is actually used.
+ */
+function searchableTextExpr(): string {
+  return `(coalesce(data->>'name','') || ' ' || coalesce(data->>'title','') || ' ' || coalesce(data->>'code','') || ' ' || data::text)`
+}
+
+/**
+ * The SQL expression that projects a Thing's normalized exact-tier key out of
+ * the jsonb `data`: an explicit `key` wins, else `name`/`title`/`code`,
+ * lowercased + whitespace-collapsed. Mirrors the client-side `normalizeKey`.
+ * Shared by the key-lookup expression index DDL and the `keyLookup` query.
+ */
+function normalizedKeyExpr(): string {
+  return `regexp_replace(btrim(lower(coalesce(data->>'key', data->>'name', data->>'title', data->>'code', ''))), '\\s+', ' ', 'g')`
 }
 
 /**
@@ -375,13 +421,16 @@ function embeddingLiteral(embedding: ReadonlyArray<number>): string {
  * Postgres + pgvector adapter implementing {@link DBProviderPort} and
  * {@link DBProviderSVO}.
  */
-export class PostgresProvider implements DBProviderPort, DBProviderSVO, VectorSearchPort {
+export class PostgresProvider
+  implements DBProviderPort, DBProviderSVO, VectorSearchPort, FullTextSearchPort
+{
   private readonly executor: PgExecutor
   private readonly namespace: string
   private readonly schema: string
   private readonly vectorDimensions: number
   private readonly _shardingModel: 'partitioned-by-tenant' | 'unsharded'
   private readonly driver: string
+  private readonly ftsConfig: string
 
   constructor(options: PostgresProviderOptions) {
     this.executor = options.executor
@@ -390,6 +439,8 @@ export class PostgresProvider implements DBProviderPort, DBProviderSVO, VectorSe
     this.vectorDimensions = options.vectorDimensions ?? DEFAULT_VECTOR_DIMS
     this._shardingModel = options.shardingModel ?? 'partitioned-by-tenant'
     this.driver = options.driver ?? 'pg'
+    this.ftsConfig = options.ftsConfig ?? DEFAULT_FTS_CONFIG
+    validateFtsConfig(this.ftsConfig)
   }
 
   /**
@@ -413,6 +464,14 @@ export class PostgresProvider implements DBProviderPort, DBProviderSVO, VectorSe
         maxDimensions: this.vectorDimensions,
         metrics: ['cosine', 'l2', 'dot'],
         implementation: 'native',
+      },
+      // Tier: ranked `tsvector` FTS + O(1) normalized-key lookup, both backed
+      // by expression indexes (see bootstrapSchema). `ts_rank` is normalized to
+      // [0,1] via the `32` flag so it composes with the find-ladder RawHit.
+      fullTextSearch: {
+        implementation: 'tsvector',
+        rankedScores: true,
+        hasKeyLookup: true,
       },
       hasActionRecording: true,
       hasVerbRegistry: true,
@@ -498,6 +557,77 @@ export class PostgresProvider implements DBProviderPort, DBProviderSVO, VectorSe
       const data = asJsonb(row['data'])
       return { ...data, $id: String(row['id']), $type: type }
     })
+  }
+
+  /**
+   * Ranked full-text search over the entity's searchable text (Tier:
+   * `tsvector` FTS). Unlike {@link search} (an ILIKE substring superset),
+   * this is term-aware: the query is parsed by `websearch_to_tsquery` (so
+   * `"audit trails" -recipe` and multi-term queries work), matched against
+   * the same `to_tsvector(<ftsConfig>, ...)` expression the FTS GIN index is
+   * built on (so the index is used), and ranked by `ts_rank` *normalized to
+   * `[0, 1]`* (the `32` flag => `rank / (rank + 1)`), so the returned `score`
+   * composes directly with the find ladder's `RawHit.score`.
+   *
+   * The text-search config (regconfig) is interpolated (it cannot be bound as
+   * a `$N` param) — it is validated to a simple identifier at construction.
+   * The user-supplied `query` is always a bound `$N` parameter.
+   */
+  async fullTextSearch<T extends Record<string, unknown> = Record<string, unknown>>(
+    type: string,
+    query: string,
+    options?: { limit?: number; minScore?: number }
+  ): Promise<FullTextSearchHit<T>[]> {
+    validateTypeName(type)
+    validateSearchQuery(query)
+    const limit = Math.max(1, options?.limit ?? 100)
+
+    const cfg = this.ftsConfig
+    const tsv = `to_tsvector('${cfg}', ${searchableTextExpr()})`
+    const tsq = `websearch_to_tsquery('${cfg}', $3)`
+    const sql = `SELECT id, data, ts_rank(${tsv}, ${tsq}, 32) AS score
+       FROM ${this.schema}.things
+       WHERE ns = $1 AND type = $2 AND ${tsv} @@ ${tsq}
+       ORDER BY score DESC, id
+       LIMIT $4`
+    const rows = await this.executor(sql, [this.namespace, type, query, limit])
+
+    let hits: FullTextSearchHit<T>[] = rows.map((row) => {
+      const data = asJsonb(row['data'])
+      const score = typeof row['score'] === 'number' ? row['score'] : Number(row['score'] ?? 0)
+      return {
+        entity: { ...data, $id: String(row['id']), $type: type } as T & {
+          $id: string
+          $type: string
+        },
+        score,
+      }
+    })
+    if (options?.minScore !== undefined) {
+      const min = options.minScore
+      hits = hits.filter((h) => h.score >= min)
+    }
+    return hits
+  }
+
+  /**
+   * O(1) exact lookup of a pre-normalized key against the normalized-key
+   * expression index (`things_normkey_idx`, built on {@link normalizedKeyExpr}).
+   * The caller passes the *normalized* key (lowercased, whitespace-collapsed);
+   * the index normalizes the stored `key`/`name`/`title`/`code` to match, so
+   * this is a single index probe — NOT an ILIKE-narrow + client-side verify.
+   * Returns the canonical id or `null`.
+   */
+  async keyLookup(type: string, normalizedKey: string): Promise<string | null> {
+    validateTypeName(type)
+    if (!normalizedKey) return null
+    const rows = await this.executor(
+      `SELECT id FROM ${this.schema}.things
+       WHERE ns = $1 AND type = $2 AND ${normalizedKeyExpr()} = $3
+       LIMIT 1`,
+      [this.namespace, type, normalizedKey]
+    )
+    return rows.length > 0 ? String(rows[0]!['id']) : null
   }
 
   async create(
@@ -1145,6 +1275,18 @@ export class PostgresProvider implements DBProviderPort, DBProviderSVO, VectorSe
  * `vector` extension installation if your database does not have
  * pgvector available (set `withVector: false`).
  *
+ * Includes the lexical/exact-tier indexes the live `findOrCreate` backend
+ * rides (aip-j10o):
+ *  - `things_fts_gin_idx` — an expression GIN index over
+ *    `to_tsvector(<ftsConfig>, <searchable text>)`, used by
+ *    {@link PostgresProvider.fullTextSearch}. Built with the SAME config +
+ *    expression the query uses, so the planner uses the index.
+ *  - `things_normkey_idx` — an expression b-tree index over the normalized
+ *    key (`lower(coalesce(key,name,title,code))`, whitespace-collapsed), used
+ *    by {@link PostgresProvider.keyLookup} for O(1) exact identity resolution.
+ * Both are best-effort (`try`/catch) so bootstrap stays idempotent on
+ * databases where the FTS config is unavailable.
+ *
  * Designed for one-shot cluster bootstrap and for PGLite-style test
  * harnesses. Production deployments typically run schema migrations via
  * a tool like `dbmate` or `node-pg-migrate`; this helper is a
@@ -1152,11 +1294,18 @@ export class PostgresProvider implements DBProviderPort, DBProviderSVO, VectorSe
  */
 export async function bootstrapSchema(
   executor: PgExecutor,
-  options: { schema?: string; withVector?: boolean; vectorDimensions?: number } = {}
+  options: {
+    schema?: string
+    withVector?: boolean
+    vectorDimensions?: number
+    ftsConfig?: string
+  } = {}
 ): Promise<void> {
   const schema = options.schema ?? DEFAULT_SCHEMA
   const withVector = options.withVector ?? true
   const dims = options.vectorDimensions ?? DEFAULT_VECTOR_DIMS
+  const ftsConfig = options.ftsConfig ?? DEFAULT_FTS_CONFIG
+  validateFtsConfig(ftsConfig)
 
   if (withVector) {
     try {
@@ -1181,6 +1330,31 @@ export async function bootstrapSchema(
     )`
   )
   await executor(`CREATE INDEX IF NOT EXISTS things_type_idx ON ${schema}.things (ns, type)`)
+
+  // Lexical tier — expression GIN index over the searchable-text tsvector.
+  // Built with the SAME config + expression `fullTextSearch` queries, so the
+  // planner can use it. Best-effort: a missing FTS config shouldn't break
+  // bootstrap (the lexical tier falls back to the ILIKE `search()` baseline).
+  try {
+    await executor(
+      `CREATE INDEX IF NOT EXISTS things_fts_gin_idx ON ${schema}.things
+       USING gin (to_tsvector('${ftsConfig}', ${searchableTextExpr()}))`
+    )
+  } catch {
+    // FTS config unavailable; `fullTextSearch` callers degrade to substring search.
+  }
+
+  // Exact tier — expression b-tree index over the normalized key for O(1)
+  // `keyLookup`. (ns, type) is the leading composite filter; the normalized-key
+  // expression is the probe. Best-effort for parity with the FTS index.
+  try {
+    await executor(
+      `CREATE INDEX IF NOT EXISTS things_normkey_idx ON ${schema}.things
+       (ns, type, (${normalizedKeyExpr()}))`
+    )
+  } catch {
+    // Index creation failed (unusual); `keyLookup` still works, just not O(1).
+  }
 
   await executor(
     `CREATE TABLE IF NOT EXISTS ${schema}.actions (
