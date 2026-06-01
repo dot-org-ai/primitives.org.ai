@@ -283,11 +283,23 @@ function stubSettler(): Settler {
 
 /**
  * Resolve the {@link Money} amount to charge from the Offer's price, gated by the
- * settlement `basis`. Today only a `SinglePrice` Offer carries a machine price;
- * all other shapes (Tiered/UsageMeter/SuccessFee/Gainshare/CustomQuote) resolve
- * to zero {@link Money} here and await the finance firmware's pricing engine
- * (aip-cnks.5). An explicit `override` (from {@link CreateHandleOpts.amount})
- * always wins.
+ * settlement `basis`. An explicit `override` (from {@link CreateHandleOpts.amount})
+ * always wins. Otherwise the Offer's `priceSpecification.structure` decides:
+ *
+ *   - `SinglePrice` → its `price` (the one concrete amount).
+ *   - `Tiered`      → the FIRST tier's `price` (the selection rule: the lead
+ *     tier is the default offer; a richer tier-selection path arrives with the
+ *     finance pricing engine in aip-cnks.5). A Tiered Offer carries a concrete
+ *     `price: Money` per tier, so it MUST resolve to that — never zero.
+ *
+ * For genuinely ORDER-TIME-UNRESOLVABLE structures (`UsageMeter` / `SuccessFee` /
+ * `Gainshare` / `CustomQuote`) the amount is known only POST-DELIVERY (metered
+ * usage, a realised invoice, a delta over a baseline, or an RFQ) and so resolves
+ * to {@link ZERO_MONEY} here, awaiting the finance pricing engine (aip-cnks.5).
+ * Returning ZERO is acceptable ONLY because a LIVE settler refuses to act on it:
+ * {@link makeFinanceSettler}'s `charge` throws `ZeroChargeError` on a zero/negative
+ * amount, so a real $0 capture can never silently happen. The in-memory
+ * `stubSettler` (a separate test-only path) is unaffected.
  */
 export function resolveAmount(
   offer: OfferOf<unknown>,
@@ -295,10 +307,23 @@ export function resolveAmount(
   override?: Money
 ): Money {
   if (override) return override
-  const spec = (offer as { priceSpecification?: { structure?: string; price?: Money } })
-    .priceSpecification
+  const spec = (
+    offer as {
+      priceSpecification?: {
+        structure?: string
+        price?: Money
+        tiers?: ReadonlyArray<{ name: string; price: Money }>
+      }
+    }
+  ).priceSpecification
   if (spec && spec.structure === 'SinglePrice' && spec.price) return spec.price
-  // awaits aip-cnks.5 — non-single-price shapes need the finance pricing engine.
+  // Tiered carries a concrete `price: Money` per tier — resolve the first
+  // (lead/default) tier rather than zeroing it.
+  if (spec && spec.structure === 'Tiered' && spec.tiers && spec.tiers.length > 0) {
+    return spec.tiers[0]!.price
+  }
+  // UsageMeter/SuccessFee/Gainshare/CustomQuote are order-time-unresolvable —
+  // see the docblock. A live settler refuses to act on the zero (ZeroChargeError).
   return { ...ZERO_MONEY }
 }
 
@@ -563,7 +588,14 @@ export function createInvocationHandle<TIn, TOut>(
         // the escalation is cleared and the re-delivery should settle).
         if (settledD.settled) return settledD.promise
         if (state === 'DELIVERED') return drive.accept()
-        return settledD.promise
+        // Neither settled NOR DELIVERED after a resume re-drive — REJECT loudly
+        // rather than returning a never-resolving `settledD.promise` that would
+        // hang the caller forever (e.g. the re-drive auto-failed into ERROR, or
+        // the buyer disputed before this returned).
+        throw new Error(
+          `resume reached an unexpected non-delivered/non-settled state ('${state}') — ` +
+            `the escalation re-drive neither settled nor reached DELIVERED`
+        )
       }
       if (r === 'cancel') {
         go('CANCELLED', 'escalation-cancel')

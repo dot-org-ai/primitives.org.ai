@@ -16,7 +16,17 @@
  *   - a Human step on the DEFAULT (unwired) runner rejects with a clear stub.
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// Mock the `ai-functions` substrate so the DEFAULT `aiFunctionsRunner` can be
+// exercised with NO real LLM / sandbox call. `generateObject` returns the
+// `{ result }` envelope the runner is expected to UNWRAP to `.result` (fix 3);
+// `generateText`/`defineFunction` are stubbed for completeness (unused below).
+vi.mock('ai-functions', () => ({
+  generateObject: vi.fn(async () => ({ object: { result: { draft: 'unwrapped-value' } } })),
+  generateText: vi.fn(async () => ({ text: 'agentic-text' })),
+  defineFunction: vi.fn(() => ({ call: async () => ({}) })),
+}))
 
 import type { InvocationEvent, Money } from '../../src/v4/index.js'
 import {
@@ -295,5 +305,64 @@ describe('v4 makeCascadeExecutor — default runner Human path rejects', () => {
     })
     const { ctx } = makeExecCtx<unknown>({})
     await expect(executor.execute(ctx as never)).rejects.toThrow(/Human/)
+  })
+})
+
+// ============================================================================
+// aiFunctionsRunner — the Generative runner UNWRAPS `result.object.result`
+// (aip-cnks.10 fix 3). With `generateObject` mocked to return the
+// `{ object: { result: <value> } }` envelope, a Generative step's `outputAs`
+// must bind the UNWRAPPED `<value>` — so a later `$ref` reaches the value, not
+// the `{ result: ... }` wrapper.
+// ============================================================================
+
+describe('v4 aiFunctionsRunner — Generative unwraps result.object.result', () => {
+  it('runGenerative returns the unwrapped value (not the { result } wrapper)', async () => {
+    const runner = aiFunctionsRunner()
+    const step: CascadeStep = {
+      fnKind: 'Generative',
+      fnId: 'fn:g',
+      name: 'g',
+      args: { topic: 'x' },
+      outputAs: 'gen',
+    }
+    const res = await runner.runGenerative(step, { args: { topic: 'x' }, input: {}, bag: {} })
+    // the runner peeled the `{ result }` envelope: the value is the inner object.
+    expect(res.value).toEqual({ draft: 'unwrapped-value' })
+  })
+
+  it("a Generative step's outputAs binds the unwrapped value in the cascade bag", async () => {
+    const cascade: CascadeStep[] = [
+      {
+        fnKind: 'Generative',
+        fnId: 'fn:g',
+        name: 'g',
+        args: { topic: 'x' },
+        outputAs: 'gen',
+      },
+      // a second Code step $refs INTO the unwrapped value — only reachable if the
+      // bag holds `{ draft: ... }` (the unwrapped value), not `{ result: {...} }`.
+      {
+        fnKind: 'Code',
+        fnId: 'fn:c',
+        name: 'c',
+        args: { draft: { $ref: 'gen.draft' } },
+        outputAs: 'echo',
+      },
+    ]
+    const records: DispatchRecord[] = []
+    const executor = makeCascadeExecutor<unknown, unknown>({
+      cascade,
+      // Generative goes through the mocked default; Code through the fake so we
+      // can read the resolved $ref arg without a sandbox call.
+      runner: {
+        ...fakeRunner(records),
+        runGenerative: aiFunctionsRunner().runGenerative,
+      },
+    })
+    const { ctx } = makeExecCtx<unknown>({})
+    await executor.execute(ctx as never)
+    // the Code step saw the UNWRAPPED `draft` — the $ref reached the value.
+    expect(records.find((r) => r.kind === 'code')!.args).toEqual({ draft: 'unwrapped-value' })
   })
 })

@@ -15,7 +15,7 @@
 import { describe, it, expect } from 'vitest'
 
 import type { Money } from '../../src/v4/index.js'
-import { makeFinanceSettler, stubFinanceProvider } from '../../src/v4/settle.js'
+import { makeFinanceSettler, stubFinanceProvider, ZeroChargeError } from '../../src/v4/settle.js'
 
 const USD = (amount: bigint): Money => ({ amount, currency: 'USD' })
 
@@ -79,6 +79,28 @@ describe('makeFinanceSettler — refund', () => {
     if (refund.outcome !== 'refunded') throw new Error('expected refunded')
     // provider falls back to the original captured amount for a full refund.
     expect(refund.amount).toEqual(amount)
+  })
+})
+
+describe('makeFinanceSettler — NO SILENT ZERO-CHARGE', () => {
+  it('charging ZERO_MONEY THROWS ZeroChargeError (no provider call)', async () => {
+    const provider = stubFinanceProvider()
+    const settler = makeFinanceSettler(provider)
+
+    await expect(
+      settler.charge({ basis: 'outcome', amount: USD(0n), buyer: 'buyer:z' })
+    ).rejects.toBeInstanceOf(ZeroChargeError)
+    // a live $0 capture is a bug — the provider never saw the call.
+    expect(provider.charges).toHaveLength(0)
+  })
+
+  it('a negative amount also THROWS (defensive)', async () => {
+    const provider = stubFinanceProvider()
+    const settler = makeFinanceSettler(provider)
+    await expect(
+      settler.charge({ basis: 'output', amount: USD(-100n), buyer: 'buyer:n' })
+    ).rejects.toBeInstanceOf(ZeroChargeError)
+    expect(provider.charges).toHaveLength(0)
   })
 })
 

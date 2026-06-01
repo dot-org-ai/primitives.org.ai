@@ -17,6 +17,7 @@ import type {
   DurableStore,
   InvocationEvent,
   InvocationState,
+  Money,
   OfferOf,
   PersistedInvocation,
 } from '../../src/v4/index.js'
@@ -28,6 +29,7 @@ import {
   IllegalTransitionError,
   createInvocationHandle,
   reconcileHandle,
+  resolveAmount,
   attach,
   NoDurableStoreError,
   InvocationNotFoundError,
@@ -558,5 +560,69 @@ describe('v4 attach', () => {
     expect(handle.history()).toHaveLength(2)
     // drive verbs are read-only on an attached view.
     await expect(handle.accept()).rejects.toThrow(/read-only/)
+  })
+})
+
+// ============================================================================
+// 2d. resolveAmount — the Offer-price → Money resolution (aip-cnks.10)
+// ============================================================================
+
+const ZERO_MONEY: Money = { amount: 0n, currency: 'USD' }
+
+/** Build a minimal Offer carrying the given `priceSpecification`. */
+function offerWithPrice(priceSpecification: unknown): OfferOf<Out> {
+  return {
+    $type: 'Offer',
+    $id: 'offer:resolve-amount',
+    name: 'Resolve Amount Offer',
+    itemOffered: { $type: 'Service', $id: 'service:ra' },
+    gatingBasis: 'access',
+    priceSpecification,
+    fundingSource: { source: 'direct' },
+  } as unknown as OfferOf<Out>
+}
+
+describe('v4 resolveAmount — Offer price → Money', () => {
+  it('SinglePrice → its price', () => {
+    const price: Money = { amount: 49900n, currency: 'USD' }
+    const offer = offerWithPrice({ structure: 'SinglePrice', price })
+    expect(resolveAmount(offer, 'access')).toEqual(price)
+  })
+
+  it('an explicit override always wins (even over a SinglePrice)', () => {
+    const offer = offerWithPrice({
+      structure: 'SinglePrice',
+      price: { amount: 49900n, currency: 'USD' },
+    })
+    const override: Money = { amount: 100n, currency: 'USD' }
+    expect(resolveAmount(offer, 'access', override)).toEqual(override)
+  })
+
+  it('Tiered → the FIRST tier price (not zero)', () => {
+    const lead: Money = { amount: 1000n, currency: 'USD' }
+    const offer = offerWithPrice({
+      structure: 'Tiered',
+      tiers: [
+        { name: 'starter', price: lead },
+        { name: 'pro', price: { amount: 5000n, currency: 'USD' } },
+      ],
+    })
+    expect(resolveAmount(offer, 'access')).toEqual(lead)
+    // explicitly NOT zero — a Tiered Offer carries a concrete per-tier price.
+    expect(resolveAmount(offer, 'access')).not.toEqual(ZERO_MONEY)
+  })
+
+  it('an order-time-unresolvable structure (SuccessFee) → ZERO_MONEY (documented)', () => {
+    const offer = offerWithPrice({ structure: 'SuccessFee', percent: 10, of: 'invoice-amount' })
+    expect(resolveAmount(offer, 'outcome')).toEqual(ZERO_MONEY)
+  })
+
+  it('a UsageMeter structure → ZERO_MONEY (known only post-delivery)', () => {
+    const offer = offerWithPrice({
+      structure: 'UsageMeter',
+      meter: { event: 'page', amount: 5n },
+      unit: 'page',
+    })
+    expect(resolveAmount(offer, 'usage')).toEqual(ZERO_MONEY)
   })
 })

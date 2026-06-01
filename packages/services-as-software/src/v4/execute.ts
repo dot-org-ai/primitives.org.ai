@@ -257,14 +257,20 @@ export function aiFunctionsRunner(opts: AiFunctionsRunnerOpts = {}): FunctionRun
         `Args: ${safeStringify(ctx.args)}`,
       ].join('\n\n')
       // A permissive object schema — the step is expected to declare its own
-      // output contract in a later pass; for now we accept any JSON object.
-      const result = await generateObject<Record<string, unknown>>({
+      // output contract in a later pass; for now we accept any JSON object under
+      // a single `result` key. We UNWRAP `result.object.result` (not the
+      // `{ result: ... }` wrapper) so a later step's `$ref` reaches the value
+      // itself, not the schema envelope.
+      const result = await generateObject<{ result: unknown }>({
         model,
         schema: { result: 'the step output' },
         prompt,
       })
       const costUsd = estimateUsd((result as { usage?: unknown }).usage)
-      return { value: result.object, cost: { amount: usdToMicroCents(costUsd), currency: 'USD' } }
+      return {
+        value: result.object.result,
+        cost: { amount: usdToMicroCents(costUsd), currency: 'USD' },
+      }
     },
 
     async runAgentic(step, ctx): Promise<RunnerResult> {

@@ -113,7 +113,7 @@ export type {
 // SETTLER adapter (the FinanceProvider → Settlement mapping; aip-cnks.10).
 export { makeEvaluatorPanelVerifier, fromSpec } from './verify.js'
 export type { EvaluatorPanelVerifierOpts } from './verify.js'
-export { makeFinanceSettler, stubFinanceProvider } from './settle.js'
+export { makeFinanceSettler, stubFinanceProvider, ZeroChargeError } from './settle.js'
 export type { StubFinanceProvider } from './settle.js'
 
 // Surface #2 — the DELIVERING-phase cascade EXECUTOR (the real step-walker that

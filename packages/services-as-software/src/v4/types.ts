@@ -37,7 +37,9 @@ import type { Money } from 'business-as-code/finance'
 // The v4 cascade-step shape lives in the DELIVERING-phase executor (`./execute.ts`)
 // — `binding.cascade` is typed as `CascadeStep[]` here. Type-only import keeps the
 // types↔executor edge erased at runtime (no value cycle).
-import type { CascadeStep } from './execute.js'
+import type { CascadeStep, FunctionRunner } from './execute.js'
+// The injected DELIVERING-phase execution port — type-only (erased at runtime).
+import type { CascadeExecutor } from './invoke.js'
 
 // ============================================================================
 // Re-exports — the canonical economic primitives originate in business-as-code
@@ -405,6 +407,23 @@ export interface OrderOpts {
   gateAt?: PricingBasis
   /** the buyer billed at settlement (threaded into `Settler.charge`). */
   buyer?: string
+
+  // ── DELIVERING-phase execution seams (test/app injection) ──
+  /**
+   * Inject a fully-built {@link CascadeExecutor} — the HIGHEST-precedence
+   * execution path in `Service().invoke()`. When present it wins over the
+   * Deliverable's declarative `binding.cascade`, the `run` shorthand, and the
+   * stub. Generics are `unknown` here (OrderOpts is not generic); the front
+   * door casts it to the Deliverable's `CascadeExecutor<TIn, TOut>`.
+   */
+  executor?: CascadeExecutor<unknown, unknown>
+  /**
+   * Inject the {@link FunctionRunner} dispatch port used when `Service().invoke()`
+   * builds a cascade executor from the Deliverable's `binding.cascade`. Tests
+   * pass a FAKE runner so the declarative cascade runs end-to-end with NO real
+   * LLM / sandbox call. Ignored when an `executor` is supplied directly.
+   */
+  runner?: FunctionRunner
 }
 
 export interface InvocationHandle<TOut> {

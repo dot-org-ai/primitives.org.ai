@@ -21,7 +21,14 @@
 import { describe, it, expect } from 'vitest'
 
 import { Service } from '../../src/v4/index.js'
-import type { CommercialLens, Deliverable, ServiceSpec } from '../../src/v4/index.js'
+import type {
+  CascadeStep,
+  CommercialLens,
+  Deliverable,
+  FunctionRunner,
+  RunnerCtx,
+  ServiceSpec,
+} from '../../src/v4/index.js'
 import type { Offer } from 'business-as-code'
 
 // Helper: a CommercialLens is `CommercialLens | [CommercialLens, ...]` — grab
@@ -259,6 +266,108 @@ describe('Service() — wired affordances', () => {
     expect(offer.$type).toBe('Offer')
     expect(offer.$id).toBe('offer:reconcile')
     expect(offer.itemOffered.$id).toBe('service:reconcile')
+  })
+})
+
+// ============================================================================
+// The LAST MILE — a declarative `cascade` runs through `Service().invoke()`
+// (aip-cnks.10). A Deliverable authored with `cascade: CascadeStep[]` (NO `run`)
+// must execute the cascade end-to-end through the front door via an INJECTED
+// fake runner — proving the declarative path is wired, with NO real LLM call.
+// ============================================================================
+
+describe('Service().invoke() — declarative binding.cascade runs through the front door', () => {
+  // A 3-step cascade: Code (uppercase) → Generative (draft) → Agentic (report).
+  // `$ref` threads each step's `outputAs` value into the next step's args.
+  const cascade: CascadeStep[] = [
+    {
+      fnKind: 'Code',
+      fnId: 'fn:upper',
+      name: 'upper',
+      args: { text: { $ref: 'input.text' } },
+      outputAs: 'step1',
+    },
+    {
+      fnKind: 'Generative',
+      fnId: 'fn:draft',
+      name: 'draft',
+      args: { upper: { $ref: 'step1.upper' } },
+      outputAs: 'step2',
+    },
+    {
+      fnKind: 'Agentic',
+      fnId: 'fn:report',
+      name: 'report',
+      args: { draft: { $ref: 'step2.draft' } },
+      outputAs: 'step3',
+    },
+  ]
+
+  interface DispatchRecord {
+    kind: 'code' | 'generative' | 'agentic' | 'human'
+    fnId: string
+    args: Record<string, unknown>
+  }
+
+  const ONE_CENT = { amount: 1_000_000n, currency: 'USD' as const }
+
+  /** A fake runner that records dispatch + returns deterministic per-kind values. */
+  function fakeRunner(records: DispatchRecord[]): FunctionRunner {
+    return {
+      async runCode(step, ctx: RunnerCtx) {
+        records.push({ kind: 'code', fnId: step.fnId, args: ctx.args })
+        return { value: { upper: String(ctx.args['text']).toUpperCase() }, cost: ONE_CENT }
+      },
+      async runGenerative(step, ctx: RunnerCtx) {
+        records.push({ kind: 'generative', fnId: step.fnId, args: ctx.args })
+        return { value: { draft: `draft-of:${String(ctx.args['upper'])}` }, cost: ONE_CENT }
+      },
+      async runAgentic(step, ctx: RunnerCtx) {
+        records.push({ kind: 'agentic', fnId: step.fnId, args: ctx.args })
+        return { value: { report: `report:${String(ctx.args['draft'])}` }, cost: ONE_CENT }
+      },
+      async runHuman(step, ctx: RunnerCtx) {
+        records.push({ kind: 'human', fnId: step.fnId, args: ctx.args })
+        return { value: { approved: true }, cost: ONE_CENT }
+      },
+    }
+  }
+
+  it('runs the cascade end-to-end and the delivered output reflects it (NOT undefined)', async () => {
+    const records: DispatchRecord[] = []
+    const svc = Service({
+      name: 'Cascade report',
+      input: { text: 'string' },
+      output: { report: 'string' },
+      // declarative cascade ONLY — no `run` shorthand.
+      cascade,
+    })
+
+    // the Deliverable carries the cascade as its implementation binding.
+    expect(svc.implementation.binding?.cascade).toHaveLength(3)
+
+    const handle = await svc.invoke({ text: 'hello' }, { runner: fakeRunner(records) })
+    await handle.watch('DELIVERED', 'ACCEPTED')
+
+    // The fake runner recorded the dispatched steps, in order, through the front door.
+    expect(records.map((r) => r.kind)).toEqual(['code', 'generative', 'agentic'])
+    expect(records.map((r) => r.fnId)).toEqual(['fn:upper', 'fn:draft', 'fn:report'])
+    // $ref threaded each step's output into the next step's args.
+    expect(records[0]!.args).toEqual({ text: 'hello' })
+    expect(records[1]!.args).toEqual({ upper: 'HELLO' })
+    expect(records[2]!.args).toEqual({ draft: 'draft-of:HELLO' })
+
+    // the delivered output is the LAST step's value — the cascade, not undefined.
+    await expect(handle.result).resolves.toEqual({ report: 'report:draft-of:HELLO' })
+  })
+
+  it('without a wired path the stub returns undefined — the cascade is what fills it', async () => {
+    // A Deliverable with NEITHER run NOR cascade falls through to the stub (the
+    // contrast that proves the cascade above did the work).
+    const bare = Service({ name: 'Bare', output: { report: 'string' } })
+    const handle = await bare.invoke({})
+    await handle.watch('DELIVERED', 'ACCEPTED')
+    await expect(handle.result).resolves.toBeUndefined()
   })
 })
 

@@ -47,6 +47,29 @@ import type { Settlement } from './types.js'
 /** The pre-charge sentinel the FSM passes when no `accept()` ran (see docblock). */
 const NO_PRIOR_CHARGE = 'no-prior-charge'
 
+/**
+ * Thrown by {@link makeFinanceSettler}'s `charge` when the resolved `amount` is
+ * zero or negative. A LIVE financial capture of $0 is a wiring bug (an Offer
+ * carrying a real price that resolved to nothing, or an unresolved
+ * order-time-unresolvable structure leaking into a real settler), NOT a
+ * legitimate no-op — so the adapter fails loudly rather than silently capturing
+ * ZERO. (The in-memory `stubSettler` in `./invoke.ts` is a SEPARATE code path
+ * used by tests and is unaffected by this guard.)
+ */
+export class ZeroChargeError extends Error {
+  readonly amount: Money
+  constructor(amount: Money) {
+    super(
+      `refusing a live $0 charge (amount ${amount.amount} ${amount.currency}) — ` +
+        `a real financial capture of zero/negative is a wiring bug, not a no-op. ` +
+        `An order-time-unresolvable price (UsageMeter/SuccessFee/Gainshare/CustomQuote) ` +
+        `must be resolved to a concrete amount before a live charge.`
+    )
+    this.name = 'ZeroChargeError'
+    this.amount = amount
+  }
+}
+
 // ============================================================================
 // makeFinanceSettler — the adapter
 // ============================================================================
@@ -59,6 +82,9 @@ const NO_PRIOR_CHARGE = 'no-prior-charge'
 export function makeFinanceSettler(provider: FinanceProvider): Settler {
   return {
     async charge(args: ChargeArgs): Promise<Settlement> {
+      // NO SILENT ZERO-CHARGE: a live capture of $0 (or negative) is a bug. Fail
+      // loudly before touching the provider (the firmware never sees the call).
+      if (args.amount.amount <= 0n) throw new ZeroChargeError(args.amount)
       const opts: ChargeOpts = {
         buyer: args.buyer,
         amount: args.amount,
