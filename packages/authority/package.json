@@ -1,0 +1,45 @@
+{
+  "name": "@org.ai/authority",
+  "version": "0.1.0",
+  "description": "The five-axis authority kernel: pure types + declared constructors that make authority mistakes compile errors (ADR 0081/0082). Zero dependencies; ships its own conformance harnesses + NoInfer canary.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "harnesses",
+    "scripts"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/canary.mjs && node scripts/canary-mutation.mjs",
+    "canary": "node scripts/canary.mjs",
+    "canary:mutation": "node scripts/canary-mutation.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "ai",
+    "authority",
+    "types",
+    "primitives",
+    "typescript",
+    "agents",
+    "governance"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
+}
