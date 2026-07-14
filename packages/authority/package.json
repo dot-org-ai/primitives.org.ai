@@ -24,7 +24,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/canary.mjs && node scripts/canary-mutation.mjs",
     "canary": "node scripts/canary.mjs",
-    "canary:mutation": "node scripts/canary-mutation.mjs"
+    "canary:mutation": "node scripts/canary-mutation.mjs",
+    "prepack": "tsc"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
@@ -39,6 +40,11 @@
     "governance"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dot-org-ai/primitives.org.ai.git",
+    "directory": "packages/authority"
+  },
   "publishConfig": {
     "access": "public"
   }
