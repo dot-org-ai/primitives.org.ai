@@ -63,6 +63,7 @@ const users = await ai.list('Generate 5 realistic user personas for a fitness ap
 |---------|-------------|
 | [`autonomous-agents`](./packages/autonomous-agents) | Build and orchestrate autonomous AI agents with goals |
 | [`human-in-the-loop`](./packages/human-in-the-loop) | Integrate human oversight and approval workflows |
+| [`@org.ai/authority`](./packages/authority) | Zero-dependency authority kernel - five-axis tokens, register discipline, and competence-typed gates ([docs](./packages/authority/README.md)) |
 
 ### Business Logic
 
