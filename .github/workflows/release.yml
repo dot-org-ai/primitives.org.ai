@@ -1,3 +1,18 @@
+# Release — opens the changesets Version PR. IT NEVER PUBLISHES.
+#
+# POLICY: publishing to npm is owner-only, from a terminal, via
+# `pnpm publish-packages` (npm browser/TouchID web-auth), and only after
+# dev-complete + adversarial review + approval. CI must never publish.
+#
+# This workflow therefore runs ONLY `changeset version` (via changesets/action):
+# it opens/updates the "Version Packages" PR, which consumes .changeset/*.md,
+# bumps versions, and writes CHANGELOGs. Merging that PR lands the version bump
+# on main — it ships nothing. The owner publishes afterwards, from a terminal.
+#
+# DO NOT add a `publish:` input, an NPM_TOKEN env, or an NPM_TOKEN repo secret.
+# A CI automation token bypasses the account 2FA that protects the local publish
+# path, and would let any push to main ship an unreviewed release.
+
 name: Release
 
 on:
@@ -9,8 +24,11 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   release:
-    name: Release
+    name: Version PR
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the changeset-release/main branch
+      pull-requests: write # open/update the Version PR
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,13 +40,15 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-          registry-url: 'https://registry.npmjs.org'
+      # No registry-url: nothing here authenticates to npm.
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - name: Create Release Pull Request or Publish
+      - name: Create or update the Version PR
         uses: changesets/action@v1
         with:
-          publish: pnpm changeset publish
+          version: pnpm changeset version
+          # No `publish:` input — CI has no publish path. See policy above.
+          title: 'chore: version packages'
+          commit: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
