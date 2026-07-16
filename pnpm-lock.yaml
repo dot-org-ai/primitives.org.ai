@@ -378,6 +378,37 @@ importers:
         specifier: ^3.105.0
         version: 3.114.17(@cloudflare/workers-types@4.20251202.0)
 
+  packages/autonomous-startups:
+    dependencies:
+      '@org.ai/authority':
+        specifier: workspace:*
+        version: link:../authority
+      '@org.ai/types':
+        specifier: workspace:*
+        version: link:../types
+      business-as-code:
+        specifier: workspace:*
+        version: link:../business-as-code
+      digital-products:
+        specifier: workspace:*
+        version: link:../digital-products
+      digital-tools:
+        specifier: workspace:*
+        version: link:../digital-tools
+      digital-workers:
+        specifier: workspace:*
+        version: link:../digital-workers
+      services-as-software:
+        specifier: workspace:*
+        version: link:../services-as-software
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.10.1)(lightningcss@1.30.2)(terser@5.16.9)
+
   packages/business-as-code:
     dependencies:
       ai-database:

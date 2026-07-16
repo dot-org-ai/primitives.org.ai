@@ -1,0 +1,63 @@
+{
+  "name": "autonomous-startups",
+  "version": "0.1.0",
+  "description": "The abstract self-running startup: the capstone primitive that composes business-as-code, services-as-software, digital-products, digital-tools, and digital-workers into one definition, with every lifecycle transition gated by @org.ai/authority.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@org.ai/authority": "workspace:*",
+    "@org.ai/types": "workspace:*",
+    "business-as-code": "workspace:*",
+    "digital-products": "workspace:*",
+    "digital-tools": "workspace:*",
+    "digital-workers": "workspace:*",
+    "services-as-software": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  },
+  "keywords": [
+    "autonomous",
+    "startup",
+    "startups",
+    "primitives",
+    "business-as-code",
+    "services-as-software",
+    "digital-workers",
+    "agents",
+    "authority",
+    "capstone"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dot-org-ai/primitives.org.ai.git",
+    "directory": "packages/autonomous-startups"
+  },
+  "homepage": "https://github.com/dot-org-ai/primitives.org.ai/tree/main/packages/autonomous-startups",
+  "publishConfig": {
+    "access": "public"
+  }
+}
