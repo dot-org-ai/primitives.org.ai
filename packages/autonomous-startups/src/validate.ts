@@ -11,7 +11,7 @@
 import type { AutonomousStartup } from './startup.js'
 import type { Worker } from './composition.js'
 import type { LifecycleState } from './lifecycle.js'
-import { LIFECYCLE_STATES } from './lifecycle.js'
+import { LIFECYCLE_STATES, isLive } from './lifecycle.js'
 
 export type IssueSeverity = 'error' | 'warning'
 
@@ -41,6 +41,9 @@ const ORDINAL: Record<LifecycleState, number> = {
   sited: 2,
   sellable: 3,
   running: 4,
+  // A dissolved construct is terminal, not "beyond running": readiness gates below are
+  // guarded by isLive(), so this ordinal is never used to trigger a supply-readiness check.
+  dissolved: -1,
 }
 
 const WORKER_TYPES: ReadonlySet<string> = new Set(['agent', 'human'])
@@ -95,34 +98,38 @@ export function validateStartup(startup: AutonomousStartup<LifecycleState>): Val
     }
   })
 
-  // Sellable and beyond: there must be something to sell.
-  if (at >= ORDINAL.sellable && composition.offers.length === 0 && composition.products.length === 0) {
-    issues.push({
-      code: 'sellable.nothing-to-sell',
-      severity: 'error',
-      path: 'composition',
-      message: 'A sellable startup needs at least one offer (services-as-software) or product (digital-products).',
-    })
-  }
+  // Lifecycle-keyed readiness only applies to a LIVE construct; a dissolved one is terminal
+  // and is not held to sellable/running invariants.
+  if (isLive(startup.state)) {
+    // Sellable and beyond: there must be something to sell.
+    if (at >= ORDINAL.sellable && composition.offers.length === 0 && composition.products.length === 0) {
+      issues.push({
+        code: 'sellable.nothing-to-sell',
+        severity: 'error',
+        path: 'composition',
+        message: 'A sellable startup needs at least one offer (services-as-software) or product (digital-products).',
+      })
+    }
 
-  // Running: there must be a workforce to run it.
-  if (at >= ORDINAL.running && composition.workforce.length === 0) {
-    issues.push({
-      code: 'running.no-workforce',
-      severity: 'error',
-      path: 'composition.workforce',
-      message: 'A running startup needs at least one worker to perform its work (digital-workers).',
-    })
-  }
+    // Running: there must be a workforce to run it.
+    if (at >= ORDINAL.running && composition.workforce.length === 0) {
+      issues.push({
+        code: 'running.no-workforce',
+        severity: 'error',
+        path: 'composition.workforce',
+        message: 'A running startup needs at least one worker to perform its work (digital-workers).',
+      })
+    }
 
-  // Advisory: an idle-but-not-yet-running startup with no workforce is worth flagging early.
-  if (at < ORDINAL.running && composition.workforce.length === 0) {
-    issues.push({
-      code: 'workforce.empty',
-      severity: 'warning',
-      path: 'composition.workforce',
-      message: 'No workforce declared yet; a running startup will need one.',
-    })
+    // Advisory: an idle-but-not-yet-running startup with no workforce is worth flagging early.
+    if (at < ORDINAL.running && composition.workforce.length === 0) {
+      issues.push({
+        code: 'workforce.empty',
+        severity: 'warning',
+        path: 'composition.workforce',
+        message: 'No workforce declared yet; a running startup will need one.',
+      })
+    }
   }
 
   // Advisory: a startup that wields no tools is unusual for an autonomous operation.
