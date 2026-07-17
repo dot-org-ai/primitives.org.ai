@@ -1,0 +1,48 @@
+{
+  "name": "digital-sites",
+  "version": "0.1.0",
+  "description": "A site as code: the digital-sites primitive. Type-only 0.1.0 name-claim stub (pre-1.0, not yet entrenched per ADR 0001 fixation gate).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "prepack": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "keywords": [
+    "site-as-code",
+    "digital-sites",
+    "primitives",
+    "org.ai",
+    "types",
+    "g4"
+  ],
+  "author": ".org.ai",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dot-org-ai/primitives.org.ai.git",
+    "directory": "packages/digital-sites"
+  },
+  "homepage": "https://primitives.org.ai/digital-sites",
+  "publishConfig": {
+    "access": "public"
+  }
+}
