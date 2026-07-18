@@ -56,6 +56,16 @@ describe('validateStartup', () => {
     expect(result.issues.some((i) => i.code === 'running.no-workforce')).toBe(true)
   })
 
+  it('does not hold a dissolved construct to sellable/running readiness invariants', () => {
+    // A dissolved construct with nothing to sell and no workforce is still "valid" — it is
+    // terminal, not held to live-state readiness. Only the always-on checks (name/business) apply.
+    const dead = at('dissolved', defineStartup({ name: 'X', business, tools: [tool] }))
+    const result = validateStartup(dead)
+    expect(result.issues.some((i) => i.code === 'sellable.nothing-to-sell')).toBe(false)
+    expect(result.issues.some((i) => i.code === 'running.no-workforce')).toBe(false)
+    expect(result.valid).toBe(true)
+  })
+
   it('passes an end-to-end running construct with all five registers', () => {
     const prin = tenant('acme')
     let s: AutonomousStartup<LifecycleState> = defineStartup({

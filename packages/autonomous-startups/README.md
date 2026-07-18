@@ -1,12 +1,14 @@
 # autonomous-startups
 
-**The abstract self-running startup.** This is the capstone conceptual primitive: it defines what an autonomous startup *is* by composing exactly five primitives — the commercial model, its paid delivery, what it sells, what it wields, and who performs the work — and gates every lifecycle transition with `@org.ai/authority`.
+**The abstract self-running startup.** This is the capstone conceptual primitive: it defines what an autonomous startup *is* by **composing conceptual primitives** — `CANONICAL_FIVE` by default (the commercial model, its paid delivery, what it sells, what it wields, and who performs the work) — and walks a construct through **lifecycle@1**, a versioned stategraph whose every mutating edge is gated by `@org.ai/authority`.
 
-It is a **definition kit**: types, a `defineStartup()` constructor, an authority-gated lifecycle walk, and validation. Pure domain — no HTTP, no database, no platform coupling. The only runtime dependency is `@org.ai/types`, whose `Startup` schema noun it *consumes* rather than redefines.
+It is a **definition kit**: a primitive registry, a `compose(primitives)` blueprint with `defineStartup(spec)` as sugar over it, the authority-gated lifecycle@1 edges, and validation. Pure domain — no HTTP, no database, no platform coupling. The only runtime dependency is `@org.ai/types`, whose `Startup` schema noun it *consumes* rather than redefines.
+
+> **v2 (ADR 0001 amendment 3).** Composition is now open: `compose(primitives)` over a registry-resolved profile (`CANONICAL_FIVE` is the default), and the lifecycle is a versioned **stategraph** with `advance` / `revert` / `pivot` / `dissolve` / `rename` edges and a `live` predicate — replacing the old linear, forward-only walk. A composable `demand` register (problems / markets) is reserved as a type-level slot.
 
 ## What an autonomous startup is
 
-An autonomous startup is the composition of five primitives plus a construction lifecycle. Each register answers one question:
+An autonomous startup is a **composition of primitives** plus a lifecycle. The default profile — `CANONICAL_FIVE` — binds five supply-side registers, each answering one question:
 
 | Register | Question | Primitive |
 |---|---|---|
@@ -17,6 +19,20 @@ An autonomous startup is the composition of five primitives plus a construction 
 | `workforce` | Who performs the work? | [`digital-workers`](../digital-workers) (`agent` \| `human`) |
 
 The workforce is the [`digital-workers`](../digital-workers) interface over both autonomous agents and humans, so a startup composes its labor uniformly regardless of who performs each unit of work.
+
+### Composing a profile
+
+`compose(primitives)` builds a **blueprint** over a *profile* — an ordered set of primitives drawn from the `PRIMITIVE_REGISTRY`. `CANONICAL_FIVE` is the registry-resolved default, so `compose()` is the canonical startup and `defineStartup(spec)` is exactly `compose().define(spec)`. A custom profile changes which slots are bound — for example, adding the composable **`demand`** register:
+
+```typescript
+import { compose, resolveProfile, CANONICAL_FIVE_IDS } from 'autonomous-startups'
+
+const withDemand = resolveProfile([...CANONICAL_FIVE_IDS, 'demand'])
+const startup = compose(withDemand).define({ name: 'Inbox Zero', business, demand })
+// startup.composition.demand is bound; under the default CANONICAL_FIVE profile it is not.
+```
+
+The **demand register** (`problems` / `markets`) is a *type-level placeholder* — the composable counterpart to the five supply primitives, reserved for when `problems.org.ai` and a markets register are ratified. It carries no implementation yet (ADR 0001 fixation gate).
 
 ```mermaid
 graph TD
@@ -34,25 +50,41 @@ graph TD
   AS --> DP
   AS --> DT
   AS --> DW
+  AS -. "demand slot (placeholder)" .-> DEMAND["demand<br/>· problems / markets"]
   AS -. "type-level gate" .-> AUTH
   AS -. "projects onto" .-> TYPES
 ```
 
-## The lifecycle
+## lifecycle@1 — the stategraph
 
-A startup is *constructed* through a linear, forward-only lifecycle. Each state has exactly one legal successor, and each transition draws on a distinct competence domain from `@org.ai/authority`:
+A startup is walked through **lifecycle@1**, an explicit, versioned stategraph. Six states — five live (`idea → named → sited → sellable → running`) plus the terminal `dissolved` — connected by **five edge kinds**, each drawing on a distinct competence domain from `@org.ai/authority`:
 
 ```mermaid
 graph LR
-  idea -->|growth| named
-  named -->|product| sited
-  sited -->|money| sellable
-  sellable -->|delivery| running
+  idea -->|advance · growth| named
+  named -->|advance · product| sited
+  sited -->|advance · money| sellable
+  sellable -->|advance · delivery| running
+  running -.->|revert · delivery| sellable
+  sellable -.->|revert · money| sited
+  running ==>|pivot · growth<br/>+ lineage| idea
+  running -->|dissolve · legal| dissolved
+  named -->|rename · schema<br/>self| named
 ```
 
-`advance()` walks a construct one step forward. It is gated by `@org.ai/authority` **at the type level**: the caller must present an unforgeable `Passed` token whose competence domain is exactly the one the transition draws on and whose principal is exactly the startup's tenant. A wrong-domain token, a token minted for another tenant, or advancing a terminal `running` startup is a **compile error** — not a runtime check. The token is a compile-time proof; nothing about it is inspected at runtime, so the capstone carries no authority machinery.
+| Edge | Shape | Domain | Notes |
+|---|---|---|---|
+| `advance` | forward one step | growth → product → money → delivery | the build spine; illegal out of `running`/`dissolved` |
+| `revert` | back one step | same domain as the forward edge it undoes | illegal out of `idea`/`dissolved` |
+| `pivot` | any formed live state → `idea` | growth | **re-idea-with-lineage** — keeps the `$id`, appends a `LineageEntry` |
+| `dissolve` | any live state → `dissolved` | legal | terminal; the projected noun keeps its last stage |
+| `rename` | any live state → itself | schema | **name is leased, identity owned** — the `$id` does not change |
 
-This construction lifecycle is distinct from the maturity `stage` on the `Startup` data noun (`idea | validating | building | scaling | established`), which each construct projects onto.
+A **`live` predicate** — `isLive(state)` — is `true` for every state but `dissolved`. The whole graph is inspectable at runtime as `STATEGRAPH` (with `edgesFrom`, `edgeFor`, `canTransition`), and the version is explicit (`LIFECYCLE_VERSION === 1`) so a future `lifecycle@2` is a versioned migration rather than a silent reshape.
+
+Every edge function is gated by `@org.ai/authority` **at the type level**: the caller must present an unforgeable `Passed` token whose competence domain is exactly that edge's domain and whose principal is exactly the startup's tenant. A wrong-domain token, a token minted for another tenant, or an edge from an illegal source state (e.g. `advance` out of `running`, `pivot` out of `idea`, any edge out of `dissolved`) is a **compile error** — not a runtime check. The token is a compile-time proof; nothing about it is inspected at runtime, so the capstone carries no authority machinery.
+
+This lifecycle is distinct from the maturity `stage` on the `Startup` data noun (`idea | validating | building | scaling | established`), which each construct projects onto.
 
 ## Position in the G1–G5 ladder
 
@@ -68,13 +100,13 @@ This construction lifecycle is distinct from the maturity `stage` on the `Startu
 
 ## Usage
 
-Define a startup, validate it, and walk it forward under authority.
+Compose a startup, validate it, and walk it through lifecycle@1 under authority.
 
 ```typescript
-import { defineStartup, advance, validateStartup } from 'autonomous-startups'
+import { defineStartup, advance, pivot, dissolve, rename, validateStartup } from 'autonomous-startups'
 import { tenant } from '@org.ai/authority'
 
-// The five registers come from their primitives; sketched here for shape.
+// defineStartup(spec) is sugar over compose().define(spec) — the CANONICAL_FIVE profile.
 const inboxZero = defineStartup({
   name: 'Inbox Zero',
   description: 'An autonomous startup that triages a team’s inbox to empty, every day.',
@@ -92,27 +124,29 @@ const inboxZero = defineStartup({
 const { valid, issues } = validateStartup(inboxZero)
 // issues: e.g. { code: 'workforce.empty', severity: 'warning', path: 'composition.workforce', ... }
 
-// Walk the construct forward. Each `advance` demands the authority token for that exact
-// transition; the type system rejects a wrong-domain or wrong-tenant token at compile time.
-const named = advance(inboxZero, growthPass)   // idea → named   (draws on 'growth')
-const sited = advance(named, productPass)       // named → sited  (draws on 'product')
-const sellable = advance(sited, moneyPass)      // sited → sellable ('money')
-const running = advance(sellable, deliveryPass) // sellable → running ('delivery')
+// Walk the construct along lifecycle@1. Each edge demands the authority token for that exact
+// edge's domain; the type system rejects a wrong-domain, wrong-tenant, or illegal-source edge
+// at compile time.
+const named = advance(inboxZero, growthPass)    // idea → named    (advance, draws on 'growth')
+const sited = advance(named, productPass)        // named → sited   (advance, 'product')
+
+const rebranded = rename(sited, 'InboxZero', schemaPass)  // self-edge, keeps state + $id ('schema')
+const relaunch = pivot(sited, growthPass)         // sited → idea, re-idea-with-lineage ('growth')
+const wound = dissolve(sited, legalPass)          // sited → dissolved, terminal ('legal')
 
 // The construct projects onto the canonical schema.org.ai/Startup noun for free.
-running.startup // { $type: 'https://schema.org.ai/Startup', name: 'Inbox Zero', stage: 'scaling', ... }
+sited.startup // { $type: 'https://schema.org.ai/Startup', name: 'Inbox Zero', stage: 'building', ... }
 ```
 
-In production the `Passed` tokens are minted by an `@org.ai/authority` gate; they cannot be constructed by hand, which is what makes each transition genuinely gated.
+In production the `Passed` tokens are minted by an `@org.ai/authority` gate; they cannot be constructed by hand, which is what makes each edge genuinely gated.
 
 ## Surface
 
-- `defineStartup(spec)` → `AutonomousStartup<'idea'>` — compose the five registers into a construct at the `idea` state.
-- `advance(startup, authorityToken)` → the construct at its next state — the authority-gated, type-safe lifecycle walk.
-- `validateStartup(startup)` → `{ valid, issues }` — readiness validation that returns typed issues and never throws.
-- `toStartupNoun(startup)` → `StartupType` — the projection onto the canonical `Startup` data noun.
-- Lifecycle machine: `LIFECYCLE_STATES`, `NEXT_STATE`, `TRANSITION_DOMAIN`, `legalNextStates`, `canTransition`.
-- Types: `StartupSpec`, `AutonomousStartup`, `StartupComposition`, `LifecycleState`, `NextOf`, `DomainOf`, `ValidationResult`, `ValidationIssue`.
+- **Composition:** `compose(primitives?)` → `StartupBlueprint`; `defineStartup(spec)` → `AutonomousStartup<'idea'>` (sugar over `compose().define`); `PRIMITIVE_REGISTRY`, `CANONICAL_FIVE`, `CANONICAL_FIVE_IDS`, `resolveProfile`, `profileHas`.
+- **lifecycle@1 edges:** `advance` / `revert` / `pivot` / `dissolve` / `rename` — the authority-gated, type-safe walk; `toStartupNoun(startup)` → `StartupType`.
+- **Stategraph:** `LIFECYCLE_VERSION`, `LIFECYCLE_STATES`, `LIVE_STATES`, `TERMINAL_STATES`, `EDGE_KINDS`, `STATEGRAPH`, `NEXT_STATE`, `TRANSITION_DOMAIN`, `isLive`, `edgesFrom`, `edgeFor`, `canTransition`, `legalNextStates`.
+- **Validation:** `validateStartup(startup)` → `{ valid, issues }` — returns typed issues, never throws.
+- **Types:** `Primitive`, `Profile`, `PrimitiveId`, `SlotName`, `Cardinality`, `StartupBlueprint`, `StartupSpec`, `AutonomousStartup`, `StartupComposition`, `LineageEntry`, `DemandRegister`, `Problem`, `Market`, `LifecycleState`, `LiveState`, `EdgeKind`, `LifecycleEdge`, `NextOf`, `PrevOf`, `AdvanceableState`, `RevertableState`, `PivotableState`, `AdvanceDomainOf`, `RevertDomainOf`, `ValidationResult`, `ValidationIssue`.
 
 ## License
 

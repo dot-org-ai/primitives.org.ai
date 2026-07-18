@@ -19,8 +19,10 @@ import type { ServiceDefinition } from 'services-as-software'
 import type { DigitalProduct } from 'digital-products'
 import type { Tool } from 'digital-tools'
 import type { Worker, WorkerType } from 'digital-workers'
+import type { DemandRegister } from './demand.js'
 
 export type { Tool, Worker, WorkerType }
+export type { DemandRegister } from './demand.js'
 
 /** The commercial model — what the startup IS as a business (business-as-code). */
 export type BusinessModel = BusinessDefinition
@@ -32,11 +34,16 @@ export type Offer = ServiceDefinition
 export type Product = DigitalProduct
 
 /**
- * The five bound registers of an autonomous startup.
+ * The bound registers of an autonomous startup.
  *
- * Exactly one business model; zero-or-more offers, products, tools, and workers. The
- * workforce is the digital-workers interface over both autonomous agents and humans, so a
- * startup composes its labor uniformly regardless of who performs each unit of work.
+ * The five SUPPLY registers are always shaped: exactly one business model; zero-or-more
+ * offers, products, tools, and workers. The workforce is the digital-workers interface over
+ * both autonomous agents and humans, so a startup composes its labor uniformly regardless of
+ * who performs each unit of work.
+ *
+ * `demand` is the composable sixth register (problems / markets) — a type-level placeholder
+ * bound only when the profile includes the demand primitive (see ./primitives.ts). It is
+ * optional and carries no implementation yet (ADR 0001 amendment 3).
  */
 export interface StartupComposition {
   /** The commercial model (business-as-code). */
@@ -49,4 +56,6 @@ export interface StartupComposition {
   readonly tools: readonly Tool[]
   /** The workforce that performs the work — agents and humans (digital-workers). */
   readonly workforce: readonly Worker[]
+  /** The demand register (problems / markets) — composable placeholder, bound by profile. */
+  readonly demand?: DemandRegister
 }
