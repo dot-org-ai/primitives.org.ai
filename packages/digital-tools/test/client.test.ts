@@ -5,47 +5,73 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createToolClient, type ToolClientOptions, type ToolServiceAPI } from '../src/client.js'
+import {
+  createToolClient,
+  DEFAULT_TOOL_WORKER_URL,
+  type ToolClientOptions,
+  type ToolClientProxy,
+  type ToolServiceAPI,
+  type ToolTransport,
+} from '../src/client.js'
+
+/** Fake transport that records what it was connected with */
+function fakeTransport() {
+  const recorded: Array<{ url: string; options?: ToolClientOptions }> = []
+  const transport: ToolTransport = {
+    connect<API extends object>(url: string, options?: ToolClientOptions): ToolClientProxy<API> {
+      recorded.push(options ? { url, options } : { url })
+      return {} as ToolClientProxy<API>
+    },
+  }
+  return { transport, recorded }
+}
 
 describe('Client Module', () => {
   describe('createToolClient', () => {
     it('creates a client with default URL', () => {
-      // This creates an RPC client but doesn't actually connect
-      const client = createToolClient()
+      const { transport, recorded } = fakeTransport()
+      const client = createToolClient(transport)
 
       expect(client).toBeDefined()
-      expect(typeof client).toBe('function')
+      expect(recorded[0]?.url).toBe(DEFAULT_TOOL_WORKER_URL)
     })
 
     it('creates a client with custom URL', () => {
-      const client = createToolClient('https://custom-tools.example.com')
+      const { transport, recorded } = fakeTransport()
+      const client = createToolClient(transport, 'https://custom-tools.example.com')
 
       expect(client).toBeDefined()
+      expect(recorded[0]?.url).toBe('https://custom-tools.example.com')
     })
 
     it('accepts client options with token', () => {
+      const { transport, recorded } = fakeTransport()
       const options: ToolClientOptions = {
         token: 'test-token',
       }
 
-      const client = createToolClient('https://example.com', options)
+      const client = createToolClient(transport, 'https://example.com', options)
 
       expect(client).toBeDefined()
+      expect(recorded[0]?.options?.token).toBe('test-token')
     })
 
     it('accepts client options with custom headers', () => {
+      const { transport, recorded } = fakeTransport()
       const options: ToolClientOptions = {
         headers: {
           'X-Custom-Header': 'test-value',
         },
       }
 
-      const client = createToolClient('https://example.com', options)
+      const client = createToolClient(transport, 'https://example.com', options)
 
       expect(client).toBeDefined()
+      expect(recorded[0]?.options?.headers?.['X-Custom-Header']).toBe('test-value')
     })
 
     it('accepts combined options', () => {
+      const { transport, recorded } = fakeTransport()
       const options: ToolClientOptions = {
         token: 'bearer-token',
         headers: {
@@ -53,9 +79,10 @@ describe('Client Module', () => {
         },
       }
 
-      const client = createToolClient('https://example.com', options)
+      const client = createToolClient(transport, 'https://example.com', options)
 
       expect(client).toBeDefined()
+      expect(recorded[0]?.options).toEqual(options)
     })
   })
 
@@ -136,9 +163,19 @@ describe('Client Module', () => {
     })
   })
 
-  describe('default export', () => {
+  describe('rpc.do transport adapter', () => {
+    it('creates a client over the rpc transport', async () => {
+      const { createRpcToolClient } = await import('../src/transports/rpc.js')
+
+      // This creates an RPC client but doesn't actually connect
+      const client = createRpcToolClient('https://custom-tools.example.com')
+
+      expect(client).toBeDefined()
+      expect(typeof client).toBe('function')
+    })
+
     it('exports a default client', async () => {
-      const { default: defaultClient } = await import('../src/client.js')
+      const { default: defaultClient } = await import('../src/transports/rpc.js')
 
       expect(defaultClient).toBeDefined()
     })
