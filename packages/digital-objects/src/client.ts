@@ -1,56 +1,27 @@
 /**
  * RPC Client for Digital Objects
  *
- * Provides a typed RPC client that connects to the deployed
- * digital-objects worker using rpc.do for remote procedure calls.
+ * Provides a typed client that connects to a deployed digital-objects
+ * worker through an injected {@link DigitalObjectsTransport}.
+ *
+ * This module only knows the transport port — no SDK imports here.
+ * The default rpc.do-backed adapter lives at
+ * `digital-objects/transports/rpc` (same injected-port discipline as
+ * ADR-0004's `DurableExecutionAdapter`): consumer code imports
+ * interfaces; the concrete binding is wired at the edge.
  *
  * @example
  * ```ts
  * import { createDigitalObjectsClient } from 'digital-objects/client'
+ * import { rpcTransport } from 'digital-objects/transports/rpc'
  *
- * const client = createDigitalObjectsClient('https://digital-objects.workers.dev')
+ * const client = createDigitalObjectsClient(rpcTransport, 'https://digital-objects.workers.dev')
  * const post = await client.create('Post', { title: 'Hello World' })
  * const found = await client.get(post.id)
  * ```
  *
  * @packageDocumentation
  */
-
-import {
-  RPC,
-  http,
-  type RPCProxy,
-  type SqlQuery,
-  type RemoteStorage,
-  type RemoteCollections,
-  type DatabaseSchema,
-  type RpcSchema,
-} from 'rpc.do'
-
-/**
- * DO Client features available on RPC proxy
- * This mirrors the DOClientFeatures interface from rpc.do which is not exported
- */
-interface DOClientFeatures {
-  /** Tagged template SQL query */
-  sql: <R = Record<string, unknown>>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ) => SqlQuery<R>
-  /** Remote storage access */
-  storage: RemoteStorage
-  /** Remote collection access (MongoDB-style) */
-  collection: RemoteCollections
-  /** Get database schema */
-  dbSchema: () => Promise<DatabaseSchema>
-  /** Get full RPC schema */
-  schema: () => Promise<RpcSchema>
-}
-
-/**
- * Type for the Digital Objects RPC client
- */
-export type DigitalObjectsClient = RPCProxy<DigitalObjectsAPI> & DOClientFeatures
 
 import type {
   Noun,
@@ -113,24 +84,57 @@ export interface DigitalObjectsClientOptions {
   headers?: Record<string, string>
 }
 
+// ==================== Transport Port ====================
+
+/**
+ * Remote proxy over an API surface — every method becomes async
+ *
+ * Mirrors the shape a transport's proxy produces without depending on
+ * any concrete transport's types.
+ */
+export type DigitalObjectsClientProxy<API> = {
+  [K in keyof API]: API[K] extends (...args: infer A) => infer R
+    ? (...args: A) => Promise<Awaited<R>>
+    : API[K]
+}
+
+/**
+ * Transport port for connecting to a digital-objects worker
+ *
+ * Implementations turn a worker URL (plus optional auth) into a typed
+ * remote proxy for the given API surface. The default rpc.do-backed
+ * implementation is exported from `digital-objects/transports/rpc`.
+ */
+export interface DigitalObjectsTransport {
+  /** Connect to a worker at the given URL, returning a typed remote proxy */
+  connect<API extends object>(
+    url: string,
+    options?: DigitalObjectsClientOptions
+  ): DigitalObjectsClientProxy<API>
+}
+
 // ==================== Client Factory ====================
 
 /** Default URL for the digital-objects worker */
-const DEFAULT_URL = 'https://digital-objects.workers.dev'
+export const DEFAULT_DIGITAL_OBJECTS_URL = 'https://digital-objects.workers.dev'
 
 /**
- * Create a typed RPC client for the digital-objects worker
+ * Create a typed client for the digital-objects worker over an
+ * injected transport
  *
+ * @param transport - The transport to connect through (e.g. the
+ *   rpc.do-backed adapter from `digital-objects/transports/rpc`)
  * @param url - The URL of the deployed digital-objects worker
  * @param options - Optional client configuration
- * @returns A typed RPC client with all DigitalObjectsService methods
+ * @returns A typed client with all DigitalObjectsService methods
  *
  * @example
  * ```ts
  * import { createDigitalObjectsClient } from 'digital-objects/client'
+ * import { rpcTransport } from 'digital-objects/transports/rpc'
  *
  * // Connect to production
- * const client = createDigitalObjectsClient('https://digital-objects.workers.dev')
+ * const client = createDigitalObjectsClient(rpcTransport, 'https://digital-objects.workers.dev')
  *
  * // Define entity types
  * await client.defineNoun({ name: 'Post', description: 'A blog post' })
@@ -146,22 +150,9 @@ const DEFAULT_URL = 'https://digital-objects.workers.dev'
  * ```
  */
 export function createDigitalObjectsClient(
-  url: string = DEFAULT_URL,
+  transport: DigitalObjectsTransport,
+  url: string = DEFAULT_DIGITAL_OBJECTS_URL,
   options?: DigitalObjectsClientOptions
-): DigitalObjectsClient {
-  return RPC<DigitalObjectsAPI>(http(url, options?.token))
+): DigitalObjectsClientProxy<DigitalObjectsAPI> {
+  return transport.connect<DigitalObjectsAPI>(url, options)
 }
-
-/**
- * Default client instance connected to the production digital-objects worker
- *
- * @example
- * ```ts
- * import client from 'digital-objects/client'
- *
- * const post = await client.create('Post', { title: 'Hello' })
- * ```
- */
-const client: DigitalObjectsClient = createDigitalObjectsClient()
-
-export default client
