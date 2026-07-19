@@ -36,6 +36,8 @@ interface Book {
   parent?: `book_${string}`   // books nest: desk, pod, fund = sub-books
 }
 
+interface Measure { amount: number; unit: string }  // Money = the Measure whose unit is a currency
+
 interface Mandate {
   $id: `mandate_${string}`
   book: `book_${string}`
@@ -51,7 +53,7 @@ interface Mandate {
 
 - **Pool and conduit** (amends R-h's sentence): *a durable GrantEdge always charges a Mandate — the Mandate is the pool, the edge is the conduit.* One ceiling can back many tool edges (the desk's $500k week spans bids and transport); the limit order is the one-edge degenerate case.
 - **The encumbrance trio, all derived, none stored:** ceiling (stored) − *encumbered* (open-commitments projection) − *settled* (settlement-stream projection) = **`available`** (the lens). The term "residual" is dead at this layer (it conflated the trio, and it collides with lease residual value in the automotive vertical, which keeps the word).
-- **Mandate conjugations** (evidence register): limit order, Manheim proxy bid, CPL ad ceiling, fund mandate, floor-plan line, send quota, **issued card** (spending controls = ceiling + perActionCap; freeze = revocation). A Treasury financial account is a Book's external shadow; every issued card is mandate-scoped or it doesn't exist — cost-side completeness survives at external edges.
+- **Mandate conjugations** (evidence register): limit order, Manheim proxy bid, CPL ad ceiling, fund mandate, floor-plan line, send quota, **power of attorney** (an agent signing under POA cites it), **issued card** (spending controls = ceiling + perActionCap; freeze = revocation). A Treasury financial account is a Book's external shadow; every issued card is mandate-scoped or it doesn't exist — cost-side completeness survives at external edges.
 
 ### 3. The `data` kind and the effect-class grid
 
@@ -68,7 +70,7 @@ interface Mandate {
 
 ### 6. Events
 
-The frozen event contract lives at stack vault `specs/drivly-rebuild/W0-EVT.md`: grammar `{noun}.{pastTenseVerb}@{n}`; envelope with required attested `who` (policy-fired events attribute to the instance whose policy fired), `authority` required on act-class events (encumbrance decrements there), bitemporal `occurredAt`/`recordedAt` (EPCIS eventTime/recordTime verbatim), append-only corrections via `causation`, singular `correlation` (flagged), and the lens doctrine (native spine; EPCIS / CloudEvents / schema:Action / Activity Streams / journal / OTel as seam-mapped renderings).
+The frozen event contract lives at stack vault `specs/drivly-rebuild/W0-EVT.md`: grammar `{noun}.{pastTenseVerb}@{n}` (whole type string lowercase; no generic change events — subject-scoped subscription IS `deal.updated`); envelope with required attested `who` (policy-fired events attribute to the instance whose policy fired); **`authority` required on act-class events iff the actor acts under delegation** (`who ≠ book.principal` — any agent, or a human under a mandate; omitted when the actor is the principal acting for themselves: authority is identity, not a grant; capture defaults to the actor's sole active mandate on the target book); bitemporal `occurredAt`/`recordedAt` (EPCIS eventTime/recordTime verbatim); append-only corrections via `causation`; singular `correlation` (flagged); and the lens doctrine (native spine; EPCIS / CloudEvents / schema:Action / Activity Streams / journal / OTel as seam-mapped renderings).
 
 ## Consequences
 
