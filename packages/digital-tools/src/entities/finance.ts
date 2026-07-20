@@ -9,6 +9,11 @@
  *
  * Heavily influenced by Stripe's API structure and nomenclature.
  *
+ * Stripe adapter mirror: provider vocabulary at the seam, never the
+ * definition's nouns (SG-4; the Mongo-`$set` posture). The canonical
+ * billing nouns live in services-as-software; these entities exist to
+ * bind that canon to Stripe's surface.
+ *
  * @packageDocumentation
  */
 

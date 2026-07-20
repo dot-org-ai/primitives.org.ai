@@ -236,6 +236,14 @@ export interface ScheduledTask<TInput = unknown> {
 
 /**
  * Subscription plan
+ *
+ * A Plan is a named recurring Offer (canon: the F5 Offer extension) with
+ * entitlements; it lives in the App definition; `hasFeature`/`checkLimit`
+ * derive from entitlements; Stripe Connect is the collecting organ.
+ *
+ * This is the CANONICAL Plan shape (SG-4). Business-layer pricing views
+ * (e.g. business-as-code's `PricingPlan`) are projections of what the
+ * business's products declare, never sibling declarations.
  */
 export interface SubscriptionPlan {
   /** Plan ID */

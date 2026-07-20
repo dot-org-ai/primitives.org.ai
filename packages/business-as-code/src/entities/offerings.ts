@@ -496,6 +496,10 @@ export const Feature: Noun = {
  * PricingPlan entity
  *
  * Represents a pricing plan or tier.
+ *
+ * Canonical: services-as-software `Plan` / `SubscriptionPlan` — SG-4; this
+ * shape is a business-layer projection. New billing work should target the
+ * canonical Plan (entitlements-bearing) and derive this view from it.
  */
 export const PricingPlan: Noun = {
   singular: 'pricing-plan',

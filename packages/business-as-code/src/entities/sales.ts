@@ -665,6 +665,11 @@ export const Contract: Noun = {
  * Subscription entity
  *
  * Represents a customer subscription.
+ *
+ * Canonical: services-as-software `ServiceSubscription` (+ its billing
+ * entity set: Quote/Order/Subscription/Usage/Invoice/Payment) — SG-4; this
+ * shape is a business-layer projection (MRR/ARR view), not the runtime
+ * billing record.
  */
 export const Subscription: Noun = {
   singular: 'subscription',
@@ -1178,6 +1183,9 @@ export const Order: Noun = {
  * Invoice entity
  *
  * Represents an invoice.
+ *
+ * Canonical: services-as-software `Invoice` — SG-4; this shape is a
+ * business-layer projection.
  */
 export const Invoice: Noun = {
   singular: 'invoice',

@@ -445,6 +445,11 @@ export function okrs(handler: (context?: ServiceContext) => Promise<OKRDefinitio
 /**
  * Create a subscription plan
  *
+ * A Plan is a named recurring Offer (canon: the F5 Offer extension) with
+ * entitlements; it lives in the App definition; `hasFeature`/`checkLimit`
+ * derive from entitlements; Stripe Connect is the collecting organ. This
+ * factory and {@link SubscriptionPlan} are the canonical Plan home (SG-4).
+ *
  * @example
  * ```ts
  * const plan = Plan({
