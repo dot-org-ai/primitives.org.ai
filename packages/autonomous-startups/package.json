@@ -1,6 +1,6 @@
 {
   "name": "autonomous-startups",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "The abstract self-running startup: the capstone primitive that composes business-as-code, services-as-software, digital-products, digital-tools, and digital-workers into one definition, with every lifecycle transition gated by @org.ai/authority.",
   "type": "module",
   "main": "./dist/index.js",
