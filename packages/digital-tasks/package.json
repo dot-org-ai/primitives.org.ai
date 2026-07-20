@@ -32,6 +32,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@org.ai/types": "workspace:*",
     "ai-functions": "workspace:*",
     "digital-objects": "workspace:*",
     "digital-tools": "workspace:*",

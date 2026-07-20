@@ -78,7 +78,10 @@ export const AgentDelivery: Noun = {
       description: 'Agent capabilities',
     },
 
-    // Autonomy
+    // Autonomy — the **autonomy** axis of a Verb (how supervised), one of
+    // the three orthogonal verb axes (kind · audience · autonomy) documented
+    // at `@org.ai/types` (`FunctionKind`); local record: ADR 0013. Distinct
+    // from the kind axis: an agentic-kind verb can run at any autonomy level.
     autonomyLevel: {
       type: 'string',
       description: 'Level of autonomous operation',

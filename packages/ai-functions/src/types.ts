@@ -3,6 +3,16 @@
  */
 
 import type { SandboxEnv } from 'ai-evaluate'
+import type { FunctionKind } from '@org.ai/types'
+
+/**
+ * The canonical **kind** axis (`'code' | 'generative' | 'agentic' | 'human'`)
+ * is defined once in `@org.ai/types` and re-exported here for convenience.
+ * The per-kind payload interfaces below are this package's implementation
+ * shapes; their `type` discriminants are checked against the canonical
+ * vocabulary (see the assertion beside {@link FunctionDefinition}).
+ */
+export type { FunctionKind } from '@org.ai/types'
 
 /**
  * Host Workers environment for the ai-evaluate sandbox.
@@ -659,6 +669,16 @@ export type FunctionDefinition<TOutput = unknown, TInput = unknown> =
   | GenerativeFunctionDefinition<TOutput, TInput>
   | AgenticFunctionDefinition<TOutput, TInput>
   | HumanFunctionDefinition<TOutput, TInput>
+
+/**
+ * Compile-time assertion: the union's `type` discriminants are exactly the
+ * canonical {@link FunctionKind} vocabulary from `@org.ai/types` — adding,
+ * removing, or renaming a kind in either place without the other is a type
+ * error here, not a silent fork.
+ */
+type _MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never
+const _functionKindsMatch: _MutuallyAssignable<FunctionDefinition['type'], FunctionKind> = true
+void _functionKindsMatch
 
 /**
  * Result of defineFunction - a callable with metadata

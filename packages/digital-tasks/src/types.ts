@@ -27,15 +27,19 @@ import type {
   AgenticFunctionDefinition,
   HumanFunctionDefinition,
 } from 'ai-functions'
+import type { FunctionKind } from '@org.ai/types'
 import type { Action } from 'digital-objects'
 
-// Re-export function types for convenience
+// Re-export function types for convenience.
+// The kind axis ('code' | 'generative' | 'agentic' | 'human') is the
+// canonical FunctionKind vocabulary from @org.ai/types.
 export type {
   FunctionDefinition,
   CodeFunctionDefinition,
   GenerativeFunctionDefinition,
   AgenticFunctionDefinition,
   HumanFunctionDefinition,
+  FunctionKind,
 }
 
 // Re-export Action so consumers can see the supertype
@@ -465,7 +469,7 @@ export interface UpdateTaskOptions {
 export interface TaskQuery {
   status?: TaskStatus | TaskStatus[]
   priority?: TaskPriority | TaskPriority[]
-  functionType?: 'code' | 'generative' | 'agentic' | 'human'
+  functionType?: FunctionKind
   assignedTo?: string
   tags?: string[]
   projectId?: string
