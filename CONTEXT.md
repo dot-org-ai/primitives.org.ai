@@ -88,6 +88,23 @@ _Avoid_: Pipeline, job graph, flow (used generically elsewhere).
 **State Machine**: A hierarchical statechart with states, transitions, guards, entry/exit actions, parallel regions, and history. Runtime is xstate (`createMachine` / `createActor`); wire formats are mermaid `stateDiagram-v2` (LLM/human surface) and xstate `MachineConfig` (typed developer surface). Both wire formats round-trip through a bidirectional parser/renderer. Persists via the `StateMachineStorage` port (Durable Object default; Postgres alternative via `ai-database`). Transitions subscribe to the workflow event bus; state entries can emit onto it.
 _Avoid_: Workflow (use **Workflow** for the surrounding concept), FSM (we mean the hierarchical variant), graph.
 
+### The App (software register)
+
+> Ruled in the 2026-07-19 software-spec grill (SG-1…SG-10; spec: startups.studio stack vault `specs/studio/SOFTWARE.md`). The abstract App is a **composition of the primitives above** — Nouns + Tools + workflows + roster + plans — never a parallel vocabulary. These entries name what the composition adds.
+
+**Mount**: The running whole-app the interpreter creates from a definition — the apply/materialise target, and what a cockpit watches. Editing the definition updates the mount; every workspace sees the new shape.
+_Avoid_: instance, deployment.
+
+**Workspace**: The per-tenant cell of a mount (one Durable Object + SQLite per tenant) that a rendering attaches to. Connections attach and detach (the tmux model); the workspace survives any one rendering disconnecting.
+_Avoid_: session — reserved to MCP's transport handshake and the web-login sense; tenant (the operator; the workspace is their cell).
+
+**Noun source**: Where a declared Noun's Things live: `house` (the app's own Things — a CRM's Deals) or `substrate` (the interpreter's own records read through a lens — a cockpit's Workspaces). An app never creates substrate-sourced Things.
+
+**Verb axes**: Three orthogonal dials on one Verb, each with one home: **kind** — `code | generative | agentic | human` (what executes; union in `@org.ai/types`); **audience** — `agent | human | both` (who may invoke; `digital-tools` `ToolAudience`); **autonomy** — `full | supervised | assisted | advisory` (how supervised; `services-as-software`, ADR 0013). Declaring one axis says nothing about the other two.
+_Avoid_: conflating any axis with another (an agentic-kind Verb may be human-audience and supervised).
+
+**Customization doors**: The four (and only four) ways an app customizes the shared core: its definition; a function override (a different Tool bound to the same Verb at app scope); a component override at a named slot; theme tokens. No ejection, no per-app fork.
+
 ## Relationships
 
 - A **Verb** declares a **Frame** of roles it accepts.
