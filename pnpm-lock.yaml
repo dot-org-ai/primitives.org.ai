@@ -494,6 +494,9 @@ importers:
 
   packages/digital-tasks:
     dependencies:
+      '@org.ai/types':
+        specifier: workspace:*
+        version: link:../types
       ai-functions:
         specifier: workspace:*
         version: link:../ai-functions

@@ -19,6 +19,9 @@ _Avoid_: Action type (Action is the instance), method.
 **Frame**: The set of complement roles a Verb can take. Closed taxonomy of nine roles: `subject`, `object`, `recipient`, `source`, `destination`, `instrument`, `topic`, `cause`, `manner`. Plus the literal `when` (timestamp) and `where` (location), carried on Action directly rather than as Frame slots.
 _Avoid_: Schema, case grammar.
 
+**Verb axes**: The three orthogonal dials a Verb can carry, each with exactly one home: **kind** (what executes: `code | generative | agentic | human` — `FunctionKind` in `@org.ai/types`), **audience** (who may invoke: `agent | human | both` — `ToolAudience` in `digital-tools`), **autonomy** (how supervised: `full | supervised | assisted | advisory` — `autonomyLevel` in `services-as-software`, ADR 0013). The axes never collapse into each other: "`Deal.negotiate` is an agentic-kind verb, agent-and-human audience, supervised autonomy."
+_Avoid_: re-declaring the kind union in a consumer package; using "type" for the kind axis in prose.
+
 **Thing**: An instance of a Noun (e.g., a specific Customer record). Plays Subject or Object in an Action.
 _Avoid_: Entity, instance, record.
 

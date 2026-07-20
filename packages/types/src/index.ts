@@ -250,6 +250,42 @@ export const StandardVerbs = [
 export type StandardVerb = (typeof StandardVerbs)[number]
 
 // ============================================================================
+// Verb Axes (SG-3)
+// ============================================================================
+
+/**
+ * The three orthogonal axes of a Verb, each with exactly one home:
+ *
+ * - **kind** (what executes): {@link FunctionKind} — defined here, the
+ *   canonical vocabulary consumed by `ai-functions` / `digital-tasks`.
+ * - **audience** (who may invoke): `ToolAudience` (`'agent' | 'human' | 'both'`)
+ *   — home: `digital-tools`.
+ * - **autonomy** (how supervised): `autonomyLevel`
+ *   (`'full' | 'supervised' | 'assisted' | 'advisory'`) — home:
+ *   `services-as-software` (`AgentDelivery`), per ADR 0013.
+ *
+ * One verb can carry all three dials; the axes never collapse into each
+ * other. "`Deal.negotiate` is an agentic-kind verb, agent-and-human
+ * audience, supervised autonomy."
+ */
+export const FunctionKinds = ['code', 'generative', 'agentic', 'human'] as const
+
+/**
+ * The **kind** axis: what executes a Verb.
+ *
+ * - `code` — a deterministic handler; no model in the execution path
+ * - `generative` — a model generates the result (text/object/media)
+ * - `agentic` — a model runs in a loop with tools until completion
+ * - `human` — a human supplies the result (approval, input, review)
+ *
+ * The cascade order is Code → Generative → Agentic → Human. The per-kind
+ * payload interfaces (`CodeFunctionDefinition` et al.) live in
+ * `ai-functions`, which types their `type` discriminants against this
+ * vocabulary.
+ */
+export type FunctionKind = (typeof FunctionKinds)[number]
+
+// ============================================================================
 // Things Collection Types (do-p9q)
 // ============================================================================
 

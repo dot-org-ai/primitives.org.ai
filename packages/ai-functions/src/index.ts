@@ -43,6 +43,7 @@ export type {
   HumanChannel,
   LegacyHumanChannel,
   SchemaLimitations,
+  FunctionKind,
   BaseFunctionDefinition,
   CodeFunctionDefinition,
   CodeFunctionResult,

@@ -218,7 +218,12 @@ export type ToolSubcategory =
 // ============================================================================
 
 /**
- * Who can use this tool
+ * Who can use this tool.
+ *
+ * This is the **audience** axis of a Verb — who may invoke — one of the
+ * three orthogonal verb axes (kind · audience · autonomy) documented at
+ * `@org.ai/types` (`FunctionKind`). Distinct from the kind axis: a
+ * code-kind verb can still have audience `'both'`.
  */
 export type ToolAudience = 'agent' | 'human' | 'both'
 

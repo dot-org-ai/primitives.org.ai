@@ -25,6 +25,7 @@ import type {
   FunctionRegistry,
   DefinedFunction,
   FunctionDefinition,
+  FunctionKind,
   CodeFunctionDefinition,
   GenerativeFunctionDefinition,
   AgenticFunctionDefinition,
@@ -57,7 +58,8 @@ export const FUNCTION_VERBS = {
  */
 export interface StoredFunctionDefinition {
   name: string
-  type: 'code' | 'generative' | 'agentic' | 'human'
+  /** The kind axis — canonical vocabulary from `@org.ai/types` */
+  type: FunctionKind
   description?: string
   args: unknown
   returnType?: unknown
