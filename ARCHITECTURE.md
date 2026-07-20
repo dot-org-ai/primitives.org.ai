@@ -22,7 +22,7 @@ graph TD
         types["@org.ai/types<br/><i>Shared type definitions</i>"]
         config["@org.ai/config<br/><i>Build tooling config</i>"]
         digital-objects["digital-objects<br/><i>SVO storage ontology</i>"]
-        graphdl["@graphdl/core<br/><i>Entity-graph DSL (interim)</i>"]
+        graphdl["@graphdl/core<br/><i>Entity-graph DSL (ratified binding — org.ai ADR 0006)</i>"]
     end
 
     subgraph "Provider Layer"
@@ -486,7 +486,7 @@ Analysis based on actual package.json dependencies:
 - `ai-workflows`: No workspace deps (Layer 0)
 - `ai-tests`: No workspace deps (Layer 0)
 - `digital-objects`: No workspace deps (Layer 0)
-- `@graphdl/core` (`graphdl`): No workspace deps (Layer 0, interim)
+- `@graphdl/core` (`graphdl`): No workspace deps (Layer 0; the ratified graph-substrate binding per [org.ai ADR 0006](https://github.com/dot-org-ai/org.ai/blob/main/docs/adr/0006-rc4-graph-substrate-binding.md))
 - `ai-providers`: Only depends on `language-models` (Layer 1)
 - `ai-core`: Depends on `ai-providers`, `language-models` (Layer 2)
 - `ai-functions`: Depends on `ai-core`, `ai-providers`, `language-models` (Layer 3)
