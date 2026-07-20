@@ -169,6 +169,12 @@ export function createProduct(input: Omit<Product, '$type' | 'status'> & { statu
  * Interactive user-facing applications that run on various platforms
  * including web browsers, mobile devices, and desktops.
  *
+ * This record is the **offering-catalog row** — "a business-as-code offers
+ * a digital product" (SG-1). It says a business ships this app at this url;
+ * it is NOT the app's definition. The abstract App definition is a
+ * composition of primitives (Nouns + Tools + workflows + roster + plans) —
+ * see the stack vault `specs/studio/SOFTWARE.md` (rulings SG-1/SG-6).
+ *
  * Extends {@link Product} with platform-specific fields.
  *
  * @see https://schema.org.ai/App
@@ -806,6 +812,13 @@ export interface DigitalProduct {
  * Application definition for builder pattern
  *
  * Used by AppBuilder for fluent API definitions.
+ *
+ * Scope note (SG-1/SG-6): this is the **code-projection descriptor** of one
+ * rendering path — it describes generated app code, which is why it may name
+ * a `framework`, a state `library`, or an auth `provider`. Those fields are
+ * projection internals. They are NOT fields of the abstract App: the abstract
+ * App definition is a composition of primitives and, by the framework razor,
+ * never names an implementation. See the stack vault `specs/studio/SOFTWARE.md`.
  *
  * @see {@link App} for JSON-LD compatible type
  */

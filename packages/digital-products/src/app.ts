@@ -8,6 +8,12 @@ import { registerProduct } from './product.js'
 /**
  * Create an application definition
  *
+ * Note (SG-1/SG-6): this builder produces the code-projection descriptor
+ * ({@link AppDefinition}) — the shape of one generated-code rendering path,
+ * not the abstract App. The abstract App is a composition of primitives
+ * whose definition never names a framework; see the stack vault
+ * `specs/studio/SOFTWARE.md`.
+ *
  * @example
  * ```ts
  * const myApp = App({
