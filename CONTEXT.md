@@ -100,8 +100,7 @@ _Avoid_: session — reserved to MCP's transport handshake and the web-login sen
 
 **Noun source**: Where a declared Noun's Things live: `house` (the app's own Things — a CRM's Deals) or `substrate` (the interpreter's own records read through a lens — a cockpit's Workspaces). An app never creates substrate-sourced Things.
 
-**Verb axes**: Three orthogonal dials on one Verb, each with one home: **kind** — `code | generative | agentic | human` (what executes; union in `@org.ai/types`); **audience** — `agent | human | both` (who may invoke; `digital-tools` `ToolAudience`); **autonomy** — `full | supervised | assisted | advisory` (how supervised; `services-as-software`, ADR 0013). Declaring one axis says nothing about the other two.
-_Avoid_: conflating any axis with another (an agentic-kind Verb may be human-audience and supervised).
+Verb **axes** (kind · audience · autonomy) are defined at the **Verb axes** entry in the Language section above — that entry ships with `FunctionKind` in `@org.ai/types` (SG-3; primitives PR #45) and is not duplicated here.
 
 **Customization doors**: The four (and only four) ways an app customizes the shared core: its definition; a function override (a different Tool bound to the same Verb at app scope); a component override at a named slot; theme tokens. No ejection, no per-app fork.
 
