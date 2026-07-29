@@ -62,6 +62,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "@graphdl/core": "workspace:*",
     "rpc.do": "^0.2.3",
     "zod": "^3.23.0"
   },

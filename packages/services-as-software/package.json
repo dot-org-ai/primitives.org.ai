@@ -13,13 +13,17 @@
     "./v3": {
       "import": "./dist/v3/index.js",
       "types": "./dist/v3/index.d.ts"
+    },
+    "./v4": {
+      "import": "./dist/v4/index.js",
+      "types": "./dist/v4/index.d.ts"
     }
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint .",
     "clean": "rm -rf dist"
   },

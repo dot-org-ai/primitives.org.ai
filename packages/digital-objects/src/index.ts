@@ -118,6 +118,12 @@ export type {
   ValidationOptions,
 } from './schema-validation.js'
 
+// Ontology() Factory - storage-agnostic SVO vocabulary (graphdl Graph() +
+// Frame layering + provider binding). The recommended way to define a
+// vocabulary; supersedes the DO()/Noun() instance-proxy factories below.
+export { Ontology } from './ontology.js'
+export type { OntologyVocabulary, OntologyOptions, VerbSpec } from './ontology.js'
+
 // DO() Factory - Declarative Digital Object Definitions
 export {
   DO,

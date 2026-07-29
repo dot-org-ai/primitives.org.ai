@@ -29,13 +29,7 @@
 // Business (Core business entities)
 // =============================================================================
 
-export {
-  Business,
-  Vision,
-  Value,
-  BusinessEntities,
-  BusinessCategories,
-} from './business.js'
+export { Business, Vision, Value, BusinessEntities, BusinessCategories } from './business.js'
 
 // =============================================================================
 // Organization (Org structure)
@@ -74,6 +68,7 @@ export {
 export {
   Product,
   Service,
+  Offer,
   Feature,
   PricingPlan,
   RoadmapItem,
@@ -188,15 +183,7 @@ export {
 // Risk (Risk management)
 // =============================================================================
 
-export {
-  Risk,
-  Mitigation,
-  Incident,
-  Control,
-  Assessment,
-  Issue,
-  RiskEntities,
-} from './risk.js'
+export { Risk, Mitigation, Incident, Control, Assessment, Issue, RiskEntities } from './risk.js'
 
 // =============================================================================
 // Projects (Project management)
@@ -262,15 +249,7 @@ export {
 // Market (Market intelligence)
 // =============================================================================
 
-export {
-  Market,
-  Competitor,
-  Trend,
-  Opportunity,
-  SWOT,
-  Industry,
-  MarketEntities,
-} from './market.js'
+export { Market, Competitor, Trend, Opportunity, SWOT, Industry, MarketEntities } from './market.js'
 
 // =============================================================================
 // All Entities Collection

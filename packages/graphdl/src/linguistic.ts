@@ -61,8 +61,13 @@ export function toKebabCase(s: string): string {
   return splitCamelCase(s).join('-').toLowerCase()
 }
 
-/** Check if we should double the final consonant (CVC pattern) */
-function shouldDoubleConsonant(verb: string): boolean {
+/**
+ * Check if we should double the final consonant (CVC pattern)
+ *
+ * Uses a curated list of known doubling verbs plus a short-word heuristic
+ * rather than a fragile inline CVC regex.
+ */
+export function shouldDoubleConsonant(verb: string): boolean {
   if (verb.length < 2) return false
   const last = verb.charAt(verb.length - 1)
   const secondLast = verb.charAt(verb.length - 2)

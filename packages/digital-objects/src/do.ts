@@ -935,6 +935,11 @@ function parseFunction(str: string): (...args: unknown[]) => unknown {
  * @example
  * const Startup = DO({ $type: 'Startup', name: 'Name' })
  * const TechStartup = Startup({ $type: 'TechStartup', techStack: ['Stack'] })
+ *
+ * @deprecated Prefer `Ontology()` for defining vocabularies. `DO()` remains a
+ * supported instance-proxy/definition factory but the vocabulary layer it
+ * embeds is being consolidated onto `@graphdl/core` via `Ontology()`. See the
+ * `Ontology()` JSDoc; full caller migration is a follow-up.
  */
 export type CallableDefinition<T extends DODefinition = DODefinition> =
   DigitalObjectDefinition<T> & {
@@ -998,6 +1003,16 @@ function makeCallable<T extends DODefinition>(
   })
 }
 
+/**
+ * Define a self-contained Digital Object (schema + cascades + functions +
+ * events + schedules + migrations + instances).
+ *
+ * @deprecated Prefer `Ontology()` for defining the vocabulary (nouns/verbs/
+ * frames) of a domain. `DO()` is retained because it is used across the
+ * monorepo and provides the instance/definition runtime that `Ontology()` does
+ * not yet replace; the vocabulary half of `DO()` is being consolidated onto
+ * `@graphdl/core` via `Ontology()`. Full caller migration is a follow-up.
+ */
 export function DO<T extends DODefinition>(
   definition: T | string,
   storage?: DOStorage
