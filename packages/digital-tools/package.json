@@ -25,6 +25,10 @@
     "./client": {
       "import": "./dist/client.js",
       "types": "./dist/client.d.ts"
+    },
+    "./transports/rpc": {
+      "import": "./dist/transports/rpc.js",
+      "types": "./dist/transports/rpc.d.ts"
     }
   },
   "scripts": {

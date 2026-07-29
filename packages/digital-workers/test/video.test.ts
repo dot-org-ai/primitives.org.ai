@@ -26,12 +26,17 @@ import type {
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
+// Gateway URL for unit tests (no baked-in default in source)
+const TEST_GATEWAY_URL = 'https://video.gateway.test'
+
 describe('video() - Video Generation Primitive', () => {
   beforeEach(() => {
     mockFetch.mockReset()
+    vi.stubEnv('VIDEO_GATEWAY_URL', TEST_GATEWAY_URL)
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
   })
 
@@ -91,7 +96,7 @@ describe('video() - Video Generation Primitive', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1)
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('video.workers.do'),
+        expect.stringContaining(TEST_GATEWAY_URL),
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

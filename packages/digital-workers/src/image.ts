@@ -63,6 +63,8 @@ export interface ImageOptions {
   seed?: number
   /** Additional model-specific parameters */
   parameters?: Record<string, unknown>
+  /** Image gateway base URL (falls back to AI_GATEWAY_URL / IMAGE_GATEWAY_URL env) */
+  gatewayUrl?: string
 }
 
 /**
@@ -108,6 +110,8 @@ export interface VariationOptions {
   model?: string
   /** Output format */
   format?: ImageFormat
+  /** Image gateway base URL (falls back to AI_GATEWAY_URL / IMAGE_GATEWAY_URL env) */
+  gatewayUrl?: string
 }
 
 /**
@@ -126,6 +130,8 @@ export interface EditOptions {
   n?: number
   /** Output format */
   format?: ImageFormat
+  /** Image gateway base URL (falls back to AI_GATEWAY_URL / IMAGE_GATEWAY_URL env) */
+  gatewayUrl?: string
 }
 
 /**
@@ -140,6 +146,8 @@ export interface UpscaleOptions {
   format?: ImageFormat
   /** Denoise level (0-1) */
   denoise?: number
+  /** Image gateway base URL (falls back to AI_GATEWAY_URL / IMAGE_GATEWAY_URL env) */
+  gatewayUrl?: string
 }
 
 /**
@@ -198,12 +206,24 @@ function getEnv(key: string): string | undefined {
 }
 
 /**
+ * Resolve the image gateway base URL from options or environment
+ */
+function resolveGatewayUrl(gatewayUrl?: string): string {
+  const baseUrl = gatewayUrl || getEnv('AI_GATEWAY_URL') || getEnv('IMAGE_GATEWAY_URL')
+  if (!baseUrl) {
+    throw new Error(
+      'No image gateway URL configured. Pass options.gatewayUrl or set AI_GATEWAY_URL / IMAGE_GATEWAY_URL.'
+    )
+  }
+  return baseUrl
+}
+
+/**
  * Get the image generation endpoint based on model
  */
-function getImageEndpoint(model: string): string {
+function getImageEndpoint(model: string, gatewayUrl?: string): string {
   // Route to appropriate worker based on model
-  const baseUrl =
-    getEnv('AI_GATEWAY_URL') || getEnv('IMAGE_GATEWAY_URL') || 'https://image.workers.do'
+  const baseUrl = resolveGatewayUrl(gatewayUrl)
 
   if (model.startsWith('dall-e') || model.startsWith('openai/')) {
     return `${baseUrl}/openai/images/generations`
@@ -320,10 +340,11 @@ export async function image(
     negativePrompt,
     seed,
     parameters = {},
+    gatewayUrl,
   } = options
 
   const enhancedPrompt = enhancePrompt(prompt, style)
-  const endpoint = getImageEndpoint(model)
+  const endpoint = getImageEndpoint(model, gatewayUrl)
 
   // Build the request payload
   const payload: Record<string, unknown> = {
@@ -449,11 +470,8 @@ image.variations = async function variations(
     size = DEFAULTS.size,
     model = 'dall-e-2', // DALL-E 2 supports variations
     format = DEFAULTS.format,
+    gatewayUrl,
   } = options
-
-  const baseUrl =
-    getEnv('AI_GATEWAY_URL') || getEnv('IMAGE_GATEWAY_URL') || 'https://image.workers.do'
-  const endpoint = `${baseUrl}/openai/images/variations`
 
   // Build form data for image upload
   const formData = new FormData()
@@ -470,6 +488,9 @@ image.variations = async function variations(
   } else {
     throw new Error('Invalid image URL format. Must be an HTTP URL or data URL.')
   }
+
+  const baseUrl = resolveGatewayUrl(gatewayUrl)
+  const endpoint = `${baseUrl}/openai/images/variations`
 
   formData.append('n', String(count))
   formData.append('size', size)
@@ -549,11 +570,8 @@ image.edit = async function edit(imageUrl: string, options: EditOptions): Promis
     model = 'dall-e-2', // DALL-E 2 supports edits
     n = 1,
     format = DEFAULTS.format,
+    gatewayUrl,
   } = options
-
-  const baseUrl =
-    getEnv('AI_GATEWAY_URL') || getEnv('IMAGE_GATEWAY_URL') || 'https://image.workers.do'
-  const endpoint = `${baseUrl}/openai/images/edits`
 
   const formData = new FormData()
 
@@ -568,6 +586,9 @@ image.edit = async function edit(imageUrl: string, options: EditOptions): Promis
   } else {
     throw new Error('Invalid image URL format. Must be an HTTP URL or data URL.')
   }
+
+  const baseUrl = resolveGatewayUrl(gatewayUrl)
+  const endpoint = `${baseUrl}/openai/images/edits`
 
   // Add mask if provided
   if (mask) {
@@ -651,10 +672,10 @@ image.upscale = async function upscale(
 ): Promise<UpscaleResult> {
   const startTime = Date.now()
 
-  const { scale = 2, model = 'real-esrgan', format = DEFAULTS.format, denoise } = options
+  const { scale = 2, model = 'real-esrgan', format = DEFAULTS.format, denoise, gatewayUrl } =
+    options
 
-  const baseUrl =
-    getEnv('AI_GATEWAY_URL') || getEnv('IMAGE_GATEWAY_URL') || 'https://image.workers.do'
+  const baseUrl = resolveGatewayUrl(gatewayUrl)
   const endpoint = `${baseUrl}/upscale`
 
   const payload: Record<string, unknown> = {
