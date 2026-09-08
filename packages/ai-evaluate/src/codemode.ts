@@ -2,8 +2,11 @@
  * `Executor` adapter for `@cloudflare/codemode` (0.5+): run the code an
  * agent writes through `evaluate()` instead of the stock
  * `DynamicWorkerExecutor`, so it gets this package's sandbox - the
- * allowlist/outbound gateway, content-addressed isolates, the CPU budget
- * bound to `timeout`, `limits`, `tails`, npm `dependencies` - unchanged.
+ * allowlist/outbound gateway, the CPU budget bound to `timeout`, `limits`,
+ * `tails`, npm `dependencies` - unchanged. Like the stock executor it loads
+ * a fresh isolate per call: `isolation: 'cached'` is not an option here,
+ * because a tool call's `outboundRpc` interceptor is registered per call
+ * (`CODEMODE_CACHED_ERROR`).
  *
  * ```ts
  * import { createCodeTool } from '@cloudflare/codemode'
@@ -40,6 +43,7 @@ import type {
 import type { EvaluateOptions, LogEntry, WorkerLoader } from './types.js'
 import type { OutboundInterceptor } from './outbound.js'
 import { evaluate } from './evaluate.js'
+import { ValidationError } from './validation.js'
 
 /**
  * Host of the sandbox's tool-call requests. `.invalid` is reserved (RFC 2606),
@@ -49,6 +53,19 @@ export const CODEMODE_DISPATCH_HOST = 'codemode.invalid'
 
 /** Default `timeout`: codemode's own default, and this package's `MAX_TIMEOUT` */
 export const DEFAULT_CODEMODE_TIMEOUT = 60000
+
+/**
+ * Error `createExecutor` throws for `evaluate.isolation: 'cached'`. Every
+ * call with something to dispatch runs under `outboundRpc`, whose interceptor
+ * is registered per evaluation (see `OUTBOUND_RPC_CACHED_ERROR`): no two
+ * calls could share a cached isolate, so the executor - like codemode's own
+ * `DynamicWorkerExecutor` - loads a fresh isolate per call, and says so
+ * rather than accepting an option it cannot honour.
+ */
+export const CODEMODE_CACHED_ERROR =
+  "ai-evaluate/codemode: evaluate.isolation 'cached' is not supported - tool calls go through " +
+  'outboundRpc, whose interceptor is registered per call, so no two calls could share a cached ' +
+  "isolate; every call loads a fresh isolate (leave isolation unset, or 'fresh')"
 
 /** Namespace of tools passed as a plain record (`execute(code, { add })`) */
 const DEFAULT_NAMESPACE = 'codemode'
@@ -175,9 +192,10 @@ export interface OutboundFetcher {
 /**
  * The `EvaluateOptions` an executor passes through to every evaluation:
  * everything but the fields the adapter owns (`script`, `timeout`, `fetch`,
- * `outboundRpc`, `bindings`, `modules`) and the ones that do not apply to
- * codemode's plain-JavaScript code (`module`, `tests`, `jsx`, `sdk`, `rpc`,
- * the deprecated `imports`).
+ * `outboundRpc`, `bindings`, `modules`, and `isolation` - every call is a
+ * fresh isolate, see `CODEMODE_CACHED_ERROR`) and the ones that do not apply
+ * to codemode's plain-JavaScript code (`module`, `tests`, `jsx`, `sdk`,
+ * `rpc`, the deprecated `imports`).
  */
 export type CodemodeEvaluateOptions = Pick<
   EvaluateOptions,
@@ -186,7 +204,6 @@ export type CodemodeEvaluateOptions = Pick<
   | 'compatibilityFlags'
   | 'compatibilityDate'
   | 'env'
-  | 'isolation'
   | 'dependencies'
   | 'bundler'
 >
@@ -460,9 +477,10 @@ function formatLog(entry: LogEntry): string {
  *
  * Per call: the providers (or the plain `fns` record, as the `codemode`
  * namespace) and connectors become a host-side dispatch table and in-sandbox
- * proxies; the code runs as the script of a fresh (or, with
- * `evaluate.isolation: 'cached'`, content-addressed) isolate under `timeout`;
- * the result is `{ result, logs }`, or `{ result: undefined, error, logs }`
+ * proxies; the code runs as the script of a fresh isolate under `timeout`
+ * (`evaluate.isolation: 'cached'` is rejected here, at construction, with
+ * `CODEMODE_CACHED_ERROR`: the per-call interceptor leaves nothing two calls
+ * could share); the result is `{ result, logs }`, or `{ result: undefined, error, logs }`
  * with the sandbox's own error string - an evaluation is never reported as
  * a `success: false` object and never thrown. Codemode's `runCode` raises
  * `error` as `Error('Code execution failed: ...')`.
@@ -489,6 +507,12 @@ export function createExecutor(options: CodemodeExecutorOptions): Executor {
     bindings,
     evaluate: passthrough,
   } = options
+  // Not in `CodemodeEvaluateOptions`, but a JavaScript caller can still pass
+  // it; the spread below would hand it to evaluate(), which would reject
+  // every tool-bearing call - say so once, here, instead
+  if ((passthrough as { isolation?: unknown } | undefined)?.isolation === 'cached') {
+    throw new ValidationError(CODEMODE_CACHED_ERROR)
+  }
 
   return {
     async execute(

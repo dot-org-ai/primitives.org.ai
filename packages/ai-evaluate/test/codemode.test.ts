@@ -17,7 +17,9 @@ import {
   sanitizeToolName,
   isFunctionSource,
   CODEMODE_DISPATCH_HOST,
+  CODEMODE_CACHED_ERROR,
   DEFAULT_CODEMODE_TIMEOUT,
+  type CodemodeEvaluateOptions,
 } from '../src/codemode.js'
 import {
   registeredInterceptorCount,
@@ -205,19 +207,53 @@ describe('createExecutor', () => {
       expect(code.env).toEqual({ FLAG: 'on' })
     })
 
-    it('evaluate options pass through: isolation, limits, compatibility flags', async () => {
+    it('evaluate options pass through: limits, compatibility flags', async () => {
       const fake = returning(1)
       await createExecutor({
         loader: fake.loader,
         evaluate: {
-          isolation: 'cached',
           limits: { subrequests: 5 },
           compatibilityFlags: ['nodejs_compat'],
         },
       }).execute('return 1', {})
-      expect(fake.calls).toEqual({ get: 1, load: 0 })
+      expect(fake.calls).toEqual({ get: 0, load: 1 })
       expect(fake.loaded[0]?.limits).toEqual({ subrequests: 5 })
       expect(fake.loaded[0]?.compatibilityFlags).toEqual(['nodejs_compat'])
+    })
+
+    it('every call loads a fresh isolate: two identical tool-bearing calls are two workers', async () => {
+      // A tool call goes through `outboundRpc`, whose interceptor is
+      // registered per evaluation: there is no spec two calls could share,
+      // so the executor never takes the cached path (`get`)
+      const fake = calling('codemode', 'add', [1, 2])
+      const executor = createExecutor({ loader: fake.loader })
+      expect((await executor.execute('return 1', { add })).result).toBe(3)
+      expect((await executor.execute('return 1', { add })).result).toBe(3)
+      expect(fake.calls).toEqual({ get: 0, load: 2 })
+      const [first, second] = fake.loaded as [WorkerCode, WorkerCode]
+      const interceptorOf = (code: WorkerCode) =>
+        (code.modules[OUTBOUND_JSON_MODULE] as { json: OutboundGatewayProps }).json.interceptor
+      expect(interceptorOf(first)).toBeDefined()
+      expect(interceptorOf(second)).not.toBe(interceptorOf(first))
+    })
+
+    it("evaluate.isolation: 'cached' is rejected at construction, not silently made fresh", () => {
+      const fake = returning(1)
+      expect(() =>
+        createExecutor({
+          loader: fake.loader,
+          // Not in `CodemodeEvaluateOptions`: what a JavaScript caller passes
+          evaluate: { isolation: 'cached' } as CodemodeEvaluateOptions,
+        })
+      ).toThrow(CODEMODE_CACHED_ERROR)
+      expect(fake.calls).toEqual({ get: 0, load: 0 })
+      // An explicit 'fresh' is the executor's own policy, and accepted
+      expect(() =>
+        createExecutor({
+          loader: fake.loader,
+          evaluate: { isolation: 'fresh' } as CodemodeEvaluateOptions,
+        })
+      ).not.toThrow()
     })
 
     it('the sandbox script defines one proxy per namespace with its tool names', async () => {

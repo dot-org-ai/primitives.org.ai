@@ -452,6 +452,14 @@ instead, where it is hashed: the fetch allowlist as `outbound.json`, and with a
 `sandbox.json` - so a `'cached'` isolate is one per sandbox, reused across
 evaluations of the same `sandboxId` and never across sandboxes.
 
+`outboundRpc` cannot be combined with `'cached'`: the interceptor is a host
+function registered per evaluation under an id that is part of `outbound.json`
+(so a gateway can never serve a released interceptor), which means no two
+evaluations could ever share an isolate - `'cached'` would be one unique worker
+per call. `evaluate()` reports `OUTBOUND_RPC_CACHED_ERROR` for the combination
+instead of doing that silently; the `ai-evaluate/codemode` executor, whose tool
+calls go through `outboundRpc`, does not accept `isolation` at all.
+
 What persists on a reused (`'cached'`) isolate: your `module` runs once, at
 module scope of the generated worker, so **everything it declares** persists
 across evaluations of the same spec - `let`/`const` bindings, exported arrays
@@ -606,7 +614,13 @@ them onto an evaluation:
 | `globalOutbound` | `null`   | `null`: `fetch: false` - the sandbox has no network; a `Fetcher`: every non-tool request goes through it, on the host |
 | `modules`        | `{}`     | `EvaluateOptions.modules` - `await import('./name.js')` in the code                                                   |
 | `bindings`       | `{}`     | `EvaluateOptions.bindings` - RPC stubs and cloneable values, as `env.NAME`                                            |
-| `evaluate`       | -        | the remaining `EvaluateOptions` (`isolation`, `limits`, `tails`, `compatibilityFlags`, `dependencies`, ...)           |
+| `evaluate`       | -        | the remaining `EvaluateOptions` (`limits`, `tails`, `compatibilityFlags`, `dependencies`, ...); not `isolation`       |
+
+Every call loads a fresh isolate, as codemode's own `DynamicWorkerExecutor`
+does: a tool call goes through `outboundRpc`, whose interceptor is registered
+per call, so there is no spec two calls could share. `createExecutor` throws
+`CODEMODE_CACHED_ERROR` for `evaluate.isolation: 'cached'` rather than
+accepting an option it cannot honour.
 
 The result is codemode's `ExecuteResult`: `{ result, logs }` on success,
 `{ result: undefined, error, logs }` with the sandbox's own error string
@@ -959,8 +973,10 @@ Node host without an env rejects it. A gateway whose interceptor is not held
 by the isolate serving it fails closed rather than forwarding.
 
 The allowlist is part of the content-addressed spec (as the `outbound.json`
-module), so a `'cached'` isolate is never reused under another policy. A
-request the gateway refuses (or that fails at the transport after being
+module), so a `'cached'` isolate is never reused under another policy. The
+interceptor's per-evaluation id is part of it too, which is why `outboundRpc`
+and `isolation: 'cached'` are rejected together (`OUTBOUND_RPC_CACHED_ERROR`,
+see "Isolate reuse"). A request the gateway refuses (or that fails at the transport after being
 forwarded) is recorded as an exception of the host worker's `OutboundGateway`
 in its logs and tail events - that is how a `Fetcher` makes its caller's
 `fetch()` reject.

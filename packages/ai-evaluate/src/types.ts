@@ -193,7 +193,8 @@ export interface EvaluateOptions {
    * `fetch: true` forwarded). Runs through the same `OutboundGateway`
    * entrypoint as an allowlist, so the host's main module must export it.
    * A function: it cannot cross the `ai-evaluate/node` JSON boundary, so the
-   * local Node host without an env rejects it.
+   * local Node host without an env rejects it. Registered per evaluation, so
+   * it cannot be combined with `isolation: 'cached'` (see `isolation`).
    */
   outboundRpc?:
     | ((url: string, request: Request) => Promise<Response | null> | Response | null)
@@ -256,6 +257,12 @@ export interface EvaluateOptions {
    *
    * Dynamic Workers are billed per unique worker per day, so `'cached'` is
    * the opt-in cost control for code that is safe to re-enter.
+   *
+   * Not combinable with `outboundRpc`: the interceptor is registered per
+   * evaluation under an id that is part of the spec, so no two evaluations
+   * could share an isolate; `evaluate()` reports `OUTBOUND_RPC_CACHED_ERROR`
+   * instead of loading one unique worker per call. A `fetch` allowlist is
+   * content-addressed and caches as expected.
    */
   isolation?: Isolation | undefined
   /**
