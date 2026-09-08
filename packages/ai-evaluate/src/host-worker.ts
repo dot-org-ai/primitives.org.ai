@@ -2,13 +2,13 @@
  * Host worker for ai-evaluate
  *
  * A minimal Cloudflare Worker whose only job is to run `evaluate()` against
- * its own `LOADER` (worker_loaders) binding on `POST /evaluate`.
+ * its own `loader` (worker_loaders) binding on `POST /evaluate`.
  *
  * This module is the single code path for local and production sandboxing:
- * - Deploy it with wrangler (`[[worker_loaders]] binding = "LOADER"`) to get a
+ * - Deploy it with wrangler (`"worker_loaders": [{ "binding": "loader" }]`) to get a
  *   hosted sandbox endpoint.
  * - `ai-evaluate/node` loads this same module (and what it imports) into a
- *   Miniflare 5 host worker with a real `LOADER` binding, so local behaviour
+ *   Miniflare 5 host worker with a real `loader` binding, so local behaviour
  *   is the behaviour of Dynamic Workers rather than a separate dev template.
  */
 

@@ -21,20 +21,26 @@ const BLOCKED_FETCH = /Network|blocked|outbound|not permitted/i
 
 describe('evaluate (workerd, real worker_loaders binding)', () => {
   describe('binding', () => {
-    it('env.LOADER is a worker_loaders binding', () => {
+    it('env.loader is a worker_loaders binding', () => {
       const sandbox: SandboxEnv = env
-      expect(sandbox.LOADER).toBeDefined()
-      expect(typeof sandbox.LOADER?.get).toBe('function')
+      expect(sandbox.loader).toBeDefined()
+      expect(typeof sandbox.loader?.get).toBe('function')
     })
 
-    it('env.LOADER exposes load() (fresh, uncached isolates)', () => {
+    it('env.loader exposes load() (fresh, uncached isolates)', () => {
       const sandbox: SandboxEnv = env
-      expect(typeof sandbox.LOADER?.load).toBe('function')
+      expect(typeof sandbox.loader?.load).toBe('function')
     })
 
-    it('has no TEST binding (embedded runner must be used)', () => {
-      expect(env.TEST).toBeUndefined()
+    it('has no test binding (embedded runner must be used)', () => {
       expect(env.test).toBeUndefined()
+    })
+
+    it('the uppercase LOADER alias is gone: a host env with only LOADER has no loader', async () => {
+      const legacy = { LOADER: env.loader } as unknown as SandboxEnv
+      const result = await evaluate({ script: 'return 1' }, legacy)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('worker_loaders')
     })
 
     it('reports a missing loader instead of throwing', async () => {
@@ -154,7 +160,76 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
     })
   })
 
-  describe('embedded test runner (no TEST binding)', () => {
+  // aip-263g.6: the sandbox env is an allowlist - strings via `env`, RPC
+  // stubs and structured-cloneable values via `bindings` - so a host binding
+  // can only reach the isolate wrapped in a WorkerEntrypoint service.
+  describe('env and bindings (allowlisted sandbox env)', () => {
+    it('env.FOO reaches the script as a frozen env', async () => {
+      const result = await evaluate(
+        {
+          script: `
+            let frozen = Object.isFrozen(env);
+            try { env.FOO = 'changed'; } catch {}
+            return { foo: env.FOO, frozen, keys: Object.keys(env) };
+          `,
+          env: { FOO: 'bar' },
+        },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({ foo: 'bar', frozen: true, keys: ['FOO'] })
+    })
+
+    it('a WorkerEntrypoint service stub passed via bindings answers RPC from inside the sandbox', async () => {
+      expect(await env.PING.ping()).toBe('pong')
+      const result = await evaluate(
+        { script: 'return await env.svc.ping()', bindings: { svc: env.PING } },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.success).toBe(true)
+      expect(result.value).toBe('pong')
+    })
+
+    it('the stub is reachable from tests on the embedded runner too', async () => {
+      const result = await evaluate(
+        {
+          tests: 'it("pings", async () => expect(await env.svc.ping()).toBe("pong"))',
+          bindings: { svc: env.PING },
+          env: { FOO: 'bar' },
+        },
+        env
+      )
+      expect(result.success).toBe(true)
+      expect(result.testResults?.passed).toBe(1)
+    })
+
+    it('a raw KV namespace is refused before the loader ever sees it', async () => {
+      expect(env.KV).toBeDefined()
+      const result = await evaluate(
+        { script: 'return typeof env.KV', bindings: { KV: env.KV } },
+        env
+      )
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/not structured-cloneable|not an RPC stub/)
+      // Our validator, not workerd's "A KV namespace binding cannot be serialized"
+      expect(result.error).toContain('bindings.KV')
+    })
+
+    it('a structured-cloneable binding arrives as a copy', async () => {
+      const result = await evaluate(
+        {
+          script: 'return { n: env.config.n, list: env.config.list }',
+          bindings: { config: { n: 1, list: [1, 2, 3] } },
+        },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({ n: 1, list: [1, 2, 3] })
+    })
+  })
+
+  describe('embedded test runner (no test binding)', () => {
     it('runs tests with the embedded runner', async () => {
       const result = await evaluate({ tests: 'it("x", () => expect(1).toBe(1))' }, env)
       expect(result.success).toBe(true)

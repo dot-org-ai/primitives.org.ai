@@ -6,7 +6,7 @@ describe('generateWorkerCode (production)', () => {
     it('generates valid worker code', () => {
       const code = generateWorkerCode({})
       expect(code).toContain('export default')
-      expect(code).toContain('async fetch(request, env)')
+      expect(code).toContain('async fetch(request, __env__)')
     })
 
     it('includes console capture', () => {
@@ -19,7 +19,7 @@ describe('generateWorkerCode (production)', () => {
 
     it('checks for TEST service binding', () => {
       const code = generateWorkerCode({})
-      expect(code).toContain('env.TEST')
+      expect(code).toContain('__env__.TEST')
       expect(code).toContain('TEST service binding not available')
     })
   })
@@ -83,8 +83,8 @@ describe('generateWorkerCode (production)', () => {
   describe('RPC setup', () => {
     it('connects to test service via RPC', () => {
       const code = generateWorkerCode({})
-      expect(code).toContain('env.TEST.connect()')
-      expect(code).toContain('const testService = await env.TEST.connect()')
+      expect(code).toContain('__env__.TEST.connect()')
+      expect(code).toContain('const testService = await __env__.TEST.connect()')
     })
 
     it('sets up test functions from RPC service', () => {
@@ -233,7 +233,7 @@ describe('generateWorkerCode testRunner option', () => {
   it('defaults to the rpc runner (TEST binding)', () => {
     const code = generateWorkerCode({ tests: 'it("x", () => {})' })
     expect(code).toContain('testRunner: rpc')
-    expect(code).toContain('env.TEST')
+    expect(code).toContain('__env__.TEST')
     expect(code).toContain('await testService.run()')
     expect(code).not.toContain('const deepEqual = (a, b)')
   })
@@ -245,7 +245,7 @@ describe('generateWorkerCode testRunner option', () => {
   it('testRunner: "embedded" bundles the test framework and needs no TEST binding', () => {
     const code = generateWorkerCode({ testRunner: 'embedded', tests: 'it("x", () => {})' })
     expect(code).toContain('testRunner: embedded')
-    expect(code).not.toContain('env.TEST')
+    expect(code).not.toContain('__env__.TEST')
     expect(code).toContain('const describe = (name, fn)')
     expect(code).toContain('const deepEqual = (a, b)')
     expect(code).toContain('const pendingTests = []')
@@ -290,7 +290,7 @@ describe('generateDevWorkerCode (development)', () => {
     it('generates valid worker code', () => {
       const code = generateDevWorkerCode({})
       expect(code).toContain('export default')
-      expect(code).toContain('async fetch(request, env)')
+      expect(code).toContain('async fetch(request, __env__)')
     })
 
     it('includes embedded test framework', () => {
@@ -302,7 +302,7 @@ describe('generateDevWorkerCode (development)', () => {
 
     it('does not require TEST service', () => {
       const code = generateDevWorkerCode({})
-      expect(code).not.toContain('env.TEST')
+      expect(code).not.toContain('__env__.TEST')
     })
   })
 

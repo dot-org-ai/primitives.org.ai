@@ -4,12 +4,18 @@
  * Uses Cloudflare Dynamic Workers (the `worker_loaders` binding) for secure
  * code execution. For Node.js/local development, import from 'ai-evaluate/node',
  * which runs this exact module inside a Miniflare host worker with a real
- * `LOADER` binding, so local and production share one code path.
+ * `loader` binding, so local and production share one code path.
  *
- * Requires:
- * - LOADER binding (worker_loaders)
- * - TEST binding (ai-tests service) - optional. When absent, tests run on the
- *   embedded (in-worker) test runner instead of the ai-tests RPC runner.
+ * Requires (see `SandboxEnv`):
+ * - `env.loader` (worker_loaders binding)
+ * - `env.test` (ai-tests service binding) - optional. When absent, tests run
+ *   on the embedded (in-worker) test runner instead of the ai-tests RPC runner.
+ *
+ * The loaded worker's own `env` is an explicit allowlist built by
+ * `buildSandboxEnv`: strings from `options.env`, RPC stubs and
+ * structured-cloneable values from `options.bindings`, plus the ai-tests
+ * binding as `TEST` on the RPC runner. Nothing else from the host env reaches
+ * the isolate.
  */
 
 import type {
@@ -31,6 +37,7 @@ import {
 } from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
 import { transformOptions } from './transform.js'
+import { buildSandboxEnv, TEST_BINDING_KEY } from './validation.js'
 import {
   COMPATIBILITY_DATE,
   SANDBOX_URL,
@@ -173,8 +180,11 @@ const { ${exportNames} } = exports;
 const __moduleLogCount__ = logs.length;
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, __env__) {
     logs.splice(__moduleLogCount__);
+    // The sandbox env, as the script sees it: a frozen copy of the allowlisted
+    // bindings the loader was given (see buildSandboxEnv), nothing else.
+    const env = Object.freeze({ ...__env__ });
     try {
       // Execute the script (embedded at generation time - no new Function())
       ${wrappedScript}
@@ -219,14 +229,14 @@ export async function evaluate(
   const start = Date.now()
 
   try {
-    // Require worker_loaders binding (check lowercase first, then legacy uppercase)
-    const loader = env?.loader || env?.LOADER
+    // Require the worker_loaders binding as `env.loader` (3.0: no uppercase alias)
+    const loader = env?.loader
     if (!loader) {
       return {
         success: false,
         logs: [],
         error:
-          'Sandbox requires worker_loaders binding. Add to wrangler.toml: [[worker_loaders]] binding = "LOADER". For Node.js, use: import { evaluate } from "ai-evaluate/node"',
+          'Sandbox requires worker_loaders binding `loader`. Add to wrangler.jsonc: "worker_loaders": [{ "binding": "loader" }]. For Node.js, use: import { evaluate } from "ai-evaluate/node"',
         duration: Date.now() - start,
       }
     }
@@ -236,7 +246,7 @@ export async function evaluate(
     // source that actually runs, and local and production see the same bytes.
     const options = transformOptions(rawOptions)
 
-    return await runWorker(options, loader, env?.test || env?.TEST, start)
+    return await runWorker(options, loader, env?.test, start)
   } catch (error) {
     return {
       success: false,
@@ -313,9 +323,14 @@ async function prefetchModules(imports: string[]): Promise<Record<string, string
  * Two templates share this path:
  * - without `tests`/`sdk`, the minimal worker (`generateSimpleWorkerCode`),
  *   plus any pre-fetched `imports` as sibling modules;
- * - otherwise the full template (capnweb export RPC, SDK, tests). The TEST
- *   (ai-tests) binding is optional: without it the worker embeds its own test
+ * - otherwise the full template (capnweb export RPC, SDK, tests). The
+ *   ai-tests binding is optional: without it the worker embeds its own test
  *   runner, and the binding is passed through as `env.TEST` only when present.
+ *
+ * Both templates get the same `env`: the allowlisted sandbox env from
+ * `buildSandboxEnv` (strings from `options.env`, RPC stubs and cloneable
+ * values from `options.bindings`). A value that fails that validator throws a
+ * `ValidationError` here, before any loader call.
  *
  * `fetch: false | null` blocks outbound network at the runtime level
  * (`globalOutbound: null`) in addition to the in-worker fetch control.
@@ -326,6 +341,7 @@ export async function buildWorkerCode(
 ): Promise<WorkerCode> {
   const useSimpleWorker = !options.tests && !options.sdk
   const globalOutbound = options.fetch === false || options.fetch === null ? null : undefined
+  const env = buildSandboxEnv(options)
 
   if (useSimpleWorker) {
     const externalModules =
@@ -341,6 +357,7 @@ export async function buildWorkerCode(
       modules: { 'worker.js': workerCode, ...externalModules },
       compatibilityDate: COMPATIBILITY_DATE,
       globalOutbound,
+      env,
     }
   }
 
@@ -365,7 +382,7 @@ export async function buildWorkerCode(
     // Cloudflare Dynamic Workers' loader field is `env`, not `bindings`. The
     // loaded worker reads `env.TEST` (see worker-template/core.ts) only in
     // 'rpc' mode, so the binding is passed through only when present.
-    env: testService ? { TEST: testService } : {},
+    env: testService ? { ...env, [TEST_BINDING_KEY]: testService } : env,
   }
 }
 

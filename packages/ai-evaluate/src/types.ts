@@ -73,8 +73,27 @@ export interface EvaluateOptions {
   jsx?: JSXOptions | undefined
   /** Timeout in milliseconds (default: 5000) */
   timeout?: number | undefined
-  /** Environment variables to pass to the sandbox */
+  /**
+   * String environment variables, visible to `module`, `tests` and `script`
+   * as `env.NAME` (a frozen object). Strings only: anything else is rejected
+   * with a `ValidationError` - stubs and structured values go in `bindings`.
+   */
   env?: Record<string, string> | undefined
+  /**
+   * Bindings visible to the sandbox as `env.NAME` next to `env`. The sandbox
+   * env is an explicit allowlist: each value must be either an RPC stub (a
+   * service binding, a `WorkerEntrypoint` stub, `ctx.exports.X` - anything
+   * with a `fetch` method, see `isRpcStubLike`) or structured-cloneable.
+   * A raw host binding (KV, D1, R2, a Durable Object namespace) or a closure
+   * is neither and is rejected with a `ValidationError` before the loader
+   * ever sees it; wrap it in a `WorkerEntrypoint` service to expose it.
+   * The key `TEST` is reserved for the ai-tests service binding.
+   *
+   * Only available when `evaluate()` runs inside a Worker with a `loader`
+   * binding: the local Node host cannot receive a stub over its JSON
+   * boundary, so `ai-evaluate/node` without an env rejects `bindings`.
+   */
+  bindings?: Record<string, unknown> | undefined
   /**
    * Network access control
    * - true: allow all (default)
@@ -92,10 +111,10 @@ export interface EvaluateOptions {
   imports?: string[] | undefined
   /**
    * Isolate reuse policy (default: `'fresh'`)
-   * - `'fresh'`: `LOADER.load(spec)` - a new, uncached isolate every call, so
+   * - `'fresh'`: `loader.load(spec)` - a new, uncached isolate every call, so
    *   identical evaluations are independent (nothing at module scope of the
    *   user module survives between calls).
-   * - `'cached'`: `LOADER.get(workerCodeId(spec), factory)` - identical specs
+   * - `'cached'`: `loader.get(workerCodeId(spec), factory)` - identical specs
    *   share one isolate; the id content-addresses the full `WorkerCode`
    *   (modules, compatibility date/flags, limits), never `env`. The user
    *   module body runs once per isolate, so all of its module-scope state
@@ -111,8 +130,8 @@ export interface EvaluateOptions {
 
 /**
  * Isolate reuse policy for `evaluate()`: `'fresh'` (default) loads a new
- * isolate every call (`LOADER.load`); `'cached'` reuses one isolate, and its
- * module-scope state, per unique `WorkerCode` spec (`LOADER.get`).
+ * isolate every call (`loader.load`); `'cached'` reuses one isolate, and its
+ * module-scope state, per unique `WorkerCode` spec (`loader.get`).
  */
 export type Isolation = 'cached' | 'fresh'
 
@@ -292,11 +311,15 @@ export interface TestServiceBinding {
 }
 
 /**
- * Environment with worker loader binding
+ * The host Worker environment `evaluate()` runs against.
+ *
+ * Bindings are looked up by these exact (lowercase) names; the 2.x uppercase
+ * aliases `LOADER` / `TEST` are gone in 3.0. Declare the loader in wrangler as
+ * `worker_loaders: [{ binding: "loader" }]`.
  */
 export interface SandboxEnv {
+  /** `worker_loaders` binding (Dynamic Workers) - required */
   loader?: WorkerLoader
-  LOADER?: WorkerLoader // Legacy - prefer lowercase
+  /** ai-tests service binding - optional; without it tests run on the embedded runner */
   test?: TestServiceBinding
-  TEST?: TestServiceBinding // Legacy - prefer lowercase
 }

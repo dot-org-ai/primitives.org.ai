@@ -199,14 +199,21 @@ describe('security (workerd)', () => {
 
   describe('environment isolation', () => {
     describe('parent worker environment', () => {
-      it('cannot see the parent worker bindings', async () => {
+      it('cannot access sensitive bindings from the parent worker env', async () => {
+        // The host env really does carry KV and PING (wrangler.test.jsonc);
+        // neither may appear in the sandbox unless passed via `bindings`.
+        expect(env.KV).toBeDefined()
+        expect(env.PING).toBeDefined()
         const value = await probe(`
           return {
             hasParentEnv: typeof parentEnv !== 'undefined',
-            hasLoaderGlobal: typeof LOADER !== 'undefined',
-            hasLoader: typeof env !== 'undefined' && !!env.LOADER,
+            hasLoaderGlobal: typeof loader !== 'undefined',
+            hasLoader: typeof env !== 'undefined' && !!env.loader,
             hasKV: typeof env !== 'undefined' && !!env.KV,
             hasDB: typeof env !== 'undefined' && !!env.DB,
+            hasDO: typeof env !== 'undefined' && !!env.DO,
+            hasR2: typeof env !== 'undefined' && !!env.R2,
+            hasPing: typeof env !== 'undefined' && !!env.PING,
             hasSecrets: typeof env !== 'undefined' && !!env.API_KEY,
           };
         `)
@@ -215,13 +222,16 @@ describe('security (workerd)', () => {
         expect(value.hasLoader).toBe(false)
         expect(value.hasKV).toBe(false)
         expect(value.hasDB).toBe(false)
+        expect(value.hasDO).toBe(false)
+        expect(value.hasR2).toBe(false)
+        expect(value.hasPing).toBe(false)
         expect(value.hasSecrets).toBe(false)
       })
 
       it('the loaded worker gets an empty env, not the host env', async () => {
         // The script runs inside the sandbox worker's fetch handler, so `env`
         // is the loaded worker's own env - which the loader left empty. The
-        // host's LOADER binding (and anything else in the host env) is absent.
+        // host's `loader` binding (and anything else in the host env) is absent.
         const value = await probe(`
           return { keys: typeof env === 'undefined' ? null : Object.keys(env) };
         `)

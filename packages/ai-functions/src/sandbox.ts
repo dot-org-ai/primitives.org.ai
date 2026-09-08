@@ -9,13 +9,13 @@
  * ## The env boundary
  *
  * "Zero env plumbing" is NOT achievable:
- * - The Workers entry (`ai-evaluate`) requires a `LOADER` binding (and, for the
- *   test path, a `TEST` service binding) to be passed in `env`.
+ * - The Workers entry (`ai-evaluate`) requires a `loader` binding (and, for the
+ *   test path, a `test` service binding) to be passed in `env`.
  * - That entry imports `cloudflare:workers`, which is Node-incompatible, so it
  *   cannot be imported eagerly in a Node/dev process.
  *
  * The clean boundary is therefore an **explicit, optional `env`**:
- * - When a host Workers `env` (carrying `LOADER` + `TEST`) is supplied, run on
+ * - When a host Workers `env` (carrying `loader` + `test`) is supplied, run on
  *   the real Dynamic Workers loader via `ai-evaluate`.
  * - When absent (Node / dev / tests), import from `ai-evaluate/node`, which
  *   falls back to Miniflare and runs with no live Worker.
@@ -39,14 +39,15 @@ let usedNodeEntry = false
  * Run an evaluation in the appropriate sandbox.
  *
  * @param options - What to evaluate (`script`, or `module` + `tests`, etc.)
- * @param env - Optional host Workers env carrying `LOADER` (+ `TEST` for the
- *   test path). When omitted, falls back to the Miniflare-backed Node entry.
+ * @param env - Optional host Workers env carrying `loader` (+ `test` for the
+ *   test path; ai-evaluate 3.0 dropped the uppercase `LOADER`/`TEST` aliases).
+ *   When omitted, falls back to the Miniflare-backed Node entry.
  */
 export async function runInSandbox(
   options: EvaluateOptions,
   env?: SandboxEnv
 ): Promise<EvaluateResult> {
-  if (env && (env.loader || env.LOADER)) {
+  if (env?.loader) {
     // Host Workers env present — use the Dynamic Workers loader entry.
     const { evaluate } = await import('ai-evaluate')
     return evaluate(options, env)

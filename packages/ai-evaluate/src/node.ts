@@ -2,7 +2,7 @@
  * Evaluate code in a sandboxed environment (Node.js version)
  *
  * Runs the exact `evaluate()` from './evaluate.js' - the bytes that ship to
- * Cloudflare - inside a Miniflare 5 host worker whose `env.LOADER` is a real
+ * Cloudflare - inside a Miniflare 5 host worker whose `env.loader` is a real
  * `worker_loaders` binding. There is no separate local template: local
  * behaviour is Dynamic Workers behaviour.
  *
@@ -83,7 +83,9 @@ async function loadMiniflare(): Promise<typeof MiniflareModule> {
     const running =
       major < MINIFLARE_MIN_NODE_MAJOR ? ` (running Node ${process.versions.node})` : ''
     throw new Error(
-      `${MINIFLARE_UNAVAILABLE_ERROR}${running}: ${error instanceof Error ? error.message : String(error)}`,
+      `${MINIFLARE_UNAVAILABLE_ERROR}${running}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
       { cause: error }
     )
   }
@@ -192,7 +194,7 @@ interface Host {
 }
 
 /**
- * A local sandbox runtime: one Miniflare 5 host worker with a LOADER binding.
+ * A local sandbox runtime: one Miniflare 5 host worker with a `loader` binding.
  */
 export interface LocalRuntime {
   /** Evaluate code in the sandbox (same semantics as `evaluate` from 'ai-evaluate') */
@@ -205,7 +207,7 @@ export interface LocalRuntime {
  * Create a local sandbox runtime backed by a Miniflare 5 host worker.
  *
  * The host worker is the `./host-worker` module graph (see `loadHostWorker`) -
- * the same `evaluate()` that runs on Cloudflare - with `env.LOADER` provided
+ * the same `evaluate()` that runs on Cloudflare - with `env.loader` provided
  * by Miniflare's `worker-loader` binding. It is created lazily on the first
  * `evaluate()` call and reused for every call after that. While no evaluation
  * is in flight the host's handles are unref'd, so it never keeps the process
@@ -230,9 +232,9 @@ export function createLocalRuntime(): LocalRuntime {
     const { mainModule, modules } = getHostWorker()
     const before = new Set(activeHandles())
     // Native Miniflare 5 options: one `workers[].config` per worker with a
-    // `manifest` of modules and the loader as `env.LOADER: { type:
+    // `manifest` of modules and the loader as `env.loader: { type:
     // 'worker-loader' }`. The Miniflare 4 shape (`modules: true`, `script`,
-    // `workerLoaders: { LOADER: {} }`) is not used; Miniflare 5 only accepts it
+    // `workerLoaders: { loader: {} }`) is not used; Miniflare 5 only accepts it
     // through its `convertV4MiniflareOptions()` shim, which went with the pool.
     const miniflare = new Miniflare({
       workers: [
@@ -247,7 +249,7 @@ export function createLocalRuntime(): LocalRuntime {
                 Object.entries(modules).map(([name, contents]) => [name, { type: 'esm', contents }])
               ),
             },
-            env: { LOADER: { type: 'worker-loader' } },
+            env: { loader: { type: 'worker-loader' } },
           },
         },
       ],
@@ -327,6 +329,19 @@ export function createLocalRuntime(): LocalRuntime {
       error,
       duration: Date.now() - start,
     })
+    // The host is reached over an HTTP/JSON boundary, which cannot carry an
+    // RPC stub, and a structured value would arrive silently JSON-narrowed.
+    // Refuse instead of forwarding something other than what was passed.
+    const bindingKeys = Object.keys(options.bindings ?? {})
+    if (bindingKeys.length > 0) {
+      return fail(
+        `bindings (${bindingKeys.join(
+          ', '
+        )}) need a live worker_loaders binding: pass the host env ` +
+          '(with `loader`) to evaluate(), or use `env` for string values. The local Node host ' +
+          'cannot receive RPC stubs from the Node side.'
+      )
+    }
     inFlight++
     let host: Host | null = null
     // The backstop clock starts once the host is ready: host startup is not
@@ -395,7 +410,7 @@ export async function dispose(): Promise<void> {
 /**
  * Evaluate code in a sandboxed worker (Node.js version)
  *
- * With an `env` that carries a `loader`/`LOADER` binding this calls
+ * With an `env` that carries a `loader` binding this calls
  * `evaluate()` from 'ai-evaluate' directly. Without one it runs that same
  * function inside the process-wide Miniflare host worker.
  */
@@ -406,7 +421,7 @@ export async function evaluate(
   const start = Date.now()
   try {
     const prepared = prepareOptions(options)
-    if (env?.loader || env?.LOADER) {
+    if (env?.loader) {
       return await evaluateInWorker(prepared, env)
     }
     return await getSharedRuntime().evaluate(prepared)

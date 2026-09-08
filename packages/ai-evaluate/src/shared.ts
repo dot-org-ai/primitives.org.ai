@@ -139,7 +139,7 @@ function workerIdentity(spec: WorkerCode) {
  *
  * Deterministic: the same spec (modules, compatibility date and flags,
  * `allowExperimental`, `limits`, whether outbound fetch is blocked) yields the
- * same id, so the Dynamic Workers loader (`LOADER.get(id, factory)`) reuses the
+ * same id, so the Dynamic Workers loader (`loader.get(id, factory)`) reuses the
  * cached isolate instead of minting a fresh one per call. Any change to those
  * fields changes the id; `env`, `globalOutbound` services and `tails` do not
  * (see `workerIdentity`). One id per unique worker is the cost control under

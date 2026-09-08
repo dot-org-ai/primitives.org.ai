@@ -130,7 +130,7 @@ interface Env {
 
 For local development, import from the `/node` subpath. It runs the **same
 `evaluate()` that ships to Cloudflare** inside a Miniflare 5 host worker whose
-`env.LOADER` is a real `worker_loaders` binding, so local behaviour is Dynamic
+`env.loader` is a real `worker_loaders` binding, so local behaviour is Dynamic
 Workers behaviour rather than a separate dev template.
 
 ```bash
@@ -166,7 +166,7 @@ matters when you want the host gone before the process ends.
 
 The host is constructed with native Miniflare 5 options - one
 `workers[].config` carrying a `manifest` of modules and the loader as
-`env.LOADER: { type: 'worker-loader' }` - not the Miniflare 4 shape
+`env.loader: { type: 'worker-loader' }` - not the Miniflare 4 shape
 (`modules: true`, `script`, `workerLoaders`), which Miniflare 5 accepts only
 through its `convertV4MiniflareOptions()` shim. ai-evaluate no longer uses that
 shim anywhere.
@@ -223,9 +223,25 @@ is called directly inside a local workerd with a loader binding (e.g. under
 `@cloudflare/vitest-pool-workers`), a CPU-bound loop wedges that workerd until
 the process is restarted - there is nothing outside it to abort the request.
 
-When the environment has no `TEST` (ai-tests) binding, tests run on the worker's
+When the environment has no `test` (ai-tests) binding, tests run on the worker's
 embedded vitest-compatible runner (`generateWorkerCode({ testRunner: 'embedded' })`);
 with the binding they proxy to ai-tests over RPC (`testRunner: 'rpc'`).
+
+### Host env: `loader` and `test`
+
+`evaluate(options, env)` reads exactly two bindings from the host env:
+
+```typescript
+interface SandboxEnv {
+  loader?: WorkerLoader        // worker_loaders binding - required
+  test?: TestServiceBinding    // ai-tests service binding - optional
+}
+```
+
+**3.0 breaking change:** the uppercase aliases `LOADER` and `TEST` accepted by
+2.x are gone. A wrangler config with `"worker_loaders": [{ "binding": "LOADER" }]`
+now fails with "Sandbox requires worker_loaders binding `loader`" - rename the
+binding to `loader` (and an ai-tests service binding to `test`).
 
 ## API Reference
 
@@ -237,12 +253,45 @@ interface EvaluateOptions {
   tests?: string               // Vitest-style test code
   script?: string              // Script to execute
   timeout?: number             // Default: 5000ms, max: 60000ms
-  env?: Record<string, string> // Environment variables
+  env?: Record<string, string> // String environment variables (see below)
+  bindings?: Record<string, unknown> // RPC stubs and structured-cloneable values (see below)
   sdk?: SDKConfig | boolean    // Enable $, db, ai globals
   imports?: string[]           // External npm packages (see below)
   isolation?: 'fresh' | 'cached' // Isolate reuse policy (default: 'fresh', see below)
 }
 ```
+
+### Sandbox env: `env` and `bindings`
+
+The loaded worker's `env` is an explicit allowlist, so a host binding can never
+leak into the isolate by accident. `module`, `tests` and `script` all see it as
+a frozen `env` object:
+
+```typescript
+await evaluate({
+  script: 'return { who: env.WHO, pong: await env.svc.ping() }',
+  env: { WHO: 'sandbox' },          // strings only
+  bindings: { svc: env.PING },      // RPC stubs and structured-cloneable values
+}, env)
+```
+
+| Option | Accepts | Rejected with `ValidationError` |
+|--------|---------|---------------------------------|
+| `env` | strings | anything that is not a string |
+| `bindings` | RPC stubs (a service binding, a `WorkerEntrypoint` stub, `ctx.exports.X` - anything with a `fetch` method, see `isRpcStubLike`) and structured-cloneable values (`structuredClone` accepts them) | raw KV / D1 / R2 / Durable Object namespace bindings, functions and closures |
+
+To give the sandbox access to a raw binding, wrap it in a `WorkerEntrypoint`
+service and pass that stub: the isolate then holds a capability you wrote, not
+the binding itself. The key `TEST` is reserved for the ai-tests service binding,
+and a key may not appear in both `env` and `bindings`. The validator runs in
+`buildWorkerCode()` before any loader call; `evaluate()` reports its
+`ValidationError` as an error result (`success: false`, `error` matching
+`not structured-cloneable and not an RPC stub`).
+
+`bindings` need a live loader: `ai-evaluate/node` without a host env reaches
+its Miniflare host over an HTTP/JSON boundary that cannot carry a stub, so it
+rejects `bindings` instead of forwarding a silently narrowed value. `env`
+(strings) works on every path.
 
 ### Isolate reuse: `isolation`
 

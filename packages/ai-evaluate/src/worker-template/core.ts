@@ -16,8 +16,9 @@ import { generateDomainCheckCode } from '../shared.js'
 /**
  * Which test runner the generated worker uses for `/execute`.
  *
- * - `'rpc'` (default): proxies `describe`/`it`/`expect` to the `env.TEST`
- *   service binding (ai-tests) over capnweb RPC. Requires the binding.
+ * - `'rpc'` (default): proxies `describe`/`it`/`expect` to the loaded
+ *   worker's `env.TEST` service binding (ai-tests, passed through by
+ *   `buildWorkerCode`) over capnweb RPC. Requires the binding.
  * - `'embedded'`: bundles a vitest-compatible test framework into the worker
  *   itself, so no `TEST` binding is needed. This is what `evaluate()` falls
  *   back to when the environment has no TEST binding (local dev, or a
@@ -67,7 +68,7 @@ globalThis.fetch = async (...args) => {
  * Generate the sandbox worker module.
  *
  * The result is a self-contained ES module that the Dynamic Workers loader
- * (`env.LOADER.get(id, ...)`) runs as `worker.js` alongside `capnweb.js`.
+ * (`env.loader.get(id, ...)`) runs as `worker.js` alongside `capnweb.js`.
  */
 export function generateWorkerCode(options: GenerateWorkerCodeOptions): string {
   const {
@@ -100,7 +101,7 @@ ${generateTestFrameworkCode()}
 `
     : `
     // Check for TEST service binding
-    if (!env.TEST) {
+    if (!__env__.TEST) {
       return Response.json({
         success: false,
         error: 'TEST service binding not available. Ensure ai-tests worker is bound.',
@@ -110,7 +111,7 @@ ${generateTestFrameworkCode()}
     }
 
     // Connect to get the TestServiceCore via RPC
-    const testService = await env.TEST.connect();
+    const testService = await __env__.TEST.connect();
 
     // Create global test functions that proxy to the RPC service
     const describe = (name, fn) => testService.describe(name, fn);
@@ -232,9 +233,12 @@ class ExportsRpcTarget extends RpcTarget {
 // WORKER ENTRY POINT
 // ============================================================
 export default {
-  async fetch(request, env) {
+  async fetch(request, __env__) {
     const url = new URL(request.url);
     logs.splice(__moduleLogCount__);
+    // The sandbox env, as tests and the script see it: a frozen copy of the
+    // allowlisted bindings the loader was given (see buildSandboxEnv).
+    const env = Object.freeze({ ...__env__ });
 
     // Route: GET / - Return info about exports
     if (request.method === 'GET' && url.pathname === '/') {
