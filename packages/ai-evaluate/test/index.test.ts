@@ -23,12 +23,14 @@ describe('index exports', () => {
     await import('../src/node.js')
   })
 
-  it('ai-evaluate/node exports exactly evaluate, createEvaluator, createLocalRuntime, dispose and the host-reset error constants', async () => {
+  it('ai-evaluate/node exports exactly evaluate, createEvaluator, createLocalRuntime, dispose and the documented error constants', async () => {
     // dispose() is the only lifecycle API: no pool (configurePool/warmPool/
     // disposePool) and no host-worker internals (loadHostWorker, HOST_*).
     // WEDGED_HOST_ERROR / DISPOSED_HOST_ERROR are the documented messages an
     // evaluation caught in flight reports when the host is reset (aip-263g.14),
     // exported so callers can match them to decide whether to retry.
+    // MINIFLARE_UNAVAILABLE_ERROR is what evaluate() reports when the optional
+    // `miniflare` dependency is not installed (aip-263g.13).
     const node = await import('../src/node.js')
     expect(Object.keys(node).sort()).toEqual(
       [
@@ -38,6 +40,7 @@ describe('index exports', () => {
         'dispose',
         'WEDGED_HOST_ERROR',
         'DISPOSED_HOST_ERROR',
+        'MINIFLARE_UNAVAILABLE_ERROR',
       ].sort()
     )
   })

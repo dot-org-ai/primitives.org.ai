@@ -1,4 +1,11 @@
+import { execFile } from 'node:child_process'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import { describe, it, expect, vi, afterAll } from 'vitest'
+import type { EvaluateResult } from '../src/types.js'
+
+const execFileAsync = promisify(execFile)
 
 /** Names of the modules in a host worker map that mention the dev-template alias, sorted */
 function devTemplateReferences(modules: Record<string, string>): string[] {
@@ -670,6 +677,51 @@ describe('ai-evaluate/node', () => {
       // Verify the module exports the expected functions
       expect(Object.keys(nodeModule)).toContain('evaluate')
       expect(Object.keys(nodeModule)).toContain('createEvaluator')
+    })
+  })
+
+  describe('miniflare availability (aip-263g.13)', () => {
+    // Miniflare 5 declares engines.node >= 22, so on older Node the package
+    // manager skips the optional dependency and `import('miniflare')` fails
+    // with ERR_MODULE_NOT_FOUND. vitest cannot make a dynamic import reject
+    // with a specific error (a throwing vi.mock factory is re-wrapped), so the
+    // fixture runs in a child `node` with resolver hooks that hide the package.
+    const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'missing-miniflare.ts')
+
+    async function runFixture(failure: 'missing' | 'broken') {
+      const { stdout } = await execFileAsync(process.execPath, ['--import', 'tsx', fixture], {
+        cwd: join(dirname(fixture), '..', '..'),
+        env: { ...process.env, MINIFLARE_FAILURE: failure },
+        timeout: 20_000,
+      })
+      return JSON.parse(stdout.trim().split('\n').at(-1) ?? '') as {
+        shared: EvaluateResult
+        explicit: EvaluateResult
+        message: string
+      }
+    }
+
+    it('reports MINIFLARE_UNAVAILABLE_ERROR when the optional miniflare dependency is not installed', async () => {
+      const { MINIFLARE_UNAVAILABLE_ERROR } = await import('../src/node.js')
+      const { shared, explicit, message } = await runFixture('missing')
+      expect(message).toBe(MINIFLARE_UNAVAILABLE_ERROR)
+      expect(MINIFLARE_UNAVAILABLE_ERROR).toMatch(/Node >= 22/)
+      for (const result of [shared, explicit]) {
+        expect(result.success).toBe(false)
+        // What is missing and why, then the resolver's own message
+        expect(result.error).toContain(MINIFLARE_UNAVAILABLE_ERROR)
+        expect(result.error).toContain("Cannot find package 'miniflare'")
+      }
+    })
+
+    it('passes through import failures that are not a missing package', async () => {
+      const { MINIFLARE_UNAVAILABLE_ERROR } = await import('../src/node.js')
+      const { shared, explicit } = await runFixture('broken')
+      for (const result of [shared, explicit]) {
+        expect(result.success).toBe(false)
+        expect(result.error).toBe('workerd binary failed to initialise')
+        expect(result.error).not.toContain(MINIFLARE_UNAVAILABLE_ERROR)
+      }
     })
   })
 
