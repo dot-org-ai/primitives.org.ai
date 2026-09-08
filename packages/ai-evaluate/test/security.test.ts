@@ -9,6 +9,36 @@ import { describe, it, expect } from 'vitest'
 import { evaluate } from '../src/node.js'
 
 describe('security', () => {
+  describe('environment isolation (local host worker)', () => {
+    // Strict: a failed evaluation is a failed test, never a silent pass.
+    it('cannot access sensitive bindings from parent worker env', async () => {
+      const result = await evaluate({
+        script: `
+          return {
+            hasParentEnv: typeof parentEnv !== 'undefined',
+            hasLoader: typeof env !== 'undefined' && !!env.loader,
+            hasKV: typeof env !== 'undefined' && !!env.KV,
+            hasDB: typeof env !== 'undefined' && !!env.DB,
+            hasDO: typeof env !== 'undefined' && !!env.DO,
+            hasR2: typeof env !== 'undefined' && !!env.R2,
+            hasSecrets: typeof env !== 'undefined' && !!env.API_KEY,
+          };
+        `,
+      })
+      expect(result.error).toBeUndefined()
+      expect(result.success).toBe(true)
+      expect(result.value).toEqual({
+        hasParentEnv: false,
+        hasLoader: false,
+        hasKV: false,
+        hasDB: false,
+        hasDO: false,
+        hasR2: false,
+        hasSecrets: false,
+      })
+    })
+  })
+
   describe('sandbox escape attempts', () => {
     describe('prototype pollution', () => {
       it('blocks Object.prototype pollution from affecting host', async () => {

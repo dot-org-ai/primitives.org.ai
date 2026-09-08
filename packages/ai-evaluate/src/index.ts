@@ -16,6 +16,13 @@ export {
   DEFAULT_ISOLATION,
 } from './evaluate.js'
 export { normalizeImport, normalizeImports, workerCodeId } from './shared.js'
+export {
+  ValidationError,
+  buildSandboxEnv,
+  isRpcStubLike,
+  isStructuredCloneable,
+  TEST_BINDING_KEY,
+} from './validation.js'
 export { transformSource, transformOptions, containsJSX } from './transform.js'
 export type { TransformSourceOptions } from './transform.js'
 

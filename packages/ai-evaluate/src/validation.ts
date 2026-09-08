@@ -7,6 +7,13 @@
 import type { EvaluateOptions } from './types.js'
 
 /**
+ * The key under which the ai-tests service binding is handed to the loaded
+ * worker (`env.TEST` in the generated template, RPC runner only). Reserved:
+ * neither `env` nor `bindings` may use it.
+ */
+export const TEST_BINDING_KEY = 'TEST'
+
+/**
  * Validation limits for EvaluateOptions
  */
 export const MAX_SCRIPT_SIZE = 1024 * 1024 // 1MB
@@ -117,4 +124,105 @@ export function validateOptions(options: EvaluateOptions): void {
       }
     }
   }
+}
+
+/**
+ * Whether a value looks like a Workers RPC stub: a service binding, a
+ * `WorkerEntrypoint` stub (`ctx.exports.X`, a `Fetcher`), a Durable Object
+ * stub - anything that carries a `fetch` method. Such stubs are the only
+ * non-cloneable values the Dynamic Workers loader accepts in a worker's `env`,
+ * and the only ones the sandbox forwards: an RPC stub hands the isolate a
+ * capability, never the host's raw binding.
+ */
+export function isRpcStubLike(value: unknown): boolean {
+  if (value === null) return false
+  if (typeof value !== 'object' && typeof value !== 'function') return false
+  return typeof (value as { fetch?: unknown }).fetch === 'function'
+}
+
+/**
+ * Whether `structuredClone` accepts the value. Host bindings (KV, D1, R2,
+ * Durable Object namespaces) and functions all throw `DataCloneError`.
+ */
+export function isStructuredCloneable(value: unknown): boolean {
+  try {
+    structuredClone(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Build the loaded worker's `env` from `options.env` (strings) and
+ * `options.bindings` (RPC stubs and structured-cloneable values), validating
+ * every value. This is the allowlist that keeps host bindings out of the
+ * isolate: a value that is neither a string, an RPC stub nor cloneable never
+ * reaches the loader.
+ *
+ * @throws ValidationError for a non-string `env` value, a `bindings` value
+ *   that is neither an RPC stub nor structured-cloneable, a key present in
+ *   both, or the reserved `TEST` key.
+ */
+export function buildSandboxEnv(options: EvaluateOptions): Record<string, unknown> {
+  const sandboxEnv: Record<string, unknown> = {}
+  const { env, bindings } = options
+
+  if (env !== undefined && env !== null) {
+    if (typeof env !== 'object' || Array.isArray(env)) {
+      throw new ValidationError('env must be an object of string values')
+    }
+    for (const [key, value] of Object.entries(env)) {
+      if (key === TEST_BINDING_KEY) {
+        throw new ValidationError(
+          `env.${key} is reserved for the ai-tests service binding; choose another name`
+        )
+      }
+      if (typeof value !== 'string') {
+        throw new ValidationError(
+          `env.${key} must be a string (got ${describeValue(
+            value
+          )}); pass RPC stubs and structured values in bindings`
+        )
+      }
+      sandboxEnv[key] = value
+    }
+  }
+
+  if (bindings !== undefined && bindings !== null) {
+    if (typeof bindings !== 'object' || Array.isArray(bindings)) {
+      throw new ValidationError('bindings must be an object')
+    }
+    for (const [key, value] of Object.entries(bindings)) {
+      if (key === TEST_BINDING_KEY) {
+        throw new ValidationError(
+          `bindings.${key} is reserved for the ai-tests service binding; choose another name`
+        )
+      }
+      if (key in sandboxEnv) {
+        throw new ValidationError(`${key} is set in both env and bindings; use one`)
+      }
+      if (!isRpcStubLike(value) && !isStructuredCloneable(value)) {
+        throw new ValidationError(
+          `bindings.${key} is not structured-cloneable and not an RPC stub (got ${describeValue(
+            value
+          )}); ` +
+            'a raw KV/D1/R2/Durable Object binding or a function cannot be handed to the sandbox - ' +
+            'wrap it in a WorkerEntrypoint service and pass that stub'
+        )
+      }
+      sandboxEnv[key] = value
+    }
+  }
+
+  return sandboxEnv
+}
+
+/** A short description of a value for error messages, never its contents */
+function describeValue(value: unknown): string {
+  if (value === null) return 'null'
+  if (typeof value !== 'object') return typeof value
+  const tag = Object.prototype.toString.call(value).slice(8, -1)
+  const name = (value as { constructor?: { name?: string } }).constructor?.name
+  return name && name !== 'Object' ? name : tag
 }

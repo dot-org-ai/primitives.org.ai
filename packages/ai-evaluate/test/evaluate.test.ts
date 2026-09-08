@@ -7,6 +7,7 @@ import {
   DEFAULT_ISOLATION,
 } from '../src/evaluate.js'
 import { workerCodeId } from '../src/shared.js'
+import { ValidationError } from '../src/validation.js'
 import type { WorkerCode, WorkerLoader, WorkerStub } from '../src/types.js'
 
 /**
@@ -377,10 +378,14 @@ describe('evaluate', () => {
       expect(fake.ids[0]).toBe(workerCodeId(fake.loaded[0]!))
     })
 
-    it('honours the legacy uppercase LOADER binding', async () => {
+    it('no longer honours the uppercase LOADER alias (3.0: `loader` only)', async () => {
       const fake = createFakeLoader()
-      await evaluateWithEnv({ script: 'return 1', isolation: 'fresh' }, { LOADER: fake.loader })
-      expect(fake.calls.load).toBe(1)
+      const result = await evaluateWithEnv({ script: 'return 1', isolation: 'fresh' }, {
+        LOADER: fake.loader,
+      } as unknown as Parameters<typeof evaluateWithEnv>[1])
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('worker_loaders')
+      expect(fake.calls.load).toBe(0)
     })
 
     it('reports a loader failure as an error result', async () => {
@@ -402,12 +407,12 @@ describe('evaluate', () => {
   })
 
   describe('buildWorkerCode', () => {
-    it('simple path: one worker.js module, compatibility date, no env', async () => {
+    it('simple path: one worker.js module, compatibility date, empty env', async () => {
       const code = await buildWorkerCode({ script: 'return 1' })
       expect(code.mainModule).toBe('worker.js')
       expect(Object.keys(code.modules)).toEqual(['worker.js'])
       expect(code.compatibilityDate).toBeTruthy()
-      expect(code.env).toBeUndefined()
+      expect(code.env).toEqual({})
       expect(code.globalOutbound).toBeUndefined()
     })
 
@@ -434,6 +439,151 @@ describe('evaluate', () => {
       const a = await buildWorkerCode({ script: 'return 1', module: 'exports.x = 1' })
       const b = await buildWorkerCode({ module: 'exports.x = 1', script: 'return 1' })
       expect(workerCodeId(a)).toBe(workerCodeId(b))
+    })
+  })
+
+  // aip-263g.6: the sandbox env is an explicit allowlist. `env` carries
+  // strings, `bindings` carries RPC stubs and structured-cloneable values;
+  // anything else (a raw KV/D1/R2/DO binding, a closure) never reaches the
+  // loader, so host bindings cannot leak into the isolate.
+  describe('env and bindings (allowlisted sandbox env)', () => {
+    const rawKV = { get: async () => null, put: async () => undefined, list: async () => ({}) }
+    const stub = { fetch: async () => new Response('ok'), ping: async () => 'pong' }
+
+    it('WorkerCode.env is exactly env when there is no test service', async () => {
+      const code = await buildWorkerCode({ script: 'return env.FOO', env: { FOO: 'bar' } })
+      expect(code.env).toEqual({ FOO: 'bar' })
+    })
+
+    it('WorkerCode.env is env plus TEST only when tests run on the RPC runner', async () => {
+      const testService = { connect: async () => ({}) }
+      const withTests = await buildWorkerCode(
+        { tests: 'it("x", () => {})', env: { FOO: 'bar' } },
+        testService
+      )
+      expect(withTests.env).toEqual({ FOO: 'bar', TEST: testService })
+
+      const embedded = await buildWorkerCode({ tests: 'it("x", () => {})', env: { FOO: 'bar' } })
+      expect(embedded.env).toEqual({ FOO: 'bar' })
+
+      // A test service is never handed to a worker that has no tests to run on it
+      const scriptOnly = await buildWorkerCode(
+        { script: 'return 1', env: { FOO: 'bar' } },
+        testService
+      )
+      expect(scriptOnly.env).toEqual({ FOO: 'bar' })
+    })
+
+    it('passes an RPC stub (has fetch) through bindings by reference', async () => {
+      const code = await buildWorkerCode({ script: 'return 1', bindings: { svc: stub } })
+      expect(code.env?.svc).toBe(stub)
+    })
+
+    it('passes structured-cloneable bindings through', async () => {
+      const config = { nested: [1, 2, { three: 3 }], when: new Date(0), set: new Set([1]) }
+      const code = await buildWorkerCode({ script: 'return 1', bindings: { config, n: 42 } })
+      expect(code.env).toEqual({ config, n: 42 })
+    })
+
+    it('rejects a raw KV namespace: not structured-cloneable and not an RPC stub', async () => {
+      await expect(
+        buildWorkerCode({ script: 'return 1', bindings: { KV: rawKV } })
+      ).rejects.toThrow(ValidationError)
+      await expect(
+        buildWorkerCode({ script: 'return 1', bindings: { KV: rawKV } })
+      ).rejects.toThrow(/not structured-cloneable|not an RPC stub/)
+    })
+
+    it('rejects a closure (would carry host state into the isolate)', async () => {
+      await expect(
+        buildWorkerCode({ script: 'return 1', bindings: { fn: () => 'secret' } })
+      ).rejects.toThrow(/not structured-cloneable|not an RPC stub/)
+    })
+
+    it('evaluate() reports the rejected binding as an error result, and never loads', async () => {
+      const fake = createFakeLoader()
+      const result = await evaluateWithEnv(
+        { script: 'return 1', bindings: { KV: rawKV } },
+        { loader: fake.loader }
+      )
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/not structured-cloneable|not an RPC stub/)
+      expect(result.error).toContain('KV')
+      expect(fake.calls.load + fake.calls.get).toBe(0)
+    })
+
+    it('rejects non-string env values (stubs and objects belong in bindings)', async () => {
+      await expect(
+        buildWorkerCode({ script: 'return 1', env: { N: 1 as unknown as string } })
+      ).rejects.toThrow(/env\.N must be a string/)
+      await expect(
+        buildWorkerCode({ script: 'return 1', env: { svc: stub as unknown as string } })
+      ).rejects.toThrow(ValidationError)
+    })
+
+    it('rejects a key that is both an env and a binding', async () => {
+      await expect(
+        buildWorkerCode({ script: 'return 1', env: { X: 'a' }, bindings: { X: 'b' } })
+      ).rejects.toThrow(/X.*both env and bindings/)
+    })
+
+    it('reserves TEST for the ai-tests service binding', async () => {
+      await expect(buildWorkerCode({ script: 'return 1', env: { TEST: 'x' } })).rejects.toThrow(
+        /TEST.*reserved/
+      )
+      await expect(
+        buildWorkerCode({ script: 'return 1', bindings: { TEST: stub } })
+      ).rejects.toThrow(/TEST.*reserved/)
+    })
+
+    it('env never changes the content-addressed id', async () => {
+      const a = await buildWorkerCode({ script: 'return env.FOO', env: { FOO: 'a' } })
+      const b = await buildWorkerCode({
+        script: 'return env.FOO',
+        env: { FOO: 'b' },
+        bindings: { svc: stub },
+      })
+      expect(workerCodeId(a)).toBe(workerCodeId(b))
+    })
+  })
+
+  describe('env (real local workerd)', () => {
+    it('env.FOO reaches the script', async () => {
+      const result = await evaluate({ script: 'return env.FOO', env: { FOO: 'bar' } })
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe('bar')
+    })
+
+    it('env is frozen and holds only what was passed', async () => {
+      const result = await evaluate({
+        script: `
+          let frozen = Object.isFrozen(env);
+          try { env.FOO = 'changed'; } catch { frozen = frozen && true; }
+          return { frozen, keys: Object.keys(env), foo: env.FOO };
+        `,
+        env: { FOO: 'bar' },
+      })
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({ frozen: true, keys: ['FOO'], foo: 'bar' })
+    })
+
+    it('env reaches tests on the embedded runner', async () => {
+      const result = await evaluate({
+        tests: 'it("sees env", () => expect(env.FOO).toBe("bar"))',
+        env: { FOO: 'bar' },
+      })
+      expect(result.success).toBe(true)
+      expect(result.testResults?.passed).toBe(1)
+    })
+
+    it('bindings cannot cross from Node into the local host (no live loader to hand a stub to)', async () => {
+      const result = await evaluate({
+        script: 'return 1',
+        bindings: { svc: { fetch: async () => new Response('ok') } },
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/bindings/)
+      expect(result.error).toMatch(/loader/)
     })
   })
 

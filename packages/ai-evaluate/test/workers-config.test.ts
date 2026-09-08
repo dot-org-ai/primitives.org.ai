@@ -32,18 +32,18 @@ describe('vitest.workers.config', () => {
     expect(workersConfig.test?.fileParallelism).toBe(false)
   })
 
-  it('wrangler.test.jsonc declares worker_loaders LOADER at the sandbox compatibility date', async () => {
+  it('wrangler.test.jsonc declares the worker_loaders `loader` binding at the sandbox compatibility date', async () => {
     const path = resolve(packageDir, WRANGLER_TEST_CONFIG_PATH)
     const { unstable_readConfig } = await import('wrangler')
     const config = unstable_readConfig({ config: path })
     expect(config.compatibility_date).toBe(COMPATIBILITY_DATE)
     expect(config.compatibility_date).toBe('2026-01-01')
-    expect(config.worker_loaders).toEqual([{ binding: 'LOADER' }])
+    expect(config.worker_loaders).toEqual([{ binding: 'loader' }])
   })
 
   it('wrangler.test.jsonc is the file the plugin was given', async () => {
     const raw = await readFile(resolve(packageDir, WRANGLER_TEST_CONFIG_PATH), 'utf8')
     expect(raw).toContain('"worker_loaders"')
-    expect(raw).toContain('"binding": "LOADER"')
+    expect(raw).toContain('"binding": "loader"')
   })
 })
