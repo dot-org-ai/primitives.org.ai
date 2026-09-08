@@ -1,0 +1,9 @@
+// Wrangler config for the workers-pool test suite (vitest.workers.config.ts).
+// Declares the real `worker_loaders` binding that `evaluate()` needs, so the
+// suite exercises src/evaluate.ts against Dynamic Workers inside workerd.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ai-evaluate-workers-test",
+  "compatibility_date": "2026-01-01",
+  "worker_loaders": [{ "binding": "LOADER" }]
+}
