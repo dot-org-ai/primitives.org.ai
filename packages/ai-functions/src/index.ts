@@ -431,3 +431,7 @@ export {
   type EvalLogListOptions,
   type EvalLogStore,
 } from './eval-log/index.js'
+
+// Sandbox teardown — releases the Miniflare host behind the Node fallback early
+// (optional: an idle host does not keep the process alive)
+export { disposeSandbox } from './sandbox.js'
