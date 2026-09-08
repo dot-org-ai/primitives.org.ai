@@ -3,14 +3,18 @@
 // suite exercises src/evaluate.ts against Dynamic Workers inside workerd.
 //
 // `PING` is a service binding to this worker's own `Ping` WorkerEntrypoint
-// (ping-worker.ts): a real RPC stub for the `bindings` tests. `KV` is a real
-// KV namespace: a raw host binding the sandbox must refuse to forward.
+// (ping-worker.ts): a real RPC stub for the `bindings` tests. `TAIL` binds its
+// `TailStub` WorkerEntrypoint: a tail worker for the `tails` tests. `KV` is a
+// real KV namespace: a raw host binding the sandbox must refuse to forward.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ai-evaluate-workers-test",
   "main": "./ping-worker.ts",
   "compatibility_date": "2026-01-01",
   "worker_loaders": [{ "binding": "loader" }],
-  "services": [{ "binding": "PING", "service": "ai-evaluate-workers-test", "entrypoint": "Ping" }],
+  "services": [
+    { "binding": "PING", "service": "ai-evaluate-workers-test", "entrypoint": "Ping" },
+    { "binding": "TAIL", "service": "ai-evaluate-workers-test", "entrypoint": "TailStub" }
+  ],
   "kv_namespaces": [{ "binding": "KV", "id": "ai-evaluate-test-kv" }]
 }

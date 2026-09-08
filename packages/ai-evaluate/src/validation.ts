@@ -5,6 +5,7 @@
  */
 
 import type { EvaluateOptions } from './types.js'
+import { normalizeImport } from './shared.js'
 
 /**
  * The key under which the ai-tests service binding is handed to the loaded
@@ -43,25 +44,97 @@ function isValidUrl(urlString: string): boolean {
   }
 }
 
+/** `YYYY-MM-DD`, the only form the runtime accepts for a compatibility date */
+const COMPATIBILITY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Validate a positive, finite number option (a timeout or a resource limit)
+ */
+function validatePositiveNumber(name: string, value: unknown, max?: number): void {
+  if (typeof value !== 'number') {
+    throw new ValidationError(`${name} must be a number`)
+  }
+  if (!Number.isFinite(value)) {
+    throw new ValidationError(`${name} must be a finite number`)
+  }
+  if (value <= 0) {
+    throw new ValidationError(`${name} must be a positive number`)
+  }
+  if (max !== undefined && value > max) {
+    throw new ValidationError(`${name} exceeds maximum allowed value of ${max}ms`)
+  }
+}
+
 /**
  * Validate EvaluateOptions
+ *
+ * Runs at the top of `evaluate()`, before any transform or loader call, so a
+ * malformed option is reported as a `ValidationError` (an error result from
+ * `evaluate()`) instead of a runtime error from inside workerd.
  *
  * @throws ValidationError if any validation fails
  */
 export function validateOptions(options: EvaluateOptions): void {
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new ValidationError('options must be an object')
+  }
+
   // Validate timeout
   if (options.timeout !== undefined) {
-    if (typeof options.timeout !== 'number') {
-      throw new ValidationError('timeout must be a number')
+    validatePositiveNumber('timeout', options.timeout, MAX_TIMEOUT)
+  }
+
+  // Validate limits (Dynamic Workers resource limits)
+  if (options.limits !== undefined && options.limits !== null) {
+    if (typeof options.limits !== 'object' || Array.isArray(options.limits)) {
+      throw new ValidationError('limits must be an object')
     }
-    if (!Number.isFinite(options.timeout)) {
-      throw new ValidationError('timeout must be a finite number')
+    const { cpuMs, subrequests } = options.limits
+    if (cpuMs !== undefined) {
+      validatePositiveNumber('limits.cpuMs', cpuMs)
     }
-    if (options.timeout <= 0) {
-      throw new ValidationError('timeout must be a positive number')
+    if (subrequests !== undefined) {
+      validatePositiveNumber('limits.subrequests', subrequests)
+      if (!Number.isInteger(subrequests)) {
+        throw new ValidationError('limits.subrequests must be an integer')
+      }
     }
-    if (options.timeout > MAX_TIMEOUT) {
-      throw new ValidationError(`timeout exceeds maximum allowed value of ${MAX_TIMEOUT}ms`)
+  }
+
+  // Validate compatibility flags
+  if (options.compatibilityFlags !== undefined && options.compatibilityFlags !== null) {
+    if (!Array.isArray(options.compatibilityFlags)) {
+      throw new ValidationError('compatibilityFlags must be an array of strings')
+    }
+    for (let i = 0; i < options.compatibilityFlags.length; i++) {
+      const flag = options.compatibilityFlags[i]
+      if (typeof flag !== 'string' || flag.length === 0) {
+        throw new ValidationError(`compatibilityFlags[${i}] must be a non-empty string`)
+      }
+    }
+  }
+
+  // Validate compatibility date
+  if (options.compatibilityDate !== undefined && options.compatibilityDate !== null) {
+    if (
+      typeof options.compatibilityDate !== 'string' ||
+      !COMPATIBILITY_DATE_PATTERN.test(options.compatibilityDate)
+    ) {
+      throw new ValidationError('compatibilityDate must be a YYYY-MM-DD string')
+    }
+  }
+
+  // Validate tails (the stubs themselves are checked by the runtime)
+  if (options.tails !== undefined && options.tails !== null) {
+    if (!Array.isArray(options.tails)) {
+      throw new ValidationError('tails must be an array of tail worker stubs')
+    }
+    for (let i = 0; i < options.tails.length; i++) {
+      if (!isRpcStubLike(options.tails[i])) {
+        throw new ValidationError(
+          `tails[${i}] is not a tail worker stub (a service binding or WorkerEntrypoint stub)`
+        )
+      }
     }
   }
 
@@ -119,7 +192,10 @@ export function validateOptions(options: EvaluateOptions): void {
       if (typeof importUrl !== 'string') {
         throw new ValidationError(`imports[${i}] must be a string`)
       }
-      if (!isValidUrl(importUrl)) {
+      // Bare package names (`lodash`, `dayjs@1.11.10`, `@scope/pkg`) resolve to
+      // esm.sh URLs (see `normalizeImport`); anything with a scheme must be
+      // http(s).
+      if (importUrl.length === 0 || !isValidUrl(normalizeImport(importUrl))) {
         throw new ValidationError(`imports[${i}] is not a valid URL: ${importUrl}`)
       }
     }

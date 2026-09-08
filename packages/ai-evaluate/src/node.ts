@@ -342,6 +342,13 @@ export function createLocalRuntime(): LocalRuntime {
           'cannot receive RPC stubs from the Node side.'
       )
     }
+    // Tail workers are stubs too: JSON would turn them into `{}`.
+    if (options.tails !== undefined && options.tails.length > 0) {
+      return fail(
+        'tails need a live worker_loaders binding: pass the host env (with `loader`) to ' +
+          'evaluate(). The local Node host cannot receive tail worker stubs from the Node side.'
+      )
+    }
     inFlight++
     let host: Host | null = null
     // The backstop clock starts once the host is ready: host startup is not

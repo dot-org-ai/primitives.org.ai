@@ -8,6 +8,7 @@
 import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 import { evaluate, createEvaluator } from '../../src/evaluate.js'
+import { SANDBOX_URL } from '../../src/shared.js'
 import type { SandboxEnv } from '../../src/types.js'
 import { SCRIPT_RESULT_KEYS, TESTS_RESULT_KEYS, resultKeys } from '../fixtures/result-shape.js'
 
@@ -226,6 +227,139 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       )
       expect(result.error).toBeUndefined()
       expect(result.value).toEqual({ n: 1, list: [1, 2, 3] })
+    })
+  })
+
+  // aip-263g.5: limits, tails and compatibility settings pass through to the
+  // real loader. Compatibility flags and tails are enforced by local workerd
+  // and witnessed here; CPU and subrequest limits are accepted but not
+  // enforced by open-source workerd (aip-263g.34), so their enforcement tests
+  // gate on a probe and skip themselves until the runtime enforces them.
+  describe('limits, tails, compatibility (real loader)', () => {
+    /** A worker that spins for `ms` of wall time (never yields) */
+    const spinWorker = (ms: number) =>
+      `export default { fetch() { const t = Date.now(); while (Date.now() - t < ${ms}) {} return new Response('done') } }`
+
+    let enforcesLimits: boolean | null = null
+
+    /**
+     * Whether this runtime enforces `limits.cpuMs`: a 150ms spin under a 5ms
+     * CPU budget must be thrown out of the loop. Bounded, so an unenforced
+     * limit costs 150ms rather than a wedged workerd.
+     */
+    const localRuntimeEnforcesLimits = async (): Promise<boolean> => {
+      if (enforcesLimits !== null) return enforcesLimits
+      const stub = env.loader!.load({
+        mainModule: 'w.js',
+        modules: { 'w.js': spinWorker(150) },
+        compatibilityDate: '2026-01-01',
+        limits: { cpuMs: 5 },
+      })
+      try {
+        await stub
+          .getEntrypoint(undefined, { limits: { cpuMs: 5 } })
+          .fetch(new Request(SANDBOX_URL))
+        enforcesLimits = false
+      } catch {
+        enforcesLimits = true
+      }
+      return enforcesLimits
+    }
+
+    it('limits reach the real loader and the worker still evaluates', async () => {
+      const result = await evaluate(
+        { script: 'return 1 + 1', limits: { cpuMs: 100, subrequests: 1 } },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe(2)
+    })
+
+    it('a CPU-bound script under limits.cpuMs fails with the CPU-limit error', async (ctx) => {
+      if (!(await localRuntimeEnforcesLimits())) {
+        ctx.skip(
+          'local workerd accepts limits.cpuMs but does not enforce it (aip-263g.34); witnessed on Cloudflare only'
+        )
+      }
+      // Bounded (2s of wall time, not while(true)) so a wrong probe fails
+      // loudly instead of wedging the runner; cpuMs: 20 ends it long before.
+      const result = await evaluate(
+        {
+          script: 'const t = Date.now(); while (Date.now() - t < 2000) {} return "finished"',
+          limits: { cpuMs: 20 },
+        },
+        env
+      )
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/CPU|limit|exceeded/i)
+    })
+
+    it('a script over limits.subrequests fails on the extra subrequest', async (ctx) => {
+      if (!(await localRuntimeEnforcesLimits())) {
+        ctx.skip(
+          'local workerd accepts limits.subrequests but does not enforce it (aip-263g.34); witnessed on Cloudflare only'
+        )
+      }
+      const result = await evaluate(
+        {
+          script: 'await env.svc.ping(); await env.svc.ping(); return "two"',
+          bindings: { svc: env.PING },
+          limits: { subrequests: 1 },
+        },
+        env
+      )
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/subrequest|limit|exceeded/i)
+    })
+
+    it('compatibilityFlags reach the loaded worker: nodejs_compat exposes Buffer', async () => {
+      const without = await evaluate({ script: 'return typeof Buffer' }, env)
+      expect(without.error).toBeUndefined()
+      expect(without.value).toBe('undefined')
+
+      const withFlag = await evaluate(
+        { script: 'return typeof Buffer', compatibilityFlags: ['nodejs_compat'] },
+        env
+      )
+      expect(withFlag.error).toBeUndefined()
+      expect(withFlag.value).toBe('function')
+    })
+
+    it('compatibilityDate is accepted by the loader', async () => {
+      const result = await evaluate(
+        { script: 'return "dated"', compatibilityDate: '2026-06-01' },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe('dated')
+    })
+
+    it("a tail worker passed via tails receives the loaded worker's trace event", async () => {
+      await env.TAIL.drain()
+      const result = await evaluate(
+        { script: 'console.log("hello tail"); return 1', tails: [env.TAIL] },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe(1)
+
+      // Tail events are delivered after the response, asynchronously
+      let count = 0
+      for (let i = 0; i < 40 && count === 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        count = await env.TAIL.count()
+      }
+      expect(count).toBeGreaterThanOrEqual(1)
+      const events = await env.TAIL.drain()
+      const logged = events.flatMap((event) => event.logs.map((log) => log.message.join(' ')))
+      expect(logged).toContain('hello tail')
+      expect(events[0]?.outcome).toBe('ok')
+    })
+
+    it('a malformed tail entry is rejected before the loader is touched', async () => {
+      const result = await evaluate({ script: 'return 1', tails: ['not-a-stub'] }, env)
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/tails\[0\]/)
     })
   })
 
