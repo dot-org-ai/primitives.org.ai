@@ -10,9 +10,14 @@ ai-evaluate: content-address the full `WorkerCode` spec; `isolation: 'cached' | 
   `limits`, and whether `globalOutbound` is blocked - so callers with different
   compatibility flags, limits or extra modules no longer collide on one cached
   isolate. `env`, `tails` and a `globalOutbound` service do not change the id.
-- New `EvaluateOptions.isolation`: `'cached'` (default) uses `LOADER.get(id, factory)`
-  and shares one isolate per unique spec (the per-unique-worker/day cost control);
-  `'fresh'` uses `LOADER.load(spec)` for a new, uncached isolate every call.
+- New `EvaluateOptions.isolation`: `'fresh'` (default) uses `LOADER.load(spec)` for a
+  new, uncached isolate every call, so identical evaluations stay independent - the
+  same per-call module scope 2.4.0 had; `'cached'` uses `LOADER.get(id, factory)` and
+  shares one isolate per unique spec (the opt-in per-unique-worker/day cost control).
+  Under `'cached'` the user module body runs once per isolate, so all of its
+  module-scope state (`let`/`const` bindings, exported arrays and objects, the
+  `exports` record, `globalThis`) persists across calls; only script locals and
+  logs are per-request. Opt in only for code that is safe to re-enter.
 - `WorkerLoader` / `WorkerCode` / `WorkerStub` types track the current Dynamic
   Workers API (`load`, `compatibilityFlags`, `allowExperimental`, `limits`, `tails`,
   `getEntrypoint(name?, { props?, limits? })`, `getDurableObjectClass`).

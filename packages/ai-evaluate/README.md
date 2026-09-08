@@ -240,7 +240,7 @@ interface EvaluateOptions {
   env?: Record<string, string> // Environment variables
   sdk?: SDKConfig | boolean    // Enable $, db, ai globals
   imports?: string[]           // External npm packages (see below)
-  isolation?: 'cached' | 'fresh' // Isolate reuse policy (default: 'cached', see below)
+  isolation?: 'fresh' | 'cached' // Isolate reuse policy (default: 'fresh', see below)
 }
 ```
 
@@ -252,22 +252,28 @@ spec into an isolate:
 
 | `isolation` | Loader call | When |
 |-------------|-------------|------|
-| `'cached'` (default) | `LOADER.get(workerCodeId(spec), factory)` | Identical specs share one isolate. Dynamic Workers are billed per unique worker per day, so this is the cost control. |
-| `'fresh'` | `LOADER.load(spec)` | A new, uncached isolate every call: nothing at module scope survives between evaluations. |
+| `'fresh'` (default) | `LOADER.load(spec)` | A new, uncached isolate every call: nothing at module scope survives between evaluations, so identical calls return identical results. |
+| `'cached'` | `LOADER.get(workerCodeId(spec), factory)` | Identical specs share one isolate, and its module-scope state. Dynamic Workers are billed per unique worker per day, so this is the opt-in cost control for code that is safe to re-enter. |
 
 `workerCodeId(spec)` content-addresses the spec - `mainModule`, `modules`,
 `compatibilityDate`, `compatibilityFlags`, `allowExperimental`, `limits`, and
 whether outbound fetch is blocked. Bindings (`env`, `tails`, a `globalOutbound`
 service) never change the id, so the same code with different bindings is still
-one unique worker. Under `'cached'`, request state (logs, script locals) is
-per-request in the generated worker; only values you deliberately put on
-`globalThis` persist across calls on a reused isolate.
+one unique worker.
+
+What persists on a reused (`'cached'`) isolate: your `module` runs once, at
+module scope of the generated worker, so **everything it declares** persists
+across evaluations of the same spec - `let`/`const` bindings, exported arrays
+and objects, the `exports` record, and anything on `globalThis`. Only `script`
+locals and captured logs are per-request. A `let n = 0; export const inc = () =>
+++n` module returns `1`, then `2`, then `3` under `'cached'`; under `'fresh'`
+(the default, and the 2.x behaviour) every call returns `1`.
 
 ```typescript
 import { evaluate, buildWorkerCode, workerCodeId } from 'ai-evaluate'
 
-await evaluate({ script: 'return 1' }, env)                        // cached (default)
-await evaluate({ script: 'return 1', isolation: 'fresh' }, env)    // new isolate
+await evaluate({ script: 'return 1' }, env)                        // fresh (default): new isolate
+await evaluate({ script: 'return 1', isolation: 'cached' }, env)   // one isolate per unique spec
 
 // Inspect the id an evaluation will be cached under
 const id = workerCodeId(await buildWorkerCode({ script: 'return 1' }))

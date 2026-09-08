@@ -42,8 +42,16 @@ import {
 /** Default per-evaluation timeout in milliseconds */
 export const DEFAULT_TIMEOUT = 5000
 
-/** Default isolate reuse policy: one cached isolate per unique worker spec */
-export const DEFAULT_ISOLATION: Isolation = 'cached'
+/**
+ * Default isolate reuse policy: a new, uncached isolate per evaluation.
+ *
+ * The user module runs at module scope of the generated worker, so a reused
+ * isolate carries every module-scope binding (let/const, exported arrays and
+ * objects, the `exports` record) into the next evaluation of the same spec.
+ * `'fresh'` keeps identical calls independent (the 2.x behaviour); `'cached'`
+ * is the opt-in per-unique-worker/day cost control.
+ */
+export const DEFAULT_ISOLATION: Isolation = 'fresh'
 
 /**
  * Run the sandbox worker's `/execute` route with a wall-clock timeout.
@@ -364,10 +372,12 @@ export async function buildWorkerCode(
 /**
  * Obtain a worker stub for a spec under the requested isolation policy.
  *
+ * - `'fresh'` (default): `loader.load(code)` - a new, uncached isolate;
+ *   nothing at module scope survives between evaluations.
  * - `'cached'`: `loader.get(workerCodeId(code), () => code)` - the loader
  *   calls the factory only when no isolate with that id is live, so identical
- *   specs share one isolate (one unique worker per distinct spec).
- * - `'fresh'`: `loader.load(code)` - a new, uncached isolate.
+ *   specs share one isolate (one unique worker per distinct spec) and its
+ *   module-scope state.
  */
 export function loadWorker(
   loader: WorkerLoader,
