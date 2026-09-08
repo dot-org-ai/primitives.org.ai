@@ -4,14 +4,15 @@
 
 ai-evaluate: local runtime is one Miniflare 5 host worker with a real LOADER binding (same `evaluate()` bytes as prod)
 
-**Breaking:** `ai-evaluate/node` now requires `miniflare@^5.20260907.0-alpha` (Node >= 22) and `esbuild`.
+**Breaking:** `ai-evaluate/node` now requires `miniflare@^5.20260907.0-alpha` (Node >= 22).
 The Miniflare 3 per-call instance and the separate dev worker template are gone.
 
-- `ai-evaluate/node` bundles `src/host-worker.ts` (which imports `evaluate()` from
-  `src/evaluate.ts`) and runs it inside a Miniflare 5 host worker whose `env.LOADER`
-  is a `worker-loader` binding. Local and production execute the same code path.
+- `ai-evaluate/node` loads `src/host-worker.ts` (which imports `evaluate()` from
+  `src/evaluate.ts`) and its module graph into a Miniflare 5 host worker whose
+  `env.LOADER` is a `worker-loader` binding. Local and production execute the same
+  code path.
 - New: `createLocalRuntime()` -> `{ evaluate, dispose }`, process-wide `dispose()`,
-  `bundleHostWorker()`. One host per process, lazily created, reused across calls
+  `loadHostWorker()`. One host per process, lazily created, reused across calls
   (test suite: ~100s -> ~13s). The host's handles are unref'd while idle, so a
   script or CLI that never calls `dispose()` still exits on its own (as with the
   per-call Miniflare 3 instance); `dispose()` is only needed to release the host

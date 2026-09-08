@@ -6,14 +6,10 @@ afterAll(async () => {
 })
 
 describe('ai-evaluate/node', () => {
-  describe('JSX transformation', () => {
-    // Note: JSX transformation uses esbuild which may produce ESM-wrapped code
-    // These tests verify the JSX detection and transformation attempt
-
-    it('detects and attempts to transform simple JSX', async () => {
+  describe('JSX / TypeScript transformation (in the host worker, via bundled sucrase)', () => {
+    it('transforms simple JSX', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // JSX code that would need transformation
       const result = await evaluate({
         module: `
           function h(tag, props, ...children) {
@@ -24,13 +20,12 @@ describe('ai-evaluate/node', () => {
         script: 'return render()',
       })
 
-      // The transformation is attempted - result depends on esbuild output format
-      // Either it succeeds or returns an error (not a crash)
-      expect(typeof result.success).toBe('boolean')
-      expect(Array.isArray(result.logs)).toBe(true)
+      expect(result.error).toBeUndefined()
+      expect(result.success).toBe(true)
+      expect(result.value).toEqual({ tag: 'div', props: null, children: ['Hello'] })
     })
 
-    it('detects JSX with props', async () => {
+    it('transforms JSX with props', async () => {
       const { evaluate } = await import('../src/node.js')
 
       const result = await evaluate({
@@ -40,22 +35,22 @@ describe('ai-evaluate/node', () => {
           }
           const handler = () => 'clicked'
           exports.render = () => <Button onClick={handler}>Click</Button>
+          function Button() {}
         `,
-        script: 'return render()',
+        script: 'const el = render(); return [typeof el.tag, el.props.onClick(), el.children]',
       })
 
-      // Verify the function doesn't crash and returns a valid result shape
-      expect(typeof result.success).toBe('boolean')
-      expect(typeof result.duration).toBe('number')
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual(['function', 'clicked', ['Click']])
     })
 
-    it('detects JSX fragments', async () => {
+    it('transforms JSX fragments', async () => {
       const { evaluate } = await import('../src/node.js')
 
       const result = await evaluate({
         module: `
           function h(tag, props, ...children) {
-            return { tag, props, children }
+            return { tag: tag === Fragment ? 'fragment' : tag, props, children }
           }
           function Fragment(props) {
             return props.children
@@ -65,28 +60,67 @@ describe('ai-evaluate/node', () => {
         script: 'return render()',
       })
 
-      // Verify graceful handling
-      expect(typeof result.success).toBe('boolean')
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({
+        tag: 'fragment',
+        props: null,
+        children: [
+          { tag: 'span', props: null, children: [] },
+          { tag: 'span', props: null, children: [] },
+        ],
+      })
     })
 
-    it('handles JSX transform failure gracefully', async () => {
+    it('honours options.jsx (factory / fragment)', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // Even with JSX that fails to transform correctly, evaluate should not throw
       const result = await evaluate({
         module: `
-          function h(tag, props, ...children) {
-            return { tag, props, children }
+          const React = {
+            createElement: (tag, props, ...children) => ({ tag, props, children }),
+            Fragment: 'Fragment',
           }
-          exports.element = <div>Test</div>
+          exports.el = <><b>x</b></>
         `,
+        script: 'return el',
+        jsx: { factory: 'React.createElement', fragment: 'React.Fragment' },
+      })
+
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({
+        tag: 'Fragment',
+        props: null,
+        children: [{ tag: 'b', props: null, children: ['x'] }],
+      })
+    })
+
+    it('strips TypeScript from module and script', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      const result = await evaluate({
+        module: `
+          interface Point { x: number; y: number }
+          export function len(p: Point): number { return p.x + p.y }
+        `,
+        script: 'const p: Point = { x: 40, y: 2 }; return len(p) as number',
+      })
+
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe(42)
+    })
+
+    it('reports a JSX syntax error from the runtime instead of throwing', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      const result = await evaluate({
+        module: 'exports.element = <div>',
         script: 'return element',
       })
 
-      // Should return a result (success or error), not throw
       expect(result).toHaveProperty('success')
       expect(result).toHaveProperty('logs')
       expect(result).toHaveProperty('duration')
+      expect(result.success).toBe(false)
     })
 
     it('passes through non-JSX code unchanged', async () => {
@@ -105,16 +139,14 @@ describe('ai-evaluate/node', () => {
     it('handles code that looks like JSX but is a string', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // String literals with angle brackets may still be detected by the regex
-      // but the transformation should still produce valid code
       const result = await evaluate({
         module: `
-          exports.html = "Not JSX"
+          exports.html = "<b>Not JSX</b>"
         `,
         script: 'return html',
       })
       expect(result.success).toBe(true)
-      expect(result.value).toBe('Not JSX')
+      expect(result.value).toBe('<b>Not JSX</b>')
     })
 
     it('handles empty module gracefully', async () => {
@@ -325,14 +357,32 @@ describe('ai-evaluate/node', () => {
       devSpy.mockRestore()
     })
 
-    it('bundles host-worker -> evaluate as the host worker (same bytes as prod)', async () => {
-      const { bundleHostWorker } = await import('../src/node.js')
-      const bundle = await bundleHostWorker()
+    it('loads host-worker -> evaluate as the host worker modules (same bytes as prod)', async () => {
+      const { loadHostWorker, HOST_MODULE } = await import('../src/node.js')
+      const { mainModule, modules } = loadHostWorker()
+      expect(mainModule).toBe(HOST_MODULE)
       // The host is the evaluate() implementation, not a separate local template
-      expect(bundle).toContain('Sandbox requires worker_loaders binding')
-      expect(bundle).toContain('/evaluate')
-      expect(bundle).toContain('Simple Sandbox Worker')
-      expect(bundle).not.toContain('Dev Mode')
+      expect(Object.keys(modules)).toEqual(
+        expect.arrayContaining([
+          'host-worker.js',
+          'evaluate.js',
+          'shared.js',
+          'transform.js',
+          'transform-bundle.js',
+          'capnweb-bundle.js',
+          'worker-template/index.js',
+          'worker-template/core.js',
+        ])
+      )
+      expect(Object.keys(modules)).not.toContain('node.js')
+      expect(modules['evaluate.js']).toContain('Sandbox requires worker_loaders binding')
+      expect(modules['evaluate.js']).toContain('Simple Sandbox Worker')
+      expect(modules['host-worker.js']).toContain('/evaluate')
+      const all = Object.values(modules).join('\n')
+      expect(all).not.toContain('Dev Mode')
+      // Plain ES modules: no TypeScript left, no bundler, no esbuild
+      expect(all).not.toMatch(/^import type\b/m)
+      expect(all).not.toContain('esbuild')
     })
 
     it('delegates to evaluate() from src/evaluate.ts when env has a loader', async () => {
@@ -357,18 +407,32 @@ describe('ai-evaluate/node', () => {
     })
   })
 
-  describe('esbuild optional dependency', () => {
-    it('esbuild is available in dev environment', async () => {
-      // esbuild should be available in dev
-      const esbuild = await import('esbuild').catch(() => null)
-      expect(esbuild).not.toBeNull()
-      expect(typeof esbuild?.transform).toBe('function')
+  describe('no esbuild dependency', () => {
+    it('package.json declares no esbuild in any dependency field', async () => {
+      const { readFileSync } = await import('node:fs')
+      const pkg = JSON.parse(
+        readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+      ) as Record<string, Record<string, string> | undefined>
+      for (const field of [
+        'dependencies',
+        'devDependencies',
+        'optionalDependencies',
+        'peerDependencies',
+      ]) {
+        expect(pkg[field] ?? {}, field).not.toHaveProperty('esbuild')
+      }
     })
 
-    it('graceful fallback when code has no JSX', async () => {
+    it('src/node.ts does not import esbuild', async () => {
+      const { readFileSync } = await import('node:fs')
+      const source = readFileSync(new URL('../src/node.ts', import.meta.url), 'utf8')
+      expect(source).not.toMatch(/import\(['"]esbuild['"]\)/)
+      expect(source).not.toMatch(/from ['"]esbuild['"]/)
+    })
+
+    it('code without JSX evaluates unchanged', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // Code without JSX should work regardless of esbuild
       const result = await evaluate({
         module: `
           exports.multiply = (a, b) => a * b
@@ -377,42 +441,6 @@ describe('ai-evaluate/node', () => {
       })
       expect(result.success).toBe(true)
       expect(result.value).toBe(42)
-    })
-
-    it('uses esbuild for JSX detection patterns', async () => {
-      // Test that JSX patterns are detected
-      // The containsJSX function should identify these patterns
-      const patterns = [
-        '<div>content</div>', // lowercase tag
-        '<Button />', // uppercase tag
-        '<>fragment</>', // fragment
-        'return <Component />', // return JSX
-        'return (\n<div>\n</div>\n)', // multiline return JSX
-      ]
-
-      // All these should be detected as JSX
-      for (const pattern of patterns) {
-        const jsxPattern = /<[A-Z][a-zA-Z0-9]*[\s/>]|<[a-z][a-z0-9-]*[\s/>]|<>|<\/>/
-        const jsxReturnPattern = /return\s*\(\s*<|return\s+<[A-Za-z]/
-        const isJSX = jsxPattern.test(pattern) || jsxReturnPattern.test(pattern)
-        expect(isJSX).toBe(true)
-      }
-    })
-
-    it('does not detect non-JSX patterns', async () => {
-      // These should NOT be detected as JSX
-      const patterns = [
-        'const x = a < b ? c : d', // comparison (no space after <)
-        '5 > 3', // comparison
-        'arr.map(x => x * 2)', // arrow function
-      ]
-
-      for (const pattern of patterns) {
-        const jsxPattern = /<[A-Z][a-zA-Z0-9]*[\s/>]|<[a-z][a-z0-9-]*[\s/>]|<>|<\/>/
-        const jsxReturnPattern = /return\s*\(\s*<|return\s+<[A-Za-z]/
-        const isJSX = jsxPattern.test(pattern) || jsxReturnPattern.test(pattern)
-        expect(isJSX).toBe(false)
-      }
     })
   })
 

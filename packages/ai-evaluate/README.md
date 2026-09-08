@@ -134,7 +134,7 @@ For local development, import from the `/node` subpath. It runs the **same
 Workers behaviour rather than a separate dev template.
 
 ```bash
-pnpm add ai-evaluate miniflare esbuild   # Miniflare 5 requires Node >= 22
+pnpm add ai-evaluate miniflare   # Miniflare 5 requires Node >= 22
 ```
 
 ```typescript

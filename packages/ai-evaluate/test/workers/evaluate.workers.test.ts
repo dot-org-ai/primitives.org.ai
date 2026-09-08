@@ -168,6 +168,78 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
     })
   })
 
+  describe('JSX / TypeScript (transformed inside workerd by the bundled sucrase)', () => {
+    it('transforms JSX with the given factory and evaluates it', async () => {
+      const result = await evaluate(
+        {
+          module: `
+            const h = (tag, props, ...children) => ({ tag, props, children })
+            export const el = <p class="x">hi</p>
+          `,
+          script: 'return el',
+          jsx: { factory: 'h', fragment: 'Fragment' },
+        },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.success).toBe(true)
+      expect(result.value).toEqual({ tag: 'p', props: { class: 'x' }, children: ['hi'] })
+    })
+
+    it('defaults to h / Fragment and handles fragments', async () => {
+      const result = await evaluate(
+        {
+          module: `
+            const Fragment = 'fragment'
+            const h = (tag, props, ...children) => ({ tag, props, children })
+            export const el = <><b/><i/></>
+          `,
+          script: 'return [el.tag, el.children.map((c) => c.tag)]',
+        },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual(['fragment', ['b', 'i']])
+    })
+
+    it('strips TypeScript in module, script and tests', async () => {
+      const result = await evaluate(
+        {
+          module: `
+            interface Point { x: number; y: number }
+            export const len = (p: Point): number => p.x + p.y
+          `,
+          tests: `
+            it('adds', () => { const p: Point = { x: 1, y: 2 }; expect(len(p) as number).toBe(3) })
+          `,
+          script: 'const p: Point = { x: 40, y: 2 }; return len(p)',
+        },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.success).toBe(true)
+      expect(result.value).toBe(42)
+      expect(result.testResults?.passed).toBe(1)
+    })
+
+    it('content-addresses the transformed source (same JSX -> same isolate)', async () => {
+      const options = {
+        module: `
+          const h = (tag, props, ...children) => ({ tag, props, children })
+          globalThis.__hits__ = (globalThis.__hits__ ?? 0) + 1
+          export const el = <p/>
+        `,
+        script: 'return globalThis.__hits__',
+      }
+      const first = await evaluate(options, env)
+      const second = await evaluate(options, env)
+      expect(first.value).toBe(1)
+      // The module body ran once: the second call reused the isolate keyed on the
+      // post-transform worker code, so it saw the same global.
+      expect(second.value).toBe(1)
+    })
+  })
+
   describe('network: fetch: false (real globalOutbound: null)', () => {
     it('blocks fetch and fails the evaluation', async () => {
       const result = await evaluate(

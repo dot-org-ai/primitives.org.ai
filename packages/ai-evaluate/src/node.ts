@@ -17,19 +17,21 @@
  */
 
 import { ChildProcess } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { Server, Socket } from 'node:net'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Miniflare as MiniflareInstance } from 'miniflare'
 import type { EvaluateOptions, EvaluateResult, SandboxEnv } from './types.js'
 import { evaluate as evaluateInWorker, DEFAULT_TIMEOUT } from './evaluate.js'
 import { COMPATIBILITY_DATE, EVALUATE_PATH, normalizeImports } from './shared.js'
+import { stripTypes } from './transform.js'
 
 /** Name of the Miniflare host worker */
 export const HOST_WORKER_NAME = 'ai-evaluate-host'
 
-/** Module name of the bundled host worker inside the Miniflare instance */
-const HOST_MODULE = 'host-worker.js'
+/** Entry module of the host worker inside the Miniflare instance */
+export const HOST_MODULE = 'host-worker.js'
 
 /**
  * Extra time (ms) the Node side waits past `timeout` before treating the
@@ -40,77 +42,79 @@ const HOST_MODULE = 'host-worker.js'
 const TIMEOUT_GRACE_MS = 250
 
 /**
- * Check if code contains JSX syntax that needs transformation
+ * Node-side preprocessing: import normalization only. JSX/TypeScript are
+ * transformed by `evaluate()` itself, inside the host worker (see
+ * `./transform.ts`), so the source reaches the worker exactly as written.
  */
-function containsJSX(code: string): boolean {
-  if (!code) return false
-  const jsxPattern = /<[A-Z][a-zA-Z0-9]*[\s/>]|<[a-z][a-z0-9-]*[\s/>]|<>|<\/>/
-  const jsxReturnPattern = /return\s*\(\s*<|return\s+<[A-Za-z]/
-  return jsxPattern.test(code) || jsxReturnPattern.test(code)
+function prepareOptions(options: EvaluateOptions): EvaluateOptions {
+  return { ...options, imports: normalizeImports(options.imports) }
+}
+
+/** The host worker as workerd modules: its entry name and `name -> ESM source` */
+export interface HostWorkerModules {
+  mainModule: string
+  modules: Record<string, string>
 }
 
 /**
- * Transform JSX in code using esbuild
+ * Relative `import ... from './x.js'` / `export ... from './x.js'` /
+ * `import './x.js'` specifiers in an ES module. Specifiers that only appear
+ * inside generated-code string literals are filtered out later by existence.
  */
-async function transformJSX(code: string): Promise<string> {
-  if (!code || !containsJSX(code)) return code
+const RELATIVE_IMPORT =
+  /\b(?:import|export)\b[^'"`;]*?\bfrom\s*['"](\.\.?\/[^'"]+)['"]|\bimport\s*['"](\.\.?\/[^'"]+)['"]/g
 
-  try {
-    const { transform } = await import('esbuild')
-    const result = await transform(code, {
-      loader: 'tsx',
-      jsxFactory: 'h',
-      jsxFragment: 'Fragment',
-      target: 'esnext',
-      format: 'esm',
-    })
-    return result.code
-  } catch (error) {
-    console.error('JSX transform failed:', error)
-    return code
+function relativeImports(source: string): string[] {
+  const specifiers: string[] = []
+  for (const match of source.matchAll(RELATIVE_IMPORT)) {
+    const specifier = match[1] ?? match[2]
+    if (specifier && !specifier.includes('${')) specifiers.push(specifier)
   }
+  return specifiers
 }
 
 /**
- * Apply Node-side preprocessing (JSX transform, import normalization) so the
- * options handed to the worker are plain JavaScript.
+ * Collect `./host-worker` (which imports `./evaluate`) and everything it
+ * imports as a set of ES modules for the Miniflare host - no bundler involved.
+ *
+ * Resolves against this file's own directory: from `dist/*.js` when installed
+ * (used as-is) and from `src/*.ts` under vitest (TypeScript stripped with the
+ * same bundled sucrase that `evaluate()` uses for sandbox code). Module names
+ * are paths relative to that directory (`evaluate.js`,
+ * `worker-template/core.js`), which is how their relative imports resolve
+ * inside workerd.
  */
-async function prepareOptions(options: EvaluateOptions): Promise<EvaluateOptions> {
-  const [module, tests, script] = await Promise.all([
-    options.module ? transformJSX(options.module) : undefined,
-    options.tests ? transformJSX(options.tests) : undefined,
-    options.script ? transformJSX(options.script) : undefined,
-  ])
-  return {
-    ...options,
-    module,
-    tests,
-    script,
-    imports: normalizeImports(options.imports),
-  }
-}
-
-/**
- * Bundle `./host-worker` (which imports `./evaluate`) into a single ES module
- * string. Resolves against this file's own directory, so it bundles from
- * `src/*.ts` under vitest and from `dist/*.js` when installed.
- */
-export async function bundleHostWorker(): Promise<string> {
+export function loadHostWorker(): HostWorkerModules {
   const here = fileURLToPath(import.meta.url)
-  const entry = join(dirname(here), `host-worker${extname(here)}`)
-  const { build } = await import('esbuild')
-  const result = await build({
-    entryPoints: [entry],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    platform: 'browser',
-    target: 'es2022',
-    logLevel: 'silent',
-  })
-  const output = result.outputFiles?.[0]
-  if (!output) throw new Error('Failed to bundle ai-evaluate host worker')
-  return output.text
+  const root = dirname(here)
+  const fromSource = extname(here) === '.ts'
+  const fileFor = (name: string): string =>
+    join(root, ...(fromSource ? name.replace(/\.js$/, '.ts') : name).split('/'))
+
+  const modules: Record<string, string> = {}
+  const queue = [HOST_MODULE]
+  for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+    if (name in modules) continue
+    const source = readFileSync(fileFor(name), 'utf8')
+    const code = fromSource ? stripTypes(source) : source
+    modules[name] = code
+    for (const specifier of relativeImports(code)) {
+      const target = posix.normalize(posix.join(posix.dirname(name), specifier))
+      // A specifier with no file behind it came from a string literal of
+      // generated sandbox code (e.g. `./__external_0__.js`); workerd reports
+      // any real miss when the host loads.
+      if (!target.startsWith('../') && existsSync(fileFor(target))) queue.push(target)
+    }
+  }
+  return { mainModule: HOST_MODULE, modules }
+}
+
+/** Host worker modules, loaded once per process */
+let hostWorkerModules: HostWorkerModules | null = null
+
+function getHostWorker(): HostWorkerModules {
+  hostWorkerModules ??= loadHostWorker()
+  return hostWorkerModules
 }
 
 /**
@@ -205,9 +209,9 @@ export interface LocalRuntime {
 /**
  * Create a local sandbox runtime backed by a Miniflare 5 host worker.
  *
- * The host worker is the bundled `./host-worker` module - the same
- * `evaluate()` that runs on Cloudflare - with `env.LOADER` provided by
- * Miniflare's `worker-loader` binding. It is created lazily on the first
+ * The host worker is the `./host-worker` module graph (see `loadHostWorker`) -
+ * the same `evaluate()` that runs on Cloudflare - with `env.LOADER` provided
+ * by Miniflare's `worker-loader` binding. It is created lazily on the first
  * `evaluate()` call and reused for every call after that. While no evaluation
  * is in flight the host's handles are unref'd, so it never keeps the process
  * alive on its own; `dispose()` releases it early.
@@ -221,18 +225,12 @@ export interface LocalRuntime {
  */
 export function createLocalRuntime(): LocalRuntime {
   let hostPromise: Promise<Host> | null = null
-  let bundlePromise: Promise<string> | null = null
   /** Evaluations currently awaiting the host; the host is unref'd at zero */
   let inFlight = 0
 
-  const getBundle = (): Promise<string> => {
-    bundlePromise ??= bundleHostWorker()
-    return bundlePromise
-  }
-
   const createHost = async (): Promise<Host> => {
     const { Miniflare } = await import('miniflare')
-    const script = await getBundle()
+    const { mainModule, modules } = getHostWorker()
     const before = new Set(activeHandles())
     const miniflare = new Miniflare({
       workers: [
@@ -242,8 +240,10 @@ export function createLocalRuntime(): LocalRuntime {
             type: 'worker',
             compatibilityDate: COMPATIBILITY_DATE,
             manifest: {
-              mainModule: HOST_MODULE,
-              modules: { [HOST_MODULE]: { type: 'esm', contents: script } },
+              mainModule,
+              modules: Object.fromEntries(
+                Object.entries(modules).map(([name, contents]) => [name, { type: 'esm', contents }])
+              ),
             },
             env: { LOADER: { type: 'worker-loader' } },
           },
@@ -363,7 +363,7 @@ export async function evaluate(
 ): Promise<EvaluateResult> {
   const start = Date.now()
   try {
-    const prepared = await prepareOptions(options)
+    const prepared = prepareOptions(options)
     if (env?.loader || env?.LOADER) {
       return await evaluateInWorker(prepared, env)
     }

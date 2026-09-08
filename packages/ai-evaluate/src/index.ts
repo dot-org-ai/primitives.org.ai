@@ -10,6 +10,8 @@
 
 export { evaluate, createEvaluator } from './evaluate.js'
 export { normalizeImport, normalizeImports } from './shared.js'
+export { transformSource, transformOptions, containsJSX } from './transform.js'
+export type { TransformSourceOptions } from './transform.js'
 
 export type {
   EvaluateOptions,
@@ -20,4 +22,5 @@ export type {
   SandboxEnv,
   SDKConfig,
   FetchConfig,
+  JSXOptions,
 } from './types.js'

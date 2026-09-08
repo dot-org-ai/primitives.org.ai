@@ -36,15 +36,41 @@ export interface SDKConfig {
 export type FetchConfig = boolean | null | string[]
 
 /**
+ * JSX settings for `module`, `tests` and `script` source
+ *
+ * The transform runs inside the worker that runs `evaluate()`, so JSX and
+ * TypeScript work identically on Cloudflare and locally.
+ *
+ * @example
+ * jsx: { factory: 'h', fragment: 'Fragment' }          // classic runtime (default)
+ * jsx: { factory: 'React.createElement' }              // classic, React
+ * jsx: { importSource: 'preact' }                      // automatic runtime: preact/jsx-runtime
+ */
+export interface JSXOptions {
+  /** Element factory for the classic runtime (default: `h`) */
+  factory?: string | undefined
+  /** Fragment component for the classic runtime (default: `Fragment`) */
+  fragment?: string | undefined
+  /**
+   * Package whose `/jsx-runtime` provides `jsx`/`jsxs`/`Fragment` (automatic
+   * runtime). When set, `factory` and `fragment` are ignored. The generated
+   * import must be resolvable by the sandbox (see `imports`).
+   */
+  importSource?: string | undefined
+}
+
+/**
  * Options for evaluate()
  */
 export interface EvaluateOptions {
-  /** Module code with exports */
+  /** Module code with exports (JavaScript, TypeScript or JSX) */
   module?: string | undefined
   /** Test code using vitest (describe, expect, it in global scope) */
   tests?: string | undefined
   /** Script code to run immediately (module exports in scope) */
   script?: string | undefined
+  /** JSX factory/fragment/runtime for the source fields (default: `h` / `Fragment`) */
+  jsx?: JSXOptions | undefined
   /** Timeout in milliseconds (default: 5000) */
   timeout?: number | undefined
   /** Environment variables to pass to the sandbox */
