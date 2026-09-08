@@ -2,23 +2,70 @@
  * Evaluate code in a sandboxed environment
  *
  * Uses Cloudflare Dynamic Workers (the `worker_loaders` binding) for secure
- * code execution. For Node.js/local development, import from 'ai-evaluate/node'.
+ * code execution. For Node.js/local development, import from 'ai-evaluate/node',
+ * which runs this exact module inside a Miniflare host worker with a real
+ * `LOADER` binding, so local and production share one code path.
  *
  * Requires:
  * - LOADER binding (worker_loaders)
- * - TEST binding (ai-tests service) - optional, only needed for test assertions
+ * - TEST binding (ai-tests service) - optional. When absent, tests run on the
+ *   embedded (in-worker) test runner instead of the ai-tests RPC runner.
  */
 
 import type {
   EvaluateOptions,
   EvaluateResult,
+  FetchConfig,
   WorkerLoader,
+  WorkerEntrypoint,
   SandboxEnv,
   WorkerCode,
 } from './types.js'
-import { generateWorkerCode } from './worker-template/index.js'
+import {
+  generateWorkerCode,
+  generateFetchControlCode,
+  transformModuleCode,
+  getExportNames,
+} from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
-import { COMPATIBILITY_DATE, generateSandboxId, normalizeImport, extractPackageName } from './shared.js'
+import {
+  COMPATIBILITY_DATE,
+  SANDBOX_URL,
+  generateSandboxId,
+  normalizeImport,
+  extractPackageName,
+} from './shared.js'
+
+/** Default per-evaluation timeout in milliseconds */
+export const DEFAULT_TIMEOUT = 5000
+
+/**
+ * Run the sandbox worker's `/execute` route with a wall-clock timeout.
+ *
+ * Uses `AbortSignal.timeout` so the timeout is enforced by whichever runtime
+ * hosts `evaluate()` (Cloudflare in production, the Miniflare host worker
+ * locally). Note that a CPU-bound loop in the loaded worker cannot be
+ * interrupted from JS; Cloudflare enforces CPU limits for that case, and the
+ * local runtime (`ai-evaluate/node`) adds a Node-side backstop.
+ */
+async function executeWithTimeout(
+  entrypoint: WorkerEntrypoint,
+  timeout: number
+): Promise<EvaluateResult> {
+  const signal = AbortSignal.timeout(timeout)
+  const timeoutError = () => new Error(`Timeout: Script execution exceeded ${timeout}ms`)
+  const timedOut = new Promise<never>((_, reject) => {
+    signal.addEventListener('abort', () => reject(timeoutError()))
+  })
+  const response = await Promise.race([
+    entrypoint.fetch(new Request(SANDBOX_URL, { signal })).catch((error: unknown) => {
+      // The runtime's own cancellation message must not shadow the timeout
+      throw signal.aborted ? timeoutError() : error
+    }),
+    timedOut,
+  ])
+  return (await response.json()) as EvaluateResult
+}
 
 /**
  * Generate a minimal worker for simple script execution
@@ -28,8 +75,14 @@ function generateSimpleWorkerCode(options: {
   module?: string
   script?: string
   imports?: string[]
+  fetch?: FetchConfig | undefined
 }): string {
-  const { module = '', script = '', imports = [] } = options
+  const { module: rawModule = '', script = '', imports = [], fetch: fetchOption } = options
+
+  // Module code may use `exports.x =` or `export const x =`; both become
+  // properties of `exports`, then top-level bindings the script can call.
+  const module = rawModule ? transformModuleCode(rawModule) : ''
+  const exportNames = getExportNames(rawModule)
 
   // Build import statements for pre-fetched external modules
   // Modules are fetched by the host worker and included in the worker definition
@@ -58,6 +111,8 @@ ${importStatements}
 
 const logs = [];
 
+${generateFetchControlCode(fetchOption)}
+
 // Capture console output
 const originalConsole = { ...console };
 const captureConsole = (level) => (...args) => {
@@ -72,15 +127,33 @@ console.log = captureConsole('log');
 console.warn = captureConsole('warn');
 console.error = captureConsole('error');
 console.info = captureConsole('info');
+console.debug = captureConsole('debug');
 
 // Make imports available globally
 ${importGlobals}
 
 // User module code (if any)
+const exports = {};
+${
+  module
+    ? `
+try {
 ${module}
+} catch (e) {
+  console.error('Module error:', e.message);
+}
+const { ${exportNames} } = exports;
+`
+    : '// No module code provided'
+}
+
+// Logs from module evaluation belong to every request; logs from a previous
+// request on a reused (content-addressed) isolate do not.
+const __moduleLogCount__ = logs.length;
 
 export default {
   async fetch(request, env) {
+    logs.splice(__moduleLogCount__);
     try {
       // Execute the script (embedded at generation time - no new Function())
       ${wrappedScript}
@@ -144,8 +217,9 @@ export async function evaluate(
       return await evaluateSimple(options, loader, start)
     }
 
-    // Use full worker template for tests and SDK features
-    return await evaluateWithWorkerLoader(options, loader, env?.TEST, start)
+    // Use full worker template for tests and SDK features. The TEST (ai-tests)
+    // binding is optional: without it the worker embeds its own test runner.
+    return await evaluateWithWorkerLoader(options, loader, env?.test || env?.TEST, start)
   } catch (error) {
     return {
       success: false,
@@ -242,6 +316,7 @@ async function evaluateSimple(
     ...(options.module !== undefined && { module: options.module }),
     ...(options.script !== undefined && { script: options.script }),
     ...(options.imports !== undefined && { imports: options.imports }),
+    ...(options.fetch !== undefined && { fetch: options.fetch }),
   })
 
   const id = generateSandboxId(workerCode)
@@ -261,9 +336,10 @@ async function evaluateSimple(
   )
 
   // Get the entrypoint and call fetch
-  const entrypoint = worker.getEntrypoint()
-  const response = await entrypoint.fetch(new Request('http://sandbox/execute'))
-  const result = (await response.json()) as EvaluateResult
+  const result = await executeWithTimeout(
+    worker.getEntrypoint(),
+    options.timeout ?? DEFAULT_TIMEOUT
+  )
 
   return {
     ...result,
@@ -272,7 +348,10 @@ async function evaluateSimple(
 }
 
 /**
- * Evaluate using full worker template with capnweb and TEST binding
+ * Evaluate using the full worker template (capnweb export RPC, SDK, tests).
+ *
+ * With a TEST binding the worker proxies assertions to ai-tests over RPC;
+ * without one it runs the embedded test framework.
  */
 async function evaluateWithWorkerLoader(
   options: EvaluateOptions,
@@ -281,6 +360,7 @@ async function evaluateWithWorkerLoader(
   start: number
 ): Promise<EvaluateResult> {
   const workerCode = generateWorkerCode({
+    testRunner: testService ? 'rpc' : 'embedded',
     ...(options.module !== undefined && { module: options.module }),
     ...(options.tests !== undefined && { tests: options.tests }),
     ...(options.script !== undefined && { script: options.script }),
@@ -303,17 +383,17 @@ async function evaluateWithWorkerLoader(
       // Block network if fetch is false or null
       globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
       // Cloudflare Dynamic Workers' loader-factory field is `env`, not `bindings`.
-      // The loaded worker reads `env.TEST` (see worker-template/core.ts).
-      env: {
-        TEST: testService,
-      },
+      // The loaded worker reads `env.TEST` (see worker-template/core.ts) only in
+      // 'rpc' mode, so the binding is passed through only when present.
+      env: testService ? { TEST: testService } : {},
     })
   )
 
   // Get the entrypoint and call fetch (required by Cloudflare worker_loaders API)
-  const entrypoint = worker.getEntrypoint()
-  const response = await entrypoint.fetch(new Request('http://sandbox/execute'))
-  const result = (await response.json()) as EvaluateResult
+  const result = await executeWithTimeout(
+    worker.getEntrypoint(),
+    options.timeout ?? DEFAULT_TIMEOUT
+  )
 
   return {
     ...result,

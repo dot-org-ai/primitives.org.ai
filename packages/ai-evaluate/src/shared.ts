@@ -65,6 +65,12 @@ export function extractPackageName(specifier: string, index: number): string {
 export const SANDBOX_URL = 'http://sandbox/execute'
 
 /**
+ * Route served by the host worker (see host-worker.ts): POST an
+ * `EvaluateOptions` body, receive an `EvaluateResult`.
+ */
+export const EVALUATE_PATH = '/evaluate'
+
+/**
  * Generate a content-addressed sandbox worker ID from the worker source.
  *
  * Deterministic: identical worker code yields the same id, so the Dynamic

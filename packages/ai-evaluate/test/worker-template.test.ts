@@ -229,6 +229,62 @@ describe('generateWorkerCode (production)', () => {
   })
 })
 
+describe('generateWorkerCode testRunner option', () => {
+  it('defaults to the rpc runner (TEST binding)', () => {
+    const code = generateWorkerCode({ tests: 'it("x", () => {})' })
+    expect(code).toContain('testRunner: rpc')
+    expect(code).toContain('env.TEST')
+    expect(code).toContain('await testService.run()')
+    expect(code).not.toContain('const deepEqual = (a, b)')
+  })
+
+  it('testRunner: "rpc" is explicit prod mode', () => {
+    expect(generateWorkerCode({ testRunner: 'rpc' })).toBe(generateWorkerCode({}))
+  })
+
+  it('testRunner: "embedded" bundles the test framework and needs no TEST binding', () => {
+    const code = generateWorkerCode({ testRunner: 'embedded', tests: 'it("x", () => {})' })
+    expect(code).toContain('testRunner: embedded')
+    expect(code).not.toContain('env.TEST')
+    expect(code).toContain('const describe = (name, fn)')
+    expect(code).toContain('const deepEqual = (a, b)')
+    expect(code).toContain('const pendingTests = []')
+    expect(code).toContain('Run all pending tests')
+  })
+
+  it('embedded and rpc share the rest of the template', () => {
+    for (const testRunner of ['embedded', 'rpc'] as const) {
+      const code = generateWorkerCode({ testRunner, module: 'exports.foo = 1' })
+      expect(code).toContain("import { RpcTarget, newWorkersRpcResponse } from 'capnweb.js'")
+      expect(code).toContain('class ExportsRpcTarget extends RpcTarget')
+      expect(code).toContain('captureConsole')
+      expect(code).toContain('const { foo } = exports')
+      expect(code).toContain('logs.splice(__moduleLogCount__)')
+    }
+  })
+
+  it('blocks fetch in-worker for fetch: false / null in both modes', () => {
+    for (const testRunner of ['embedded', 'rpc'] as const) {
+      expect(generateWorkerCode({ testRunner, fetch: null })).toContain(
+        'Network access blocked: fetch is disabled'
+      )
+      expect(generateWorkerCode({ testRunner, fetch: false })).toContain(
+        'Network access blocked: fetch is disabled'
+      )
+      expect(generateWorkerCode({ testRunner, fetch: true })).not.toContain(
+        'Network access blocked: fetch is disabled'
+      )
+    }
+  })
+
+  it('generateDevWorkerCode is an alias for testRunner: "embedded"', () => {
+    const options = { module: 'exports.a = 1', tests: 'it("t", () => {})', script: 'return a' }
+    expect(generateDevWorkerCode(options)).toBe(
+      generateWorkerCode({ ...options, testRunner: 'embedded' })
+    )
+  })
+})
+
 describe('generateDevWorkerCode (development)', () => {
   describe('basic structure', () => {
     it('generates valid worker code', () => {

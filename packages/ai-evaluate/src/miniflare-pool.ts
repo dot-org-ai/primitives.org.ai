@@ -11,6 +11,7 @@
 import type {
   Miniflare as MiniflareType,
   MiniflareOptions as MiniflareOptionsType,
+  V4MiniflareOptions as V4MiniflareOptionsType,
 } from 'miniflare'
 
 /**
@@ -53,6 +54,8 @@ interface PooledInstance {
 
 // Type for the Miniflare constructor
 type MiniflareConstructor = new (config: MiniflareOptionsType) => MiniflareType
+// Miniflare 5 changed its options shape; the pool keeps the v4 shape and converts.
+type ConvertV4Options = (options: V4MiniflareOptionsType) => MiniflareOptionsType
 
 /**
  * Global pool state (singleton per process)
@@ -64,6 +67,7 @@ let poolConfig: Required<PoolConfig> = {
 }
 let idleCleanupInterval: NodeJS.Timeout | null = null
 let MiniflareClass: MiniflareConstructor | null = null
+let convertV4Options: ConvertV4Options | null = null
 let isShuttingDown = false
 
 // Default worker script for warm instances
@@ -125,11 +129,21 @@ export function getPoolStats(): {
  * Initialize the Miniflare class (lazy load)
  */
 async function getMiniflareClass(): Promise<MiniflareConstructor> {
-  if (!MiniflareClass) {
-    const { Miniflare } = await import('miniflare')
+  if (!MiniflareClass || !convertV4Options) {
+    const { Miniflare, convertV4MiniflareOptions } = await import('miniflare')
     MiniflareClass = Miniflare as MiniflareConstructor
+    convertV4Options = convertV4MiniflareOptions as ConvertV4Options
   }
   return MiniflareClass
+}
+
+/**
+ * Convert v4-shaped worker options to the Miniflare 5 options shape
+ */
+async function toMiniflareOptions(options: V4MiniflareOptionsType): Promise<MiniflareOptionsType> {
+  await getMiniflareClass()
+  if (!convertV4Options) throw new Error('Miniflare not loaded')
+  return convertV4Options(options)
 }
 
 /**
@@ -137,11 +151,13 @@ async function getMiniflareClass(): Promise<MiniflareConstructor> {
  */
 async function createInstance(): Promise<MiniflareType> {
   const Miniflare = await getMiniflareClass()
-  return new Miniflare({
-    modules: true,
-    script: WARM_WORKER_SCRIPT,
-    compatibilityDate: '2026-01-01',
-  })
+  return new Miniflare(
+    await toMiniflareOptions({
+      modules: true,
+      script: WARM_WORKER_SCRIPT,
+      compatibilityDate: '2026-01-01',
+    })
+  )
 }
 
 /**
@@ -212,8 +228,8 @@ export async function acquireInstance(workerOptions: WorkerOptions): Promise<{
 
   const { script, compatibilityDate = '2026-01-01', outboundService } = workerOptions
 
-  // Build the options for setOptions
-  const updateOptions: MiniflareOptionsType = {
+  // Build the options for setOptions (v4 shape, converted for Miniflare 5)
+  const v4Options: V4MiniflareOptionsType = {
     modules: true,
     script,
     compatibilityDate,
@@ -221,8 +237,9 @@ export async function acquireInstance(workerOptions: WorkerOptions): Promise<{
 
   // Only add outboundService if it's defined (for blocking network)
   if (outboundService !== undefined) {
-    updateOptions.outboundService = outboundService
+    v4Options.outboundService = outboundService
   }
+  const updateOptions = await toMiniflareOptions(v4Options)
 
   // Try to find an available instance
   const available = pool.find((p) => !p.inUse)

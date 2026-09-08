@@ -20,7 +20,7 @@
  */
 
 import { CAPNWEB_SOURCE } from '../capnweb-bundle.js'
-import { generateWorkerCode, generateDevWorkerCode } from '../worker-template/index.js'
+import { generateWorkerCode } from '../worker-template/index.js'
 import {
   generateTestFrameworkCode,
   generateTestRunnerCode,
@@ -286,7 +286,7 @@ export interface BuildWorkerOptions {
   imports?: string[]
   /** Network access configuration */
   fetch?: FetchConfig
-  /** Use dev mode (embedded test framework, no capnweb) */
+  /** Use the embedded test runner (no TEST binding required) instead of the ai-tests RPC runner */
   dev?: boolean
 }
 
@@ -306,17 +306,8 @@ export interface BuildWorkerOptions {
  * ```
  */
 export function buildWorkerTemplate(options: BuildWorkerOptions = {}): string {
-  if (options.dev) {
-    return generateDevWorkerCode({
-      ...(options.module !== undefined && { module: options.module }),
-      ...(options.tests !== undefined && { tests: options.tests }),
-      ...(options.script !== undefined && { script: options.script }),
-      ...(options.sdk !== undefined && { sdk: options.sdk }),
-      ...(options.imports !== undefined && { imports: options.imports }),
-      ...(options.fetch !== undefined && { fetch: options.fetch }),
-    })
-  }
   return generateWorkerCode({
+    testRunner: options.dev ? 'embedded' : 'rpc',
     ...(options.module !== undefined && { module: options.module }),
     ...(options.tests !== undefined && { tests: options.tests }),
     ...(options.script !== undefined && { script: options.script }),
