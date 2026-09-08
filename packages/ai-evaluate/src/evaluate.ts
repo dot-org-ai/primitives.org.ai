@@ -16,6 +16,10 @@
  * structured-cloneable values from `options.bindings`, plus the ai-tests
  * binding as `TEST` on the RPC runner. Nothing else from the host env reaches
  * the isolate.
+ *
+ * npm `dependencies` are resolved by `@cloudflare/worker-bundler` inside this
+ * worker (see `./bundler.ts`); where it cannot load, or with `bundler: false`,
+ * they are fetched from esm.sh as bundled modules instead.
  */
 
 import type {
@@ -29,23 +33,31 @@ import type {
   SandboxEnv,
   WorkerCode,
   WorkerLimits,
+  WorkerModule,
+  LogEntry,
 } from './types.js'
 import {
   generateWorkerCode,
   generateFetchControlCode,
   transformModuleCode,
   getExportNames,
+  hoistImports,
 } from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
 import { transformOptions } from './transform.js'
 import { buildSandboxEnv, validateOptions, TEST_BINDING_KEY } from './validation.js'
 import { assertEvaluateResult } from './type-guards.js'
+import { resolveImports, BundlerUnavailableError } from './bundler.js'
 import {
   COMPATIBILITY_DATE,
   SANDBOX_URL,
+  PACKAGE_JSON_MODULE,
   workerCodeId,
   normalizeImport,
   extractPackageName,
+  parseImportSpecifier,
+  partitionImports,
+  packageJsonModule,
 } from './shared.js'
 
 /** Default per-evaluation timeout in milliseconds */
@@ -108,31 +120,26 @@ async function executeWithTimeout(
 function generateSimpleWorkerCode(options: {
   module?: string
   script?: string
+  /** Import declarations placed at the true top level of the worker module */
   imports?: string[]
+  /** Code run once at module scope, after console capture and before the user module */
+  preamble?: string
   fetch?: FetchConfig | undefined
 }): string {
-  const { module: rawModule = '', script = '', imports = [], fetch: fetchOption } = options
+  const {
+    module: rawModule = '',
+    script = '',
+    imports = [],
+    preamble = '',
+    fetch: fetchOption,
+  } = options
 
   // Module code may use `exports.x =` or `export const x =`; both become
   // properties of `exports`, then top-level bindings the script can call.
   const module = rawModule ? transformModuleCode(rawModule) : ''
   const exportNames = getExportNames(rawModule)
 
-  // Build import statements for pre-fetched external modules
-  // Modules are fetched by the host worker and included in the worker definition
-  const importStatements = imports
-    .map((url, i) => `import * as __import${i}__ from './__external_${i}__.js';`)
-    .join('\n')
-
-  // Make imports available as globals
-  const importGlobals = imports
-    .map((specifier, i) => {
-      const pkgName = extractPackageName(specifier, i)
-      const varName = pkgName === 'lodash' ? '_' : pkgName
-      return `globalThis.${varName} = __import${i}__.default || __import${i}__;
-globalThis.pkg = __import${i}__.default || __import${i}__;`
-    })
-    .join('\n')
+  const importStatements = imports.join('\n')
 
   // Wrap script to capture return value (code is embedded at build time, no eval)
   const wrappedScript = script
@@ -163,8 +170,7 @@ console.error = captureConsole('error');
 console.info = captureConsole('info');
 console.debug = captureConsole('debug');
 
-// Make imports available globally
-${importGlobals}
+${preamble}
 
 // User module code (if any)
 const exports = {};
@@ -269,62 +275,195 @@ export async function evaluate(
 }
 
 /**
- * Pre-fetch external modules from URLs or package names
- * Returns a map of module name to source code
+ * Fetch one esm.sh module as a self-contained bundle.
  *
- * Supports:
- * - Full URLs: https://esm.sh/lodash@4.17.21
- * - Bare package names: lodash, lodash@4.17.21, @scope/pkg
- *
- * Handles esm.sh's redirect-style modules by following the internal import paths.
+ * `https://esm.sh/<pkg>?bundle` answers with a short stub that re-exports the
+ * real bundle (`export * from "/lodash@4.17.21/es2022/lodash.bundle.mjs"`);
+ * the stub is followed once so the module handed to the loader has no
+ * `/...` imports of its own. Bundles of packages that touch Node built-ins
+ * still import esm.sh's `/node/*.mjs` polyfills, which the sandbox cannot
+ * resolve - a limit of this fallback the bundler does not have.
  */
-async function prefetchModules(imports: string[]): Promise<Record<string, string>> {
+async function fetchEsmShBundle(url: string): Promise<string> {
+  const parsed = new URL(url)
+  const bundleUrl = parsed.searchParams.has('bundle')
+    ? url
+    : `${url}${parsed.search ? '&' : '?'}bundle`
+  const response = await fetch(bundleUrl, { redirect: 'follow' })
+  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`)
+  const source = await response.text()
+  const reexports = [...source.matchAll(/^export\s+(?:\*|\{[^}]*\})\s+from\s+"(\/[^"]+)"/gm)]
+  const target = reexports[0]?.[1]
+  // A stub: every line is a re-export (or a bare import) of one esm.sh path
+  const isStub =
+    target !== undefined &&
+    source
+      .trim()
+      .split('\n')
+      .every((line) => /^\/\*|^(?:export|import)\b/.test(line.trim())) &&
+    reexports.every((match) => match[1] === target)
+  if (!isStub) return source
+  const bundled = await fetch(new URL(target, parsed.origin), { redirect: 'follow' })
+  if (!bundled.ok) throw new Error(`Failed to fetch ${bundled.url}: ${bundled.status}`)
+  return bundled.text()
+}
+
+/**
+ * Pre-fetch the URL entries of `imports` (fallback path, and always for URLs:
+ * the bundler resolves packages, not URLs). Returns `__external_<i>__.js`
+ * modules, indexed by position in the original `imports` list.
+ */
+async function prefetchModules(
+  urls: { index: number; url: string }[]
+): Promise<Record<string, string>> {
   const modules: Record<string, string> = {}
-
   await Promise.all(
-    imports.map(async (specifier, i) => {
+    urls.map(async ({ index, url }) => {
       try {
-        // Normalize bare package names to esm.sh URLs
-        const url = normalizeImport(specifier)
-
-        // For esm.sh URLs, try to get the bundled version directly
-        let fetchUrl = url
-        if (url.includes('esm.sh/') && !url.includes('.mjs') && !url.includes('.js')) {
-          // Parse the esm.sh URL to construct the bundle path
-          // e.g., https://esm.sh/lodash@4.17.21 -> https://esm.sh/lodash@4.17.21/es2022/lodash.bundle.mjs
-          const urlObj = new URL(url)
-          const pathParts = urlObj.pathname.slice(1).split('/')
-          const pkgSpec = pathParts[0] // e.g., "lodash@4.17.21"
-          const pkgName = pkgSpec?.split('@')[0] ?? 'pkg'
-          fetchUrl = `${urlObj.origin}/${pkgSpec}/es2022/${pkgName}.bundle.mjs`
-        }
-
-        const response = await fetch(fetchUrl, { redirect: 'follow' })
-        if (!response.ok) {
-          // Fallback to original URL if bundle URL fails
-          const fallbackResponse = await fetch(url, { redirect: 'follow' })
-          if (!fallbackResponse.ok) {
-            throw new Error(`Failed to fetch ${url}: ${fallbackResponse.status}`)
-          }
-          const source = await fallbackResponse.text()
-          modules[`__external_${i}__.js`] = source
-          return
-        }
-        const source = await response.text()
-        // Use a simple module name that can be imported
-        const moduleName = `__external_${i}__.js`
-        modules[moduleName] = source
+        modules[`__external_${index}__.js`] = url.includes('esm.sh/')
+          ? await fetchEsmShBundle(url)
+          : await fetchText(url)
       } catch (error) {
         throw new Error(
-          `Failed to fetch import ${specifier}: ${
+          `Failed to fetch import ${url}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    })
+  )
+  return modules
+}
+
+async function fetchText(url: string): Promise<string> {
+  const response = await fetch(url, { redirect: 'follow' })
+  if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`)
+  return response.text()
+}
+
+/**
+ * esm.sh fallback for `dependencies`: each package is fetched as one bundled
+ * module from `https://esm.sh/<name>@<version>` and registered under its bare
+ * name (`{ js }` form: workerd resolves `import _ from 'lodash'` against a
+ * module named `lodash`). Subpath imports (`hono/cors`) are not covered.
+ */
+async function prefetchDependencies(
+  dependencies: Record<string, string>
+): Promise<Record<string, WorkerModule>> {
+  const modules: Record<string, WorkerModule> = {}
+  await Promise.all(
+    Object.entries(dependencies).map(async ([name, version]) => {
+      const specifier = version === 'latest' ? name : `${name}@${version}`
+      try {
+        modules[name] = { js: await fetchEsmShBundle(normalizeImport(specifier)) }
+      } catch (error) {
+        throw new Error(
+          `Failed to fetch dependency ${specifier}: ${
             error instanceof Error ? error.message : String(error)
           }`
         )
       }
     })
   )
-
   return modules
+}
+
+/** The bare specifier of a static import declaration (`'lodash'`, `'hono/cors'`), if any */
+function importedPackage(statement: string): string | null {
+  const specifier = statement.match(/from\s*['"]([^'"]+)['"]|^import\s*['"]([^'"]+)['"]/)
+  const source = specifier?.[1] ?? specifier?.[2]
+  if (!source || source.startsWith('.') || source.startsWith('/') || source.includes(':')) {
+    return null
+  }
+  const name = source.startsWith('@')
+    ? source.split('/').slice(0, 2).join('/')
+    : source.split('/')[0]
+  return name && parseImportSpecifier(name) ? name : null
+}
+
+/** Whether the `imports` globals deprecation has been printed in this isolate */
+let importsGlobalsWarned = false
+
+/**
+ * The import layer of one evaluation, computed before any template runs.
+ *
+ * - `statements`: import declarations for the worker's top level - the
+ *   user's own (hoisted out of `module` and `script`, where they would be
+ *   syntax errors inside the generated blocks) and one namespace import per
+ *   `imports` entry.
+ * - `preamble`: the `imports` globals aliasing (`lodash` -> `_`, 2.x
+ *   behaviour, deprecated).
+ * - `dependencies`: what the bundler installs - `dependencies` plus bare
+ *   `imports`, plus any package the hoisted imports name that was not
+ *   declared (resolved at `latest`, with a warning).
+ * - `urls`: `imports` entries that are URLs, fetched as-is in both modes.
+ */
+export function planImports(options: EvaluateOptions): {
+  module: string
+  script: string
+  statements: string[]
+  preamble: string
+  dependencies: Record<string, string>
+  urls: { index: number; url: string }[]
+  warnings: string[]
+} {
+  const warnings: string[] = []
+  const hoistedModule = hoistImports(options.module ?? '')
+  const hoistedScript = hoistImports(options.script ?? '')
+  const imports = options.imports ?? []
+  const { dependencies, urls: urlList } = partitionImports(imports, options.dependencies ?? {})
+  const urls = imports
+    .map((url, index) => ({ index, url }))
+    .filter(({ url }) => urlList.includes(url))
+
+  const statements = [...hoistedModule.imports, ...hoistedScript.imports]
+  for (const statement of statements) {
+    const name = importedPackage(statement)
+    if (name && !(name in dependencies)) {
+      dependencies[name] = 'latest'
+      warnings.push(
+        `import of '${name}' is not declared in dependencies; resolved as latest - pin it: dependencies: { '${name}': '<version>' }`
+      )
+    }
+  }
+
+  const preambleLines: string[] = []
+  imports.forEach((specifier, i) => {
+    const parsed = parseImportSpecifier(specifier)
+    const source = parsed ? parsed.name : `./__external_${i}__.js`
+    statements.push(`import * as __import${i}__ from '${source}';`)
+    const pkgName = extractPackageName(specifier, i)
+    const varName = pkgName === 'lodash' ? '_' : pkgName
+    preambleLines.push(
+      `globalThis.${varName} = __import${i}__.default || __import${i}__;`,
+      `globalThis.pkg = __import${i}__.default || __import${i}__;`
+    )
+  })
+  if (imports.length > 0 && !importsGlobalsWarned) {
+    importsGlobalsWarned = true
+    console.warn(
+      '[ai-evaluate] `imports` exposes packages as globals (`_`, `pkg`), which is deprecated; ' +
+        "declare `dependencies` and `import` them: import { chunk } from 'lodash'"
+    )
+  }
+
+  return {
+    module: hoistedModule.code,
+    script: hoistedScript.code,
+    statements,
+    preamble:
+      preambleLines.length > 0
+        ? `// \`imports\` globals (deprecated)\n${preambleLines.join('\n')}`
+        : '',
+    dependencies,
+    urls,
+    warnings,
+  }
+}
+
+/** A `WorkerCode` plus the host-side warnings that accompany it */
+export interface BuiltWorkerCode {
+  code: WorkerCode
+  /** Warnings from import resolution, reported to the caller as `warn` logs */
+  warnings: string[]
 }
 
 /**
@@ -332,11 +471,20 @@ async function prefetchModules(imports: string[]): Promise<Record<string, string
  * both content-addressed (`workerCodeId`) and handed to the loader.
  *
  * Two templates share this path:
- * - without `tests`/`sdk`, the minimal worker (`generateSimpleWorkerCode`),
- *   plus any pre-fetched `imports` as sibling modules;
+ * - without `tests`/`sdk`, the minimal worker (`generateSimpleWorkerCode`);
  * - otherwise the full template (capnweb export RPC, SDK, tests). The
  *   ai-tests binding is optional: without it the worker embeds its own test
  *   runner, and the binding is passed through as `env.TEST` only when present.
+ *
+ * Imports (see `planImports`) are resolved one of two ways:
+ * - with `@cloudflare/worker-bundler` (default, workerd with package
+ *   resolution): the generated entry and its `dependencies` are bundled into
+ *   one module; `capnweb.js` stays a sibling module;
+ * - the esm.sh fallback (`bundler: false`, or the bundler cannot load or
+ *   fails): each dependency is fetched from esm.sh as one bundled module and
+ *   registered under its bare name.
+ * Either way `package.json` (a json module) carries the dependency versions
+ * into the content-addressed spec. URL `imports` are fetched as-is on both.
  *
  * Both templates get the same `env`: the allowlisted sandbox env from
  * `buildSandboxEnv` (strings from `options.env`, RPC stubs and cloneable
@@ -357,6 +505,14 @@ export async function buildWorkerCode(
   options: EvaluateOptions,
   testService?: unknown
 ): Promise<WorkerCode> {
+  return (await buildWorkerCodeWithWarnings(options, testService)).code
+}
+
+/** `buildWorkerCode`, with the import-resolution warnings it produced */
+export async function buildWorkerCodeWithWarnings(
+  options: EvaluateOptions,
+  testService?: unknown
+): Promise<BuiltWorkerCode> {
   const useSimpleWorker = !options.tests && !options.sdk
   const globalOutbound = options.fetch === false || options.fetch === null ? null : undefined
   const env = buildSandboxEnv(options)
@@ -368,44 +524,77 @@ export async function buildWorkerCode(
     globalOutbound,
   }
 
-  if (useSimpleWorker) {
-    const externalModules =
-      options.imports && options.imports.length > 0 ? await prefetchModules(options.imports) : {}
-    const workerCode = generateSimpleWorkerCode({
-      ...(options.module !== undefined && { module: options.module }),
-      ...(options.script !== undefined && { script: options.script }),
-      ...(options.imports !== undefined && { imports: options.imports }),
-      ...(options.fetch !== undefined && { fetch: options.fetch }),
-    })
-    return {
+  const plan = planImports(options)
+  const warnings = [...plan.warnings]
+  const externalModules = plan.urls.length > 0 ? await prefetchModules(plan.urls) : {}
+  const hasDependencies = Object.keys(plan.dependencies).length > 0
+
+  const entry = useSimpleWorker
+    ? generateSimpleWorkerCode({
+        module: plan.module,
+        script: plan.script,
+        imports: plan.statements,
+        preamble: plan.preamble,
+        ...(options.fetch !== undefined && { fetch: options.fetch }),
+      })
+    : generateWorkerCode({
+        testRunner: testService ? 'rpc' : 'embedded',
+        module: plan.module,
+        script: plan.script,
+        imports: plan.statements,
+        preamble: plan.preamble,
+        ...(options.tests !== undefined && { tests: options.tests }),
+        ...(options.sdk !== undefined && { sdk: options.sdk }),
+        ...(options.fetch !== undefined && { fetch: options.fetch }),
+      })
+  // capnweb is a module so the worker can import it (full template only)
+  const siblings: Record<string, string> = useSimpleWorker ? {} : { 'capnweb.js': CAPNWEB_SOURCE }
+  const packageJson = hasDependencies
+    ? { [PACKAGE_JSON_MODULE]: packageJsonModule(plan.dependencies) }
+    : {}
+  // Cloudflare Dynamic Workers' loader field is `env`, not `bindings`. The
+  // loaded worker reads `env.TEST` (see worker-template/core.ts) only in
+  // 'rpc' mode, so the binding is passed through only when present - and
+  // never to the simple worker, which has no tests to run on it.
+  const loaderEnv =
+    testService && !useSimpleWorker ? { ...env, [TEST_BINDING_KEY]: testService } : env
+
+  let resolved: { mainModule: string; modules: Record<string, string | WorkerModule> } | null = null
+  if (hasDependencies && options.bundler !== false) {
+    try {
+      const bundled = await resolveImports({
+        entry,
+        dependencies: plan.dependencies,
+        files: externalModules,
+        externals: Object.keys(siblings),
+      })
+      warnings.push(...bundled.warnings.map((warning) => `bundler: ${warning}`))
+      resolved = { mainModule: bundled.mainModule, modules: { ...bundled.modules, ...siblings } }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      warnings.push(
+        error instanceof BundlerUnavailableError
+          ? `${reason}; dependencies resolved from esm.sh instead`
+          : `bundler failed (${reason}); dependencies resolved from esm.sh instead`
+      )
+    }
+  }
+  if (!resolved) {
+    const dependencyModules = hasDependencies ? await prefetchDependencies(plan.dependencies) : {}
+    resolved = {
       mainModule: 'worker.js',
-      modules: { 'worker.js': workerCode, ...externalModules },
-      ...spec,
-      env,
+      modules: { 'worker.js': entry, ...externalModules, ...dependencyModules, ...siblings },
     }
   }
 
-  const workerCode = generateWorkerCode({
-    testRunner: testService ? 'rpc' : 'embedded',
-    ...(options.module !== undefined && { module: options.module }),
-    ...(options.tests !== undefined && { tests: options.tests }),
-    ...(options.script !== undefined && { script: options.script }),
-    ...(options.sdk !== undefined && { sdk: options.sdk }),
-    ...(options.imports !== undefined && { imports: options.imports }),
-    ...(options.fetch !== undefined && { fetch: options.fetch }),
-  })
   return {
-    mainModule: 'worker.js',
-    modules: {
-      'worker.js': workerCode,
-      // capnweb is a module so the worker can import it
-      'capnweb.js': CAPNWEB_SOURCE,
+    code: {
+      mainModule: resolved.mainModule,
+      modules: { ...resolved.modules, ...packageJson },
+      ...spec,
+      env: loaderEnv,
     },
-    ...spec,
-    // Cloudflare Dynamic Workers' loader field is `env`, not `bindings`. The
-    // loaded worker reads `env.TEST` (see worker-template/core.ts) only in
-    // 'rpc' mode, so the binding is passed through only when present.
-    env: testService ? { ...env, [TEST_BINDING_KEY]: testService } : env,
+    warnings,
   }
 }
 
@@ -451,7 +640,7 @@ async function runWorker(
   testService: unknown,
   start: number
 ): Promise<EvaluateResult> {
-  const code = await buildWorkerCode(options, testService)
+  const { code, warnings } = await buildWorkerCodeWithWarnings(options, testService)
   const worker = loadWorker(loader, code, options.isolation)
   const timeout = options.timeout ?? DEFAULT_TIMEOUT
 
@@ -464,8 +653,17 @@ async function runWorker(
   const entrypoint = worker.getEntrypoint(undefined, { limits: entrypointLimits(options, timeout) })
   const result = await executeWithTimeout(entrypoint, timeout)
 
+  // Import-resolution warnings (bundler warnings, the esm.sh fallback being
+  // taken, undeclared dependencies) precede the worker's own console output.
+  const hostLogs: LogEntry[] = warnings.map((message) => ({
+    level: 'warn',
+    message: `[ai-evaluate] ${message}`,
+    timestamp: start,
+  }))
+
   return {
     ...result,
+    logs: [...hostLogs, ...result.logs],
     duration: Date.now() - start,
   }
 }

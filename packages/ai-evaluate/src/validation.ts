@@ -5,7 +5,7 @@
  */
 
 import type { EvaluateOptions } from './types.js'
-import { normalizeImport } from './shared.js'
+import { isPackageName, parseImportSpecifier } from './shared.js'
 
 /**
  * The key under which the ai-tests service binding is handed to the loaded
@@ -192,13 +192,41 @@ export function validateOptions(options: EvaluateOptions): void {
       if (typeof importUrl !== 'string') {
         throw new ValidationError(`imports[${i}] must be a string`)
       }
-      // Bare package names (`lodash`, `dayjs@1.11.10`, `@scope/pkg`) resolve to
-      // esm.sh URLs (see `normalizeImport`); anything with a scheme must be
-      // http(s).
-      if (importUrl.length === 0 || !isValidUrl(normalizeImport(importUrl))) {
+      // Bare package specifiers (`lodash`, `dayjs@1.11.10`, `@scope/pkg@1.0.0`)
+      // are dependencies for the bundler; anything else must be an http(s)
+      // URL. `file:`, `ftp:` and malformed strings are rejected.
+      if (parseImportSpecifier(importUrl) === null && !isValidUrl(importUrl)) {
         throw new ValidationError(`imports[${i}] is not a valid URL: ${importUrl}`)
       }
     }
+  }
+
+  // Validate dependencies (package.json shape: name -> version range)
+  if (options.dependencies !== undefined && options.dependencies !== null) {
+    if (typeof options.dependencies !== 'object' || Array.isArray(options.dependencies)) {
+      throw new ValidationError('dependencies must be an object of package name -> version')
+    }
+    const entries = Object.entries(options.dependencies)
+    if (entries.length > MAX_IMPORTS) {
+      throw new ValidationError(
+        `dependencies count (${entries.length}) exceeds maximum allowed count of ${MAX_IMPORTS}`
+      )
+    }
+    for (const [name, version] of entries) {
+      if (!isPackageName(name)) {
+        throw new ValidationError(`dependencies has an invalid package name: ${name}`)
+      }
+      if (typeof version !== 'string' || version.length === 0 || /\s/.test(version)) {
+        throw new ValidationError(
+          `dependencies.${name} must be a version or range string (e.g. "4.17.21", "^4")`
+        )
+      }
+    }
+  }
+
+  // Validate bundler switch
+  if (options.bundler !== undefined && typeof options.bundler !== 'boolean') {
+    throw new ValidationError('bundler must be a boolean')
   }
 }
 

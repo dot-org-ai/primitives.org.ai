@@ -40,23 +40,102 @@ export function normalizeImports(imports: string[] | undefined): string[] | unde
 }
 
 /**
+ * An npm package name, optionally scoped: `lodash`, `@scope/pkg`, `pkg.js`.
+ * The npm rules, minus length: lowercase, URL-safe, no leading `.` or `_`.
+ */
+const PACKAGE_NAME_PATTERN = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/
+
+/** A bare import specifier split into its package name and version range */
+export interface ImportSpecifier {
+  /** Package name, scope included: `lodash`, `@scope/pkg` */
+  name: string
+  /** Version or range after the last `@` (`4.17.21`, `^4`); `'latest'` when absent */
+  version: string
+}
+
+/**
+ * Parse a bare package specifier - `lodash`, `lodash@4.17.21`, `@scope/pkg`,
+ * `@scope/pkg@^1.0.0` - into name and version. Returns `null` for anything
+ * that is not a bare specifier: URLs, relative paths, empty or malformed
+ * names. Subpaths (`lodash/fp`) are not specifiers of a package to install
+ * and are rejected too.
+ */
+export function parseImportSpecifier(specifier: string): ImportSpecifier | null {
+  if (!specifier || specifier.includes('://') || specifier.startsWith('.')) return null
+  // The version separator is the last `@` that is not the scope marker
+  const at = specifier.lastIndexOf('@')
+  const [name, version] =
+    at > 0 ? [specifier.slice(0, at), specifier.slice(at + 1)] : [specifier, 'latest']
+  if (!PACKAGE_NAME_PATTERN.test(name) || version.length === 0 || /\s/.test(version)) {
+    return null
+  }
+  return { name, version }
+}
+
+/**
+ * Whether a string is a valid npm package name (`lodash`, `@scope/pkg`) - the
+ * shape of a `dependencies` key.
+ */
+export function isPackageName(name: string): boolean {
+  return PACKAGE_NAME_PATTERN.test(name)
+}
+
+/**
+ * Split an `imports` list into what the bundler resolves (bare specifiers,
+ * as package.json `dependencies`) and what is fetched as-is (URLs). Order is
+ * preserved per group; a bare specifier that is also in `dependencies`
+ * keeps the explicit dependency's version.
+ */
+export function partitionImports(
+  imports: readonly string[],
+  dependencies: Record<string, string> = {}
+): { dependencies: Record<string, string>; urls: string[] } {
+  const resolved: Record<string, string> = { ...dependencies }
+  const urls: string[] = []
+  for (const specifier of imports) {
+    const parsed = parseImportSpecifier(specifier)
+    if (!parsed) {
+      urls.push(specifier)
+      continue
+    }
+    resolved[parsed.name] ??= parsed.version
+  }
+  return { dependencies: resolved, urls }
+}
+
+/**
+ * The `package.json` module every worker with dependencies carries. A json
+ * module the code never imports; it puts the dependency versions into the
+ * content-addressed spec so that `lodash@4.17.21` and `lodash@4.17.20` are
+ * two workers even when their bundled bytes happen to agree.
+ */
+export const PACKAGE_JSON_MODULE = 'package.json'
+
+/** The `package.json` module for a set of dependencies (sorted keys) */
+export function packageJsonModule(dependencies: Record<string, string>): {
+  json: { dependencies: Record<string, string> }
+} {
+  const sorted: Record<string, string> = {}
+  for (const name of Object.keys(dependencies).sort()) sorted[name] = dependencies[name]!
+  return { json: { dependencies: sorted } }
+}
+
+/**
  * Extract package name from import specifier for variable naming
  * Supports: lodash, lodash@4.17.21, @scope/pkg, https://esm.sh/lodash
  */
 export function extractPackageName(specifier: string, index: number): string {
-  let pkgName: string
+  let name: string | undefined
   if (specifier.includes('://')) {
-    // Full URL - extract from path
-    const match = specifier.match(/esm\.sh\/(@?[^@/]+)/)
-    pkgName = match?.[1]?.replace(/^@/, '').replace(/-/g, '_') ?? `pkg${index}`
+    // Full URL - the package path segment(s) of an esm.sh-style URL
+    name = specifier.match(/esm\.sh\/(@[^@/]+\/[^@/]+|[^@/]+)/)?.[1]
   } else {
-    // Bare package name - extract before @ version
-    const baseName = specifier.split('@')[0]
-    pkgName = baseName
-      ? baseName.replace(/^@/, '').replace(/-/g, '_').replace(/\//g, '_')
-      : `pkg${index}`
+    name = parseImportSpecifier(specifier)?.name
   }
-  return pkgName
+  if (!name) return `pkg${index}`
+  // `@scope/pkg-name` -> `scope_pkg_name`: a plain identifier for globalThis
+  const identifier = name.replace(/^@/, '').replace(/[^A-Za-z0-9_$]/g, '_')
+  return /^[A-Za-z_$]/.test(identifier) ? identifier : `_${identifier}`
 }
 
 /**
@@ -74,7 +153,7 @@ export const EVALUATE_PATH = '/evaluate'
  * cyrb53: fast, well-distributed ~53-bit string hash. A cache key, not a
  * security hash.
  */
-const cyrb53 = (input: string): string => {
+export const cyrb53 = (input: string): string => {
   let h1 = 0xdeadbeef
   let h2 = 0x41c6ce57
   for (let i = 0; i < input.length; i++) {

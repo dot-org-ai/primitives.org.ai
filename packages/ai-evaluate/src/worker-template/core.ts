@@ -35,7 +35,10 @@ export interface GenerateWorkerCodeOptions {
   tests?: string | undefined
   script?: string | undefined
   sdk?: SDKConfig | boolean | undefined
+  /** Import declarations placed at the true top level of the worker module */
   imports?: string[] | undefined
+  /** Code run once at module scope, after console capture and before the user module */
+  preamble?: string | undefined
   fetch?: null | FetchConfig | undefined
   testRunner?: TestRunner | undefined
 }
@@ -77,6 +80,7 @@ export function generateWorkerCode(options: GenerateWorkerCodeOptions): string {
     script: rawScript = '',
     sdk,
     imports = [],
+    preamble = '',
     fetch: fetchOption,
     testRunner = 'rpc',
   } = options
@@ -86,7 +90,8 @@ export function generateWorkerCode(options: GenerateWorkerCodeOptions): string {
   const exportNames = getExportNames(rawModule)
   const embedded = testRunner === 'embedded'
 
-  // Hoisted imports (from MDX test files) - placed at true module top level
+  // Hoisted imports (the user module's own, and the `imports` option's
+  // bindings) - placed at true module top level
   const hoistedImports = imports.length > 0 ? imports.join('\n') + '\n' : ''
 
   const fetchControlCode = generateFetchControlCode(fetchOption)
@@ -170,6 +175,8 @@ console.warn = captureConsole('warn');
 console.error = captureConsole('error');
 console.info = captureConsole('info');
 console.debug = captureConsole('debug');
+
+${preamble}
 
 // ============================================================
 // USER MODULE CODE (embedded at generation time)

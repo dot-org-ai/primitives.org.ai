@@ -569,9 +569,11 @@ describe('ai-evaluate/node', () => {
       expect(modules['evaluate.js']).toContain('Simple Sandbox Worker')
       expect(modules['host-worker.js']).toContain('/evaluate')
       const all = Object.values(modules).join('\n')
-      // Plain ES modules: no TypeScript left, no bundler, no esbuild
+      // Plain ES modules: no TypeScript left; no static import of esbuild or
+      // the worker bundler (the bundler is loaded on demand, see src/bundler.ts,
+      // and this host cannot resolve it - the esm.sh fallback runs here)
       expect(all).not.toMatch(/^import type\b/m)
-      expect(all).not.toContain('esbuild')
+      expect(all).not.toMatch(/^import[^\n]*from\s*['"](?:esbuild|@cloudflare\/worker-bundler)/m)
     })
 
     it('delegates to evaluate() from src/evaluate.ts when env has a loader', async () => {
