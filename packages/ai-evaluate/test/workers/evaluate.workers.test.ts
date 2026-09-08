@@ -9,6 +9,7 @@ import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
 import { evaluate, createEvaluator } from '../../src/evaluate.js'
 import type { SandboxEnv } from '../../src/types.js'
+import { SCRIPT_RESULT_KEYS, TESTS_RESULT_KEYS, resultKeys } from '../fixtures/result-shape.js'
 
 /**
  * Error text a blocked fetch produces: the in-isolate override says
@@ -50,6 +51,8 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       expect(result.value).toBe(2)
       expect(result.error).toBeUndefined()
       expect(result.duration).toBeGreaterThanOrEqual(0)
+      // Same contract the Node pool holds ai-evaluate/node to (test/index.test.ts)
+      expect(resultKeys(result)).toEqual([...SCRIPT_RESULT_KEYS])
     })
 
     it('captures console output', async () => {
@@ -138,6 +141,7 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
     it('runs tests with the embedded runner', async () => {
       const result = await evaluate({ tests: 'it("x", () => expect(1).toBe(1))' }, env)
       expect(result.success).toBe(true)
+      expect(resultKeys(result)).toEqual([...TESTS_RESULT_KEYS])
       expect(result.error).toBeUndefined()
       expect(result.testResults?.total).toBe(1)
       expect(result.testResults?.passed).toBe(1)

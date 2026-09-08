@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, afterAll } from 'vitest'
 
+/** Names of the modules in a host worker map that mention the dev-template alias, sorted */
+function devTemplateReferences(modules: Record<string, string>): string[] {
+  return Object.entries(modules)
+    .filter(([, source]) => /\bgenerateDevWorkerCode\b/.test(source))
+    .map(([name]) => name)
+    .sort()
+}
+
 afterAll(async () => {
   const { dispose } = await import('../src/node.js')
   await dispose()
@@ -375,16 +383,39 @@ describe('ai-evaluate/node', () => {
   })
 
   describe('single code path with src/evaluate.ts', () => {
-    it('does not use a dev-only worker template', async () => {
-      const template = await import('../src/worker-template/index.js')
-      const devSpy = vi.spyOn(template, 'generateDevWorkerCode')
-      const { evaluate } = await import('../src/node.js')
+    it('the host worker builds sandbox code with generateWorkerCode, not the dev alias', async () => {
+      // A Node-side spy cannot see code running inside workerd, so this is
+      // asserted on the module text the Miniflare host actually loads: the
+      // only modules that mention `generateDevWorkerCode` are the one that
+      // defines the deprecated alias and the barrel that re-exports it.
+      // `evaluate.js` - which builds every WorkerCode - calls the production
+      // generator and picks the test runner from the TEST binding.
+      const { loadHostWorker } = await import('../src/host-modules.js')
+      const { modules } = loadHostWorker()
 
-      const result = await evaluate({ script: 'return 7' })
-      expect(result.success).toBe(true)
-      expect(result.value).toBe(7)
-      expect(devSpy).not.toHaveBeenCalled()
-      devSpy.mockRestore()
+      expect(devTemplateReferences(modules)).toEqual([
+        'worker-template/core.js',
+        'worker-template/index.js',
+      ])
+      expect(modules['evaluate.js']).toMatch(/\bgenerateWorkerCode\(/)
+      expect(modules['evaluate.js']).toMatch(
+        /testRunner:\s*testService\s*\?\s*['"]rpc['"]\s*:\s*['"]embedded['"]/
+      )
+    })
+
+    it('that witness fails when evaluate.js is rewired to the dev alias', async () => {
+      // Guard against the check itself being vacuous: a tampered module map
+      // in which evaluate.js calls the alias must be reported.
+      const { loadHostWorker } = await import('../src/host-modules.js')
+      const { modules } = loadHostWorker()
+      const tampered = {
+        ...modules,
+        'evaluate.js': modules['evaluate.js']!.replace(
+          /\bgenerateWorkerCode\(/,
+          'generateDevWorkerCode('
+        ),
+      }
+      expect(devTemplateReferences(tampered)).toContain('evaluate.js')
     })
 
     it('walks host-worker -> evaluate as the host worker modules (same bytes as prod)', async () => {
@@ -409,7 +440,6 @@ describe('ai-evaluate/node', () => {
       expect(modules['evaluate.js']).toContain('Simple Sandbox Worker')
       expect(modules['host-worker.js']).toContain('/evaluate')
       const all = Object.values(modules).join('\n')
-      expect(all).not.toContain('Dev Mode')
       // Plain ES modules: no TypeScript left, no bundler, no esbuild
       expect(all).not.toMatch(/^import type\b/m)
       expect(all).not.toContain('esbuild')
