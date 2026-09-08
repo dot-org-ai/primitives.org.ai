@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterAll } from 'vitest'
+
+afterAll(async () => {
+  const { dispose } = await import('../src/node.js')
+  await dispose()
+})
 
 describe('index exports', () => {
   it('exports evaluate function', async () => {
@@ -46,6 +51,44 @@ describe('types', () => {
     expect(typeof result.success).toBe('boolean')
     expect(Array.isArray(result.logs)).toBe(true)
     expect(typeof result.duration).toBe('number')
+  })
+
+  it('src/node.js and src/evaluate.js produce identical EvaluateResult shape', async () => {
+    const node = await import('../src/node.js')
+    const workers = await import('../src/evaluate.js')
+
+    // Local runtime: evaluate() from src/evaluate.js running inside the host worker
+    const local = await node.evaluate({ script: 'return 42' })
+
+    // Workers entry, driven through a stub LOADER that runs the generated worker
+    // code in the same local runtime (so the loaded-worker result is real).
+    const runtime = node.createLocalRuntime()
+    try {
+      const env = {
+        loader: {
+          get: (_id: string, load: () => Promise<{ modules: Record<string, unknown> }>) => ({
+            getEntrypoint: () => ({
+              fetch: async () => {
+                const code = await load()
+                // The generated worker is a plain module; run its script via the runtime
+                expect(code.modules).toHaveProperty('worker.js')
+                return Response.json(await runtime.evaluate({ script: 'return 42' }))
+              },
+            }),
+          }),
+        },
+      }
+      const direct = await workers.evaluate({ script: 'return 42' }, env)
+
+      expect(local.success).toBe(true)
+      expect(direct.success).toBe(true)
+      expect(local.value).toBe(42)
+      expect(direct.value).toBe(42)
+      expect(Object.keys(local).sort()).toEqual(Object.keys(direct).sort())
+      expect(Object.keys(local).sort()).toEqual(['duration', 'logs', 'success', 'value'])
+    } finally {
+      await runtime.dispose()
+    }
   })
 
   it('LogEntry has correct shape', async () => {

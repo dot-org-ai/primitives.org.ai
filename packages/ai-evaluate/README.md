@@ -128,18 +128,44 @@ interface Env {
 
 ### Node.js / Local Development
 
-For local development, import from the `/node` subpath which uses Miniflare:
+For local development, import from the `/node` subpath. It runs the **same
+`evaluate()` that ships to Cloudflare** inside a Miniflare 5 host worker whose
+`env.LOADER` is a real `worker_loaders` binding, so local behaviour is Dynamic
+Workers behaviour rather than a separate dev template.
 
 ```bash
-pnpm add ai-evaluate miniflare
+pnpm add ai-evaluate miniflare esbuild   # Miniflare 5 requires Node >= 22
 ```
 
 ```typescript
-import { evaluate } from 'ai-evaluate/node'
+import { evaluate, dispose } from 'ai-evaluate/node'
 
 const result = await evaluate({ script: '1 + 1' })
 // { success: true, value: 2, logs: [], duration: 50 }
+
+await dispose() // shut down the process-wide host worker (test teardown, CLI exit)
 ```
+
+One host worker is created lazily per process and reused for every call; each
+`evaluate()` still runs in its own dynamically-loaded isolate. For an isolated
+runtime (e.g. per test file) use `createLocalRuntime()`:
+
+```typescript
+import { createLocalRuntime } from 'ai-evaluate/node'
+
+const runtime = createLocalRuntime()
+const result = await runtime.evaluate({ script: 'return 1 + 1' })
+await runtime.dispose()
+```
+
+Timeouts are enforced by `AbortSignal.timeout` inside `evaluate()` (the host
+worker). A CPU-bound loop cannot be interrupted from JS and local workerd
+enforces no CPU limit, so the Node side adds a backstop: on timeout the wedged
+host is disposed and recreated on the next call.
+
+When the environment has no `TEST` (ai-tests) binding, tests run on the worker's
+embedded vitest-compatible runner (`generateWorkerCode({ testRunner: 'embedded' })`);
+with the binding they proxy to ai-tests over RPC (`testRunner: 'rpc'`).
 
 ## API Reference
 
