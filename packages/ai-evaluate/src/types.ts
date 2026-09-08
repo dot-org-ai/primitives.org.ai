@@ -278,8 +278,12 @@ export interface EvaluateOptions {
    * Identity of the sandbox whose persistent state this evaluation runs
    * against: the name of the `SandboxHost` Durable Object that owns its
    * facets. Two evaluations with the same `sandboxId` share facet storage;
-   * different ids are isolated. Meaningful only with `facet`, which requires
-   * it.
+   * different ids are isolated - under `isolation: 'cached'` too: with a
+   * facet the sandbox identity is part of the script worker's
+   * content-addressed spec (as the `sandbox.json` module), so a cached
+   * isolate is one per sandbox, reused across evaluations of the same
+   * `sandboxId` and never across sandboxes. Meaningful only with `facet`,
+   * which requires it.
    */
   sandboxId?: string | undefined
 }

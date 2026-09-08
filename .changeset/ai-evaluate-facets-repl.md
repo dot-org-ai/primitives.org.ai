@@ -8,7 +8,11 @@ New `EvaluateOptions.facet: { class, id?, binding? }` and `sandboxId`: the
 named class of `module` runs as a SQLite-backed Durable Object facet owned by
 the host worker's `SandboxHost` Durable Object for `sandboxId`, and the script
 calls it as `env.<BINDING>` (`State` -> `env.STATE`). Facet storage survives
-across evaluations and isolates, and is isolated per `sandboxId`. A plain
+across evaluations and isolates, and is isolated per `sandboxId` - under
+`isolation: 'cached'` too: the sandbox identity is part of the script worker's
+content-addressed spec (the `sandbox.json` module, `SANDBOX_JSON_MODULE`), so
+a cached isolate is one per sandbox and never carries one sandbox's
+`SandboxHost` stub into another's evaluation (aip-263g.39). A plain
 class is wrapped in a `DurableObject` subclass; one that extends
 `DurableObject` runs as it is. A changed module restarts the facet on the new
 class with its storage kept; `fetch: false` / allowlists apply to facet code

@@ -418,7 +418,12 @@ host's loader, outside the outbound policy. The facet keeps running across evalu
 module (in-memory state included); a changed module restarts it on the new
 class with its SQLite storage kept. Outbound policy applies to facet code
 too (`fetch: false`, an allowlist), except `outboundRpc`, which is
-per-evaluation and does not serve a facet that outlives it.
+per-evaluation and does not serve a facet that outlives it. Under
+`isolation: 'cached'` the script worker is cached per sandbox: `sandboxId` and
+the facet class are part of its content-addressed spec (the `sandbox.json`
+module), so a reused isolate - whose env holds one sandbox's `SandboxHost`
+stub - is never handed another sandbox's script, and `user-43` above gets
+`value: 1` under `'cached'` as well.
 
 `ai-evaluate/node` has the `SandboxHost` on its Miniflare host, with
 in-memory storage that lives as long as that host. In your own Worker,
@@ -441,7 +446,11 @@ spec into an isolate:
 `compatibilityDate`, `compatibilityFlags`, `allowExperimental`, `limits`, and
 whether outbound fetch is blocked. Bindings (`env`, `tails`, a `globalOutbound`
 service) never change the id, so the same code with different bindings is still
-one unique worker.
+one unique worker. What must not be shared across callers goes into `modules`
+instead, where it is hashed: the fetch allowlist as `outbound.json`, and with a
+`facet` the sandbox identity (`sandboxId` and the facet class) as
+`sandbox.json` - so a `'cached'` isolate is one per sandbox, reused across
+evaluations of the same `sandboxId` and never across sandboxes.
 
 What persists on a reused (`'cached'`) isolate: your `module` runs once, at
 module scope of the generated worker, so **everything it declares** persists

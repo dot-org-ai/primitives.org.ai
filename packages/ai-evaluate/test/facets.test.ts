@@ -23,6 +23,7 @@ import {
   facetNotAttachedError,
   SANDBOX_HOST_BINDING_KEY,
   SANDBOX_HOST_EXPORT,
+  SANDBOX_JSON_MODULE,
   type FacetsApi,
   type FacetStartup,
   type FacetStub,
@@ -410,6 +411,58 @@ describe('evaluate() with a facet (fake loader, mocked loopback)', () => {
       expect(byName.size).toBe(2)
       // The script worker was loaded fresh each time, the facet worker once per host
       expect(loaded.filter((entry) => entry.id === null)).toHaveLength(3)
+    } finally {
+      hosts.current = null
+    }
+  })
+
+  it('the script worker is content-addressed per sandboxId (sandbox.json); the facet worker is not (aip-263g.39)', async () => {
+    const { loader, loaded } = createFakeLoader()
+    const byName = new Map<string, ReturnType<typeof createFacetHost>>()
+    hosts.current = {
+      getByName: (name: string) => {
+        let host = byName.get(name)
+        if (!host) {
+          host = createFacetHost({ facets: createFakeFacets().facets }, loader)
+          byName.set(name, host)
+        }
+        return host
+      },
+    }
+    try {
+      const a = await buildWorkerCodeWithWarnings(options)
+      const again = await buildWorkerCodeWithWarnings(options)
+      const b = await buildWorkerCodeWithWarnings({ ...options, sandboxId: 'sandbox-b' })
+      expect(a.code.modules[SANDBOX_JSON_MODULE]).toEqual({
+        json: { sandboxId: 'sandbox-a', facet: 'State' },
+      })
+      expect(workerCodeId(a.code)).toBe(workerCodeId(again.code))
+      expect(workerCodeId(a.code)).not.toBe(workerCodeId(b.code))
+      expect(a.facet!.spec.code.modules).not.toHaveProperty(SANDBOX_JSON_MODULE)
+      expect(a.facet!.spec.codeId).toBe(b.facet!.spec.codeId)
+      // Without a facet there is no sandbox.json: sandboxId alone does not change the id
+      const plain = await buildWorkerCodeWithWarnings({
+        script: 'return 1',
+        sandboxId: 'sandbox-a',
+      })
+      expect(plain.code.modules).not.toHaveProperty(SANDBOX_JSON_MODULE)
+
+      // Under 'cached' the loader is asked for one id per sandbox: b never gets a's isolate
+      expect((await evaluate({ ...options, isolation: 'cached' }, { loader })).value).toMatchObject(
+        { value: 1 }
+      )
+      expect((await evaluate({ ...options, isolation: 'cached' }, { loader })).value).toMatchObject(
+        { value: 2 }
+      )
+      expect(
+        (await evaluate({ ...options, sandboxId: 'sandbox-b', isolation: 'cached' }, { loader }))
+          .value
+      ).toMatchObject({ value: 1 })
+      expect(loaded.filter((entry) => entry.id !== null).map((entry) => entry.id)).toEqual([
+        workerCodeId(a.code),
+        workerCodeId(a.code),
+        workerCodeId(b.code),
+      ])
     } finally {
       hosts.current = null
     }
