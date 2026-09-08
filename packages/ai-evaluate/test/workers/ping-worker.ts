@@ -14,10 +14,13 @@
  * `OutboundGateway` is what any host worker that calls `evaluate()` with a
  * fetch allowlist or `outboundRpc` must export: `evaluate()` binds a loopback
  * stub of it (`ctx.exports.OutboundGateway`) as the sandbox's `globalOutbound`.
+ * `SandboxHost` is what one that calls it with a `facet` must export, with a
+ * Durable Object namespace (`SANDBOX_HOST`, SQLite) configured: the object
+ * that owns the sandbox's facets, reached as `ctx.exports.SandboxHost`.
  */
 import { WorkerEntrypoint } from 'cloudflare:workers'
 
-export { OutboundGateway } from '../../src/worker.js'
+export { OutboundGateway, SandboxHost } from '../../src/worker.js'
 
 export class Ping extends WorkerEntrypoint {
   ping(): string {

@@ -63,6 +63,28 @@ export type {
   OutboundGatewayFactory,
   OutboundInterceptor,
 } from './outbound.js'
+export {
+  createFacetHost,
+  facetBindingName,
+  facetEnvSource,
+  generateFacetWorkerCode,
+  loopbackSandboxHost,
+  facetNotAttachedError,
+  isIdentifier,
+  SANDBOX_HOST_EXPORT,
+  SANDBOX_HOST_BINDING_KEY,
+  SANDBOX_HOST_UNAVAILABLE_ERROR,
+} from './facets.js'
+export type {
+  FacetSpec,
+  FacetHost,
+  FacetStub,
+  FacetsApi,
+  FacetStartup,
+  SandboxHostStub,
+  SandboxHostNamespace,
+} from './facets.js'
+export { loopbackExport } from './loopback.js'
 export { transformSource, transformOptions, containsJSX } from './transform.js'
 export type { TransformSourceOptions } from './transform.js'
 
@@ -76,6 +98,7 @@ export type {
   SDKConfig,
   FetchConfig,
   JSXOptions,
+  FacetOptions,
   Isolation,
   WorkerLoader,
   WorkerCode,

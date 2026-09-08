@@ -2,9 +2,9 @@
  * Type `import { env } from 'cloudflare:test'` as the sandbox environment.
  *
  * `@cloudflare/vitest-pool-workers` types `env` as `Cloudflare.Env`; merging
- * `SandboxEnv` into it gives `env.loader` its real type. `PING`, `TAIL` and
- * `KV` are the extra bindings wrangler.test.jsonc declares for the `bindings`
- * and `tails` tests.
+ * `SandboxEnv` into it gives `env.loader` its real type. `PING`, `TAIL`,
+ * `KV` and `SANDBOX_HOST` are the extra bindings wrangler.test.jsonc declares
+ * for the `bindings`, `tails` and `facet` tests.
  */
 import type { SandboxEnv } from '../../src/types.js'
 import type { TailEventSummary } from './ping-worker.js'
@@ -25,6 +25,8 @@ declare global {
       }
       /** A real KV namespace: a raw host binding the sandbox must never forward */
       KV: KVNamespace
+      /** The SandboxHost Durable Object namespace (SQLite): owner of the sandbox facets */
+      SANDBOX_HOST: DurableObjectNamespace
     }
   }
 }

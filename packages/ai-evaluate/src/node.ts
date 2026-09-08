@@ -25,6 +25,7 @@ import type { EvaluateOptions, EvaluateResult, SandboxEnv } from './types.js'
 import { evaluate as evaluateInWorker, DEFAULT_TIMEOUT } from './evaluate.js'
 import { COMPATIBILITY_DATE, EVALUATE_PATH } from './shared.js'
 import { HOST_WORKER_NAME, loadHostWorker, type HostWorkerModules } from './host-modules.js'
+import { SANDBOX_HOST_EXPORT } from './facets.js'
 
 /**
  * Extra time (ms) the Node side waits past `timeout` before treating the
@@ -234,8 +235,8 @@ export function createLocalRuntime(): LocalRuntime {
     const { mainModule, modules } = getHostWorker()
     const before = new Set(activeHandles())
     // Native Miniflare 5 options: one `workers[].config` per worker with a
-    // `manifest` of modules and the loader as `env.loader: { type:
-    // 'worker-loader' }`. The Miniflare 4 shape (`modules: true`, `script`,
+    // `manifest` of modules, the loader as `env.loader: { type:
+    // 'worker-loader' }` and the SandboxHost Durable Object as an export. The Miniflare 4 shape (`modules: true`, `script`,
     // `workerLoaders: { loader: {} }`) is not used; Miniflare 5 only accepts it
     // through its `convertV4MiniflareOptions()` shim, which went with the pool.
     const miniflare = new Miniflare({
@@ -252,6 +253,10 @@ export function createLocalRuntime(): LocalRuntime {
               ),
             },
             env: { loader: { type: 'worker-loader' } },
+            // The host's SandboxHost Durable Object (facets of `facet` /
+            // `sandboxId`), SQLite-backed; Miniflare keeps its storage in
+            // memory, so facet state lives as long as this host.
+            exports: { [SANDBOX_HOST_EXPORT]: { type: 'durable-object', storage: 'sqlite' } },
           },
         },
       ],
