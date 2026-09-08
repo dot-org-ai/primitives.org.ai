@@ -123,10 +123,7 @@ export function createOutboundGateway(
       const request =
         input instanceof Request && init === undefined ? input : new Request(input, init)
       if (outboundRpc) {
-        const intercepted = await outboundRpc(
-          request.url,
-          request.body ? request.clone() : request
-        )
+        const intercepted = await outboundRpc(request.url, request.body ? request.clone() : request)
         if (intercepted) return intercepted
       }
       if (hosts !== null && !isDomainAllowed(request.url, hosts)) {

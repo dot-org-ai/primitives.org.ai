@@ -125,7 +125,8 @@ describe('fetch allowlist (globalOutbound gateway, workerd)', () => {
     )
     expect(result.success, result.error).toBe(true)
     expect(result.value).toEqual({
-      'https://notexample.com/': 'Network access blocked: domain not in allowlist. Attempted: notexample.com',
+      'https://notexample.com/':
+        'Network access blocked: domain not in allowlist. Attempted: notexample.com',
       'https://example.com.evil.test/':
         'Network access blocked: domain not in allowlist. Attempted: example.com.evil.test',
       'https://evil.test/example.com':
@@ -224,7 +225,9 @@ describe('outboundRpc (workerd)', () => {
     )
     expect(result.success, result.error).toBe(true)
     expect(result.value).toMatchObject({ served: { ok: true } })
-    expect(String((result.value as { forwarded: unknown }).forwarded)).not.toMatch(/allowlist|blocked/)
+    expect(String((result.value as { forwarded: unknown }).forwarded)).not.toMatch(
+      /allowlist|blocked/
+    )
     expect(seen).toEqual(['GET https://rpc.test/call', `GET ${REFUSED_URL}`])
   })
 
