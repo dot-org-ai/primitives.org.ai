@@ -12,12 +12,32 @@ export {
   evaluate,
   createEvaluator,
   buildWorkerCode,
+  buildWorkerCodeWithWarnings,
+  planImports,
   loadWorker,
   entrypointLimits,
   DEFAULT_ISOLATION,
   DEFAULT_TIMEOUT,
 } from './evaluate.js'
-export { normalizeImport, normalizeImports, workerCodeId, COMPATIBILITY_DATE } from './shared.js'
+export type { BuiltWorkerCode } from './evaluate.js'
+export {
+  normalizeImport,
+  normalizeImports,
+  parseImportSpecifier,
+  partitionImports,
+  packageJsonModule,
+  workerCodeId,
+  COMPATIBILITY_DATE,
+  PACKAGE_JSON_MODULE,
+} from './shared.js'
+export type { ImportSpecifier } from './shared.js'
+export {
+  resolveImports,
+  dependenciesHash,
+  clearBundlerCache,
+  BundlerUnavailableError,
+} from './bundler.js'
+export type { ResolveImportsOptions, ResolvedImports, CreateWorker } from './bundler.js'
 export {
   ValidationError,
   validateOptions,

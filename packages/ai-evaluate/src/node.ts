@@ -23,7 +23,7 @@ import type { Miniflare as MiniflareInstance } from 'miniflare'
 import type * as MiniflareModule from 'miniflare'
 import type { EvaluateOptions, EvaluateResult, SandboxEnv } from './types.js'
 import { evaluate as evaluateInWorker, DEFAULT_TIMEOUT } from './evaluate.js'
-import { COMPATIBILITY_DATE, EVALUATE_PATH, normalizeImports } from './shared.js'
+import { COMPATIBILITY_DATE, EVALUATE_PATH } from './shared.js'
 import { HOST_WORKER_NAME, loadHostWorker, type HostWorkerModules } from './host-modules.js'
 
 /**
@@ -92,12 +92,14 @@ async function loadMiniflare(): Promise<typeof MiniflareModule> {
 }
 
 /**
- * Node-side preprocessing: import normalization only. JSX/TypeScript are
- * transformed by `evaluate()` itself, inside the host worker (see
- * `./transform.ts`), so the source reaches the worker exactly as written.
+ * Node-side preprocessing: none. JSX/TypeScript are transformed and imports
+ * are resolved by `evaluate()` itself, inside the host worker (see
+ * `./transform.ts`, `./bundler.ts`), so the options reach the worker exactly
+ * as written - bare `imports` included, which the host decides how to
+ * resolve.
  */
 function prepareOptions(options: EvaluateOptions): EvaluateOptions {
-  return { ...options, imports: normalizeImports(options.imports) }
+  return { ...options }
 }
 
 /** Host worker modules, loaded once per process */

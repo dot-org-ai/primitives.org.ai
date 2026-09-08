@@ -5,6 +5,11 @@ import {
   generateDomainCheckCode,
   workerCodeId,
   stableStringify,
+  parseImportSpecifier,
+  partitionImports,
+  extractPackageName,
+  packageJsonModule,
+  PACKAGE_JSON_MODULE,
 } from '../src/shared.js'
 import type { WorkerCode } from '../src/types.js'
 
@@ -108,6 +113,67 @@ describe('domain matching utilities', () => {
       const code = generateDomainCheckCode(['api.example.com'])
       expect(code).toContain('not in allowlist')
     })
+  })
+})
+
+describe('import specifiers', () => {
+  it('parseImportSpecifier splits name and version', () => {
+    expect(parseImportSpecifier('lodash')).toEqual({ name: 'lodash', version: 'latest' })
+    expect(parseImportSpecifier('lodash@4.17.21')).toEqual({ name: 'lodash', version: '4.17.21' })
+    expect(parseImportSpecifier('@scope/pkg')).toEqual({ name: '@scope/pkg', version: 'latest' })
+    expect(parseImportSpecifier('@scope/pkg@1.0.0')).toEqual({
+      name: '@scope/pkg',
+      version: '1.0.0',
+    })
+    expect(parseImportSpecifier('pkg@^4')).toEqual({ name: 'pkg', version: '^4' })
+  })
+
+  it('parseImportSpecifier rejects URLs, paths, subpaths and malformed names', () => {
+    for (const bad of [
+      'https://esm.sh/lodash',
+      './local.js',
+      'lodash/fp',
+      'Lodash',
+      '',
+      '@scope',
+      'lodash@',
+      'a b',
+    ]) {
+      expect(parseImportSpecifier(bad)).toBeNull()
+    }
+  })
+
+  it('partitionImports splits bare specifiers (as dependencies) from URLs', () => {
+    expect(
+      partitionImports(['lodash@4.17.21', 'https://esm.sh/zod@3', '@scope/pkg'], { hono: '^4' })
+    ).toEqual({
+      dependencies: { hono: '^4', lodash: '4.17.21', '@scope/pkg': 'latest' },
+      urls: ['https://esm.sh/zod@3'],
+    })
+  })
+
+  it('partitionImports lets an explicit dependency win over an imports version', () => {
+    expect(partitionImports(['lodash@4.17.20'], { lodash: '4.17.21' }).dependencies).toEqual({
+      lodash: '4.17.21',
+    })
+  })
+
+  it('extractPackageName yields an identifier for scoped and hyphenated names', () => {
+    expect(extractPackageName('lodash@4.17.21', 0)).toBe('lodash')
+    expect(extractPackageName('@faker-js/faker', 0)).toBe('faker_js_faker')
+    expect(extractPackageName('https://esm.sh/@scope/pkg@1.0.0', 0)).toBe('scope_pkg')
+    expect(extractPackageName('https://esm.sh/lodash@4.17.21', 0)).toBe('lodash')
+    expect(extractPackageName('https://cdn.example.test/x.js', 3)).toBe('pkg3')
+  })
+
+  it('packageJsonModule is a json module with sorted dependencies', () => {
+    expect(packageJsonModule({ zod: '3', lodash: '4' })).toEqual({
+      json: { dependencies: { lodash: '4', zod: '3' } },
+    })
+    expect(Object.keys(packageJsonModule({ zod: '3', lodash: '4' }).json.dependencies)).toEqual([
+      'lodash',
+      'zod',
+    ])
   })
 })
 
@@ -229,6 +295,24 @@ describe('workerCodeId', () => {
     withOutbound.globalOutbound = { fetch: () => {} }
     expect(workerCodeId(withTails)).toBe(workerCodeId(spec()))
     expect(workerCodeId(withOutbound)).toBe(workerCodeId(spec()))
+  })
+
+  it('differs by dependency version (the package.json module)', () => {
+    const withDeps = (dependencies: Record<string, string>): WorkerCode => {
+      const withModule = spec()
+      withModule.modules = {
+        ...withModule.modules,
+        [PACKAGE_JSON_MODULE]: packageJsonModule(dependencies),
+      }
+      return withModule
+    }
+    expect(workerCodeId(withDeps({ lodash: '4.17.21' }))).not.toBe(
+      workerCodeId(withDeps({ lodash: '4.17.20' }))
+    )
+    expect(workerCodeId(withDeps({ lodash: '4.17.21' }))).not.toBe(workerCodeId(spec()))
+    expect(workerCodeId(withDeps({ lodash: '4.17.21', zod: '3' }))).toBe(
+      workerCodeId(withDeps({ zod: '3', lodash: '4.17.21' }))
+    )
   })
 
   it('does not throw on non-serializable bindings', () => {

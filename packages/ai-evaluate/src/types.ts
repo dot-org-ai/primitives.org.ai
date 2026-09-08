@@ -142,8 +142,37 @@ export interface EvaluateOptions {
   outboundRpc?: ((url: string, request: Request) => Promise<Response> | Response | null) | undefined
   /** SDK configuration - enables $, db, ai, api, on, send globals */
   sdk?: SDKConfig | boolean | undefined
-  /** Top-level imports to hoist (for MDX test files with external imports) */
+  /**
+   * npm dependencies of the sandboxed code, package.json style
+   * (`{ lodash: '4.17.21', hono: '^4.0.0' }`). `module` and `script` then
+   * import them with real ES module syntax (`import { chunk } from 'lodash'`).
+   *
+   * Resolved against the npm registry and bundled into the worker by
+   * `@cloudflare/worker-bundler` inside the worker that runs `evaluate()`
+   * (workerd only). Where the bundler cannot load - the local Miniflare host
+   * of `ai-evaluate/node`, or `bundler: false` - each dependency is fetched
+   * from esm.sh as a single bundled module instead and registered under its
+   * bare name, so the same `import` syntax keeps working. Part of the
+   * content-addressed spec: different versions are different workers.
+   */
+  dependencies?: Record<string, string> | undefined
+  /**
+   * External packages exposed as globals (deprecated - use `dependencies`
+   * and `import` syntax). Bare names (`lodash`, `dayjs@1.11.10`,
+   * `@scope/pkg@1.0.0`) are treated as `dependencies` and resolved by the
+   * bundler; http(s) URLs are fetched as-is. Each package is also aliased
+   * onto `globalThis` under its name (`lodash` -> `_`), which is the 2.x
+   * behaviour this option keeps for compatibility.
+   */
   imports?: string[] | undefined
+  /**
+   * Whether to resolve `dependencies` and bare `imports` with
+   * `@cloudflare/worker-bundler` (default: `true`). `false` skips the bundler
+   * and uses the esm.sh fallback directly - the path the local Miniflare
+   * host takes anyway, since the bundler only loads inside workerd with
+   * package resolution.
+   */
+  bundler?: boolean | undefined
   /**
    * Isolate reuse policy (default: `'fresh'`)
    * - `'fresh'`: `loader.load(spec)` - a new, uncached isolate every call, so

@@ -44,6 +44,7 @@
     "build:transform": "npx tsx scripts/build-transform-bundle.ts"
   },
   "dependencies": {
+    "@cloudflare/worker-bundler": "0.2.3",
     "capnweb": "^0.2.0"
   },
   "devDependencies": {

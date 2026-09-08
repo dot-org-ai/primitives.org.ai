@@ -198,10 +198,21 @@ describe('validation', () => {
         )
       })
 
-      it('accepts bare package specifiers (normalized to esm.sh, as evaluate() does)', () => {
+      it('accepts bare package specifiers (dependencies for the bundler)', () => {
         expect(() =>
-          validateOptions({ imports: ['lodash', 'dayjs@1.11.10', '@faker-js/faker'] })
+          validateOptions({
+            imports: ['lodash', 'dayjs@1.11.10', '@faker-js/faker', '@scope/pkg@1.0.0', 'pkg@^4'],
+          })
         ).not.toThrow()
+      })
+
+      it('rejects bare specifiers that are not package names', () => {
+        for (const bad of ['Lodash', 'lodash/fp', '.hidden', 'a b', 'lodash@']) {
+          expect(() => validateOptions({ imports: [bad] })).toThrow(ValidationError)
+          expect(() => validateOptions({ imports: [bad] })).toThrow(
+            `imports[0] is not a valid URL: ${bad}`
+          )
+        }
       })
 
       it('rejects invalid URLs', () => {
@@ -233,6 +244,55 @@ describe('validation', () => {
             imports: ['https://esm.sh/lodash', 'ftp://invalid-url', 'https://esm.sh/react'],
           })
         ).toThrow('imports[1] is not a valid URL: ftp://invalid-url')
+      })
+    })
+
+    // aip-263g.9: npm dependencies for the bundler
+    describe('dependencies validation', () => {
+      it('accepts package.json-style dependencies', () => {
+        expect(() =>
+          validateOptions({
+            dependencies: { lodash: '4.17.21', '@scope/pkg': '^1.0.0', hono: 'latest', zod: '*' },
+          })
+        ).not.toThrow()
+      })
+
+      it('rejects a non-object', () => {
+        expect(() =>
+          validateOptions({ dependencies: ['lodash'] as unknown as Record<string, string> })
+        ).toThrow('dependencies must be an object of package name -> version')
+      })
+
+      it('rejects an invalid package name', () => {
+        expect(() => validateOptions({ dependencies: { 'Not A Package': '1' } })).toThrow(
+          'dependencies has an invalid package name: Not A Package'
+        )
+        expect(() => validateOptions({ dependencies: { 'file:///etc/passwd': '1' } })).toThrow(
+          ValidationError
+        )
+      })
+
+      it('rejects a non-string or empty version', () => {
+        expect(() => validateOptions({ dependencies: { lodash: 4 as unknown as string } })).toThrow(
+          'dependencies.lodash must be a version or range string'
+        )
+        expect(() => validateOptions({ dependencies: { lodash: '' } })).toThrow(ValidationError)
+      })
+
+      it('rejects more dependencies than MAX_IMPORTS', () => {
+        const dependencies = Object.fromEntries(
+          Array.from({ length: MAX_IMPORTS + 1 }, (_, i) => [`pkg${i}`, '1.0.0'])
+        )
+        expect(() => validateOptions({ dependencies })).toThrow(
+          `dependencies count (${MAX_IMPORTS + 1}) exceeds maximum allowed count of ${MAX_IMPORTS}`
+        )
+      })
+
+      it('bundler must be a boolean', () => {
+        expect(() => validateOptions({ bundler: false })).not.toThrow()
+        expect(() => validateOptions({ bundler: 'no' as unknown as boolean })).toThrow(
+          'bundler must be a boolean'
+        )
       })
     })
 

@@ -62,16 +62,16 @@ curl -X POST https://eval.workers.do \
   -d '{"script": "console.log(42); return 42"}'
 # {"success":true,"value":42,"logs":[{"level":"log","message":"42",...}],"duration":2}
 
-# With external imports (npm packages)
+# With npm dependencies (real import syntax)
 curl -X POST https://eval.workers.do \
   -H "Content-Type: application/json" \
-  -d '{"script": "return _.chunk([1, 2, 3, 4, 5, 6], 2)", "imports": ["lodash"]}'
+  -d '{"script": "import { chunk } from \"lodash\"; return chunk([1, 2, 3, 4, 5, 6], 2)", "dependencies": {"lodash": "4.17.21"}}'
 # {"success":true,"value":[[1,2],[3,4],[5,6]],"logs":[],"duration":42}
 
-# With versioned imports
+# A module that imports, a script that uses its exports
 curl -X POST https://eval.workers.do \
   -H "Content-Type: application/json" \
-  -d '{"script": "return dayjs().format(\"YYYY-MM-DD\")", "imports": ["dayjs@1.11.10"]}'
+  -d '{"module": "import dayjs from \"dayjs\"; export const today = () => dayjs().format(\"YYYY-MM-DD\")", "script": "return today()", "dependencies": {"dayjs": "1.11.10"}}'
 # {"success":true,"value":"2026-01-25","logs":[],"duration":35}
 ```
 
@@ -261,14 +261,16 @@ interface EvaluateOptions {
   env?: Record<string, string> // String environment variables (see below)
   bindings?: Record<string, unknown> // RPC stubs and structured-cloneable values (see below)
   sdk?: SDKConfig | boolean    // Enable $, db, ai globals
-  imports?: string[]           // External npm packages (see below)
+  dependencies?: Record<string, string> // npm packages to import (see External Imports)
+  bundler?: boolean            // Resolve them with @cloudflare/worker-bundler (default: true)
+  imports?: string[]           // Deprecated: packages as globals (see External Imports)
   isolation?: 'fresh' | 'cached' // Isolate reuse policy (default: 'fresh', see below)
 }
 ```
 
 Every option is validated at the top of `evaluate()` (`validateOptions`):
-sizes, `timeout`, `limits`, `compatibilityFlags`, `compatibilityDate`, `tails`
-and `imports` are checked before anything is transformed or loaded, and a
+sizes, `timeout`, `limits`, `compatibilityFlags`, `compatibilityDate`, `tails`,
+`dependencies` and `imports` are checked before anything is transformed or loaded, and a
 `ValidationError` comes back as an error result (`success: false`, `error`
 naming the option). What the loaded worker answers is checked too
 (`assertEvaluateResult`): a response that is not a well-formed `EvaluateResult`
@@ -379,37 +381,75 @@ const id = workerCodeId(await buildWorkerCode({ script: 'return 1' }))
 
 ### External Imports
 
-The `imports` option lets you use npm packages in your sandboxed code. Supports:
-
-```typescript
-// Bare package names (auto-resolved via esm.sh)
-imports: ['lodash', 'dayjs', 'uuid']
-
-// Versioned packages
-imports: ['lodash@4.17.21', 'dayjs@1.11.10']
-
-// Scoped packages
-imports: ['@faker-js/faker']
-
-// Full URLs (for custom CDNs)
-imports: ['https://esm.sh/lodash@4.17.21']
-```
-
-Imported packages are available as globals matching their package name:
-- `lodash` → `_` (special case) and `lodash`
-- `dayjs` → `dayjs`
-- `uuid` → `uuid`
+Sandboxed code can `import` npm packages. Declare them in `dependencies`
+(package.json style) and import them with ordinary ES module syntax in
+`module` or `script`:
 
 ```typescript
 const result = await evaluate({
-  imports: ['lodash', 'dayjs'],
-  script: `
-    const chunks = _.chunk([1,2,3,4,5,6], 2)
-    const today = dayjs().format('YYYY-MM-DD')
-    return { chunks, today }
-  `
+  module: `
+    import { chunk } from 'lodash'
+    import dayjs from 'dayjs'
+    export const chunks = chunk([1, 2, 3, 4, 5, 6], 2)
+    export const today = () => dayjs().format('YYYY-MM-DD')
+  `,
+  script: 'return { chunks, today: today() }',
+  dependencies: { lodash: '4.17.21', dayjs: '^1.11.0' },
 }, env)
+```
 
+Versions are anything npm accepts (`4.17.21`, `^4`, `latest`); subpaths
+(`import { cors } from 'hono/cors'`) and scoped packages work. A package the
+code imports but does not declare is resolved at `latest` and reported in
+`logs` as a warning - pin it. `dependencies` are part of the content-addressed
+spec (a `package.json` module in the loaded worker), so `lodash@4.17.21` and
+`lodash@4.17.20` are two workers.
+
+**How they are resolved.** Inside the worker that runs `evaluate()`,
+[`@cloudflare/worker-bundler`](https://www.npmjs.com/package/@cloudflare/worker-bundler)
+installs the packages from the npm registry and bundles them with the
+generated entry (esbuild-wasm) into one module - real packages, CommonJS
+interop, no CDN in the loop. The bundler runs only inside workerd with package
+resolution (a wrangler-bundled deployment, `@cloudflare/vitest-pool-workers`);
+its warnings (an install failure, a package it could not fully resolve)
+appear in `result.logs` at `warn` level. Resolved bundles are cached per
+isolate by their input, and installed `node_modules` per set of dependencies,
+so repeated evaluations over the same packages do not touch the registry.
+
+**esm.sh is the fallback, not the path.** Where the bundler cannot load -
+the local Miniflare host of `ai-evaluate/node`, which runs `evaluate()` as a
+plain module graph - or when it fails, or with `bundler: false`, each
+dependency is fetched from `https://esm.sh/<name>@<version>` as a single
+bundled module and registered under its bare name, so the same `import`
+syntax keeps working. The fallback is announced with a `warn` log entry
+(except under an explicit `bundler: false`). Its limits: no subpath imports
+(`hono/cors`), and packages whose esm.sh bundle pulls Node polyfills
+(`/node/buffer.mjs`) will not load; on the bundler path these work.
+
+Known bundler limits (0.2.x, experimental): a flat `node_modules` (one
+version per package across the tree), text-only tarball extraction (no
+`.wasm` / `.node` files), and no PAX tar headers (paths over 100 characters
+are dropped).
+
+**`imports` (deprecated).** The 2.x option still works: bare specifiers
+(`lodash`, `dayjs@1.11.10`, `@faker-js/faker`) are treated as `dependencies`
+and resolved the same way; http(s) URLs are fetched as-is on both paths. Each
+package is additionally aliased onto `globalThis` under its name (`lodash` →
+`_` and `lodash`, `dayjs` → `dayjs`, `@faker-js/faker` → `faker_js_faker`;
+the last one also as `pkg`). This aliasing prints a one-time deprecation
+warning; prefer `dependencies` and `import`.
+
+```typescript
+// 2.x style, still supported
+await evaluate({ imports: ['lodash'], script: 'return _.chunk([1, 2], 1)' }, env)
+
+// Full URLs (custom CDNs) are fetched as-is and exposed the same way
+await evaluate({ imports: ['https://esm.sh/lodash@4.17.21'], script: 'return _.chunk([1, 2], 1)' }, env)
+```
+
+### EvaluateResult
+
+```typescript
 interface EvaluateResult {
   success: boolean             // Execution succeeded
   value?: unknown              // Script return value
@@ -650,7 +690,8 @@ console.log(result.value) // 7
 | Memory Limits | Standard Worker limits apply |
 | CPU Limits | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts)) |
 | Subrequest Limits | `limits.subrequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility)) |
-| Input Validation | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape |
+| Input Validation | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `dependencies` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape |
+| Dependencies | `dependencies` come from the npm registry via `@cloudflare/worker-bundler` (esm.sh only as fallback); `imports` accept bare package names and http(s) URLs only (`file:` and other schemes are rejected) |
 
 ### Network Access Control
 
