@@ -209,6 +209,10 @@ export function createLocalRuntime(): LocalRuntime {
     if (!pending) return
     try {
       const host = await pending
+      // An idle host's handles are unref'd; hold the loop open until teardown
+      // (kill workerd, close the loopback server) has actually completed, or
+      // an `await dispose()` at the tail of a script exits unsettled.
+      setHandlesActive(host.handles, true)
       await host.miniflare.dispose()
     } catch {
       // Already gone (failed to start, or wedged and killed) - nothing to release

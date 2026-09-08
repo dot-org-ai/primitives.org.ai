@@ -9,6 +9,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, join, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { EMBEDDED_HOST_WORKER } from './host-worker-modules.js'
 import { stripTypes } from './transform.js'
 
 /** Name of the Miniflare host worker */
@@ -41,17 +42,33 @@ function relativeImports(source: string): string[] {
 }
 
 /**
+ * The host worker modules for the Miniflare host.
+ *
+ * The published package carries them embedded (`EMBEDDED_HOST_WORKER`, written
+ * into `dist/host-worker-modules.js` by `scripts/build-host-worker.ts`), so a
+ * plain install and a consumer that bundled `ai-evaluate/node` into its own
+ * artifact both get the host worker without touching the filesystem. Where
+ * the embed is the `src/` placeholder - vitest running `src/*.ts`, or `dist/`
+ * emitted by `tsc --watch` alone - the graph is walked from disk instead.
+ */
+export function loadHostWorker(): HostWorkerModules {
+  return EMBEDDED_HOST_WORKER ?? walkHostWorker()
+}
+
+/**
  * Collect `./host-worker` (which imports `./evaluate`) and everything it
  * imports as a set of ES modules for the Miniflare host - no bundler involved.
  *
- * Resolves against this file's own directory: from `dist/*.js` when installed
- * (used as-is) and from `src/*.ts` under vitest (TypeScript stripped with the
- * same bundled sucrase that `evaluate()` uses for sandbox code). Module names
- * are paths relative to that directory (`evaluate.js`,
- * `worker-template/core.js`), which is how their relative imports resolve
- * inside workerd.
+ * Resolves against this file's own directory: from `dist/*.js` (used as-is)
+ * and from `src/*.ts` under vitest (TypeScript stripped with the same bundled
+ * sucrase that `evaluate()` uses for sandbox code). Module names are paths
+ * relative to that directory (`evaluate.js`, `worker-template/core.js`), which
+ * is how their relative imports resolve inside workerd.
+ *
+ * Only correct when this module runs from its own package directory; a bundled
+ * copy must use the embedded map (see `loadHostWorker`).
  */
-export function loadHostWorker(): HostWorkerModules {
+export function walkHostWorker(): HostWorkerModules {
   const here = fileURLToPath(import.meta.url)
   const root = dirname(here)
   const fromSource = extname(here) === '.ts'
