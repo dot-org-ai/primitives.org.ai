@@ -429,7 +429,7 @@ describe('ai-evaluate/node', () => {
       expect(result.value).toContain('fetch blocked')
     })
 
-    it('enforces a fetch allowlist through the host worker\'s OutboundGateway', async () => {
+    it("enforces a fetch allowlist through the host worker's OutboundGateway", async () => {
       // The Miniflare host is src/host-worker.ts, which exports the gateway,
       // so the allowlist is enforced locally exactly as on Cloudflare: by the
       // loader's globalOutbound, not by anything in the isolate.
