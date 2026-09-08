@@ -1,6 +1,6 @@
 /**
  * The workers-pool harness config loads and points at a wrangler config that
- * declares the `LOADER` worker_loaders binding.
+ * declares the `loader` worker_loaders binding.
  *
  * Runs on the Node pool; the suite it describes runs on the workers pool.
  */

@@ -2,6 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "eval-workers-do",
   "main": "src/index.ts",
+  // 2025-11-17 or later: evaluate() reaches OutboundGateway and SandboxHost
+  // through ctx.exports (loopback bindings) for allowlists, outboundRpc and facets
   "compatibility_date": "2026-01-01",
   "account_id": "b6641681fe423910342b9ffa1364c76d",
 
@@ -13,7 +15,8 @@
   // Keep workers.dev enabled for testing
   "workers_dev": true,
 
-  // Worker loader for dynamic sandbox execution
+  // Worker loader for dynamic sandbox execution. ai-evaluate 3.0 reads exactly
+  // `env.loader`: the 2.x `LOADER` alias is gone.
   "worker_loaders": [
     { "binding": "loader" }
   ],
@@ -24,6 +27,14 @@
     "bindings": [{ "name": "SANDBOX_HOST", "class_name": "SandboxHost" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SandboxHost"] }],
+
+  // A tail worker for `evaluate({ tails })`: this worker's own `TailLogger`
+  // entrypoint (src/index.ts), bound to itself as a service. Every sandbox's
+  // trace events (console output, exceptions, outcome) land in its tail()
+  // handler, which logs them where `wrangler tail` shows them.
+  "services": [
+    { "binding": "TAIL", "service": "eval-workers-do", "entrypoint": "TailLogger" }
+  ],
 
   // Bundle configuration to resolve workspace package
   "alias": {

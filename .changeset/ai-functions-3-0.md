@@ -1,0 +1,20 @@
+---
+'ai-functions': major
+---
+
+ai-functions: `runInSandbox` follows ai-evaluate 3.0 - `env.loader` only, Node >= 22 for the Node fallback (aip-263g.12)
+
+- **Breaking:** `runInSandbox(options, env)` - and so `DefinedFunction.call`
+  and `generateAndRunCode` with an `env` - switches on `env.loader` only; the
+  uppercase `LOADER` / `TEST` aliases ai-evaluate 2.x accepted are gone, and
+  an env carrying only `LOADER` takes the Node fallback instead of the
+  Dynamic Workers loader. Rename the wrangler binding to `loader`.
+- **Breaking:** the Node fallback runs on `ai-evaluate/node`'s Miniflare 5
+  host, which requires **Node >= 22** (Miniflare 5 is skipped at install time
+  on older Node; the first sandboxed call then fails with
+  `MINIFLARE_UNAVAILABLE_ERROR`). Every package that depends on
+  `ai-functions` inherits that floor on Node.
+- The Node fallback now holds its own `createLocalRuntime()` handle rather
+  than the process-wide host: `disposeSandbox()` tears down only the host
+  ai-functions created, and the next sandboxed call starts a fresh one. A
+  process still exits on its own without calling it (an idle host is unref'd).

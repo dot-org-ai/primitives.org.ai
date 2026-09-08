@@ -49,7 +49,8 @@
     "clean": "rm -rf dist public",
     "test:node": "vitest run",
     "test:workers": "vitest run --config vitest.workers.config.ts",
-    "build:transform": "npx tsx scripts/build-transform-bundle.ts"
+    "build:transform": "npx tsx scripts/build-transform-bundle.ts",
+    "sync:version": "npx tsx scripts/sync-static-version.ts"
   },
   "dependencies": {
     "@cloudflare/worker-bundler": "0.2.3",

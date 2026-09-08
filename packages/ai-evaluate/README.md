@@ -4,6 +4,12 @@
 
 Runtime sandboxed execution of AI-generated (or otherwise untrusted) code in V8 isolates, backed by Cloudflare Workers `worker_loaders` in production and Miniflare locally.
 
+> **Upgrading from 2.x?** 3.0 runs the same `evaluate()` locally and in
+> production, requires Node >= 22 and Miniflare 5, drops the `LOADER` / `TEST`
+> env aliases and the miniflare-pool API, and enforces fetch allowlists with a
+> host-side gateway. See [MIGRATION.md](./MIGRATION.md) for every breaking
+> change and what to do about it.
+
 ## Lifecycle
 
 **Runtime (production).** `ai-evaluate` is for executing untrusted code while your application is serving real requests — agent-generated scripts, user-supplied snippets, dynamic tool implementations. Reach for it when you need to run code you didn't write at request time without exposing your host environment.
@@ -439,8 +445,8 @@ spec into an isolate:
 
 | `isolation`         | Loader call                               | When                                                                                                                                                                                       |
 | ------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `'fresh'` (default) | `LOADER.load(spec)`                       | A new, uncached isolate every call: nothing at module scope survives between evaluations, so identical calls return identical results.                                                     |
-| `'cached'`          | `LOADER.get(workerCodeId(spec), factory)` | Identical specs share one isolate, and its module-scope state. Dynamic Workers are billed per unique worker per day, so this is the opt-in cost control for code that is safe to re-enter. |
+| `'fresh'` (default) | `loader.load(spec)`                       | A new, uncached isolate every call: nothing at module scope survives between evaluations, so identical calls return identical results.                                                     |
+| `'cached'`          | `loader.get(workerCodeId(spec), factory)` | Identical specs share one isolate, and its module-scope state. Dynamic Workers are billed per unique worker per day, so this is the opt-in cost control for code that is safe to re-enter. |
 
 `workerCodeId(spec)` content-addresses the spec - `mainModule`, `modules`,
 `compatibilityDate`, `compatibilityFlags`, `allowExperimental`, `limits`, and
@@ -597,7 +603,7 @@ import { createExecutor } from 'ai-evaluate/codemode'
 export { OutboundGateway } from 'ai-evaluate/worker' // tool calls come back through it
 
 // As the executor of createCodeTool (an AI SDK tool the model writes code for)
-const executor = createExecutor({ loader: env.LOADER })
+const executor = createExecutor({ loader: env.loader })
 const codemode = createCodeTool({ tools, executor })
 
 // Or of a durable codemode runtime (approvals, replay, snippets)
@@ -609,7 +615,7 @@ them onto an evaluation:
 
 | Option           | Default  | Maps to                                                                                                               |
 | ---------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
-| `loader`         | required | the `worker_loaders` binding `evaluate()` loads into (any binding name: `env.LOADER` works)                           |
+| `loader`         | required | the `worker_loaders` binding `evaluate()` loads into (passed explicitly, so any binding name works here)              |
 | `timeout`        | `60000`  | `timeout` (wall clock) and the loaded worker's CPU budget (`limits.cpuMs`)                                            |
 | `globalOutbound` | `null`   | `null`: `fetch: false` - the sandbox has no network; a `Fetcher`: every non-tool request goes through it, on the host |
 | `modules`        | `{}`     | `EvaluateOptions.modules` - `await import('./name.js')` in the code                                                   |
@@ -630,7 +636,7 @@ model). `logs` are the sandbox's console lines, `[warn]`/`[error]`-prefixed
 by level.
 
 ```typescript
-const executor = createExecutor({ loader: env.LOADER, timeout: 10000 })
+const executor = createExecutor({ loader: env.loader, timeout: 10000 })
 
 await executor.execute('return await codemode.add(1, 2)', { add: async (a, b) => a + b })
 // { result: 3, logs: [] }
@@ -1008,6 +1014,38 @@ Ensure your wrangler.jsonc has the worker_loaders config and you're passing `env
 ```typescript
 await evaluate({ script: code }, env) // Don't forget env!
 ```
+
+## Exports
+
+The runtime exports of each entry, as `test/index.test.ts` pins them. Types
+(`EvaluateOptions`, `EvaluateResult`, `SandboxEnv`, `WorkerLoader`,
+`WorkerCode`, ...) come from the same entries.
+
+### `ai-evaluate` (inside a Worker)
+
+| Group          | Exports                                                                                                                                                                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Evaluate       | `evaluate`, `createEvaluator`, `buildWorkerCode`, `buildWorkerCodeWithWarnings`, `loadWorker`, `planImports`, `entrypointLimits`, `DEFAULT_ISOLATION`, `DEFAULT_TIMEOUT`, `VERSION`                                                                                     |
+| Spec and ids   | `workerCodeId`, `packageJsonModule`, `COMPATIBILITY_DATE`, `PACKAGE_JSON_MODULE`, `normalizeImport`, `normalizeImports`, `parseImportSpecifier`, `partitionImports`                                                                                                     |
+| Dependencies   | `resolveImports`, `dependenciesHash`, `clearBundlerCache`, `BundlerUnavailableError`                                                                                                                                                                                  |
+| Validation     | `validateOptions`, `ValidationError`, `buildSandboxEnv`, `isRpcStubLike`, `isStructuredCloneable`, `isEvaluateResult`, `assertEvaluateResult`, `TEST_BINDING_KEY`, `MAX_TIMEOUT`                                                                                       |
+| Outbound       | `createOutboundGateway`, `outboundPolicy`, `blockedHostError`, `OUTBOUND_GATEWAY_EXPORT`, `OUTBOUND_JSON_MODULE`, `OUTBOUND_GATEWAY_UNAVAILABLE_ERROR`, `INTERCEPTOR_UNAVAILABLE_ERROR`, `OUTBOUND_RPC_CACHED_ERROR`                                                    |
+| Facets         | `createFacetHost`, `facetBindingName`, `facetEnvSource`, `generateFacetWorkerCode`, `loopbackSandboxHost`, `loopbackExport`, `facetNotAttachedError`, `isIdentifier`, `SANDBOX_ENV_FUNCTION`, `SANDBOX_HOST_EXPORT`, `SANDBOX_HOST_BINDING_KEY`, `SANDBOX_JSON_MODULE`, `SANDBOX_HOST_UNAVAILABLE_ERROR` |
+| Transform      | `transformSource`, `transformOptions`, `containsJSX`                                                                                                                                                                                                                  |
+
+### Other entries
+
+| Entry                  | Exports                                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ai-evaluate/node`     | `evaluate`, `createEvaluator`, `createLocalRuntime`, `dispose`, `WEDGED_HOST_ERROR`, `DISPOSED_HOST_ERROR`, `MINIFLARE_UNAVAILABLE_ERROR`            |
+| `ai-evaluate/worker`   | `OutboundGateway`, `SandboxHost` (the entrypoints a host Worker re-exports)                                                                          |
+| `ai-evaluate/codemode` | `createExecutor`, `CODEMODE_CACHED_ERROR`, `CODEMODE_DISPATCH_HOST`, `DEFAULT_CODEMODE_TIMEOUT` and the helpers it is built from                      |
+| `ai-evaluate/repl`     | `createReplSession`, `quickEval`, `REPL_FACET_CLASS`, `REPL_FACET_BINDING`, `REPL_STATE_MODULE` and the script helpers                               |
+| `ai-evaluate/static`   | `VERSION`, `WORKER_TEMPLATE`, `SCAFFOLD_TEMPLATE`, `CAPNWEB_BUNDLE`, `buildWorkerTemplate`, `buildWorkerBundle`, `getTestFrameworkCode`, `getTestRunnerCode`, `getSDKCode`, `getShouldCode` |
+
+`VERSION` is the package version (kept equal to `package.json` by
+`pnpm sync:version`, which the root `version-packages` script runs after
+`changeset version`).
 
 ## Types
 
