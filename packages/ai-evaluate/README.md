@@ -151,8 +151,15 @@ One host worker is created lazily per process and reused for every call; each
 evaluation is in flight the host's handles (workerd child, loopback server) are
 unref'd, so a script or CLI that never calls `dispose()` still exits on its own
 as soon as its work is done; workerd is reaped on exit. `dispose()` only
-matters when you want the host gone before the process ends. For an isolated
-runtime (e.g. per test file) use `createLocalRuntime()`:
+matters when you want the host gone before the process ends.
+
+The host worker's modules are embedded in the published package at build time
+(`dist/host-worker-modules.js`), so `ai-evaluate/node` can be bundled into your
+own artifact - a single-file CLI, a Next.js server bundle - and still work:
+nothing is read from disk beside the package at runtime. Only `miniflare` has
+to stay resolvable (keep it external when you bundle).
+
+For an isolated runtime (e.g. per test file) use `createLocalRuntime()`:
 
 ```typescript
 import { createLocalRuntime } from 'ai-evaluate/node'

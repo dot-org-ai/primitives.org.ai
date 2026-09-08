@@ -387,9 +387,9 @@ describe('ai-evaluate/node', () => {
       devSpy.mockRestore()
     })
 
-    it('loads host-worker -> evaluate as the host worker modules (same bytes as prod)', async () => {
-      const { loadHostWorker, HOST_MODULE } = await import('../src/host-modules.js')
-      const { mainModule, modules } = loadHostWorker()
+    it('walks host-worker -> evaluate as the host worker modules (same bytes as prod)', async () => {
+      const { walkHostWorker, HOST_MODULE } = await import('../src/host-modules.js')
+      const { mainModule, modules } = walkHostWorker()
       expect(mainModule).toBe(HOST_MODULE)
       // The host is the evaluate() implementation, not a separate local template
       expect(Object.keys(modules)).toEqual(

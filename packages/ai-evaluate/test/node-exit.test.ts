@@ -18,6 +18,7 @@ const execFileAsync = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))
 const packageDir = join(here, '..')
 const fixture = join(here, 'fixtures', 'exit-without-dispose.ts')
+const disposeFixture = join(here, 'fixtures', 'dispose-after-idle.ts')
 
 /** Upper bound for the whole fixture: host startup + ~1.2s of evaluations */
 const EXIT_BOUND_MS = 20_000
@@ -98,5 +99,18 @@ describe('ai-evaluate/node process exit', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
     }
     expect(isAlive(pid)).toBe(false)
+  })
+
+  it('an `await dispose()` at the tail of a script settles and the process exits 0', async () => {
+    // Teardown of an idle host must hold the loop open until it completes;
+    // otherwise Node exits 13 (unsettled top-level await) mid-dispose.
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      ['--import', 'tsx', disposeFixture],
+      { cwd: packageDir, timeout: EXIT_BOUND_MS, killSignal: 'SIGTERM' }
+    )
+    expect(stderr).not.toMatch(/unsettled top-level await/)
+    const line = stdout.trim().split('\n').at(-1) ?? ''
+    expect(JSON.parse(line)).toEqual({ value: 2, disposed: true })
   })
 })

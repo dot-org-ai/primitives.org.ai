@@ -31,7 +31,8 @@
     "public"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm run build:static",
+    "build": "tsc -p tsconfig.json && npm run build:host-worker && npm run build:static",
+    "build:host-worker": "npx tsx scripts/build-host-worker.ts",
     "build:static": "npx tsx scripts/build-static.ts",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run && vitest run --config vitest.workers.config.ts",
