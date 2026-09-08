@@ -6,15 +6,19 @@
  * `worker_loaders` binding. There is no separate local template: local
  * behaviour is Dynamic Workers behaviour.
  *
- * - One host worker per process, created lazily on first use; call
- *   `dispose()` to shut it down (test teardown, CLI exit).
+ * - One host worker per process, created lazily on first use. Its handles
+ *   (workerd child, loopback server) are unref'd while idle, so a script or
+ *   CLI exits on its own once its work is done; Miniflare's own exit hook
+ *   reaps workerd. Call `dispose()` to release the host early (test teardown).
  * - When an `env` with a loader binding is supplied (e.g. running inside
  *   workerd via vitest-pool-workers), `evaluate()` is called directly.
  *
  * For Workers-only builds, import from 'ai-evaluate' instead.
  */
 
-import { dirname, extname, join } from 'node:path'
+import { ChildProcess } from 'node:child_process'
+import { Server, Socket } from 'node:net'
+import { basename, dirname, extname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Miniflare as MiniflareInstance } from 'miniflare'
 import type { EvaluateOptions, EvaluateResult, SandboxEnv } from './types.js'
@@ -110,6 +114,85 @@ export async function bundleHostWorker(): Promise<string> {
 }
 
 /**
+ * Something that can be detached from / re-attached to the Node event loop.
+ * `ChildProcess`, `net.Server` and `net.Socket` all implement this pair.
+ */
+interface RefCounted {
+  ref(): unknown
+  unref(): unknown
+}
+
+/**
+ * The handles a Miniflare host opens in this process: the workerd child, its
+ * stdio pipes, and the loopback HTTP server. None of them is reachable through
+ * Miniflare's public API, so they are found by diffing the process's active
+ * handles across host startup (see `findHostHandles`).
+ */
+interface HostHandles {
+  workerd: ChildProcess | null
+  others: RefCounted[]
+}
+
+/**
+ * Snapshot of the process's active libuv handles (`process._getActiveHandles`
+ * is undocumented but present in every supported Node release). Returns an
+ * empty list where it is unavailable, in which case the host keeps the loop
+ * alive until `dispose()` - the behaviour the exit test guards against.
+ */
+function activeHandles(): unknown[] {
+  const getter = (process as { _getActiveHandles?: () => unknown[] })._getActiveHandles
+  return typeof getter === 'function' ? getter.call(process) : []
+}
+
+/**
+ * Pick out, from the handles that appeared during host startup, the ones that
+ * belong to Miniflare: the `workerd` child (matched by its executable name,
+ * plus its stdio pipes) and the loopback `http.Server` (Miniflare wraps it
+ * with `stoppable`, hence the `stop` method). Anything else that happened to
+ * open in the same window - a caller's own request or server - is left alone.
+ */
+function findHostHandles(before: Set<unknown>, after: unknown[]): HostHandles {
+  let workerd: ChildProcess | null = null
+  const others: RefCounted[] = []
+  for (const handle of after) {
+    if (before.has(handle)) continue
+    if (handle instanceof ChildProcess) {
+      if (!basename(handle.spawnfile).startsWith('workerd')) continue
+      workerd ??= handle
+      for (const pipe of handle.stdio) if (pipe instanceof Socket) others.push(pipe)
+    } else if (handle instanceof Server) {
+      if (typeof (handle as { stop?: unknown }).stop === 'function') others.push(handle)
+    }
+  }
+  return { workerd, others }
+}
+
+/**
+ * Attach (`active`) or detach (idle) the host's handles from the event loop.
+ * Detached, an idle host does not stop the process from exiting; attached,
+ * an in-flight evaluation is guaranteed to be waited for.
+ */
+function setHandlesActive(handles: HostHandles, active: boolean): void {
+  const targets: RefCounted[] = handles.workerd
+    ? [handles.workerd, ...handles.others]
+    : handles.others
+  for (const target of targets) {
+    try {
+      if (active) target.ref()
+      else target.unref()
+    } catch {
+      // Handle already closed - nothing to (un)ref
+    }
+  }
+}
+
+/** A started Miniflare host together with the process handles it owns */
+interface Host {
+  miniflare: MiniflareInstance
+  handles: HostHandles
+}
+
+/**
  * A local sandbox runtime: one Miniflare 5 host worker with a LOADER binding.
  */
 export interface LocalRuntime {
@@ -125,7 +208,9 @@ export interface LocalRuntime {
  * The host worker is the bundled `./host-worker` module - the same
  * `evaluate()` that runs on Cloudflare - with `env.LOADER` provided by
  * Miniflare's `worker-loader` binding. It is created lazily on the first
- * `evaluate()` call and reused for every call after that.
+ * `evaluate()` call and reused for every call after that. While no evaluation
+ * is in flight the host's handles are unref'd, so it never keeps the process
+ * alive on its own; `dispose()` releases it early.
  *
  * @example
  * ```ts
@@ -135,18 +220,21 @@ export interface LocalRuntime {
  * ```
  */
 export function createLocalRuntime(): LocalRuntime {
-  let hostPromise: Promise<MiniflareInstance> | null = null
+  let hostPromise: Promise<Host> | null = null
   let bundlePromise: Promise<string> | null = null
+  /** Evaluations currently awaiting the host; the host is unref'd at zero */
+  let inFlight = 0
 
   const getBundle = (): Promise<string> => {
     bundlePromise ??= bundleHostWorker()
     return bundlePromise
   }
 
-  const createHost = async (): Promise<MiniflareInstance> => {
+  const createHost = async (): Promise<Host> => {
     const { Miniflare } = await import('miniflare')
     const script = await getBundle()
-    return new Miniflare({
+    const before = new Set(activeHandles())
+    const miniflare = new Miniflare({
       workers: [
         {
           config: {
@@ -162,9 +250,19 @@ export function createLocalRuntime(): LocalRuntime {
         },
       ],
     })
+    try {
+      await miniflare.ready
+    } catch (error) {
+      await miniflare.dispose().catch(() => {})
+      throw error
+    }
+    const handles = findHostHandles(before, activeHandles())
+    // Whoever awaited this is about to evaluate; `evaluate` re-syncs anyway.
+    setHandlesActive(handles, inFlight > 0)
+    return { miniflare, handles }
   }
 
-  const getHost = (): Promise<MiniflareInstance> => {
+  const getHost = (): Promise<Host> => {
     hostPromise ??= createHost().catch((error) => {
       hostPromise = null
       throw error
@@ -178,7 +276,7 @@ export function createLocalRuntime(): LocalRuntime {
     if (!pending) return
     try {
       const host = await pending
-      await host.dispose()
+      await host.miniflare.dispose()
     } catch {
       // Already gone (failed to start, or wedged and killed) - nothing to release
     }
@@ -187,14 +285,20 @@ export function createLocalRuntime(): LocalRuntime {
   const evaluate = async (options: EvaluateOptions): Promise<EvaluateResult> => {
     const start = Date.now()
     const timeout = options.timeout ?? DEFAULT_TIMEOUT
+    inFlight++
+    let host: Host | null = null
     try {
-      const host = await getHost()
-      const response = await host.dispatchFetch(`http://${HOST_WORKER_NAME}${EVALUATE_PATH}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(options),
-        signal: AbortSignal.timeout(timeout + TIMEOUT_GRACE_MS),
-      })
+      host = await getHost()
+      setHandlesActive(host.handles, true)
+      const response = await host.miniflare.dispatchFetch(
+        `http://${HOST_WORKER_NAME}${EVALUATE_PATH}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(options),
+          signal: AbortSignal.timeout(timeout + TIMEOUT_GRACE_MS),
+        }
+      )
       const result = (await response.json()) as EvaluateResult
       return { ...result, duration: Date.now() - start }
     } catch (error) {
@@ -215,6 +319,9 @@ export function createLocalRuntime(): LocalRuntime {
         error: error instanceof Error ? error.message : String(error),
         duration: Date.now() - start,
       }
+    } finally {
+      inFlight--
+      if (inFlight === 0 && host && hostPromise) setHandlesActive(host.handles, false)
     }
   }
 
@@ -232,8 +339,10 @@ function getSharedRuntime(): LocalRuntime {
 /**
  * Dispose the process-wide local runtime (if one was created).
  *
- * Call from test teardown or before process exit. The next `evaluate()`
- * without an env creates a fresh runtime.
+ * Optional: an idle runtime does not keep the process alive, so a script or
+ * CLI exits on its own. Call it to release the host early (test teardown, or
+ * before a long idle stretch). The next `evaluate()` without an env creates a
+ * fresh runtime.
  */
 export async function dispose(): Promise<void> {
   const runtime = sharedRuntime

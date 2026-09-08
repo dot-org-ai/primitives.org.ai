@@ -51,7 +51,13 @@ export interface ReplSession {
   /** Run prelude code (called automatically on first eval) */
   runPrelude(): Promise<void>
 
-  /** Close the session and release resources */
+  /**
+   * Close the session: drop the accumulated context.
+   *
+   * Local sessions share the process-wide host from 'ai-evaluate/node', which
+   * is not released here - it is unref'd while idle (so the process still exits
+   * on its own) and can be shut down early with `dispose()` from that module.
+   */
   close(): Promise<void>
 }
 
@@ -78,7 +84,6 @@ export async function createReplSession(
   // Context accumulates across evaluations
   let context: Record<string, unknown> = {}
   let preludeRun = false
-  let miniflare: unknown = null
 
   // Build module code from accumulated context
   function buildContextModule(): string {
@@ -192,13 +197,6 @@ export async function createReplSession(
     async close(): Promise<void> {
       context = {}
       preludeRun = false
-      if (
-        miniflare &&
-        typeof (miniflare as { dispose?: () => Promise<void> }).dispose === 'function'
-      ) {
-        await (miniflare as { dispose: () => Promise<void> }).dispose()
-        miniflare = null
-      }
     },
   }
 }

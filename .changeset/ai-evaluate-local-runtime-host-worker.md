@@ -12,7 +12,10 @@ The Miniflare 3 per-call instance and the separate dev worker template are gone.
   is a `worker-loader` binding. Local and production execute the same code path.
 - New: `createLocalRuntime()` -> `{ evaluate, dispose }`, process-wide `dispose()`,
   `bundleHostWorker()`. One host per process, lazily created, reused across calls
-  (test suite: ~100s -> ~13s).
+  (test suite: ~100s -> ~13s). The host's handles are unref'd while idle, so a
+  script or CLI that never calls `dispose()` still exits on its own (as with the
+  per-call Miniflare 3 instance); `dispose()` is only needed to release the host
+  early. `ai-functions` exposes this as `disposeSandbox()`.
 - `generateDevWorkerCode` is merged into `generateWorkerCode` as
   `testRunner: 'rpc' | 'embedded'`; it remains as a deprecated alias. `evaluate()`
   falls back to the embedded test runner when no `TEST` binding is present, so the

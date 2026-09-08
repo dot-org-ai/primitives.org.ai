@@ -22,11 +22,18 @@
  *
  * The `ai-evaluate/node` module is only imported when no `env` is present, so a
  * Node process never pulls in `cloudflare:workers`.
+ *
+ * The Node entry keeps one Miniflare host per process. It is unref'd while
+ * idle, so a process exits on its own without any teardown; `disposeSandbox()`
+ * releases it early (test teardown) and is a no-op if it was never used.
  */
 
 import type { EvaluateOptions, EvaluateResult, SandboxEnv } from 'ai-evaluate'
 
 export type { SandboxEnv } from 'ai-evaluate'
+
+/** Set once the Node entry has been imported, so `disposeSandbox` never loads it just to dispose */
+let usedNodeEntry = false
 
 /**
  * Run an evaluation in the appropriate sandbox.
@@ -48,5 +55,17 @@ export async function runInSandbox(
   // No live Worker — use the Node entry (Miniflare fallback). This module is
   // imported lazily so Node processes never eagerly pull in `cloudflare:workers`.
   const { evaluate } = await import('ai-evaluate/node')
+  usedNodeEntry = true
   return evaluate(options, env)
+}
+
+/**
+ * Shut down the process-wide Miniflare host behind the Node fallback, if one
+ * was created. Not required for a process to exit (an idle host is unref'd);
+ * call it to release the host early, e.g. from test teardown.
+ */
+export async function disposeSandbox(): Promise<void> {
+  if (!usedNodeEntry) return
+  const { dispose } = await import('ai-evaluate/node')
+  await dispose()
 }

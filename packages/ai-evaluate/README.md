@@ -143,11 +143,15 @@ import { evaluate, dispose } from 'ai-evaluate/node'
 const result = await evaluate({ script: '1 + 1' })
 // { success: true, value: 2, logs: [], duration: 50 }
 
-await dispose() // shut down the process-wide host worker (test teardown, CLI exit)
+await dispose() // optional: release the process-wide host worker early (test teardown)
 ```
 
 One host worker is created lazily per process and reused for every call; each
-`evaluate()` still runs in its own dynamically-loaded isolate. For an isolated
+`evaluate()` still runs in its own dynamically-loaded isolate. While no
+evaluation is in flight the host's handles (workerd child, loopback server) are
+unref'd, so a script or CLI that never calls `dispose()` still exits on its own
+as soon as its work is done; workerd is reaped on exit. `dispose()` only
+matters when you want the host gone before the process ends. For an isolated
 runtime (e.g. per test file) use `createLocalRuntime()`:
 
 ```typescript
