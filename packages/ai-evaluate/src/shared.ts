@@ -224,6 +224,12 @@ function workerIdentity(spec: WorkerCode) {
  * (see `workerIdentity`). One id per unique worker is the cost control under
  * Cloudflare's per-unique-worker/day pricing.
  *
+ * What must not be shared across callers of the same code goes into
+ * `modules` as a json module instead, so it is hashed: the outbound policy as
+ * `outbound.json`, and with a facet the sandbox identity as `sandbox.json`
+ * (`SANDBOX_JSON_MODULE`) - a `'cached'` isolate whose env holds sandbox A's
+ * `SandboxHost` stub is never handed sandbox B's script.
+ *
  * Uses a stable (sorted-key) JSON serialization hashed with cyrb53.
  */
 export const workerCodeId = (spec: WorkerCode): string =>

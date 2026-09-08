@@ -8,9 +8,10 @@
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 import { env } from 'cloudflare:test'
 import { describe, it, expect } from 'vitest'
-import { evaluate } from '../../src/evaluate.js'
+import { evaluate, buildWorkerCodeWithWarnings } from '../../src/evaluate.js'
 import { createReplSession } from '../../src/repl.js'
-import { SANDBOX_HOST_BINDING_KEY } from '../../src/facets.js'
+import { SANDBOX_HOST_BINDING_KEY, SANDBOX_JSON_MODULE } from '../../src/facets.js'
+import { workerCodeId } from '../../src/shared.js'
 import type { EvaluateOptions } from '../../src/types.js'
 
 /** A plain class (no `extends DurableObject`): the facet worker wraps it */
@@ -260,6 +261,38 @@ describe('facets (workerd, SandboxHost Durable Object)', () => {
     expect((await evaluate(options, env)).value).toBe(2)
   })
 
+  it('cached: a later sandboxId gets its own facet, not the isolate cached for the first (aip-263g.39)', async () => {
+    const a = sandbox()
+    const b = sandbox()
+    expect((await evaluate(counter(a, { isolation: 'cached' }), env)).value).toBe(1)
+    expect((await evaluate(counter(a, { isolation: 'cached' }), env)).value).toBe(2)
+    // Same code, other sandbox: another isolate, bound to b's SandboxHost - not
+    // a's cached isolate, whose env holds a's stub (witnessed 3 before the fix)
+    const other = await evaluate(counter(b, { isolation: 'cached' }), env)
+    expect(other.success, other.error).toBe(true)
+    expect(other.value).toBe(1)
+    // ... and each sandbox's cached isolate keeps serving its own sandbox
+    expect((await evaluate(counter(a, { isolation: 'cached' }), env)).value).toBe(3)
+    expect((await evaluate(counter(b, { isolation: 'cached' }), env)).value).toBe(2)
+  })
+
+  it('the script worker id differs per sandboxId (sandbox.json) and is stable within one; the facet worker id does not', async () => {
+    const a = sandbox()
+    const [first, again, other] = await Promise.all([
+      buildWorkerCodeWithWarnings(counter(a)),
+      buildWorkerCodeWithWarnings(counter(a)),
+      buildWorkerCodeWithWarnings(counter(sandbox())),
+    ])
+    expect(first.code.modules[SANDBOX_JSON_MODULE]).toEqual({
+      json: { sandboxId: a, facet: 'State' },
+    })
+    expect(workerCodeId(first.code)).toBe(workerCodeId(again.code))
+    expect(workerCodeId(first.code)).not.toBe(workerCodeId(other.code))
+    // The facet worker is content-addressed on the module alone
+    expect(first.facet!.spec.code.modules).not.toHaveProperty(SANDBOX_JSON_MODULE)
+    expect(first.facet!.spec.codeId).toBe(other.facet!.spec.codeId)
+  })
+
   it('fetch: false applies to facet code too', async () => {
     const result = await evaluate(
       {
@@ -276,6 +309,33 @@ describe('facets (workerd, SandboxHost Durable Object)', () => {
     )
     expect(result.success, result.error).toBe(true)
     expect(result.value).toMatch(/^blocked: /)
+  })
+
+  it('an allowlist applies to facet code too: a host outside it is refused, one inside is forwarded', async () => {
+    const probe = (url: string) =>
+      evaluate(
+        {
+          module: `export class State {
+            constructor(ctx) {}
+            async probe(url) {
+              try { return { status: (await fetch(url)).status } } catch (e) { return { error: e.message } }
+            }
+          }`,
+          script: `return await env.STATE.probe(${JSON.stringify(url)})`,
+          facet: { class: 'State' },
+          sandboxId: sandbox(),
+          fetch: ['127.0.0.1'],
+        },
+        env
+      )
+    const refused = await probe('https://blocked.test/')
+    expect(refused.success, refused.error).toBe(true)
+    expect((refused.value as { error?: string }).error).toMatch(/not in allowlist/)
+    expect((refused.value as { error?: string }).error).toContain('blocked.test')
+    // Allowed: forwarded to the real fetch, which fails at the transport (nothing listens)
+    const forwarded = await probe('http://127.0.0.1:1/')
+    expect(forwarded.success, forwarded.error).toBe(true)
+    expect((forwarded.value as { error?: string }).error ?? '').not.toMatch(/not in allowlist/)
   })
 
   it('a module that does not export the class fails at the first call, naming it', async () => {

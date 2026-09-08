@@ -46,6 +46,23 @@ export const SANDBOX_HOST_EXPORT = 'SandboxHost'
 export const SANDBOX_HOST_BINDING_KEY = '__ai_evaluate_sandbox_host__'
 
 /**
+ * The json module that carries the sandbox identity into the script worker's
+ * content-addressed `WorkerCode` spec when a facet is configured (as
+ * `outbound.json` does for the outbound policy): `{ sandboxId, facet }`.
+ *
+ * The `SandboxHost` stub in the loader env is a binding, which `workerCodeId`
+ * never hashes; without this module the same code under two `sandboxId`s is
+ * one id, and under `isolation: 'cached'` the isolate loaded for sandbox A -
+ * its env bound to A's stub - would serve sandbox B's script, so B's calls
+ * would reach A's facet and A's storage (aip-263g.39). With it, a `'cached'`
+ * isolate is one per sandbox: reused across evaluations of the same
+ * `sandboxId`, never across sandboxes. The facet worker does not carry it:
+ * it is content-addressed on the module alone and runs inside the sandbox's
+ * own `SandboxHost`.
+ */
+export const SANDBOX_JSON_MODULE = 'sandbox.json'
+
+/**
  * Error reported when `facet` is set and the host worker does not export
  * `SandboxHost` with a namespace (or runs on a compatibility date without
  * `ctx.exports`).

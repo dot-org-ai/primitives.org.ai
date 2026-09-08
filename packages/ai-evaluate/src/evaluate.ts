@@ -79,6 +79,7 @@ import {
 import {
   SANDBOX_ENV_FUNCTION,
   SANDBOX_HOST_BINDING_KEY,
+  SANDBOX_JSON_MODULE,
   SANDBOX_HOST_UNAVAILABLE_ERROR,
   facetBindingName,
   facetEnvSource,
@@ -558,8 +559,13 @@ export interface BuiltWorkerCode {
  * which is registered per evaluation and cannot serve a facet that outlives
  * it. The script worker's env additionally carries the `SandboxHost` stub
  * for `sandboxId` under `SANDBOX_HOST_BINDING_KEY`, which the generated
- * worker strips from what the script sees. A host worker without the
- * `SandboxHost` export fails here, closed, before any loader call.
+ * worker strips from what the script sees, and its modules carry the sandbox
+ * identity as `sandbox.json` (`SANDBOX_JSON_MODULE`, `{ sandboxId, facet }`)
+ * so that its content-addressed id differs per `sandboxId`: the stub is a
+ * binding, which `workerCodeId` never hashes, and a `'cached'` isolate bound
+ * to one sandbox's stub must never serve another sandbox's script. A host
+ * worker without the `SandboxHost` export fails here, closed, before any
+ * loader call.
  */
 export async function buildWorkerCode(
   options: EvaluateOptions,
@@ -686,9 +692,17 @@ export async function buildWorkerCodeWithWarnings(
 
   let built: BuiltWorkerCode['facet']
   let scriptEnv: Record<string, unknown> = loaderEnv
+  let sandboxModule: Record<string, WorkerModule> = {}
   if (facetOptions && sandboxHosts && facetResolved) {
     // `sandboxId` is required with `facet` by validateOptions
-    const host = sandboxHosts.getByName(options.sandboxId ?? '')
+    const sandboxId = options.sandboxId ?? ''
+    const host = sandboxHosts.getByName(sandboxId)
+    // The sandbox identity goes into the script worker's spec: the host stub
+    // is a binding, outside the content-addressed id, and this is what keeps
+    // a 'cached' isolate from serving another sandbox (SANDBOX_JSON_MODULE).
+    sandboxModule = {
+      [SANDBOX_JSON_MODULE]: { json: { sandboxId, facet: facetOptions.class } },
+    }
     const facetCode: WorkerCode = {
       mainModule: facetResolved.mainModule,
       modules: { ...facetResolved.modules, ...packageJson, ...facetOutboundModule },
@@ -712,7 +726,7 @@ export async function buildWorkerCodeWithWarnings(
   return {
     code: {
       mainModule: resolved.mainModule,
-      modules: { ...resolved.modules, ...packageJson, ...outboundModule },
+      modules: { ...resolved.modules, ...packageJson, ...outboundModule, ...sandboxModule },
       ...spec,
       globalOutbound,
       env: scriptEnv,
