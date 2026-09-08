@@ -9,6 +9,7 @@ import {
   DEFAULT_TIMEOUT,
 } from '../src/evaluate.js'
 import { COMPATIBILITY_DATE, workerCodeId } from '../src/shared.js'
+import { OUTBOUND_GATEWAY_UNAVAILABLE_ERROR } from '../src/outbound.js'
 import { ValidationError } from '../src/validation.js'
 import type { WorkerCode, WorkerEntrypointOptions, WorkerLoader, WorkerStub } from '../src/types.js'
 
@@ -449,9 +450,30 @@ describe('evaluate', () => {
       expect((await buildWorkerCode({ script: '1', fetch: false })).globalOutbound).toBeNull()
       expect((await buildWorkerCode({ script: '1', fetch: null })).globalOutbound).toBeNull()
       expect((await buildWorkerCode({ script: '1', fetch: true })).globalOutbound).toBeUndefined()
-      expect(
-        (await buildWorkerCode({ script: '1', fetch: ['a.com'] })).globalOutbound
-      ).toBeUndefined()
+    })
+
+    it('an allowlist or outboundRpc fails closed where the host has no OutboundGateway', async () => {
+      // Node has no `cloudflare:workers` loopback bindings, so the gateway the
+      // policy needs cannot be bound; the build refuses rather than loading a
+      // worker whose fetch would be unrestricted.
+      await expect(buildWorkerCode({ script: '1', fetch: ['a.com'] })).rejects.toThrow(
+        OUTBOUND_GATEWAY_UNAVAILABLE_ERROR
+      )
+      await expect(buildWorkerCode({ script: '1', outboundRpc: () => null })).rejects.toThrow(
+        OUTBOUND_GATEWAY_UNAVAILABLE_ERROR
+      )
+      // ... and evaluate() reports it as an error result, before any load
+      const loader: WorkerLoader = {
+        get: () => {
+          throw new Error('loader must not be reached')
+        },
+        load: () => {
+          throw new Error('loader must not be reached')
+        },
+      }
+      const result = await evaluateWithEnv({ script: 'return 1', fetch: ['a.com'] }, { loader })
+      expect(result.success).toBe(false)
+      expect(result.error).toBe(OUTBOUND_GATEWAY_UNAVAILABLE_ERROR)
     })
 
     it('is content-addressed: identical options hash to the same id', async () => {

@@ -17,13 +17,21 @@ import { EVALUATE_PATH } from './shared.js'
 import type { EvaluateOptions, EvaluateResult, SandboxEnv } from './types.js'
 
 /**
+ * The outbound gateway entrypoint, exported so `evaluate()` can bind it as
+ * the sandbox's `globalOutbound` for `fetch: string[]` / `outboundRpc` (a
+ * loopback stub via `ctx.exports`, see outbound.ts). A Worker of your own
+ * that calls `evaluate()` needs the same export from its main module.
+ */
+export { OutboundGateway } from './worker.js'
+
+/**
  * Handle one host-worker request.
  *
  * `POST /evaluate` with an `EvaluateOptions` JSON body returns the
  * `EvaluateResult` as JSON. Anything else is 404.
  *
- * Only the default export leaves this module: workerd requires every named
- * export of a main module to be a handler.
+ * Besides `OutboundGateway` only the default export leaves this module:
+ * workerd requires every named export of a main module to be a handler.
  */
 async function handleRequest(request: Request, env: SandboxEnv): Promise<Response> {
   const url = new URL(request.url)

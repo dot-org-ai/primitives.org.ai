@@ -345,6 +345,12 @@ export function createLocalRuntime(): LocalRuntime {
       )
     }
     // Tail workers are stubs too: JSON would turn them into `{}`.
+    if (options.outboundRpc !== undefined) {
+      return fail(
+        'outboundRpc needs a live worker_loaders binding: pass the host env (with `loader`) to ' +
+          'evaluate(). A function cannot cross the local Node host\'s JSON boundary.'
+      )
+    }
     if (options.tails !== undefined && options.tails.length > 0) {
       return fail(
         'tails need a live worker_loaders binding: pass the host env (with `loader`) to ' +

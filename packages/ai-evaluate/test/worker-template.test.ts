@@ -263,17 +263,20 @@ describe('generateWorkerCode testRunner option', () => {
     }
   })
 
-  it('blocks fetch in-worker for fetch: false / null in both modes', () => {
+  it("never patches fetch inside the worker: network policy is the loader's globalOutbound", () => {
+    // 2.x accepted a `fetch` option here and rebound globalThis.fetch in the
+    // template (keeping the original as __originalFetch__ in module scope,
+    // within the user code's reach). A stale caller that still passes one
+    // gets the same unpatched template as everyone else.
+    const stale = { fetch: ['a.com'] } as unknown as Parameters<typeof generateWorkerCode>[0]
     for (const testRunner of ['embedded', 'rpc'] as const) {
-      expect(generateWorkerCode({ testRunner, fetch: null })).toContain(
-        'Network access blocked: fetch is disabled'
-      )
-      expect(generateWorkerCode({ testRunner, fetch: false })).toContain(
-        'Network access blocked: fetch is disabled'
-      )
-      expect(generateWorkerCode({ testRunner, fetch: true })).not.toContain(
-        'Network access blocked: fetch is disabled'
-      )
+      for (const options of [{}, stale]) {
+        const code = generateWorkerCode({ ...options, testRunner })
+        expect(code).not.toContain('globalThis.fetch =')
+        expect(code).not.toContain('__originalFetch__')
+        expect(code).not.toContain('Network access blocked')
+        expect(code).not.toContain('a.com')
+      }
     }
   })
 

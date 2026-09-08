@@ -113,6 +113,11 @@ pnpm add ai-evaluate
 ```typescript
 import { evaluate } from 'ai-evaluate'
 
+// Needed for `fetch: [...]` allowlists and `outboundRpc`: evaluate() binds a
+// loopback stub of this entrypoint as the sandbox's outbound (see
+// "Network Access Control" below)
+export { OutboundGateway } from 'ai-evaluate/worker'
+
 export default {
   async fetch(request: Request, env: Env) {
     const result = await evaluate({ script: '1 + 1' }, env)
@@ -685,7 +690,7 @@ console.log(result.value) // 7
 | Protection | Description |
 |------------|-------------|
 | V8 Isolate | Code runs in isolated V8 context |
-| Network Control | Configurable: allow, block, or allowlist |
+| Network Control | Configurable: allow, block, or allowlist - enforced as the loaded worker's `globalOutbound` (see [Network Access Control](#network-access-control)), never by code in the isolate |
 | No File System | Zero filesystem access |
 | Memory Limits | Standard Worker limits apply |
 | CPU Limits | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts)) |
@@ -707,7 +712,53 @@ await evaluate({
   script: '...',
   fetch: ['api.example.com', '*.trusted.com']
 })
+
+// Answer some requests from the host instead of the network
+await evaluate({
+  script: 'return (await fetch("https://rpc.internal/users")).json()',
+  fetch: ['api.example.com'],
+  outboundRpc: (url, request) =>
+    new URL(url).hostname === 'rpc.internal' ? Response.json({ users: [] }) : null,
+})
 ```
+
+The policy is the loaded worker's `globalOutbound`, enforced by the runtime.
+Nothing inside the isolate checks hosts: there is no patched `globalThis.fetch`
+and no `__originalFetch__` in module scope for the sandboxed code to reach
+(2.x had both, and the allowlist was bypassable through them).
+
+| `fetch` | `globalOutbound` | A blocked `fetch()` rejects with |
+|---------|------------------|----------------------------------|
+| `true` / absent | inherited (the host's) | - |
+| `false` / `null` | `null` | workerd's own "not permitted to access the internet" |
+| `string[]` | the host's `OutboundGateway` entrypoint | `Network access blocked: domain not in allowlist. Attempted: <host>` |
+
+An allowlist (and `outboundRpc`) is served by the **`OutboundGateway`
+entrypoint of the host worker** - the Worker that calls `evaluate()`. Its main
+module must export it (`export { OutboundGateway } from 'ai-evaluate/worker'`)
+and run on a compatibility date of `2025-11-17` or later, so `evaluate()` can
+create a loopback stub of it (`ctx.exports.OutboundGateway({ props })`) with
+the policy in `props`. Without the export, an evaluation that needs it fails
+closed: an error result that says so, before anything is loaded. The host of
+`ai-evaluate/node` (`src/host-worker.ts`) exports it, so allowlists work
+locally with no setup. Cloudflare Dynamic Workers cannot use an entrypoint of
+another dynamically loaded worker as an outbound, which is why the gateway is
+an entrypoint of the host itself.
+
+`outboundRpc` is asked first, for every request the sandbox makes: a
+`Response` answers it, `null` declines it to the `fetch` policy (blocked under
+`fetch: false`, checked under an allowlist, forwarded under `fetch: true`).
+The function runs on the host and is registered for the duration of the
+evaluation; it cannot cross the `ai-evaluate/node` JSON boundary, so the local
+Node host without an env rejects it. A gateway whose interceptor is not held
+by the isolate serving it fails closed rather than forwarding.
+
+The allowlist is part of the content-addressed spec (as the `outbound.json`
+module), so a `'cached'` isolate is never reused under another policy. A
+request the gateway refuses (or that fails at the transport after being
+forwarded) is recorded as an exception of the host worker's `OutboundGateway`
+in its logs and tail events - that is how a `Fetcher` makes its caller's
+`fetch()` reject.
 
 ## Troubleshooting
 

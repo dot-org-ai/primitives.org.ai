@@ -48,6 +48,21 @@ export {
   MAX_TIMEOUT,
 } from './validation.js'
 export { isEvaluateResult, assertEvaluateResult } from './type-guards.js'
+export {
+  createOutboundGateway,
+  outboundPolicy,
+  blockedHostError,
+  OUTBOUND_GATEWAY_EXPORT,
+  OUTBOUND_JSON_MODULE,
+  OUTBOUND_GATEWAY_UNAVAILABLE_ERROR,
+  INTERCEPTOR_UNAVAILABLE_ERROR,
+} from './outbound.js'
+export type {
+  OutboundGateway,
+  OutboundGatewayProps,
+  OutboundGatewayFactory,
+  OutboundInterceptor,
+} from './outbound.js'
 export { transformSource, transformOptions, containsJSX } from './transform.js'
 export type { TransformSourceOptions } from './transform.js'
 

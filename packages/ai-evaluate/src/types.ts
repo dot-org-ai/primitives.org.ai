@@ -130,16 +130,34 @@ export interface EvaluateOptions {
    */
   bindings?: Record<string, unknown> | undefined
   /**
-   * Network access control
+   * Network access control, enforced by the runtime as the loaded worker's
+   * `globalOutbound` - never by code inside the isolate:
    * - true: allow all (default)
-   * - false/null: block all
-   * - string[]: allowlist of domains (wildcards: '*.example.com')
+   * - false/null: block all (`globalOutbound: null`; `fetch()` rejects with
+   *   the runtime's own message)
+   * - string[]: allowlist of hosts (wildcards: '*.example.com'), served by
+   *   the host worker's `OutboundGateway` entrypoint, which the host's main
+   *   module must export (`export { OutboundGateway } from
+   *   'ai-evaluate/worker'`); a request to any other host rejects with
+   *   "Network access blocked: domain not in allowlist". Part of the
+   *   content-addressed spec.
    */
   fetch?: FetchConfig
   /** RPC services to expose via capnweb (URL -> handler) */
   rpc?: Record<string, unknown> | undefined
-  /** Outbound RPC interceptor - intercepts fetch calls to RPC URLs */
-  outboundRpc?: ((url: string, request: Request) => Promise<Response> | Response | null) | undefined
+  /**
+   * Host-side interceptor for the sandbox's outbound requests. Asked first
+   * for every `fetch()` the sandbox makes: a `Response` answers it, `null`
+   * declines it and the `fetch` policy decides (a declined request under
+   * `fetch: false` is blocked, under an allowlist checked against it, under
+   * `fetch: true` forwarded). Runs through the same `OutboundGateway`
+   * entrypoint as an allowlist, so the host's main module must export it.
+   * A function: it cannot cross the `ai-evaluate/node` JSON boundary, so the
+   * local Node host without an env rejects it.
+   */
+  outboundRpc?:
+    | ((url: string, request: Request) => Promise<Response | null> | Response | null)
+    | undefined
   /** SDK configuration - enables $, db, ai, api, on, send globals */
   sdk?: SDKConfig | boolean | undefined
   /**
@@ -311,7 +329,11 @@ export interface WorkerCode {
   allowExperimental?: boolean | undefined
   /** Bindings visible to the loaded worker as `env` */
   env?: Record<string, unknown> | undefined
-  /** `null` blocks all global `fetch()`; a service routes it; `undefined` inherits */
+  /**
+   * `null` blocks all global `fetch()`; a service (a `Fetcher`: a service
+   * binding or a loopback `ctx.exports.X(...)` stub - never an entrypoint of
+   * another dynamically loaded worker) routes it; `undefined` inherits
+   */
   globalOutbound?: null | unknown
   /** Resource limits enforced by the runtime */
   limits?: WorkerLimits | undefined

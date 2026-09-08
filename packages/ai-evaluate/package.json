@@ -18,6 +18,10 @@
       "import": "./dist/repl.js",
       "types": "./dist/repl.d.ts"
     },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
+    },
     "./static": {
       "import": "./dist/static/index.js",
       "types": "./dist/static/index.d.ts"
