@@ -4,11 +4,13 @@ import {
   evaluate as evaluateWithEnv,
   buildWorkerCode,
   loadWorker,
+  entrypointLimits,
   DEFAULT_ISOLATION,
+  DEFAULT_TIMEOUT,
 } from '../src/evaluate.js'
-import { workerCodeId } from '../src/shared.js'
+import { COMPATIBILITY_DATE, workerCodeId } from '../src/shared.js'
 import { ValidationError } from '../src/validation.js'
-import type { WorkerCode, WorkerLoader, WorkerStub } from '../src/types.js'
+import type { WorkerCode, WorkerEntrypointOptions, WorkerLoader, WorkerStub } from '../src/types.js'
 
 /**
  * A fake `worker_loaders` binding that records how it was driven. `get()`
@@ -20,20 +22,25 @@ function createFakeLoader() {
   const calls = { get: 0, load: 0, factory: 0 }
   const ids: string[] = []
   const loaded: WorkerCode[] = []
+  /** `getEntrypoint()` options, one per evaluation */
+  const entrypoints: (WorkerEntrypointOptions | undefined)[] = []
 
   const stubFor = (pending: WorkerCode | Promise<WorkerCode>): WorkerStub => ({
-    getEntrypoint: () => ({
-      fetch: async () => {
-        const code = await pending
-        loaded.push(code)
-        return Response.json({
-          success: true,
-          value: { mainModule: code.mainModule, modules: Object.keys(code.modules).sort() },
-          logs: [],
-          duration: 0,
-        })
-      },
-    }),
+    getEntrypoint: (_name, options) => {
+      entrypoints.push(options)
+      return {
+        fetch: async () => {
+          const code = await pending
+          loaded.push(code)
+          return Response.json({
+            success: true,
+            value: { mainModule: code.mainModule, modules: Object.keys(code.modules).sort() },
+            logs: [],
+            duration: 0,
+          })
+        },
+      }
+    },
     getDurableObjectClass: () => undefined,
   })
 
@@ -55,7 +62,19 @@ function createFakeLoader() {
     },
   }
 
-  return { loader, calls, ids, loaded }
+  return { loader, calls, ids, loaded, entrypoints }
+}
+
+/**
+ * A fake loader whose worker answers with whatever `body` is - for the
+ * response-shape check `evaluate()` runs on what comes back.
+ */
+function createRespondingLoader(body: unknown): WorkerLoader {
+  const stub: WorkerStub = {
+    getEntrypoint: () => ({ fetch: async () => Response.json(body) }),
+    getDurableObjectClass: () => undefined,
+  }
+  return { get: () => stub, load: () => stub }
 }
 
 describe('evaluate', () => {
@@ -442,6 +461,163 @@ describe('evaluate', () => {
     })
   })
 
+  // aip-263g.5: limits, tails, compatibility flags and date reach the loader
+  // through the spec; the timeout-derived CPU budget reaches the entrypoint.
+  describe('limits, tails, compatibility (fake loader)', () => {
+    const tail = { fetch: async () => new Response('tail') }
+
+    it('explicit limits are handed to the loader on the spec', async () => {
+      const fake = createFakeLoader()
+      await evaluateWithEnv(
+        { script: 'return 1', limits: { cpuMs: 50, subrequests: 2 }, isolation: 'cached' },
+        { loader: fake.loader }
+      )
+      expect(fake.loaded[0]?.limits).toEqual({ cpuMs: 50, subrequests: 2 })
+    })
+
+    it('no limits: the spec carries none, and the entrypoint CPU budget is the timeout', async () => {
+      const fake = createFakeLoader()
+      await evaluateWithEnv({ script: 'return 1', timeout: 200 }, { loader: fake.loader })
+      expect(fake.loaded[0]?.limits).toBeUndefined()
+      expect(fake.entrypoints[0]?.limits).toEqual({ cpuMs: 200 })
+    })
+
+    it('no limits and no timeout: the entrypoint CPU budget is DEFAULT_TIMEOUT', async () => {
+      const fake = createFakeLoader()
+      await evaluateWithEnv({ script: 'return 1' }, { loader: fake.loader })
+      expect(fake.entrypoints[0]?.limits).toEqual({ cpuMs: DEFAULT_TIMEOUT })
+    })
+
+    it('an explicit limits.cpuMs wins over the timeout on the entrypoint', async () => {
+      const fake = createFakeLoader()
+      await evaluateWithEnv(
+        { script: 'return 1', timeout: 200, limits: { cpuMs: 50 } },
+        { loader: fake.loader }
+      )
+      expect(fake.entrypoints[0]?.limits).toEqual({ cpuMs: 50 })
+      expect(fake.loaded[0]?.limits).toEqual({ cpuMs: 50 })
+    })
+
+    it('entrypointLimits maps timeout -> cpuMs only when limits.cpuMs is unset', () => {
+      expect(entrypointLimits({ script: '1' }, 200)).toEqual({ cpuMs: 200 })
+      expect(entrypointLimits({ script: '1', limits: { subrequests: 2 } }, 200)).toEqual({
+        cpuMs: 200,
+      })
+      expect(entrypointLimits({ script: '1', limits: { cpuMs: 50 } }, 200)).toEqual({ cpuMs: 50 })
+    })
+
+    it('limits are part of the content-addressed id; the timeout is not', async () => {
+      const plain = await buildWorkerCode({ script: 'return 1' })
+      const slow = await buildWorkerCode({ script: 'return 1', timeout: 30000 })
+      const capped = await buildWorkerCode({ script: 'return 1', limits: { cpuMs: 50 } })
+      expect(workerCodeId(plain)).toBe(workerCodeId(slow))
+      expect(workerCodeId(plain)).not.toBe(workerCodeId(capped))
+    })
+
+    it('compatibilityFlags and compatibilityDate appear in the spec as given', async () => {
+      const fake = createFakeLoader()
+      await evaluateWithEnv(
+        {
+          script: 'return 1',
+          compatibilityFlags: ['nodejs_compat'],
+          compatibilityDate: '2026-06-01',
+        },
+        { loader: fake.loader }
+      )
+      expect(fake.loaded[0]?.compatibilityFlags).toEqual(['nodejs_compat'])
+      expect(fake.loaded[0]?.compatibilityDate).toBe('2026-06-01')
+    })
+
+    it('omitted: COMPATIBILITY_DATE and no flags', async () => {
+      const fake = createFakeLoader()
+      await evaluateWithEnv({ script: 'return 1' }, { loader: fake.loader })
+      expect(fake.loaded[0]?.compatibilityDate).toBe(COMPATIBILITY_DATE)
+      expect(fake.loaded[0]?.compatibilityFlags).toEqual([])
+    })
+
+    it('the full (tests) template gets the same compatibility settings and limits', async () => {
+      const code = await buildWorkerCode({
+        tests: 'it("x", () => {})',
+        compatibilityFlags: ['nodejs_compat'],
+        compatibilityDate: '2026-06-01',
+        limits: { subrequests: 3 },
+      })
+      expect(Object.keys(code.modules).sort()).toEqual(['capnweb.js', 'worker.js'])
+      expect(code.compatibilityFlags).toEqual(['nodejs_compat'])
+      expect(code.compatibilityDate).toBe('2026-06-01')
+      expect(code.limits).toEqual({ subrequests: 3 })
+    })
+
+    it('compatibility flags and date change the content-addressed id', async () => {
+      const plain = await buildWorkerCode({ script: 'return 1' })
+      const flagged = await buildWorkerCode({
+        script: 'return 1',
+        compatibilityFlags: ['nodejs_compat'],
+      })
+      const dated = await buildWorkerCode({ script: 'return 1', compatibilityDate: '2026-06-01' })
+      expect(workerCodeId(plain)).not.toBe(workerCodeId(flagged))
+      expect(workerCodeId(plain)).not.toBe(workerCodeId(dated))
+    })
+
+    it('tails: WorkerCode.tails is the same array, and never changes the id', async () => {
+      const fake = createFakeLoader()
+      const tails = [tail]
+      await evaluateWithEnv({ script: 'return 1', tails }, { loader: fake.loader })
+      expect(fake.loaded[0]?.tails).toBe(tails)
+
+      const plain = await buildWorkerCode({ script: 'return 1' })
+      const tailed = await buildWorkerCode({ script: 'return 1', tails })
+      expect(plain.tails).toBeUndefined()
+      expect(workerCodeId(plain)).toBe(workerCodeId(tailed))
+    })
+
+    it('a malformed limit is rejected before the loader is touched', async () => {
+      const fake = createFakeLoader()
+      const result = await evaluateWithEnv(
+        { script: 'return 1', limits: { cpuMs: -1 } },
+        { loader: fake.loader }
+      )
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/limits\.cpuMs/)
+      expect(fake.calls.load + fake.calls.get).toBe(0)
+    })
+  })
+
+  // aip-263g.5: what the loaded worker answers is checked before it is
+  // returned as an EvaluateResult.
+  describe('response shape (assertEvaluateResult)', () => {
+    it('passes a well-formed result through', async () => {
+      const loader = createRespondingLoader({
+        success: true,
+        value: 42,
+        logs: [{ level: 'log', message: 'hi', timestamp: 1 }],
+        duration: 0,
+      })
+      const result = await evaluateWithEnv({ script: 'return 42' }, { loader })
+      expect(result.success).toBe(true)
+      expect(result.value).toBe(42)
+      expect(result.logs).toEqual([{ level: 'log', message: 'hi', timestamp: 1 }])
+    })
+
+    it('reports a malformed worker response as an error result', async () => {
+      const loader = createRespondingLoader({ success: 'yes', logs: 'none' })
+      const result = await evaluateWithEnv({ script: 'return 1' }, { loader })
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/Invalid EvaluateResult/)
+    })
+
+    it('rejects a log entry with an unknown level', async () => {
+      const loader = createRespondingLoader({
+        success: true,
+        logs: [{ level: 'trace', message: 'x', timestamp: 1 }],
+        duration: 0,
+      })
+      const result = await evaluateWithEnv({ script: 'return 1' }, { loader })
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/logs\[0\]\.level/)
+    })
+  })
+
   // aip-263g.6: the sandbox env is an explicit allowlist. `env` carries
   // strings, `bindings` carries RPC stubs and structured-cloneable values;
   // anything else (a raw KV/D1/R2/DO binding, a closure) never reaches the
@@ -574,6 +750,33 @@ describe('evaluate', () => {
       })
       expect(result.success).toBe(true)
       expect(result.testResults?.passed).toBe(1)
+    })
+
+    it('tails cannot cross from Node into the local host either', async () => {
+      const result = await evaluate({
+        script: 'return 1',
+        tails: [{ fetch: async () => new Response('tail') }],
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/tails/)
+      expect(result.error).toMatch(/loader/)
+    })
+
+    it('compatibilityFlags reach the loaded worker (nodejs_compat exposes Buffer)', async () => {
+      const without = await evaluate({ script: 'return typeof Buffer' })
+      expect(without.value).toBe('undefined')
+      const withFlag = await evaluate({
+        script: 'return typeof Buffer',
+        compatibilityFlags: ['nodejs_compat'],
+      })
+      expect(withFlag.error).toBeUndefined()
+      expect(withFlag.value).toBe('function')
+    })
+
+    it('limits are accepted by the local loader (not enforced by open-source workerd)', async () => {
+      const result = await evaluate({ script: 'return 1', limits: { cpuMs: 100, subrequests: 1 } })
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe(1)
     })
 
     it('bindings cannot cross from Node into the local host (no live loader to hand a stub to)', async () => {

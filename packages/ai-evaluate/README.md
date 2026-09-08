@@ -200,9 +200,10 @@ script is doing:
 
 A loop that never yields is never interrupted by `AbortSignal.timeout` - the
 signal is only observed when the script returns to the event loop. On
-Cloudflare `evaluate()` therefore also passes `limits: { cpuMs: timeout }` to
-the loaded worker's entrypoint (per-entrypoint limits do not change the
-content-addressed isolate id, so cached isolates are unaffected). **Open-source
+Cloudflare `evaluate()` therefore also passes `limits: { cpuMs: limits.cpuMs ??
+timeout }` to the loaded worker's entrypoint (per-entrypoint limits do not
+change the content-addressed isolate id, so cached isolates are unaffected; an
+explicit `limits.cpuMs` is used as given). **Open-source
 workerd accepts `limits.cpuMs` but does not enforce it**, and runs every loaded
 worker on the host worker's single thread, so locally a CPU-bound loop also
 stalls the host's own timers. The Node side is the local contract for that case:
@@ -252,7 +253,11 @@ interface EvaluateOptions {
   module?: string              // Module code with exports
   tests?: string               // Vitest-style test code
   script?: string              // Script to execute
-  timeout?: number             // Default: 5000ms, max: 60000ms
+  timeout?: number             // Default: 5000ms, max: 60000ms (wall clock)
+  limits?: { cpuMs?: number; subrequests?: number } // Runtime-enforced limits (see below)
+  tails?: unknown[]            // Tail workers receiving trace events (see below)
+  compatibilityFlags?: string[] // e.g. ['nodejs_compat'] (default: none)
+  compatibilityDate?: string   // YYYY-MM-DD (default: the package's COMPATIBILITY_DATE)
   env?: Record<string, string> // String environment variables (see below)
   bindings?: Record<string, unknown> // RPC stubs and structured-cloneable values (see below)
   sdk?: SDKConfig | boolean    // Enable $, db, ai globals
@@ -260,6 +265,50 @@ interface EvaluateOptions {
   isolation?: 'fresh' | 'cached' // Isolate reuse policy (default: 'fresh', see below)
 }
 ```
+
+Every option is validated at the top of `evaluate()` (`validateOptions`):
+sizes, `timeout`, `limits`, `compatibilityFlags`, `compatibilityDate`, `tails`
+and `imports` are checked before anything is transformed or loaded, and a
+`ValidationError` comes back as an error result (`success: false`, `error`
+naming the option). What the loaded worker answers is checked too
+(`assertEvaluateResult`): a response that is not a well-formed `EvaluateResult`
+is reported as `Invalid EvaluateResult: ...` rather than returned as one.
+
+### Limits, tails and compatibility
+
+These map directly onto the Dynamic Workers spec the loader receives:
+
+| Option | Where it lands | Content-addressed? |
+|--------|----------------|--------------------|
+| `limits.cpuMs` | `WorkerCode.limits` (as given) and the entrypoint's CPU budget | yes (the spec's `limits`; the entrypoint budget is not) |
+| `limits.subrequests` | `WorkerCode.limits` | yes |
+| `compatibilityFlags` | `WorkerCode.compatibilityFlags` (default `[]`) | yes |
+| `compatibilityDate` | `WorkerCode.compatibilityDate` (default `COMPATIBILITY_DATE`) | yes |
+| `tails` | `WorkerCode.tails` (the same array) | no - a runtime binding |
+
+```typescript
+await evaluate({
+  script: 'console.log("hi"); return Buffer.from("hi").toString("base64")',
+  limits: { cpuMs: 50, subrequests: 2 },   // CPU and outbound-request caps, enforced by the runtime
+  compatibilityFlags: ['nodejs_compat'],   // Buffer, process, node: builtins
+  tails: [env.TAIL],                       // a tail worker: gets console output, exceptions, outcome
+}, env)
+```
+
+`limits.cpuMs` defaults to `timeout`: CPU time never exceeds wall time, so the
+default cannot cut off a script the timeout would have let finish, and it is
+what ends a CPU-bound loop (see [Timeouts and CPU-bound
+scripts](#timeouts-and-cpu-bound-scripts)). The effective CPU budget
+(`limits.cpuMs ?? timeout`) is applied on the entrypoint, where it does not
+change the isolate id, so the same code with different timeouts is still one
+cached isolate; an explicit `limits` object is part of the spec and does.
+
+Cloudflare enforces `limits`; **open-source workerd (local) accepts and ignores
+them** - `compatibilityFlags`, `compatibilityDate` and `tails` are honoured
+locally. `tails` need a live loader: like `bindings`, they cannot cross the
+`ai-evaluate/node` JSON boundary, so the local Node host rejects them; a
+`WorkerEntrypoint` with a `tail(events)` handler bound as a service is the
+usual tail worker.
 
 ### Sandbox env: `env` and `bindings`
 
@@ -599,7 +648,9 @@ console.log(result.value) // 7
 | Network Control | Configurable: allow, block, or allowlist |
 | No File System | Zero filesystem access |
 | Memory Limits | Standard Worker limits apply |
-| CPU Limits | `limits.cpuMs` bound to `timeout` on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts)) |
+| CPU Limits | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts)) |
+| Subrequest Limits | `limits.subrequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility)) |
+| Input Validation | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape |
 
 ### Network Access Control
 

@@ -13,16 +13,21 @@ export {
   createEvaluator,
   buildWorkerCode,
   loadWorker,
+  entrypointLimits,
   DEFAULT_ISOLATION,
+  DEFAULT_TIMEOUT,
 } from './evaluate.js'
-export { normalizeImport, normalizeImports, workerCodeId } from './shared.js'
+export { normalizeImport, normalizeImports, workerCodeId, COMPATIBILITY_DATE } from './shared.js'
 export {
   ValidationError,
+  validateOptions,
   buildSandboxEnv,
   isRpcStubLike,
   isStructuredCloneable,
   TEST_BINDING_KEY,
+  MAX_TIMEOUT,
 } from './validation.js'
+export { isEvaluateResult, assertEvaluateResult } from './type-guards.js'
 export { transformSource, transformOptions, containsJSX } from './transform.js'
 export type { TransformSourceOptions } from './transform.js'
 

@@ -71,8 +71,43 @@ export interface EvaluateOptions {
   script?: string | undefined
   /** JSX factory/fragment/runtime for the source fields (default: `h` / `Fragment`) */
   jsx?: JSXOptions | undefined
-  /** Timeout in milliseconds (default: 5000) */
+  /**
+   * Wall-clock timeout in milliseconds (default: 5000, max: 60000), enforced
+   * host-side with `AbortSignal.timeout`. Also the loaded worker's CPU budget
+   * unless `limits.cpuMs` says otherwise (see `limits`).
+   */
   timeout?: number | undefined
+  /**
+   * Resource limits the runtime enforces on the loaded worker (Cloudflare
+   * Dynamic Workers `limits`): `cpuMs` caps CPU time per request, `subrequests`
+   * caps outbound requests (fetch and binding calls) per request. Part of the
+   * `WorkerCode` spec, so they are content-addressed with the code.
+   *
+   * `cpuMs` defaults to `timeout`: a CPU-bound loop never observes the
+   * wall-clock signal, so the CPU limit is what ends it. The effective CPU
+   * budget (`limits.cpuMs ?? timeout`) is applied on the entrypoint, where it
+   * does not change the isolate id. Cloudflare enforces both limits;
+   * open-source workerd (local) accepts and ignores them.
+   */
+  limits?: WorkerLimits | undefined
+  /**
+   * Tail workers (service bindings / `WorkerEntrypoint` stubs with a `tail()`
+   * handler) that receive the loaded worker's trace events - console output,
+   * exceptions, outcome - after each request. A runtime binding: it never
+   * changes the isolate id. Needs a live loader: `ai-evaluate/node` without a
+   * host env cannot carry a stub over its JSON boundary and rejects `tails`.
+   */
+  tails?: unknown[] | undefined
+  /**
+   * Compatibility flags for the loaded worker (e.g. `['nodejs_compat']`).
+   * Default: none. Part of the content-addressed spec.
+   */
+  compatibilityFlags?: string[] | undefined
+  /**
+   * Compatibility date for the loaded worker (`YYYY-MM-DD`). Default:
+   * `COMPATIBILITY_DATE`. Part of the content-addressed spec.
+   */
+  compatibilityDate?: string | undefined
   /**
    * String environment variables, visible to `module`, `tests` and `script`
    * as `env.NAME` (a frozen object). Strings only: anything else is rejected

@@ -28,6 +28,7 @@ import type {
   WorkerStub,
   SandboxEnv,
   WorkerCode,
+  WorkerLimits,
 } from './types.js'
 import {
   generateWorkerCode,
@@ -37,7 +38,8 @@ import {
 } from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
 import { transformOptions } from './transform.js'
-import { buildSandboxEnv, TEST_BINDING_KEY } from './validation.js'
+import { buildSandboxEnv, validateOptions, TEST_BINDING_KEY } from './validation.js'
+import { assertEvaluateResult } from './type-guards.js'
 import {
   COMPATIBILITY_DATE,
   SANDBOX_URL,
@@ -92,7 +94,11 @@ async function executeWithTimeout(
     }),
     timedOut,
   ])
-  return (await response.json()) as EvaluateResult
+  // The loaded worker is the untrusted side of this boundary: check the shape
+  // of what came back before it is returned as an `EvaluateResult`.
+  const result: unknown = await response.json()
+  assertEvaluateResult(result)
+  return result
 }
 
 /**
@@ -229,6 +235,11 @@ export async function evaluate(
   const start = Date.now()
 
   try {
+    // Reject malformed options (sizes, timeout, limits, compatibility flags and
+    // date, tails, imports) before anything is transformed or loaded; the
+    // `ValidationError` is reported as an error result below.
+    validateOptions(rawOptions)
+
     // Require the worker_loaders binding as `env.loader` (3.0: no uppercase alias)
     const loader = env?.loader
     if (!loader) {
@@ -334,6 +345,13 @@ async function prefetchModules(imports: string[]): Promise<Record<string, string
  *
  * `fetch: false | null` blocks outbound network at the runtime level
  * (`globalOutbound: null`) in addition to the in-worker fetch control.
+ *
+ * `compatibilityDate` (default `COMPATIBILITY_DATE`), `compatibilityFlags`
+ * (default none) and `limits` are passed through as given - they are part of
+ * the content-addressed spec. `tails` is a runtime binding, passed through
+ * only when present so an absent option and an empty list are the same spec.
+ * The `timeout`-derived CPU budget is not added here: it goes on the
+ * entrypoint (see `runWorker`) so that it never changes the spec's id.
  */
 export async function buildWorkerCode(
   options: EvaluateOptions,
@@ -342,6 +360,13 @@ export async function buildWorkerCode(
   const useSimpleWorker = !options.tests && !options.sdk
   const globalOutbound = options.fetch === false || options.fetch === null ? null : undefined
   const env = buildSandboxEnv(options)
+  const spec = {
+    compatibilityDate: options.compatibilityDate ?? COMPATIBILITY_DATE,
+    compatibilityFlags: options.compatibilityFlags ?? [],
+    ...(options.limits !== undefined && { limits: options.limits }),
+    ...(options.tails !== undefined && { tails: options.tails }),
+    globalOutbound,
+  }
 
   if (useSimpleWorker) {
     const externalModules =
@@ -355,8 +380,7 @@ export async function buildWorkerCode(
     return {
       mainModule: 'worker.js',
       modules: { 'worker.js': workerCode, ...externalModules },
-      compatibilityDate: COMPATIBILITY_DATE,
-      globalOutbound,
+      ...spec,
       env,
     }
   }
@@ -377,8 +401,7 @@ export async function buildWorkerCode(
       // capnweb is a module so the worker can import it
       'capnweb.js': CAPNWEB_SOURCE,
     },
-    compatibilityDate: COMPATIBILITY_DATE,
-    globalOutbound,
+    ...spec,
     // Cloudflare Dynamic Workers' loader field is `env`, not `bindings`. The
     // loaded worker reads `env.TEST` (see worker-template/core.ts) only in
     // 'rpc' mode, so the binding is passed through only when present.
@@ -406,6 +429,20 @@ export function loadWorker(
 }
 
 /**
+ * The CPU budget the loaded worker's entrypoint runs under: `limits.cpuMs`
+ * when given, else `timeout`.
+ *
+ * CPU time never exceeds wall time, so `cpuMs = timeout` cannot cut off a
+ * script the timeout would have let finish, and it is the only thing that
+ * stops a CPU-bound loop: `AbortSignal.timeout` is never observed by code
+ * that does not yield. An explicit `limits.cpuMs` is the caller's choice and
+ * is not overridden by `timeout`.
+ */
+export function entrypointLimits(options: EvaluateOptions, timeout: number): WorkerLimits {
+  return { cpuMs: options.limits?.cpuMs ?? timeout }
+}
+
+/**
  * Build, load and run the sandbox worker for one evaluation.
  */
 async function runWorker(
@@ -418,15 +455,13 @@ async function runWorker(
   const worker = loadWorker(loader, code, options.isolation)
   const timeout = options.timeout ?? DEFAULT_TIMEOUT
 
-  // Bind the loaded worker's CPU budget to the wall-clock timeout. CPU time
-  // never exceeds wall time, so `cpuMs = timeout` cannot cut off a script the
-  // timeout would have let finish, and it is the only thing that stops a
-  // CPU-bound loop: `AbortSignal.timeout` is never observed by code that does
-  // not yield. Limits set on the entrypoint narrow the spec's own `limits`
-  // (the lower wins) without changing its content-addressed id, so the same
-  // code with different timeouts is still one cached isolate. Cloudflare
-  // enforces the limit; open-source workerd (local) accepts and ignores it.
-  const entrypoint = worker.getEntrypoint(undefined, { limits: { cpuMs: timeout } })
+  // Bind the loaded worker's CPU budget to the wall-clock timeout (or the
+  // explicit `limits.cpuMs`, see `entrypointLimits`). Limits set on the
+  // entrypoint narrow the spec's own `limits` (the lower wins) without
+  // changing its content-addressed id, so the same code with different
+  // timeouts is still one cached isolate. Cloudflare enforces the limit;
+  // open-source workerd (local) accepts and ignores it.
+  const entrypoint = worker.getEntrypoint(undefined, { limits: entrypointLimits(options, timeout) })
   const result = await executeWithTimeout(entrypoint, timeout)
 
   return {
