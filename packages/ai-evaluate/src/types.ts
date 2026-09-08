@@ -90,7 +90,26 @@ export interface EvaluateOptions {
   sdk?: SDKConfig | boolean | undefined
   /** Top-level imports to hoist (for MDX test files with external imports) */
   imports?: string[] | undefined
+  /**
+   * Isolate reuse policy (default: `'cached'`)
+   * - `'cached'`: `LOADER.get(workerCodeId(spec), factory)` - identical specs
+   *   share one isolate; the id content-addresses the full `WorkerCode`
+   *   (modules, compatibility date/flags, limits), never `env`.
+   * - `'fresh'`: `LOADER.load(spec)` - a new, uncached isolate every call.
+   *
+   * Dynamic Workers are billed per unique worker per day, so `'cached'` is
+   * the cost control and `'fresh'` the escape hatch for per-call isolate
+   * state.
+   */
+  isolation?: Isolation | undefined
 }
+
+/**
+ * Isolate reuse policy for `evaluate()`: `'cached'` reuses one isolate per
+ * unique `WorkerCode` spec (`LOADER.get`), `'fresh'` loads a new one every
+ * call (`LOADER.load`).
+ */
+export type Isolation = 'cached' | 'fresh'
 
 /**
  * Result from evaluate()
@@ -152,21 +171,66 @@ export interface TestResult {
 }
 
 /**
- * Worker loader binding type (Cloudflare)
+ * Resource limits for a dynamically loaded worker (Cloudflare Dynamic Workers)
  */
-export interface WorkerLoader {
-  get(id: string, loader: () => Promise<WorkerCode>): WorkerStub
+export interface WorkerLimits {
+  /** CPU time per request, in milliseconds */
+  cpuMs?: number | undefined
+  /** Subrequests (fetch, bindings) per request */
+  subrequests?: number | undefined
 }
 
 /**
- * Worker code configuration
+ * Worker loader binding type (Cloudflare Dynamic Workers, `worker_loaders`)
+ *
+ * - `get(id, factory)`: returns the isolate cached under `id`, calling
+ *   `factory` only when no isolate with that id is live. `evaluate()` derives
+ *   `id` with `workerCodeId(spec)`, so identical specs share one isolate.
+ * - `load(code)`: always loads a new, uncached isolate.
+ */
+export interface WorkerLoader {
+  get(id: string, loader: () => WorkerCode | Promise<WorkerCode>): WorkerStub
+  load(code: WorkerCode): WorkerStub
+}
+
+/**
+ * A module of a dynamically loaded worker, by kind
+ */
+export interface WorkerModule {
+  js?: string
+  cjs?: string
+  text?: string
+  json?: unknown
+  data?: ArrayBuffer
+  py?: string
+  wasm?: ArrayBuffer
+}
+
+/**
+ * Worker code configuration: the full spec of a dynamically loaded worker.
+ *
+ * `workerCodeId()` content-addresses `mainModule`, `modules`,
+ * `compatibilityDate`, `compatibilityFlags`, `allowExperimental`, `limits`
+ * and whether `globalOutbound` is blocked; `env`, `globalOutbound` services
+ * and `tails` are runtime bindings and do not change the id.
  */
 export interface WorkerCode {
   mainModule: string
-  modules: Record<string, string | { js?: string; cjs?: string; text?: string; json?: unknown }>
-  compatibilityDate?: string
-  env?: Record<string, unknown>
+  modules: Record<string, string | WorkerModule>
+  compatibilityDate?: string | undefined
+  compatibilityFlags?: string[] | undefined
+  /** Allow experimental compatibility flags */
+  allowExperimental?: boolean | undefined
+  /** Bindings visible to the loaded worker as `env` */
+  env?: Record<string, unknown> | undefined
+  /** `null` blocks all global `fetch()`; a service routes it; `undefined` inherits */
   globalOutbound?: null | unknown
+  /** Resource limits enforced by the runtime */
+  limits?: WorkerLimits | undefined
+  /** Tail workers receiving this worker's trace events */
+  tails?: unknown[] | undefined
+  /** Tail workers receiving streaming trace events */
+  streamingTails?: unknown[] | undefined
 }
 
 /**
@@ -177,10 +241,21 @@ export interface WorkerEntrypoint {
 }
 
 /**
- * Worker stub returned by loader
+ * Options for `WorkerStub.getEntrypoint()`
+ */
+export interface WorkerEntrypointOptions {
+  /** `ctx.props` of the entrypoint */
+  props?: unknown
+  /** Per-entrypoint limits, narrowing the worker's `limits` */
+  limits?: WorkerLimits | undefined
+}
+
+/**
+ * Worker stub returned by the loader
  */
 export interface WorkerStub {
-  getEntrypoint(): WorkerEntrypoint
+  getEntrypoint(name?: string, options?: WorkerEntrypointOptions): WorkerEntrypoint
+  getDurableObjectClass(name?: string, options?: WorkerEntrypointOptions): unknown
 }
 
 /**

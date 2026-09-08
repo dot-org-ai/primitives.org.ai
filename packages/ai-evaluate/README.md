@@ -184,7 +184,37 @@ interface EvaluateOptions {
   env?: Record<string, string> // Environment variables
   sdk?: SDKConfig | boolean    // Enable $, db, ai globals
   imports?: string[]           // External npm packages (see below)
+  isolation?: 'cached' | 'fresh' // Isolate reuse policy (default: 'cached', see below)
 }
+```
+
+### Isolate reuse: `isolation`
+
+Every evaluation is one `WorkerCode` spec (modules, compatibility date and
+flags, limits). `isolation` decides how the Dynamic Workers loader turns that
+spec into an isolate:
+
+| `isolation` | Loader call | When |
+|-------------|-------------|------|
+| `'cached'` (default) | `LOADER.get(workerCodeId(spec), factory)` | Identical specs share one isolate. Dynamic Workers are billed per unique worker per day, so this is the cost control. |
+| `'fresh'` | `LOADER.load(spec)` | A new, uncached isolate every call: nothing at module scope survives between evaluations. |
+
+`workerCodeId(spec)` content-addresses the spec - `mainModule`, `modules`,
+`compatibilityDate`, `compatibilityFlags`, `allowExperimental`, `limits`, and
+whether outbound fetch is blocked. Bindings (`env`, `tails`, a `globalOutbound`
+service) never change the id, so the same code with different bindings is still
+one unique worker. Under `'cached'`, request state (logs, script locals) is
+per-request in the generated worker; only values you deliberately put on
+`globalThis` persist across calls on a reused isolate.
+
+```typescript
+import { evaluate, buildWorkerCode, workerCodeId } from 'ai-evaluate'
+
+await evaluate({ script: 'return 1' }, env)                        // cached (default)
+await evaluate({ script: 'return 1', isolation: 'fresh' }, env)    // new isolate
+
+// Inspect the id an evaluation will be cached under
+const id = workerCodeId(await buildWorkerCode({ script: 'return 1' }))
 ```
 
 ### External Imports

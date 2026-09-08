@@ -5,7 +5,7 @@
  * evaluate.ts (Workers) and node.ts (Node.js/Miniflare)
  */
 
-import type { EvaluateResult } from './types.js'
+import type { EvaluateResult, WorkerCode } from './types.js'
 
 /**
  * Compatibility date for dynamic workers (2026)
@@ -71,28 +71,84 @@ export const SANDBOX_URL = 'http://sandbox/execute'
 export const EVALUATE_PATH = '/evaluate'
 
 /**
- * Generate a content-addressed sandbox worker ID from the worker source.
- *
- * Deterministic: identical worker code yields the same id, so the Dynamic
- * Workers loader (`LOADER.get(id, factory)`) reuses the cached isolate instead
- * of minting a fresh one per call. This dedupes to one "unique worker" per
- * distinct code (relevant once Cloudflare's per-worker billing leaves beta),
- * rather than one per invocation. Uses cyrb53 (fast, well-distributed, ~53-bit
- * — ample for a cache key; not a security hash).
+ * cyrb53: fast, well-distributed ~53-bit string hash. A cache key, not a
+ * security hash.
  */
-export const generateSandboxId = (code: string): string => {
+const cyrb53 = (input: string): string => {
   let h1 = 0xdeadbeef
   let h2 = 0x41c6ce57
-  for (let i = 0; i < code.length; i++) {
-    const ch = code.charCodeAt(i)
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i)
     h1 = Math.imul(h1 ^ ch, 2654435761)
     h2 = Math.imul(h2 ^ ch, 1597334677)
   }
   h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
-  const hash = (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
-  return `sandbox-${hash}`
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
 }
+
+/**
+ * Serialize a value to JSON with object keys sorted at every depth, so two
+ * specs that differ only in property order serialize identically.
+ * `undefined` properties are dropped (as `JSON.stringify` does), so an absent
+ * field and an explicitly `undefined` one are the same spec.
+ */
+export function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return v
+    // Binary modules (`data`, `wasm`) would serialize as `{}`; stand in a
+    // digest of the bytes so differing binaries get differing ids.
+    if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
+      const bytes =
+        v instanceof ArrayBuffer
+          ? new Uint8Array(v)
+          : new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+      return { $bytes: bytes.byteLength, $hash: cyrb53(String.fromCharCode(...bytes)) }
+    }
+    const sorted: Record<string, unknown> = {}
+    for (const key of Object.keys(v as Record<string, unknown>).sort()) {
+      sorted[key] = (v as Record<string, unknown>)[key]
+    }
+    return sorted
+  })
+}
+
+/**
+ * The parts of a `WorkerCode` spec that define a unique worker.
+ *
+ * Bindings (`env`, the `globalOutbound` service, `tails`) are excluded: they
+ * are attached to the isolate at load time, and hashing them would either
+ * fail (RPC stubs are not serializable) or split one worker into many for
+ * the same code. Whether outbound fetch is blocked (`globalOutbound: null`)
+ * is kept, as it changes what the worker can do.
+ */
+function workerIdentity(spec: WorkerCode) {
+  return {
+    mainModule: spec.mainModule,
+    modules: spec.modules,
+    compatibilityDate: spec.compatibilityDate,
+    compatibilityFlags: spec.compatibilityFlags,
+    allowExperimental: spec.allowExperimental,
+    limits: spec.limits,
+    outboundBlocked: spec.globalOutbound === null,
+  }
+}
+
+/**
+ * Content-address a `WorkerCode` spec.
+ *
+ * Deterministic: the same spec (modules, compatibility date and flags,
+ * `allowExperimental`, `limits`, whether outbound fetch is blocked) yields the
+ * same id, so the Dynamic Workers loader (`LOADER.get(id, factory)`) reuses the
+ * cached isolate instead of minting a fresh one per call. Any change to those
+ * fields changes the id; `env`, `globalOutbound` services and `tails` do not
+ * (see `workerIdentity`). One id per unique worker is the cost control under
+ * Cloudflare's per-unique-worker/day pricing.
+ *
+ * Uses a stable (sorted-key) JSON serialization hashed with cyrb53.
+ */
+export const workerCodeId = (spec: WorkerCode): string =>
+  `sandbox-${cyrb53(stableStringify(workerIdentity(spec)))}`
 
 /**
  * Create an error result with consistent structure
