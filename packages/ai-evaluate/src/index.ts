@@ -56,6 +56,7 @@ export {
   OUTBOUND_JSON_MODULE,
   OUTBOUND_GATEWAY_UNAVAILABLE_ERROR,
   INTERCEPTOR_UNAVAILABLE_ERROR,
+  OUTBOUND_RPC_CACHED_ERROR,
 } from './outbound.js'
 export type {
   OutboundGateway,

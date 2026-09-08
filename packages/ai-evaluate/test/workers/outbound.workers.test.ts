@@ -14,6 +14,7 @@ import { evaluate, buildWorkerCodeWithWarnings } from '../../src/evaluate.js'
 import {
   OUTBOUND_JSON_MODULE,
   INTERCEPTOR_UNAVAILABLE_ERROR,
+  OUTBOUND_RPC_CACHED_ERROR,
   registeredInterceptorCount,
 } from '../../src/outbound.js'
 import { workerCodeId } from '../../src/shared.js'
@@ -182,6 +183,17 @@ describe('fetch allowlist (globalOutbound gateway, workerd)', () => {
     expect(workerCodeId(a.code)).not.toBe(workerCodeId(b.code))
   })
 
+  it('the same allowlist over the same code is one worker: the spec is content-stable', async () => {
+    // The policy in `outbound.json` is the allowlist only: nothing per-call
+    // reaches the hashed spec, so `'cached'` really does reuse the isolate
+    const a = await buildWorkerCodeWithWarnings({ script: 'return 1', fetch: ['a.com'] })
+    const b = await buildWorkerCodeWithWarnings({ script: 'return 1', fetch: ['a.com'] })
+    a.release()
+    b.release()
+    expect(workerCodeId(a.code)).toBe(workerCodeId(b.code))
+    expect(a.code.modules[OUTBOUND_JSON_MODULE]).toEqual({ json: { allowlist: ['a.com'] } })
+  })
+
   it('a cached isolate is never reused under another allowlist', async () => {
     const script = `
       try {
@@ -262,6 +274,32 @@ describe('outboundRpc (workerd)', () => {
     // Also released when the evaluation fails
     await evaluate({ script: 'throw new Error("boom")', outboundRpc }, env)
     expect(registeredInterceptorCount()).toBe(before)
+  })
+
+  it("with isolation: 'cached' the evaluation is rejected, not silently made fresh", async () => {
+    // The interceptor is registered per evaluation under a fresh id, so no
+    // two calls could ever share a cached isolate: rather than a unique
+    // worker per call with no warning, the combination fails closed, before
+    // anything is registered or loaded.
+    const before = registeredInterceptorCount()
+    const { outboundRpc, seen } = answer('rpc.test')
+    const options = {
+      script: 'return (await fetch("https://rpc.test/")).status',
+      outboundRpc,
+      isolation: 'cached' as const,
+    }
+    const first = await evaluate(options, env)
+    const second = await evaluate(options, env)
+    for (const result of [first, second]) {
+      expect(result.success).toBe(false)
+      expect(result.error).toBe(OUTBOUND_RPC_CACHED_ERROR)
+    }
+    expect(seen).toEqual([])
+    expect(registeredInterceptorCount()).toBe(before)
+    // The same call under the default ('fresh') isolation runs
+    const fresh = await evaluate({ ...options, isolation: 'fresh' }, env)
+    expect(fresh.success, fresh.error).toBe(true)
+    expect(fresh.value).toBe(200)
   })
 
   it('a gateway whose interceptor is gone fails closed', async () => {

@@ -8,6 +8,7 @@ import {
   DEFAULT_TIMEOUT,
 } from '../src/validation.js'
 import { evaluate } from '../src/evaluate.js'
+import { OUTBOUND_RPC_CACHED_ERROR } from '../src/outbound.js'
 import type * as ValidationModule from '../src/validation.js'
 import type { WorkerLoader, WorkerStub } from '../src/types.js'
 
@@ -68,6 +69,32 @@ describe('validation', () => {
             timeout: undefined,
             imports: undefined,
           })
+        ).not.toThrow()
+      })
+    })
+
+    describe('outboundRpc and isolation', () => {
+      const outboundRpc = () => null
+
+      it('rejects outboundRpc with isolation: cached (the interceptor is per evaluation)', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc, isolation: 'cached' })
+        ).toThrow(ValidationError)
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc, isolation: 'cached' })
+        ).toThrow(OUTBOUND_RPC_CACHED_ERROR)
+      })
+
+      it('accepts outboundRpc under fresh isolation, explicit or default', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc, isolation: 'fresh' })
+        ).not.toThrow()
+        expect(() => validateOptions({ script: 'return 1', outboundRpc })).not.toThrow()
+      })
+
+      it('accepts isolation: cached without outboundRpc (an allowlist is hashed, not registered)', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', fetch: ['a.test'], isolation: 'cached' })
         ).not.toThrow()
       })
     })

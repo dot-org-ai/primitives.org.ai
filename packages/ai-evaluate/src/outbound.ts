@@ -60,6 +60,21 @@ export const INTERCEPTOR_UNAVAILABLE_ERROR =
   'the isolate serving its outbound gateway'
 
 /**
+ * Error `validateOptions` reports for `outboundRpc` with `isolation:
+ * 'cached'`. The interceptor is a host function registered per evaluation
+ * under a fresh id (`registerInterceptor`), and that id goes into the
+ * `outbound.json` module so the gateway of an isolate can never serve a
+ * released interceptor: the content-addressed id therefore differs on every
+ * call, and `'cached'` could only ever mean one unique worker per call - the
+ * cost it exists to avoid - with the isolate's module scope never shared.
+ * Rather than that silently, the combination is rejected.
+ */
+export const OUTBOUND_RPC_CACHED_ERROR =
+  "outboundRpc cannot be combined with isolation: 'cached': the interceptor is registered per " +
+  'evaluation, so no two evaluations could share a cached isolate; use the default ' +
+  "isolation ('fresh'), or a fetch allowlist without outboundRpc, which is content-addressed"
+
+/**
  * A host-side interceptor for the sandbox's outbound requests
  * (`EvaluateOptions.outboundRpc`): it is asked first, for every request; a
  * `Response` answers the request, `null` declines it (the allowlist then

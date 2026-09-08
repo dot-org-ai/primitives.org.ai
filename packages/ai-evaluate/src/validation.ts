@@ -6,7 +6,7 @@
 
 import type { EvaluateOptions } from './types.js'
 import { isPackageName, parseImportSpecifier, PACKAGE_JSON_MODULE } from './shared.js'
-import { OUTBOUND_JSON_MODULE } from './outbound.js'
+import { OUTBOUND_JSON_MODULE, OUTBOUND_RPC_CACHED_ERROR } from './outbound.js'
 import { SANDBOX_HOST_BINDING_KEY, facetBindingName, isIdentifier } from './facets.js'
 
 /**
@@ -103,6 +103,13 @@ export function validateOptions(options: EvaluateOptions): void {
   // Validate timeout
   if (options.timeout !== undefined) {
     validatePositiveNumber('timeout', options.timeout, MAX_TIMEOUT)
+  }
+
+  // outboundRpc is registered per evaluation under a fresh id that is part
+  // of the content-addressed spec: 'cached' could never reuse an isolate
+  // under it, so the combination fails here rather than silently as 'fresh'
+  if (options.outboundRpc !== undefined && options.isolation === 'cached') {
+    throw new ValidationError(OUTBOUND_RPC_CACHED_ERROR)
   }
 
   // Validate limits (Dynamic Workers resource limits)
