@@ -11,8 +11,8 @@ The Miniflare 3 per-call instance and the separate dev worker template are gone.
   `src/evaluate.ts`) and its module graph into a Miniflare 5 host worker whose
   `env.LOADER` is a `worker-loader` binding. Local and production execute the same
   code path.
-- New: `createLocalRuntime()` -> `{ evaluate, dispose }`, process-wide `dispose()`,
-  `loadHostWorker()`. One host per process, lazily created, reused across calls
+- New: `createLocalRuntime()` -> `{ evaluate, dispose }` and process-wide `dispose()`.
+  One host per process, lazily created, reused across calls
   (test suite: ~100s -> ~13s). The host's handles are unref'd while idle, so a
   script or CLI that never calls `dispose()` still exits on its own (as with the
   per-call Miniflare 3 instance); `dispose()` is only needed to release the host
@@ -29,5 +29,5 @@ The Miniflare 3 per-call instance and the separate dev worker template are gone.
   `exports.add = ...` + `script: 'return add(2, 3)'` works), honours the `fetch`
   allowlist / block option, and captures `console.debug`. Logs no longer leak between
   requests on a reused content-addressed isolate.
-- `miniflare-pool.ts` is ported to Miniflare 5 via `convertV4MiniflareOptions`
-  pending its removal.
+- `miniflare-pool.ts` (`configurePool`, `warmPool`, `acquireInstance`, `disposePool`,
+  `resetPool`) is removed - see the "remove miniflare-pool" changeset.
