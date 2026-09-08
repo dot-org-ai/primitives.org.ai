@@ -192,6 +192,16 @@ export interface EvaluateOptions {
    */
   bundler?: boolean | undefined
   /**
+   * Extra ES modules of the loaded worker, by name
+   * (`{ 'helper.js': 'export const answer = 42' }`), importable from `module`
+   * and `script` as `./helper.js`. Bundled with the entry when `dependencies`
+   * go through the bundler, and always present as sibling modules of the
+   * worker. Part of the content-addressed spec. The names the generated
+   * worker uses (`worker.js`, `capnweb.js`, `package.json`, `outbound.json`,
+   * `__external_<i>__.js`) are reserved.
+   */
+  modules?: Record<string, string> | undefined
+  /**
    * Isolate reuse policy (default: `'fresh'`)
    * - `'fresh'`: `loader.load(spec)` - a new, uncached isolate every call, so
    *   identical evaluations are independent (nothing at module scope of the

@@ -5,7 +5,8 @@
  */
 
 import type { EvaluateOptions } from './types.js'
-import { isPackageName, parseImportSpecifier } from './shared.js'
+import { isPackageName, parseImportSpecifier, PACKAGE_JSON_MODULE } from './shared.js'
+import { OUTBOUND_JSON_MODULE } from './outbound.js'
 
 /**
  * The key under which the ai-tests service binding is handed to the loaded
@@ -46,6 +47,22 @@ function isValidUrl(urlString: string): boolean {
 
 /** `YYYY-MM-DD`, the only form the runtime accepts for a compatibility date */
 const COMPATIBILITY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Whether a module name is one the generated worker uses itself, and so is
+ * not available to `options.modules`: the entry, the capnweb sibling, the
+ * two json modules of the content-addressed spec, and the prefetched URL
+ * imports.
+ */
+export function isReservedModuleName(name: string): boolean {
+  return (
+    name === 'worker.js' ||
+    name === 'capnweb.js' ||
+    name === PACKAGE_JSON_MODULE ||
+    name === OUTBOUND_JSON_MODULE ||
+    /^__external_\d+__\.js$/.test(name)
+  )
+}
 
 /**
  * Validate a positive, finite number option (a timeout or a resource limit)
@@ -227,6 +244,32 @@ export function validateOptions(options: EvaluateOptions): void {
   // Validate bundler switch
   if (options.bundler !== undefined && typeof options.bundler !== 'boolean') {
     throw new ValidationError('bundler must be a boolean')
+  }
+
+  // Validate modules (extra ES modules of the loaded worker, by name)
+  if (options.modules !== undefined && options.modules !== null) {
+    if (typeof options.modules !== 'object' || Array.isArray(options.modules)) {
+      throw new ValidationError('modules must be an object of module name -> source')
+    }
+    for (const [name, source] of Object.entries(options.modules)) {
+      if (name.length === 0 || name.startsWith('/') || name.split('/').includes('..')) {
+        throw new ValidationError(`modules has an invalid module name: ${JSON.stringify(name)}`)
+      }
+      if (isReservedModuleName(name)) {
+        throw new ValidationError(
+          `modules.${name} is reserved for the generated worker; choose another name`
+        )
+      }
+      if (typeof source !== 'string') {
+        throw new ValidationError(`modules.${name} must be a string of module source`)
+      }
+      const sourceBytes = new TextEncoder().encode(source).length
+      if (sourceBytes > MAX_SCRIPT_SIZE) {
+        throw new ValidationError(
+          `modules.${name} size (${sourceBytes} bytes) exceeds maximum allowed size of ${MAX_SCRIPT_SIZE} bytes (1MB)`
+        )
+      }
+    }
   }
 }
 

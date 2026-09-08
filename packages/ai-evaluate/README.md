@@ -268,6 +268,7 @@ interface EvaluateOptions {
   sdk?: SDKConfig | boolean    // Enable $, db, ai globals
   dependencies?: Record<string, string> // npm packages to import (see External Imports)
   bundler?: boolean            // Resolve them with @cloudflare/worker-bundler (default: true)
+  modules?: Record<string, string> // Extra ES modules of the worker, importable as ./name.js
   imports?: string[]           // Deprecated: packages as globals (see External Imports)
   isolation?: 'fresh' | 'cached' // Isolate reuse policy (default: 'fresh', see below)
 }
@@ -480,6 +481,71 @@ export default {
   }
 }
 ```
+
+### createExecutor(options) - Code Mode (`ai-evaluate/codemode`)
+
+[`@cloudflare/codemode`](https://www.npmjs.com/package/@cloudflare/codemode)
+(0.5+) lets an agent write code that calls its tools instead of making one
+tool call at a time, and runs that code through a pluggable `Executor`.
+`ai-evaluate/codemode` is an `Executor` on top of `evaluate()`: the agent's
+code gets this sandbox - the outbound gateway, content-addressed isolates,
+`timeout` as the CPU budget, `limits`, `tails`, npm `dependencies` - in place
+of the stock `DynamicWorkerExecutor`.
+
+```typescript
+import { createCodeTool, createCodemodeRuntime } from '@cloudflare/codemode'
+import { createExecutor } from 'ai-evaluate/codemode'
+export { OutboundGateway } from 'ai-evaluate/worker'   // tool calls come back through it
+
+// As the executor of createCodeTool (an AI SDK tool the model writes code for)
+const executor = createExecutor({ loader: env.LOADER })
+const codemode = createCodeTool({ tools, executor })
+
+// Or of a durable codemode runtime (approvals, replay, snippets)
+const runtime = createCodemodeRuntime({ ctx, connectors, executor })
+```
+
+`createExecutor` takes codemode's own `DynamicWorkerExecutorOptions` and maps
+them onto an evaluation:
+
+| Option | Default | Maps to |
+|--------|---------|---------|
+| `loader` | required | the `worker_loaders` binding `evaluate()` loads into (any binding name: `env.LOADER` works) |
+| `timeout` | `60000` | `timeout` (wall clock) and the loaded worker's CPU budget (`limits.cpuMs`) |
+| `globalOutbound` | `null` | `null`: `fetch: false` - the sandbox has no network; a `Fetcher`: every non-tool request goes through it, on the host |
+| `modules` | `{}` | `EvaluateOptions.modules` - `await import('./name.js')` in the code |
+| `bindings` | `{}` | `EvaluateOptions.bindings` - RPC stubs and cloneable values, as `env.NAME` |
+| `evaluate` | - | the remaining `EvaluateOptions` (`isolation`, `limits`, `tails`, `compatibilityFlags`, `dependencies`, ...) |
+
+The result is codemode's `ExecuteResult`: `{ result, logs }` on success,
+`{ result: undefined, error, logs }` with the sandbox's own error string
+otherwise - never a `success: false` object, and never a throw (codemode's
+`runCode` raises `error` as `Error('Code execution failed: ...')` for the
+model). `logs` are the sandbox's console lines, `[warn]`/`[error]`-prefixed
+by level.
+
+```typescript
+const executor = createExecutor({ loader: env.LOADER, timeout: 10000 })
+
+await executor.execute('return await codemode.add(1, 2)', { add: async (a, b) => a + b })
+// { result: 3, logs: [] }
+
+await executor.execute('async () => { console.log("hi"); throw new Error("boom") }', {})
+// { result: undefined, error: 'boom', logs: ['hi'] }
+```
+
+Tool functions never enter the isolate. Each provider namespace
+(`codemode.*`, or `name.*` for a `ResolvedProvider`; `list-issues` is called as
+`list_issues`, as in codemode) is a proxy in the sandbox whose calls are
+`POST https://codemode.invalid/<namespace>/<tool>` with the JSON arguments;
+the host's `OutboundGateway` answers them by calling the function
+(`outboundRpc`), and blocks or routes everything else per `globalOutbound`.
+Connectors (`options.connectors`) are dispatched the same way to their
+`callTool` on the host. So a Worker that calls the executor exports the
+gateway from its main module, exactly as for a fetch allowlist; a tool call
+without it is reported as `error` naming the missing export. Arguments and
+results cross as JSON. `@cloudflare/codemode` is an optional peer dependency:
+only its types are imported.
 
 ## Usage Examples
 

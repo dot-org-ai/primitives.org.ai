@@ -545,6 +545,10 @@ export async function buildWorkerCodeWithWarnings(
   const plan = planImports(options)
   const warnings = [...plan.warnings]
   const externalModules = plan.urls.length > 0 ? await prefetchModules(plan.urls) : {}
+  // Caller-supplied modules (`options.modules`, validated): files for the
+  // bundler, so the entry can import them, and siblings of the worker either
+  // way, so a dynamic `import('./name.js')` resolves at runtime too.
+  const extraModules: Record<string, string> = options.modules ?? {}
   const hasDependencies = Object.keys(plan.dependencies).length > 0
 
   const entry = useSimpleWorker
@@ -581,11 +585,14 @@ export async function buildWorkerCodeWithWarnings(
       const bundled = await resolveImports({
         entry,
         dependencies: plan.dependencies,
-        files: externalModules,
+        files: { ...externalModules, ...extraModules },
         externals: Object.keys(siblings),
       })
       warnings.push(...bundled.warnings.map((warning) => `bundler: ${warning}`))
-      resolved = { mainModule: bundled.mainModule, modules: { ...bundled.modules, ...siblings } }
+      resolved = {
+        mainModule: bundled.mainModule,
+        modules: { ...bundled.modules, ...extraModules, ...siblings },
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       warnings.push(
@@ -599,7 +606,13 @@ export async function buildWorkerCodeWithWarnings(
     const dependencyModules = hasDependencies ? await prefetchDependencies(plan.dependencies) : {}
     resolved = {
       mainModule: 'worker.js',
-      modules: { 'worker.js': entry, ...externalModules, ...dependencyModules, ...siblings },
+      modules: {
+        'worker.js': entry,
+        ...externalModules,
+        ...extraModules,
+        ...dependencyModules,
+        ...siblings,
+      },
     }
   }
 

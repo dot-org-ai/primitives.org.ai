@@ -16,6 +16,9 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     exclude: ['test/workers/**', '**/node_modules/**'],
     testTimeout: 30000, // Allow time for Miniflare startup
+    // `@cloudflare/codemode` imports `cloudflare:workers` at load; run it
+    // through Vite so test/codemode.test.ts can mock that module for Node.
+    server: { deps: { inline: ['@cloudflare/codemode'] } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
