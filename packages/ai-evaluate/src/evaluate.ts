@@ -50,9 +50,16 @@ export const DEFAULT_ISOLATION: Isolation = 'cached'
  *
  * Uses `AbortSignal.timeout` so the timeout is enforced by whichever runtime
  * hosts `evaluate()` (Cloudflare in production, the Miniflare host worker
- * locally). Note that a CPU-bound loop in the loaded worker cannot be
- * interrupted from JS; Cloudflare enforces CPU limits for that case, and the
- * local runtime (`ai-evaluate/node`) adds a Node-side backstop.
+ * locally). A CPU-bound loop in the loaded worker cannot be interrupted from
+ * JS - the signal is only observed when the loop yields, which it never does:
+ *
+ * - On Cloudflare the loaded worker's CPU budget is bound to `timeout` via
+ *   the entrypoint's `limits.cpuMs` (see `runWorker`), so the runtime throws
+ *   out of the loop and this call rejects with the runtime's CPU-limit error.
+ * - Local open-source workerd accepts `limits.cpuMs` but does not enforce
+ *   it, and runs every loaded worker on the host's single thread, so the loop
+ *   also stalls this timer. `ai-evaluate/node` adds a Node-side backstop that
+ *   aborts the request and replaces the wedged host (see `node.ts`).
  */
 async function executeWithTimeout(
   entrypoint: WorkerEntrypoint,
@@ -382,12 +389,18 @@ async function runWorker(
 ): Promise<EvaluateResult> {
   const code = await buildWorkerCode(options, testService)
   const worker = loadWorker(loader, code, options.isolation)
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT
 
-  // Get the entrypoint and call fetch (required by Cloudflare worker_loaders API)
-  const result = await executeWithTimeout(
-    worker.getEntrypoint(),
-    options.timeout ?? DEFAULT_TIMEOUT
-  )
+  // Bind the loaded worker's CPU budget to the wall-clock timeout. CPU time
+  // never exceeds wall time, so `cpuMs = timeout` cannot cut off a script the
+  // timeout would have let finish, and it is the only thing that stops a
+  // CPU-bound loop: `AbortSignal.timeout` is never observed by code that does
+  // not yield. Limits set on the entrypoint narrow the spec's own `limits`
+  // (the lower wins) without changing its content-addressed id, so the same
+  // code with different timeouts is still one cached isolate. Cloudflare
+  // enforces the limit; open-source workerd (local) accepts and ignores it.
+  const entrypoint = worker.getEntrypoint(undefined, { limits: { cpuMs: timeout } })
+  const result = await executeWithTimeout(entrypoint, timeout)
 
   return {
     ...result,

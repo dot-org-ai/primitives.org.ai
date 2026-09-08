@@ -30,8 +30,25 @@ import { HOST_WORKER_NAME, loadHostWorker, type HostWorkerModules } from './host
  * host as wedged. The host worker's own `AbortSignal.timeout` fires first for
  * async hangs; the Node backstop only triggers for CPU-bound loops, which
  * block the single-threaded local workerd (no CPU limits are enforced there).
+ *
+ * Local workerd runs every loaded worker on the host's one thread, so a
+ * `while (true) {}` stalls the host worker's timers - `AbortSignal.timeout`
+ * inside `evaluate()` never fires - and `limits.cpuMs` is accepted but not
+ * enforced by open-source workerd. Cloudflare enforces both. The backstop is
+ * therefore the local contract for CPU-bound scripts: the Node side aborts the
+ * request, kills the host (SIGKILL via `Miniflare#dispose`), and the next call
+ * starts a fresh one. Every other evaluation in flight on that host fails too;
+ * it is reported as `WEDGED_HOST_ERROR` rather than a bare `fetch failed`.
  */
 const TIMEOUT_GRACE_MS = 250
+
+/** Error reported by evaluations caught in flight when a wedged host is reset */
+export const WEDGED_HOST_ERROR =
+  'Host worker reset: a concurrent evaluation exceeded its timeout with a CPU-bound loop ' +
+  'and wedged the local runtime; retry this evaluation'
+
+/** Error reported by evaluations caught in flight when the runtime is disposed */
+export const DISPOSED_HOST_ERROR = 'Host worker disposed while this evaluation was in flight'
 
 /**
  * Node-side preprocessing: import normalization only. JSX/TypeScript are
@@ -127,6 +144,12 @@ function setHandlesActive(handles: HostHandles, active: boolean): void {
 interface Host {
   miniflare: MiniflareInstance
   handles: HostHandles
+  /**
+   * Set the moment teardown of this host begins, before workerd is killed.
+   * An evaluation still in flight on the host reports it instead of the
+   * transport error the kill produces.
+   */
+  teardown: string | null
 }
 
 /**
@@ -158,6 +181,8 @@ export interface LocalRuntime {
  */
 export function createLocalRuntime(): LocalRuntime {
   let hostPromise: Promise<Host> | null = null
+  /** The host `hostPromise` resolved to, once it has; null while starting or after teardown */
+  let current: Host | null = null
   /** Evaluations currently awaiting the host; the host is unref'd at zero */
   let inFlight = 0
 
@@ -192,73 +217,109 @@ export function createLocalRuntime(): LocalRuntime {
     const handles = findHostHandles(before, activeHandles())
     // Whoever awaited this is about to evaluate; `evaluate` re-syncs anyway.
     setHandlesActive(handles, inFlight > 0)
-    return { miniflare, handles }
+    return { miniflare, handles, teardown: null }
   }
 
   const getHost = (): Promise<Host> => {
-    hostPromise ??= createHost().catch((error) => {
-      hostPromise = null
-      throw error
-    })
-    return hostPromise
+    if (hostPromise) return hostPromise
+    const starting: Promise<Host> = createHost().then(
+      (host) => {
+        // Unless torn down while it was still starting
+        if (hostPromise === starting) current = host
+        return host
+      },
+      (error: unknown) => {
+        if (hostPromise === starting) hostPromise = null
+        throw error
+      }
+    )
+    hostPromise = starting
+    return starting
   }
 
-  const dispose = async (): Promise<void> => {
+  /**
+   * Tear down the current host, if there is one. `reason` is what evaluations
+   * still in flight on it report. The next `getHost()` starts a fresh host,
+   * possibly while this teardown is still running - the two never share
+   * handles, so that is fine.
+   */
+  const teardown = async (reason: string): Promise<void> => {
     const pending = hostPromise
     hostPromise = null
+    current = null
     if (!pending) return
+    let host: Host
     try {
-      const host = await pending
-      // An idle host's handles are unref'd; hold the loop open until teardown
-      // (kill workerd, close the loopback server) has actually completed, or
-      // an `await dispose()` at the tail of a script exits unsettled.
-      setHandlesActive(host.handles, true)
-      await host.miniflare.dispose()
+      host = await pending
     } catch {
-      // Already gone (failed to start, or wedged and killed) - nothing to release
+      return // Failed to start - nothing to release
     }
+    host.teardown = reason
+    // An idle host's handles are unref'd; hold the loop open until teardown
+    // (kill workerd, close the loopback server) has actually completed, or
+    // an `await dispose()` at the tail of a script exits unsettled.
+    setHandlesActive(host.handles, true)
+    // Miniflare SIGKILLs workerd, so a wedged child cannot hold this up.
+    await host.miniflare.dispose().catch(() => {})
   }
+
+  /**
+   * Retire `host` because an evaluation on it hit the Node backstop. Only the
+   * host that wedged is torn down: if it has already been replaced (another
+   * evaluation got there first, or the caller disposed), the replacement is
+   * left alone.
+   */
+  const retire = (host: Host): Promise<void> =>
+    current === host ? teardown(WEDGED_HOST_ERROR) : Promise.resolve()
+
+  const dispose = (): Promise<void> => teardown(DISPOSED_HOST_ERROR)
 
   const evaluate = async (options: EvaluateOptions): Promise<EvaluateResult> => {
     const start = Date.now()
     const timeout = options.timeout ?? DEFAULT_TIMEOUT
+    const fail = (error: string): EvaluateResult => ({
+      success: false,
+      logs: [],
+      error,
+      duration: Date.now() - start,
+    })
     inFlight++
     let host: Host | null = null
+    // The backstop clock starts once the host is ready: host startup is not
+    // the script's time, and a cold start must never register as a timeout.
+    let backstop: AbortSignal | null = null
     try {
       host = await getHost()
       setHandlesActive(host.handles, true)
+      backstop = AbortSignal.timeout(timeout + TIMEOUT_GRACE_MS)
       const response = await host.miniflare.dispatchFetch(
         `http://${HOST_WORKER_NAME}${EVALUATE_PATH}`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(options),
-          signal: AbortSignal.timeout(timeout + TIMEOUT_GRACE_MS),
+          signal: backstop,
         }
       )
       const result = (await response.json()) as EvaluateResult
       return { ...result, duration: Date.now() - start }
     } catch (error) {
-      if (error instanceof Error && error.name === 'TimeoutError') {
+      if (host && backstop?.aborted) {
         // The host did not answer in time: a CPU-bound loop has wedged the
         // local workerd. Tear it down so the next call gets a fresh host.
-        await dispose()
-        return {
-          success: false,
-          logs: [],
-          error: `Timeout: Script execution exceeded ${timeout}ms`,
-          duration: Date.now() - start,
-        }
+        await retire(host)
+        return fail(`Timeout: Script execution exceeded ${timeout}ms`)
       }
-      return {
-        success: false,
-        logs: [],
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - start,
+      if (host?.teardown) {
+        // Killed out from under this evaluation by a retire or a dispose
+        return fail(host.teardown)
       }
+      return fail(error instanceof Error ? error.message : String(error))
     } finally {
       inFlight--
-      if (inFlight === 0 && host && hostPromise) setHandlesActive(host.handles, false)
+      // Idle the host that is current now - not `host`, which may since have
+      // been retired and replaced while this evaluation was in flight.
+      if (inFlight === 0 && current) setHandlesActive(current.handles, false)
     }
   }
 
