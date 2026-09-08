@@ -41,6 +41,16 @@ describe('vitest.workers.config', () => {
     expect(config.worker_loaders).toEqual([{ binding: 'loader' }])
   })
 
+  it('wrangler.test.jsonc declares the SandboxHost Durable Object with SQLite storage', async () => {
+    const path = resolve(packageDir, WRANGLER_TEST_CONFIG_PATH)
+    const { unstable_readConfig } = await import('wrangler')
+    const config = unstable_readConfig({ config: path })
+    expect(config.durable_objects.bindings).toEqual([
+      { name: 'SANDBOX_HOST', class_name: 'SandboxHost' },
+    ])
+    expect(config.migrations.some((m) => m.new_sqlite_classes?.includes('SandboxHost'))).toBe(true)
+  })
+
   it('wrangler.test.jsonc is the file the plugin was given', async () => {
     const raw = await readFile(resolve(packageDir, WRANGLER_TEST_CONFIG_PATH), 'utf8')
     expect(raw).toContain('"worker_loaders"')

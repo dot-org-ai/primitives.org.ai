@@ -10,7 +10,7 @@ Runtime sandboxed execution of AI-generated (or otherwise untrusted) code in V8 
 
 ## Not for
 
-- **Replacing your test runner.** Unit and integration tests should use [`ai-tests`](../ai-tests) plus `vitest`. `ai-evaluate` runs *inside* production; it isn't a vitest substitute.
+- **Replacing your test runner.** Unit and integration tests should use [`ai-tests`](../ai-tests) plus `vitest`. `ai-evaluate` runs _inside_ production; it isn't a vitest substitute.
 - **A/B testing variants under traffic.** Use [`ai-experiments`](../ai-experiments) for production traffic splitting and outcome measurement.
 - **Trusted, statically-known code.** If you wrote and shipped the code yourself, just call it directly — sandboxing has overhead.
 
@@ -102,9 +102,7 @@ pnpm add ai-evaluate
   "name": "my-worker",
   "main": "src/index.ts",
   "compatibility_date": "2026-01-01",
-  "worker_loaders": [
-    { "binding": "loader" }
-  ]
+  "worker_loaders": [{ "binding": "loader" }]
 }
 ```
 
@@ -115,15 +113,18 @@ import { evaluate } from 'ai-evaluate'
 
 // Needed for `fetch: [...]` allowlists and `outboundRpc`: evaluate() binds a
 // loopback stub of this entrypoint as the sandbox's outbound (see
-// "Network Access Control" below)
-export { OutboundGateway } from 'ai-evaluate/worker'
+// "Network Access Control" below). SandboxHost is needed for `facet` (see
+// "Persistent state: facets"), and must also be declared in wrangler.jsonc:
+//   "durable_objects": { "bindings": [{ "name": "SANDBOX_HOST", "class_name": "SandboxHost" }] },
+//   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SandboxHost"] }]
+export { OutboundGateway, SandboxHost } from 'ai-evaluate/worker'
 
 export default {
   async fetch(request: Request, env: Env) {
     const result = await evaluate({ script: '1 + 1' }, env)
     return Response.json(result)
     // { success: true, value: 2, logs: [], duration: 5 }
-  }
+  },
 }
 
 interface Env {
@@ -197,11 +198,11 @@ await runtime.dispose()
 `timeout` is enforced in two layers, and which one fires depends on what the
 script is doing:
 
-| Script | Cloudflare | Local (`ai-evaluate/node`) |
-|--------|------------|----------------------------|
-| Slow but yielding (`await setTimeout(...)`) | `AbortSignal.timeout` in `evaluate()` → `Timeout: Script execution exceeded {timeout}ms` | same |
-| Promise that never settles | workerd hang detection, or the timeout | same |
-| CPU-bound loop (`while (true) {}`) | the loaded worker's `limits.cpuMs`, bound to `timeout`, throws out of the loop (the runtime's CPU-limit error) | Node backstop: `Timeout: ...` at `timeout + 250ms`, then the host is replaced |
+| Script                                      | Cloudflare                                                                                                     | Local (`ai-evaluate/node`)                                                    |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Slow but yielding (`await setTimeout(...)`) | `AbortSignal.timeout` in `evaluate()` → `Timeout: Script execution exceeded {timeout}ms`                       | same                                                                          |
+| Promise that never settles                  | workerd hang detection, or the timeout                                                                         | same                                                                          |
+| CPU-bound loop (`while (true) {}`)          | the loaded worker's `limits.cpuMs`, bound to `timeout`, throws out of the loop (the runtime's CPU-limit error) | Node backstop: `Timeout: ...` at `timeout + 250ms`, then the host is replaced |
 
 A loop that never yields is never interrupted by `AbortSignal.timeout` - the
 signal is only observed when the script returns to the event loop. On
@@ -214,7 +215,7 @@ worker on the host worker's single thread, so locally a CPU-bound loop also
 stalls the host's own timers. The Node side is the local contract for that case:
 
 - The evaluation that looped returns `Timeout: Script execution exceeded
-  {timeout}ms` about 250ms after its timeout; the wedged host is then
+{timeout}ms` about 250ms after its timeout; the wedged host is then
   SIGKILLed and the next `evaluate()` starts a fresh one (~1s cold start).
 - Any other evaluation in flight on that host fails with `WEDGED_HOST_ERROR`
   (exported from `ai-evaluate/node`) rather than a transport error, and can be
@@ -235,12 +236,14 @@ with the binding they proxy to ai-tests over RPC (`testRunner: 'rpc'`).
 
 ### Host env: `loader` and `test`
 
-`evaluate(options, env)` reads exactly two bindings from the host env:
+`evaluate(options, env)` reads exactly two bindings from the host env (the
+`OutboundGateway` and `SandboxHost` exports are reached as loopback bindings,
+`ctx.exports`, not through env):
 
 ```typescript
 interface SandboxEnv {
-  loader?: WorkerLoader        // worker_loaders binding - required
-  test?: TestServiceBinding    // ai-tests service binding - optional
+  loader?: WorkerLoader // worker_loaders binding - required
+  test?: TestServiceBinding // ai-tests service binding - optional
 }
 ```
 
@@ -255,21 +258,21 @@ binding to `loader` (and an ai-tests service binding to `test`).
 
 ```typescript
 interface EvaluateOptions {
-  module?: string              // Module code with exports
-  tests?: string               // Vitest-style test code
-  script?: string              // Script to execute
-  timeout?: number             // Default: 5000ms, max: 60000ms (wall clock)
+  module?: string // Module code with exports
+  tests?: string // Vitest-style test code
+  script?: string // Script to execute
+  timeout?: number // Default: 5000ms, max: 60000ms (wall clock)
   limits?: { cpuMs?: number; subrequests?: number } // Runtime-enforced limits (see below)
-  tails?: unknown[]            // Tail workers receiving trace events (see below)
+  tails?: unknown[] // Tail workers receiving trace events (see below)
   compatibilityFlags?: string[] // e.g. ['nodejs_compat'] (default: none)
-  compatibilityDate?: string   // YYYY-MM-DD (default: the package's COMPATIBILITY_DATE)
+  compatibilityDate?: string // YYYY-MM-DD (default: the package's COMPATIBILITY_DATE)
   env?: Record<string, string> // String environment variables (see below)
   bindings?: Record<string, unknown> // RPC stubs and structured-cloneable values (see below)
-  sdk?: SDKConfig | boolean    // Enable $, db, ai globals
+  sdk?: SDKConfig | boolean // Enable $, db, ai globals
   dependencies?: Record<string, string> // npm packages to import (see External Imports)
-  bundler?: boolean            // Resolve them with @cloudflare/worker-bundler (default: true)
+  bundler?: boolean // Resolve them with @cloudflare/worker-bundler (default: true)
   modules?: Record<string, string> // Extra ES modules of the worker, importable as ./name.js
-  imports?: string[]           // Deprecated: packages as globals (see External Imports)
+  imports?: string[] // Deprecated: packages as globals (see External Imports)
   isolation?: 'fresh' | 'cached' // Isolate reuse policy (default: 'fresh', see below)
 }
 ```
@@ -286,21 +289,24 @@ is reported as `Invalid EvaluateResult: ...` rather than returned as one.
 
 These map directly onto the Dynamic Workers spec the loader receives:
 
-| Option | Where it lands | Content-addressed? |
-|--------|----------------|--------------------|
-| `limits.cpuMs` | `WorkerCode.limits` (as given) and the entrypoint's CPU budget | yes (the spec's `limits`; the entrypoint budget is not) |
-| `limits.subrequests` | `WorkerCode.limits` | yes |
-| `compatibilityFlags` | `WorkerCode.compatibilityFlags` (default `[]`) | yes |
-| `compatibilityDate` | `WorkerCode.compatibilityDate` (default `COMPATIBILITY_DATE`) | yes |
-| `tails` | `WorkerCode.tails` (the same array) | no - a runtime binding |
+| Option               | Where it lands                                                 | Content-addressed?                                      |
+| -------------------- | -------------------------------------------------------------- | ------------------------------------------------------- |
+| `limits.cpuMs`       | `WorkerCode.limits` (as given) and the entrypoint's CPU budget | yes (the spec's `limits`; the entrypoint budget is not) |
+| `limits.subrequests` | `WorkerCode.limits`                                            | yes                                                     |
+| `compatibilityFlags` | `WorkerCode.compatibilityFlags` (default `[]`)                 | yes                                                     |
+| `compatibilityDate`  | `WorkerCode.compatibilityDate` (default `COMPATIBILITY_DATE`)  | yes                                                     |
+| `tails`              | `WorkerCode.tails` (the same array)                            | no - a runtime binding                                  |
 
 ```typescript
-await evaluate({
-  script: 'console.log("hi"); return Buffer.from("hi").toString("base64")',
-  limits: { cpuMs: 50, subrequests: 2 },   // CPU and outbound-request caps, enforced by the runtime
-  compatibilityFlags: ['nodejs_compat'],   // Buffer, process, node: builtins
-  tails: [env.TAIL],                       // a tail worker: gets console output, exceptions, outcome
-}, env)
+await evaluate(
+  {
+    script: 'console.log("hi"); return Buffer.from("hi").toString("base64")',
+    limits: { cpuMs: 50, subrequests: 2 }, // CPU and outbound-request caps, enforced by the runtime
+    compatibilityFlags: ['nodejs_compat'], // Buffer, process, node: builtins
+    tails: [env.TAIL], // a tail worker: gets console output, exceptions, outcome
+  },
+  env
+)
 ```
 
 `limits.cpuMs` defaults to `timeout`: CPU time never exceeds wall time, so the
@@ -325,16 +331,19 @@ leak into the isolate by accident. `module`, `tests` and `script` all see it as
 a frozen `env` object:
 
 ```typescript
-await evaluate({
-  script: 'return { who: env.WHO, pong: await env.svc.ping() }',
-  env: { WHO: 'sandbox' },          // strings only
-  bindings: { svc: env.PING },      // RPC stubs and structured-cloneable values
-}, env)
+await evaluate(
+  {
+    script: 'return { who: env.WHO, pong: await env.svc.ping() }',
+    env: { WHO: 'sandbox' }, // strings only
+    bindings: { svc: env.PING }, // RPC stubs and structured-cloneable values
+  },
+  env
+)
 ```
 
-| Option | Accepts | Rejected with `ValidationError` |
-|--------|---------|---------------------------------|
-| `env` | strings | anything that is not a string |
+| Option     | Accepts                                                                                                                                                                                          | Rejected with `ValidationError`                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `env`      | strings                                                                                                                                                                                          | anything that is not a string                                                |
 | `bindings` | RPC stubs (a service binding, a `WorkerEntrypoint` stub, `ctx.exports.X` - anything with a `fetch` method, see `isRpcStubLike`) and structured-cloneable values (`structuredClone` accepts them) | raw KV / D1 / R2 / Durable Object namespace bindings, functions and closures |
 
 To give the sandbox access to a raw binding, wrap it in a `WorkerEntrypoint`
@@ -350,16 +359,78 @@ its Miniflare host over an HTTP/JSON boundary that cannot carry a stub, so it
 rejects `bindings` instead of forwarding a silently narrowed value. `env`
 (strings) works on every path.
 
+### Persistent state: `facet` and `sandboxId`
+
+A sandbox can keep state across evaluations - in its own SQLite-backed
+Durable Object, not in a re-serialized context. Name a class of `module` as
+the sandbox's **facet**, and the class runs as a Durable Object facet owned by
+the host worker's `SandboxHost` Durable Object for `sandboxId`. The script
+calls it as `env.<BINDING>` (the class name in CONSTANT_CASE, or
+`facet.binding`):
+
+```typescript
+const options = {
+  module: `
+    export class State {
+      constructor(ctx) {
+        this.sql = ctx.storage.sql
+        this.sql.exec('CREATE TABLE IF NOT EXISTS counter (n INTEGER NOT NULL)')
+      }
+      incr() {
+        const n = (this.sql.exec('SELECT n FROM counter').toArray()[0]?.n ?? 0) + 1
+        this.sql.exec('DELETE FROM counter')
+        this.sql.exec('INSERT INTO counter (n) VALUES (?)', n)
+        return n
+      }
+    }`,
+  script: 'return await env.STATE.incr()',
+  facet: { class: 'State' },
+  sandboxId: 'user-42',
+}
+
+await evaluate(options, env) // { success: true, value: 1 }
+await evaluate(options, env) // { success: true, value: 2 } - same sandboxId, same SQLite
+await evaluate({ ...options, sandboxId: 'user-43' }, env) // value: 1 - isolated
+```
+
+| Option          | Meaning                                                                                                                                                                                                                                        |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `facet.class`   | The export of `module` to run as the facet. A plain class receives `(ctx, env)` and is wrapped in a `DurableObject` subclass (workerd only routes RPC to those); a class that `extends DurableObject` from `cloudflare:workers` runs as it is. |
+| `facet.id`      | The facet's Durable Object id; default derived by the runtime from the sandbox and the class name.                                                                                                                                             |
+| `facet.binding` | The env key of the facet in the script (default `State` -> `STATE`). May not collide with `env`, `bindings` or `TEST`.                                                                                                                         |
+| `sandboxId`     | Which `SandboxHost` owns the facet: evaluations with the same id share storage. Required with `facet`.                                                                                                                                         |
+
+How it is wired (see `src/facets.ts`): `evaluate()` builds a second,
+content-addressed **facet worker** from `module` and its imports (no script,
+no capnweb) and attaches it to `ctx.exports.SandboxHost.getByName(sandboxId)`;
+the Durable Object loads it through its own `loader` binding and starts the
+facet on the first call (`ctx.facets.get`). The facet stub never leaves the
+Durable Object - workerd does not serialize facet stubs, nor a dynamic
+worker's `DurableObjectClass` - so the script worker receives a stub of the
+`SandboxHost` under a reserved env key, and `env.STATE` is a proxy whose
+method calls are `invoke` RPCs and whose `fetch()` reaches the class's
+`fetch` handler. The facet keeps running across evaluations of the same
+module (in-memory state included); a changed module restarts it on the new
+class with its SQLite storage kept. Outbound policy applies to facet code
+too (`fetch: false`, an allowlist), except `outboundRpc`, which is
+per-evaluation and does not serve a facet that outlives it.
+
+`ai-evaluate/node` has the `SandboxHost` on its Miniflare host, with
+in-memory storage that lives as long as that host. In your own Worker,
+export `SandboxHost` from the main module and declare it in wrangler (see
+"Cloudflare Workers" above); without it an evaluation with `facet` fails
+closed with an error naming the export.
+
 ### Isolate reuse: `isolation`
 
 Every evaluation is one `WorkerCode` spec (modules, compatibility date and
 flags, limits). `isolation` decides how the Dynamic Workers loader turns that
 spec into an isolate:
 
-| `isolation` | Loader call | When |
-|-------------|-------------|------|
-| `'fresh'` (default) | `LOADER.load(spec)` | A new, uncached isolate every call: nothing at module scope survives between evaluations, so identical calls return identical results. |
-| `'cached'` | `LOADER.get(workerCodeId(spec), factory)` | Identical specs share one isolate, and its module-scope state. Dynamic Workers are billed per unique worker per day, so this is the opt-in cost control for code that is safe to re-enter. |
+| `isolation`         | Loader call                               | When                                                                                                                                                                                       |
+| ------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `'fresh'` (default) | `LOADER.load(spec)`                       | A new, uncached isolate every call: nothing at module scope survives between evaluations, so identical calls return identical results.                                                     |
+| `'cached'`          | `LOADER.get(workerCodeId(spec), factory)` | Identical specs share one isolate, and its module-scope state. Dynamic Workers are billed per unique worker per day, so this is the opt-in cost control for code that is safe to re-enter. |
 
 `workerCodeId(spec)` content-addresses the spec - `mainModule`, `modules`,
 `compatibilityDate`, `compatibilityFlags`, `allowExperimental`, `limits`, and
@@ -378,8 +449,8 @@ locals and captured logs are per-request. A `let n = 0; export const inc = () =>
 ```typescript
 import { evaluate, buildWorkerCode, workerCodeId } from 'ai-evaluate'
 
-await evaluate({ script: 'return 1' }, env)                        // fresh (default): new isolate
-await evaluate({ script: 'return 1', isolation: 'cached' }, env)   // one isolate per unique spec
+await evaluate({ script: 'return 1' }, env) // fresh (default): new isolate
+await evaluate({ script: 'return 1', isolation: 'cached' }, env) // one isolate per unique spec
 
 // Inspect the id an evaluation will be cached under
 const id = workerCodeId(await buildWorkerCode({ script: 'return 1' }))
@@ -392,16 +463,19 @@ Sandboxed code can `import` npm packages. Declare them in `dependencies`
 `module` or `script`:
 
 ```typescript
-const result = await evaluate({
-  module: `
+const result = await evaluate(
+  {
+    module: `
     import { chunk } from 'lodash'
     import dayjs from 'dayjs'
     export const chunks = chunk([1, 2, 3, 4, 5, 6], 2)
     export const today = () => dayjs().format('YYYY-MM-DD')
   `,
-  script: 'return { chunks, today: today() }',
-  dependencies: { lodash: '4.17.21', dayjs: '^1.11.0' },
-}, env)
+    script: 'return { chunks, today: today() }',
+    dependencies: { lodash: '4.17.21', dayjs: '^1.11.0' },
+  },
+  env
+)
 ```
 
 Versions are anything npm accepts (`4.17.21`, `^4`, `latest`); subpaths
@@ -450,19 +524,22 @@ warning; prefer `dependencies` and `import`.
 await evaluate({ imports: ['lodash'], script: 'return _.chunk([1, 2], 1)' }, env)
 
 // Full URLs (custom CDNs) are fetched as-is and exposed the same way
-await evaluate({ imports: ['https://esm.sh/lodash@4.17.21'], script: 'return _.chunk([1, 2], 1)' }, env)
+await evaluate(
+  { imports: ['https://esm.sh/lodash@4.17.21'], script: 'return _.chunk([1, 2], 1)' },
+  env
+)
 ```
 
 ### EvaluateResult
 
 ```typescript
 interface EvaluateResult {
-  success: boolean             // Execution succeeded
-  value?: unknown              // Script return value
-  logs: LogEntry[]             // Console output
-  testResults?: TestResults    // Test results if tests provided
-  error?: string               // Error message if failed
-  duration: number             // Execution time in ms
+  success: boolean // Execution succeeded
+  value?: unknown // Script return value
+  logs: LogEntry[] // Console output
+  testResults?: TestResults // Test results if tests provided
+  error?: string // Error message if failed
+  duration: number // Execution time in ms
 }
 ```
 
@@ -478,7 +555,7 @@ export default {
     const sandbox = createEvaluator(env)
     const result = await sandbox({ script: '1 + 1' })
     return Response.json(result)
-  }
+  },
 }
 ```
 
@@ -495,7 +572,7 @@ of the stock `DynamicWorkerExecutor`.
 ```typescript
 import { createCodeTool, createCodemodeRuntime } from '@cloudflare/codemode'
 import { createExecutor } from 'ai-evaluate/codemode'
-export { OutboundGateway } from 'ai-evaluate/worker'   // tool calls come back through it
+export { OutboundGateway } from 'ai-evaluate/worker' // tool calls come back through it
 
 // As the executor of createCodeTool (an AI SDK tool the model writes code for)
 const executor = createExecutor({ loader: env.LOADER })
@@ -508,14 +585,14 @@ const runtime = createCodemodeRuntime({ ctx, connectors, executor })
 `createExecutor` takes codemode's own `DynamicWorkerExecutorOptions` and maps
 them onto an evaluation:
 
-| Option | Default | Maps to |
-|--------|---------|---------|
-| `loader` | required | the `worker_loaders` binding `evaluate()` loads into (any binding name: `env.LOADER` works) |
-| `timeout` | `60000` | `timeout` (wall clock) and the loaded worker's CPU budget (`limits.cpuMs`) |
-| `globalOutbound` | `null` | `null`: `fetch: false` - the sandbox has no network; a `Fetcher`: every non-tool request goes through it, on the host |
-| `modules` | `{}` | `EvaluateOptions.modules` - `await import('./name.js')` in the code |
-| `bindings` | `{}` | `EvaluateOptions.bindings` - RPC stubs and cloneable values, as `env.NAME` |
-| `evaluate` | - | the remaining `EvaluateOptions` (`isolation`, `limits`, `tails`, `compatibilityFlags`, `dependencies`, ...) |
+| Option           | Default  | Maps to                                                                                                               |
+| ---------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `loader`         | required | the `worker_loaders` binding `evaluate()` loads into (any binding name: `env.LOADER` works)                           |
+| `timeout`        | `60000`  | `timeout` (wall clock) and the loaded worker's CPU budget (`limits.cpuMs`)                                            |
+| `globalOutbound` | `null`   | `null`: `fetch: false` - the sandbox has no network; a `Fetcher`: every non-tool request goes through it, on the host |
+| `modules`        | `{}`     | `EvaluateOptions.modules` - `await import('./name.js')` in the code                                                   |
+| `bindings`       | `{}`     | `EvaluateOptions.bindings` - RPC stubs and cloneable values, as `env.NAME`                                            |
+| `evaluate`       | -        | the remaining `EvaluateOptions` (`isolation`, `limits`, `tails`, `compatibilityFlags`, `dependencies`, ...)           |
 
 The result is codemode's `ExecuteResult`: `{ result, logs }` on success,
 `{ result: undefined, error, logs }` with the sandbox's own error string
@@ -552,29 +629,35 @@ only its types are imported.
 ### Simple Script
 
 ```typescript
-const result = await evaluate({
-  script: `
+const result = await evaluate(
+  {
+    script: `
     const x = 10
     const y = 20
     return x + y
-  `
-}, env)
+  `,
+  },
+  env
+)
 // result.value === 30
 ```
 
 ### Module with Exports
 
 ```typescript
-const result = await evaluate({
-  module: `
+const result = await evaluate(
+  {
+    module: `
     export const greet = (name) => \`Hello, \${name}!\`
     export const sum = (...nums) => nums.reduce((a, b) => a + b, 0)
   `,
-  script: `
+    script: `
     console.log(greet('World'))
     return sum(1, 2, 3, 4, 5)
-  `
-}, env)
+  `,
+  },
+  env
+)
 // result.value === 15
 // result.logs[0].message === 'Hello, World!'
 ```
@@ -582,8 +665,9 @@ const result = await evaluate({
 ### Testing User Code
 
 ```typescript
-const result = await evaluate({
-  module: `
+const result = await evaluate(
+  {
+    module: `
     export const isPrime = (n) => {
       if (n < 2) return false
       for (let i = 2; i <= Math.sqrt(n); i++) {
@@ -592,7 +676,7 @@ const result = await evaluate({
       return true
     }
   `,
-  tests: `
+    tests: `
     describe('isPrime', () => {
       it('returns false for numbers less than 2', () => {
         expect(isPrime(0)).toBe(false)
@@ -609,8 +693,10 @@ const result = await evaluate({
         expect(isPrime(100)).toBe(false)
       })
     })
-  `
-}, env)
+  `,
+  },
+  env
+)
 
 // result.testResults = { total: 3, passed: 3, failed: 0, ... }
 ```
@@ -623,10 +709,18 @@ Full vitest-compatible API with async support.
 
 ```typescript
 describe('group', () => {
-  it('test name', () => { /* ... */ })
-  test('another test', () => { /* ... */ })
-  it.skip('skipped', () => { /* ... */ })
-  it.only('focused', () => { /* ... */ })
+  it('test name', () => {
+    /* ... */
+  })
+  test('another test', () => {
+    /* ... */
+  })
+  it.skip('skipped', () => {
+    /* ... */
+  })
+  it.only('focused', () => {
+    /* ... */
+  })
 })
 ```
 
@@ -645,8 +739,12 @@ it('async/await', async () => {
 describe('with setup', () => {
   let data
 
-  beforeEach(() => { data = { count: 0 } })
-  afterEach(() => { data = null })
+  beforeEach(() => {
+    data = { count: 0 }
+  })
+  afterEach(() => {
+    data = null
+  })
 
   it('uses setup', () => {
     data.count++
@@ -716,20 +814,46 @@ await session.eval('const x = 10')
 const result2 = await session.eval('sum(x, 5)')
 console.log(result2.value) // 15
 
+// Objects are stored in the sandbox, not re-serialized into source
+await session.eval('const counter = { n: 1 }')
+const result3 = await session.eval('counter.n += 1; counter.n')
+console.log(result3.value) // 2
+
 // Clean up
 await session.close()
 ```
+
+A session is a thin client over `evaluate()`: every `eval` is one evaluation
+against the session's `sandboxId`, with a `ReplState` facet (see "Persistent
+state: `facet` and `sandboxId`") holding the variables in the sandbox's own
+SQLite-backed storage. Each evaluation hydrates the variables the client
+knows about from the facet, runs the code, and stores the declared variables
+back - every structured-cloneable value (objects, arrays, `Map`, `Date`,
+...). Functions, class instances and symbols cannot be stored; the code that
+declared them is replayed, as written, at the start of every later `eval`
+(so `sum` above keeps working), with its side effects. The value of an
+`eval` is its last expression statement (or a trailing `return`).
+
+Pass `sandboxId` to resume a sandbox: a new session on the same id finds the
+stored variables in scope again. A session without one gets a random id and
+deletes its storage on `close()`.
+
+`getContext()` is deprecated (the context lives in the sandbox, not in the
+client); it warns once and returns a snapshot of the stored values as of the
+last `eval`. `setContext(key, value)` and `clearContext()` apply at the next
+evaluation.
 
 ### REPL Configuration
 
 ```typescript
 interface ReplSessionConfig {
-  local?: boolean           // Use Miniflare (default: false, uses remote)
-  auth?: string             // Auth token for remote execution
+  local?: boolean // Use the local Miniflare host (default without an env)
+  auth?: string // Auth token for remote execution
   sdk?: SDKConfig | boolean // Enable platform primitives ($, db, ai)
-  prelude?: string          // Code to run at session start
-  timeout?: number          // Eval timeout in ms (default: 5000)
-  allowNetwork?: boolean    // Allow fetch (default: true)
+  prelude?: string // Module code every eval runs with (its exports are in scope)
+  timeout?: number // Eval timeout in ms (default: 5000)
+  allowNetwork?: boolean // Allow fetch (default: true)
+  sandboxId?: string // Sandbox holding the session's variables (default: random, dropped on close)
 }
 ```
 
@@ -746,23 +870,24 @@ console.log(result.value) // 7
 
 ## Requirements
 
-| Environment | Requirement |
-|-------------|-------------|
-| Cloudflare Workers | wrangler v4+, `worker_loaders` binding |
+| Environment                  | Requirement                                                       |
+| ---------------------------- | ----------------------------------------------------------------- |
+| Cloudflare Workers           | wrangler v4+, `worker_loaders` binding                            |
 | Node.js (`ai-evaluate/node`) | Node >= 22, `miniflare@^5.20260907.0-alpha` (optional dependency) |
 
 ## Security Model
 
-| Protection | Description |
-|------------|-------------|
-| V8 Isolate | Code runs in isolated V8 context |
-| Network Control | Configurable: allow, block, or allowlist - enforced as the loaded worker's `globalOutbound` (see [Network Access Control](#network-access-control)), never by code in the isolate |
-| No File System | Zero filesystem access |
-| Memory Limits | Standard Worker limits apply |
-| CPU Limits | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts)) |
-| Subrequest Limits | `limits.subrequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility)) |
-| Input Validation | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `dependencies` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape |
-| Dependencies | `dependencies` come from the npm registry via `@cloudflare/worker-bundler` (esm.sh only as fallback); `imports` accept bare package names and http(s) URLs only (`file:` and other schemes are rejected) |
+| Protection        | Description                                                                                                                                                                                                                               |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V8 Isolate        | Code runs in isolated V8 context                                                                                                                                                                                                          |
+| Persistent state  | Only through a declared `facet`: a SQLite-backed Durable Object per `sandboxId`, reached by RPC through the host's `SandboxHost`; the sandbox holds no host binding, and the `SandboxHost` stub it uses is removed from the `env` it sees |
+| Network Control   | Configurable: allow, block, or allowlist - enforced as the loaded worker's `globalOutbound` (see [Network Access Control](#network-access-control)), never by code in the isolate                                                         |
+| No File System    | Zero filesystem access                                                                                                                                                                                                                    |
+| Memory Limits     | Standard Worker limits apply                                                                                                                                                                                                              |
+| CPU Limits        | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts))                                        |
+| Subrequest Limits | `limits.subrequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility))                                                               |
+| Input Validation  | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `dependencies` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape               |
+| Dependencies      | `dependencies` come from the npm registry via `@cloudflare/worker-bundler` (esm.sh only as fallback); `imports` accept bare package names and http(s) URLs only (`file:` and other schemes are rejected)                                  |
 
 ### Network Access Control
 
@@ -776,7 +901,7 @@ await evaluate({ script: '...', fetch: false })
 // Allowlist specific domains (wildcards supported)
 await evaluate({
   script: '...',
-  fetch: ['api.example.com', '*.trusted.com']
+  fetch: ['api.example.com', '*.trusted.com'],
 })
 
 // Answer some requests from the host instead of the network
@@ -793,11 +918,11 @@ Nothing inside the isolate checks hosts: there is no patched `globalThis.fetch`
 and no `__originalFetch__` in module scope for the sandboxed code to reach
 (2.x had both, and the allowlist was bypassable through them).
 
-| `fetch` | `globalOutbound` | A blocked `fetch()` rejects with |
-|---------|------------------|----------------------------------|
-| `true` / absent | inherited (the host's) | - |
-| `false` / `null` | `null` | workerd's own "not permitted to access the internet" |
-| `string[]` | the host's `OutboundGateway` entrypoint | `Network access blocked: domain not in allowlist. Attempted: <host>` |
+| `fetch`          | `globalOutbound`                        | A blocked `fetch()` rejects with                                     |
+| ---------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| `true` / absent  | inherited (the host's)                  | -                                                                    |
+| `false` / `null` | `null`                                  | workerd's own "not permitted to access the internet"                 |
+| `string[]`       | the host's `OutboundGateway` entrypoint | `Network access blocked: domain not in allowlist. Attempted: <host>` |
 
 An allowlist (and `outboundRpc`) is served by the **`OutboundGateway`
 entrypoint of the host worker** - the Worker that calls `evaluate()`. Its main
@@ -831,6 +956,7 @@ in its logs and tail events - that is how a `Fetcher` makes its caller's
 ### "Unexpected fields found in top-level field: worker_loaders"
 
 Upgrade wrangler to v4+:
+
 ```bash
 pnpm add -D wrangler@4
 ```
@@ -850,7 +976,7 @@ Ensure your wrangler.jsonc has the worker_loaders config and you're passing `env
 ```
 
 ```typescript
-await evaluate({ script: code }, env)  // Don't forget env!
+await evaluate({ script: code }, env) // Don't forget env!
 ```
 
 ## Types

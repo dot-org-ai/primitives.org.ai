@@ -60,6 +60,46 @@ export interface JSXOptions {
 }
 
 /**
+ * A Durable Object facet of the sandbox: a class that `module` exports, run
+ * as a SQLite-backed Durable Object of its own, owned by the host worker's
+ * `SandboxHost` Durable Object for the evaluation's `sandboxId`.
+ *
+ * The script reaches it as `env.<binding>` (an RPC stub-like proxy: every
+ * method call is an RPC into the facet, `fetch()` reaches its `fetch`
+ * handler). The class receives `(ctx, env)` like any Durable Object and may
+ * extend `DurableObject` from `cloudflare:workers` or be a plain class - a
+ * plain class is wrapped in one that does. Its `ctx.storage` (SQLite) is
+ * isolated per `sandboxId` and per class name, and survives across
+ * evaluations, isolates and the host's own restarts.
+ *
+ * @example
+ * await evaluate({
+ *   module: `export class State {
+ *     constructor(ctx) { this.sql = ctx.storage.sql }
+ *     incr() { ... }
+ *   }`,
+ *   script: 'return await env.STATE.incr()',
+ *   facet: { class: 'State' },
+ *   sandboxId: 'user-42',
+ * }, env)
+ */
+export interface FacetOptions {
+  /** Name of the class `module` exports (`export class State {}` -> `'State'`) */
+  class: string
+  /**
+   * Durable Object id of the facet (any string). Default: derived by the
+   * runtime from the sandbox and the class name, so it need not be set.
+   */
+  id?: string | undefined
+  /**
+   * Name under which the script sees the facet, as `env.<binding>`. Default:
+   * the class name in CONSTANT_CASE (`State` -> `STATE`, `ReplState` ->
+   * `REPL_STATE`). May not collide with `env`, `bindings` or `TEST`.
+   */
+  binding?: string | undefined
+}
+
+/**
  * Options for evaluate()
  */
 export interface EvaluateOptions {
@@ -218,6 +258,30 @@ export interface EvaluateOptions {
    * the opt-in cost control for code that is safe to re-enter.
    */
   isolation?: Isolation | undefined
+  /**
+   * A Durable Object facet of the sandbox (see `FacetOptions`): the named
+   * class of `module` runs as a SQLite-backed Durable Object owned by the
+   * host worker's `SandboxHost` Durable Object for `sandboxId`, and the
+   * script calls it as `env.<binding>`. Requires `sandboxId`, and a host
+   * worker that exports `SandboxHost` from its main module with a namespace
+   * configured (`export { SandboxHost } from 'ai-evaluate/worker'`, plus
+   * `durable_objects.bindings` and a `new_sqlite_classes` migration in
+   * wrangler); the local host of `ai-evaluate/node` has it already.
+   *
+   * The facet worker (the module and its imports, without the script) is
+   * content-addressed separately from the script worker: the facet stays
+   * hot across evaluations of the same module, and a changed module restarts
+   * it on the new class while its SQLite storage is kept.
+   */
+  facet?: FacetOptions | undefined
+  /**
+   * Identity of the sandbox whose persistent state this evaluation runs
+   * against: the name of the `SandboxHost` Durable Object that owns its
+   * facets. Two evaluations with the same `sandboxId` share facet storage;
+   * different ids are isolated. Meaningful only with `facet`, which requires
+   * it.
+   */
+  sandboxId?: string | undefined
 }
 
 /**

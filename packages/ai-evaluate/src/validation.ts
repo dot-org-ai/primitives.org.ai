@@ -7,6 +7,7 @@
 import type { EvaluateOptions } from './types.js'
 import { isPackageName, parseImportSpecifier, PACKAGE_JSON_MODULE } from './shared.js'
 import { OUTBOUND_JSON_MODULE } from './outbound.js'
+import { SANDBOX_HOST_BINDING_KEY, facetBindingName, isIdentifier } from './facets.js'
 
 /**
  * The key under which the ai-tests service binding is handed to the loaded
@@ -14,6 +15,9 @@ import { OUTBOUND_JSON_MODULE } from './outbound.js'
  * neither `env` nor `bindings` may use it.
  */
 export const TEST_BINDING_KEY = 'TEST'
+
+/** Longest `sandboxId` accepted: it names a Durable Object, and appears in error messages */
+export const MAX_SANDBOX_ID_LENGTH = 256
 
 /**
  * Validation limits for EvaluateOptions
@@ -271,6 +275,55 @@ export function validateOptions(options: EvaluateOptions): void {
       }
     }
   }
+
+  // Validate sandboxId (the name of the SandboxHost Durable Object)
+  if (options.sandboxId !== undefined && options.sandboxId !== null) {
+    if (typeof options.sandboxId !== 'string' || options.sandboxId.length === 0) {
+      throw new ValidationError('sandboxId must be a non-empty string')
+    }
+    if (options.sandboxId.length > MAX_SANDBOX_ID_LENGTH) {
+      throw new ValidationError(
+        `sandboxId length (${options.sandboxId.length}) exceeds maximum allowed length of ${MAX_SANDBOX_ID_LENGTH}`
+      )
+    }
+  }
+
+  // Validate facet (a Durable Object class of the module, run under the SandboxHost)
+  if (options.facet !== undefined && options.facet !== null) {
+    const { facet } = options
+    if (typeof facet !== 'object' || Array.isArray(facet)) {
+      throw new ValidationError('facet must be an object ({ class, id?, binding? })')
+    }
+    if (!isIdentifier(facet.class)) {
+      throw new ValidationError('facet.class must be the name of a class the module exports')
+    }
+    if (facet.id !== undefined && (typeof facet.id !== 'string' || facet.id.length === 0)) {
+      throw new ValidationError('facet.id must be a non-empty string')
+    }
+    if (facet.binding !== undefined && !isIdentifier(facet.binding)) {
+      throw new ValidationError('facet.binding must be an identifier (the env key of the facet)')
+    }
+    const binding = facetBindingName(facet)
+    if (binding === TEST_BINDING_KEY || binding === SANDBOX_HOST_BINDING_KEY) {
+      throw new ValidationError(`facet binding ${binding} is reserved; set facet.binding`)
+    }
+    if (options.env && Object.hasOwn(options.env, binding)) {
+      throw new ValidationError(`env.${binding} collides with the facet binding; use another name`)
+    }
+    if (options.bindings && Object.hasOwn(options.bindings, binding)) {
+      throw new ValidationError(
+        `bindings.${binding} collides with the facet binding; use another name`
+      )
+    }
+    if (!options.module) {
+      throw new ValidationError(`facet.class ${facet.class} needs a module that exports it`)
+    }
+    if (options.sandboxId === undefined || options.sandboxId === null) {
+      throw new ValidationError(
+        'facet needs a sandboxId: the identity of the sandbox whose state the facet holds'
+      )
+    }
+  }
 }
 
 /**
@@ -309,7 +362,7 @@ export function isStructuredCloneable(value: unknown): boolean {
  *
  * @throws ValidationError for a non-string `env` value, a `bindings` value
  *   that is neither an RPC stub nor structured-cloneable, a key present in
- *   both, or the reserved `TEST` key.
+ *   both, or a reserved key (`TEST`, the `SandboxHost` stub key).
  */
 export function buildSandboxEnv(options: EvaluateOptions): Record<string, unknown> {
   const sandboxEnv: Record<string, unknown> = {}
@@ -323,6 +376,11 @@ export function buildSandboxEnv(options: EvaluateOptions): Record<string, unknow
       if (key === TEST_BINDING_KEY) {
         throw new ValidationError(
           `env.${key} is reserved for the ai-tests service binding; choose another name`
+        )
+      }
+      if (key === SANDBOX_HOST_BINDING_KEY) {
+        throw new ValidationError(
+          `env.${key} is reserved for the SandboxHost stub; choose another name`
         )
       }
       if (typeof value !== 'string') {
@@ -344,6 +402,11 @@ export function buildSandboxEnv(options: EvaluateOptions): Record<string, unknow
       if (key === TEST_BINDING_KEY) {
         throw new ValidationError(
           `bindings.${key} is reserved for the ai-tests service binding; choose another name`
+        )
+      }
+      if (key === SANDBOX_HOST_BINDING_KEY) {
+        throw new ValidationError(
+          `bindings.${key} is reserved for the SandboxHost stub; choose another name`
         )
       }
       if (key in sandboxEnv) {

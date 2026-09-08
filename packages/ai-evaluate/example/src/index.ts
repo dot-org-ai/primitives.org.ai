@@ -5,11 +5,17 @@
  * Domain: eval.workers.do
  *
  * Endpoints:
- * - POST / - Execute code (accepts { script?, module?, tests?, imports? })
+ * - POST / - Execute code (accepts { script?, module?, tests?, imports?, facet?, sandboxId? })
  * - GET /health - Health check
  */
 
 import { evaluate, type SandboxEnv, type EvaluateOptions, type EvaluateResult } from 'ai-evaluate'
+
+// The host worker's own entrypoints, which evaluate() reaches through
+// ctx.exports: OutboundGateway serves fetch allowlists / outboundRpc as the
+// sandbox's globalOutbound; SandboxHost is the Durable Object (declared in
+// wrangler.jsonc) that owns the per-sandbox facets of { facet, sandboxId }.
+export { OutboundGateway, SandboxHost } from 'ai-evaluate/worker'
 
 interface Env extends SandboxEnv {
   loader: unknown
@@ -160,6 +166,10 @@ export default {
           imports: body.imports,
           sdk: body.sdk,
           fetch: body.fetch,
+          // Persistent state: a class of `module` as a SQLite-backed facet of
+          // the sandbox named by `sandboxId`, reached as env.<BINDING>
+          facet: body.facet,
+          sandboxId: body.sandboxId,
         }
 
         // Validate that at least one of script/module/tests is provided

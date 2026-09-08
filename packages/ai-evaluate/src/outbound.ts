@@ -23,6 +23,7 @@
 
 import type { EvaluateOptions } from './types.js'
 import { isDomainAllowed } from './shared.js'
+import { loopbackExport } from './loopback.js'
 
 /**
  * Name of the entrypoint the host worker's main module must export for
@@ -200,31 +201,13 @@ export function outboundPolicy(
 /** A loopback binding of the host's `OutboundGateway` export: `ctx.exports.OutboundGateway` */
 export type OutboundGatewayFactory = (options: { props: OutboundGatewayProps }) => unknown
 
-/** Module specifier, kept out of the import expression so bundlers leave it to the runtime */
-const CLOUDFLARE_WORKERS = 'cloudflare:workers'
-
 /**
  * The host worker's loopback binding for its `OutboundGateway` export, or
  * `null` where there is none: outside workerd (Node), on a compatibility date
- * without `ctx.exports`, or when the main module does not export the class.
- *
- * `cloudflare:workers` exposes the current worker's loopback bindings as
- * `exports`, which is how `evaluate(options, env)` reaches the gateway without
- * an `ExecutionContext` parameter.
+ * without `ctx.exports`, or when the main module does not export the class
+ * (see `loopbackExport`).
  */
 export async function loopbackOutboundGateway(): Promise<OutboundGatewayFactory | null> {
-  let workers: { exports?: Record<string, unknown> } | undefined
-  try {
-    workers = (await import(/* @vite-ignore */ CLOUDFLARE_WORKERS)) as typeof workers
-  } catch {
-    return null
-  }
-  let factory: unknown
-  try {
-    factory = workers?.exports?.[OUTBOUND_GATEWAY_EXPORT]
-  } catch {
-    // `exports` throws where the runtime has no loopback bindings
-    return null
-  }
+  const factory = await loopbackExport(OUTBOUND_GATEWAY_EXPORT)
   return typeof factory === 'function' ? (factory as OutboundGatewayFactory) : null
 }

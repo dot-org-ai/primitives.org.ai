@@ -25,6 +25,11 @@
  * npm `dependencies` are resolved by `@cloudflare/worker-bundler` inside this
  * worker (see `./bundler.ts`); where it cannot load, or with `bundler: false`,
  * they are fetched from esm.sh as bundled modules instead.
+ *
+ * Persistent state is a Durable Object facet (`facet` + `sandboxId`, see
+ * `./facets.ts`): the host worker's `SandboxHost` Durable Object for the
+ * sandbox runs a class of `module` as a SQLite-backed facet, and the script
+ * reaches it as `env.<binding>` through a stub of that object.
  */
 
 import type {
@@ -71,6 +76,16 @@ import {
   partitionImports,
   packageJsonModule,
 } from './shared.js'
+import {
+  SANDBOX_HOST_BINDING_KEY,
+  SANDBOX_HOST_UNAVAILABLE_ERROR,
+  facetBindingName,
+  facetEnvSource,
+  generateFacetWorkerCode,
+  loopbackSandboxHost,
+  type FacetSpec,
+  type SandboxHostStub,
+} from './facets.js'
 
 /** Default per-evaluation timeout in milliseconds */
 export const DEFAULT_TIMEOUT = 5000
@@ -136,8 +151,10 @@ function generateSimpleWorkerCode(options: {
   imports?: string[]
   /** Code run once at module scope, after console capture and before the user module */
   preamble?: string
+  /** The sandbox's facet, exposed to the script as `env.<binding>` (see ./facets.ts) */
+  facet?: { binding: string; name: string } | undefined
 }): string {
-  const { module: rawModule = '', script = '', imports = [], preamble = '' } = options
+  const { module: rawModule = '', script = '', imports = [], preamble = '', facet } = options
 
   // Module code may use `exports.x =` or `export const x =`; both become
   // properties of `exports`, then top-level bindings the script can call.
@@ -198,8 +215,9 @@ export default {
   async fetch(request, __env__) {
     logs.splice(__moduleLogCount__);
     // The sandbox env, as the script sees it: a frozen copy of the allowlisted
-    // bindings the loader was given (see buildSandboxEnv), nothing else.
-    const env = Object.freeze({ ...__env__ });
+    // bindings the loader was given (see buildSandboxEnv), minus the reserved
+    // SandboxHost stub, plus the facet proxy when there is one.
+    ${facetEnvSource(facet)}
     try {
       // Execute the script (embedded at generation time - no new Function())
       ${wrappedScript}
@@ -473,6 +491,13 @@ export interface BuiltWorkerCode {
    * worker is done; a no-op when nothing was registered.
    */
   release(): void
+  /**
+   * The sandbox's facet, when `options.facet` is set: the `SandboxHost` stub
+   * for `sandboxId` (also in the script worker's `env` under the reserved
+   * key), the facet's name, and the facet worker spec to `attach` before the
+   * script runs (see `runWorker`).
+   */
+  facet?: { host: SandboxHostStub; name: string; spec: FacetSpec } | undefined
 }
 
 /**
@@ -515,6 +540,17 @@ export interface BuiltWorkerCode {
  * only when present so an absent option and an empty list are the same spec.
  * The `timeout`-derived CPU budget is not added here: it goes on the
  * entrypoint (see `runWorker`) so that it never changes the spec's id.
+ *
+ * With `facet`, a second spec is built from the same plan: the facet worker
+ * (`generateFacetWorkerCode` - the module and its imports exporting the
+ * class, no script, no capnweb), content-addressed on its own so it changes
+ * only when the module does. It gets the sandbox env (no `TEST`, no host
+ * stub) and the same outbound policy minus any `outboundRpc` interceptor,
+ * which is registered per evaluation and cannot serve a facet that outlives
+ * it. The script worker's env additionally carries the `SandboxHost` stub
+ * for `sandboxId` under `SANDBOX_HOST_BINDING_KEY`, which the generated
+ * worker strips from what the script sees. A host worker without the
+ * `SandboxHost` export fails here, closed, before any loader call.
  */
 export async function buildWorkerCode(
   options: EvaluateOptions,
@@ -535,6 +571,10 @@ export async function buildWorkerCodeWithWarnings(
   // policy fails here, closed, without having done any work.
   const gateway = policy ? await loopbackOutboundGateway() : null
   if (policy && !gateway) throw new Error(OUTBOUND_GATEWAY_UNAVAILABLE_ERROR)
+  // Likewise the SandboxHost namespace, before any fetching or loading
+  const facetOptions = options.facet
+  const sandboxHosts = facetOptions ? await loopbackSandboxHost() : null
+  if (facetOptions && !sandboxHosts) throw new Error(SANDBOX_HOST_UNAVAILABLE_ERROR)
   const spec = {
     compatibilityDate: options.compatibilityDate ?? COMPATIBILITY_DATE,
     compatibilityFlags: options.compatibilityFlags ?? [],
@@ -550,6 +590,9 @@ export async function buildWorkerCodeWithWarnings(
   // way, so a dynamic `import('./name.js')` resolves at runtime too.
   const extraModules: Record<string, string> = options.modules ?? {}
   const hasDependencies = Object.keys(plan.dependencies).length > 0
+  const facet = facetOptions
+    ? { binding: facetBindingName(facetOptions), name: facetOptions.class }
+    : undefined
 
   const entry = useSimpleWorker
     ? generateSimpleWorkerCode({
@@ -557,6 +600,7 @@ export async function buildWorkerCodeWithWarnings(
         script: plan.script,
         imports: plan.statements,
         preamble: plan.preamble,
+        facet,
       })
     : generateWorkerCode({
         testRunner: testService ? 'rpc' : 'embedded',
@@ -564,6 +608,7 @@ export async function buildWorkerCodeWithWarnings(
         script: plan.script,
         imports: plan.statements,
         preamble: plan.preamble,
+        facet,
         ...(options.tests !== undefined && { tests: options.tests }),
         ...(options.sdk !== undefined && { sdk: options.sdk }),
       })
@@ -579,17 +624,126 @@ export async function buildWorkerCodeWithWarnings(
   const loaderEnv =
     testService && !useSimpleWorker ? { ...env, [TEST_BINDING_KEY]: testService } : env
 
-  let resolved: { mainModule: string; modules: Record<string, string | WorkerModule> } | null = null
-  if (hasDependencies && options.bundler !== false) {
+  const assemble = (
+    entryModule: string,
+    entrySiblings: Record<string, string>
+  ): Promise<{ mainModule: string; modules: Record<string, string | WorkerModule> }> =>
+    assembleWorker(entryModule, {
+      dependencies: plan.dependencies,
+      bundler: hasDependencies && options.bundler !== false,
+      externalModules,
+      extraModules,
+      siblings: entrySiblings,
+      warnings,
+    })
+  const resolved = await assemble(entry, siblings)
+  // The facet worker: the same module and imports, exporting the class; no
+  // script, no capnweb. Built here so a resolution failure is reported before
+  // anything is attached or loaded.
+  const facetEntry = facetOptions
+    ? generateFacetWorkerCode({
+        module: plan.module,
+        className: facetOptions.class,
+        imports: plan.statements,
+        preamble: plan.preamble,
+      })
+    : null
+  const facetResolved = facetEntry ? await assemble(facetEntry, {}) : null
+
+  // The outbound policy, last: registering the interceptor is the one side
+  // effect of this build, and nothing after it can throw.
+  let globalOutbound: null | unknown = null
+  let facetOutbound: null | unknown = null
+  let outboundModule: Record<string, WorkerModule> = {}
+  let facetOutboundModule: Record<string, WorkerModule> = {}
+  let release = (): void => {}
+  if (policy && gateway) {
+    const props: OutboundGatewayProps = { allowlist: policy.allowlist }
+    // The facet outlives the evaluation and its interceptor: allowlist only
+    const facetProps: OutboundGatewayProps = { allowlist: policy.allowlist }
+    facetOutbound = gateway({ props: facetProps })
+    facetOutboundModule = { [OUTBOUND_JSON_MODULE]: { json: facetProps } }
+    if (options.outboundRpc) {
+      const id = registerInterceptor(options.outboundRpc)
+      props.interceptor = id
+      release = () => releaseInterceptor(id)
+    }
+    globalOutbound = gateway({ props })
+    outboundModule = { [OUTBOUND_JSON_MODULE]: { json: props } }
+  } else if (options.fetch !== false && options.fetch !== null) {
+    globalOutbound = undefined
+    facetOutbound = undefined
+  }
+
+  let built: BuiltWorkerCode['facet']
+  let scriptEnv: Record<string, unknown> = loaderEnv
+  if (facetOptions && sandboxHosts && facetResolved) {
+    // `sandboxId` is required with `facet` by validateOptions
+    const host = sandboxHosts.getByName(options.sandboxId ?? '')
+    const facetCode: WorkerCode = {
+      mainModule: facetResolved.mainModule,
+      modules: { ...facetResolved.modules, ...packageJson, ...facetOutboundModule },
+      ...spec,
+      globalOutbound: facetOutbound,
+      env,
+    }
+    built = {
+      host,
+      name: facetOptions.class,
+      spec: {
+        code: facetCode,
+        codeId: workerCodeId(facetCode),
+        className: facetOptions.class,
+        ...(facetOptions.id !== undefined && { id: facetOptions.id }),
+      },
+    }
+    scriptEnv = { ...loaderEnv, [SANDBOX_HOST_BINDING_KEY]: host }
+  }
+
+  return {
+    code: {
+      mainModule: resolved.mainModule,
+      modules: { ...resolved.modules, ...packageJson, ...outboundModule },
+      ...spec,
+      globalOutbound,
+      env: scriptEnv,
+    },
+    warnings,
+    release,
+    ...(built !== undefined && { facet: built }),
+  }
+}
+
+/**
+ * Resolve one worker entry into its module set: through the bundler when
+ * there are dependencies to install (and `bundler` allows it), else as plain
+ * modules with the esm.sh fallback for dependencies. `siblings` are modules
+ * the loader provides next to the entry, which the bundler must leave
+ * external (`capnweb.js`).
+ */
+async function assembleWorker(
+  entry: string,
+  input: {
+    dependencies: Record<string, string>
+    bundler: boolean
+    externalModules: Record<string, string>
+    extraModules: Record<string, string>
+    siblings: Record<string, string>
+    warnings: string[]
+  }
+): Promise<{ mainModule: string; modules: Record<string, string | WorkerModule> }> {
+  const { dependencies, externalModules, extraModules, siblings, warnings } = input
+  const hasDependencies = Object.keys(dependencies).length > 0
+  if (input.bundler) {
     try {
       const bundled = await resolveImports({
         entry,
-        dependencies: plan.dependencies,
+        dependencies,
         files: { ...externalModules, ...extraModules },
         externals: Object.keys(siblings),
       })
       warnings.push(...bundled.warnings.map((warning) => `bundler: ${warning}`))
-      resolved = {
+      return {
         mainModule: bundled.mainModule,
         modules: { ...bundled.modules, ...extraModules, ...siblings },
       }
@@ -602,48 +756,16 @@ export async function buildWorkerCodeWithWarnings(
       )
     }
   }
-  if (!resolved) {
-    const dependencyModules = hasDependencies ? await prefetchDependencies(plan.dependencies) : {}
-    resolved = {
-      mainModule: 'worker.js',
-      modules: {
-        'worker.js': entry,
-        ...externalModules,
-        ...extraModules,
-        ...dependencyModules,
-        ...siblings,
-      },
-    }
-  }
-
-  // The outbound policy, last: registering the interceptor is the one side
-  // effect of this build, and nothing after it can throw.
-  let globalOutbound: null | unknown = null
-  let outboundModule: Record<string, WorkerModule> = {}
-  let release = (): void => {}
-  if (policy && gateway) {
-    const props: OutboundGatewayProps = { allowlist: policy.allowlist }
-    if (options.outboundRpc) {
-      const id = registerInterceptor(options.outboundRpc)
-      props.interceptor = id
-      release = () => releaseInterceptor(id)
-    }
-    globalOutbound = gateway({ props })
-    outboundModule = { [OUTBOUND_JSON_MODULE]: { json: props } }
-  } else if (options.fetch !== false && options.fetch !== null) {
-    globalOutbound = undefined
-  }
-
+  const dependencyModules = hasDependencies ? await prefetchDependencies(dependencies) : {}
   return {
-    code: {
-      mainModule: resolved.mainModule,
-      modules: { ...resolved.modules, ...packageJson, ...outboundModule },
-      ...spec,
-      globalOutbound,
-      env: loaderEnv,
+    mainModule: 'worker.js',
+    modules: {
+      'worker.js': entry,
+      ...externalModules,
+      ...extraModules,
+      ...dependencyModules,
+      ...siblings,
     },
-    warnings,
-    release,
   }
 }
 
@@ -689,10 +811,15 @@ async function runWorker(
   testService: unknown,
   start: number
 ): Promise<EvaluateResult> {
-  const { code, warnings, release } = await buildWorkerCodeWithWarnings(options, testService)
+  const { code, warnings, release, facet } = await buildWorkerCodeWithWarnings(options, testService)
   const timeout = options.timeout ?? DEFAULT_TIMEOUT
   let result: EvaluateResult
   try {
+    // The facet is attached to the sandbox's SandboxHost before the script
+    // can call it; the facet itself starts on its first call. Attaching is
+    // one RPC into the Durable Object, which loads the facet worker through
+    // its own `loader` binding (a dynamic worker's class cannot cross RPC).
+    if (facet) await facet.host.attach(facet.name, facet.spec)
     const worker = loadWorker(loader, code, options.isolation)
     // Bind the loaded worker's CPU budget to the wall-clock timeout (or the
     // explicit `limits.cpuMs`, see `entrypointLimits`). Limits set on the

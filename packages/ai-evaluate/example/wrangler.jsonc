@@ -18,8 +18,16 @@
     { "binding": "loader" }
   ],
 
+  // The SandboxHost Durable Object (SQLite): owns the per-sandbox facets of
+  // `evaluate({ facet, sandboxId })`; exported from src/index.ts
+  "durable_objects": {
+    "bindings": [{ "name": "SANDBOX_HOST", "class_name": "SandboxHost" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SandboxHost"] }],
+
   // Bundle configuration to resolve workspace package
   "alias": {
-    "ai-evaluate": "../dist/index.js"
+    "ai-evaluate": "../dist/index.js",
+    "ai-evaluate/worker": "../dist/worker.js"
   }
 }

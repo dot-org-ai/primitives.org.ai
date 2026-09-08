@@ -11,6 +11,7 @@ import { getExportNames, wrapScriptForReturn } from './helpers.js'
 import { transformModuleCode } from './code-transforms.js'
 import { generateSDKCode, generateShouldCode } from './sdk-generator.js'
 import { generateTestFrameworkCode, generateTestRunnerCode } from './test-generator.js'
+import { facetEnvSource } from '../facets.js'
 
 /**
  * Which test runner the generated worker uses for `/execute`.
@@ -40,6 +41,8 @@ export interface GenerateWorkerCodeOptions {
   /** Code run once at module scope, after console capture and before the user module */
   preamble?: string | undefined
   testRunner?: TestRunner | undefined
+  /** The sandbox's facet, exposed to the script as `env.<binding>` (see ../facets.ts) */
+  facet?: { binding: string; name: string } | undefined
 }
 
 /**
@@ -57,6 +60,7 @@ export function generateWorkerCode(options: GenerateWorkerCodeOptions): string {
     imports = [],
     preamble = '',
     testRunner = 'rpc',
+    facet,
   } = options
   const sdkConfig = sdk === true ? {} : sdk || null
   const module = rawModule ? transformModuleCode(rawModule) : ''
@@ -214,8 +218,9 @@ export default {
     const url = new URL(request.url);
     logs.splice(__moduleLogCount__);
     // The sandbox env, as tests and the script see it: a frozen copy of the
-    // allowlisted bindings the loader was given (see buildSandboxEnv).
-    const env = Object.freeze({ ...__env__ });
+    // allowlisted bindings the loader was given (see buildSandboxEnv), minus
+    // the reserved SandboxHost stub, plus the facet proxy when there is one.
+    ${facetEnvSource(facet)}
 
     // Route: GET / - Return info about exports
     if (request.method === 'GET' && url.pathname === '/') {
