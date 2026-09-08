@@ -26,6 +26,11 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       expect(typeof sandbox.LOADER?.get).toBe('function')
     })
 
+    it('env.LOADER exposes load() (fresh, uncached isolates)', () => {
+      const sandbox: SandboxEnv = env
+      expect(typeof sandbox.LOADER?.load).toBe('function')
+    })
+
     it('has no TEST binding (embedded runner must be used)', () => {
       expect(env.TEST).toBeUndefined()
       expect(env.test).toBeUndefined()
@@ -102,6 +107,14 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       const second = await evaluate(options, env)
       expect(first.logs).toHaveLength(1)
       expect(second.logs).toHaveLength(1)
+    })
+
+    it("isolation: 'cached' reuses one isolate per spec; 'fresh' loads a new one", async () => {
+      const script = 'globalThis.__n = (globalThis.__n ?? 0) + 1; return globalThis.__n'
+      expect((await evaluate({ script }, env)).value).toBe(1)
+      expect((await evaluate({ script, isolation: 'cached' }, env)).value).toBe(2)
+      expect((await evaluate({ script, isolation: 'fresh' }, env)).value).toBe(1)
+      expect((await evaluate({ script, isolation: 'fresh' }, env)).value).toBe(1)
     })
 
     it('enforces the timeout', async () => {

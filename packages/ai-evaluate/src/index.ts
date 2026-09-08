@@ -8,8 +8,14 @@
  * @packageDocumentation
  */
 
-export { evaluate, createEvaluator } from './evaluate.js'
-export { normalizeImport, normalizeImports } from './shared.js'
+export {
+  evaluate,
+  createEvaluator,
+  buildWorkerCode,
+  loadWorker,
+  DEFAULT_ISOLATION,
+} from './evaluate.js'
+export { normalizeImport, normalizeImports, workerCodeId } from './shared.js'
 export { transformSource, transformOptions, containsJSX } from './transform.js'
 export type { TransformSourceOptions } from './transform.js'
 
@@ -23,4 +29,12 @@ export type {
   SDKConfig,
   FetchConfig,
   JSXOptions,
+  Isolation,
+  WorkerLoader,
+  WorkerCode,
+  WorkerModule,
+  WorkerLimits,
+  WorkerStub,
+  WorkerEntrypoint,
+  WorkerEntrypointOptions,
 } from './types.js'

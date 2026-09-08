@@ -16,8 +16,10 @@ import type {
   EvaluateOptions,
   EvaluateResult,
   FetchConfig,
+  Isolation,
   WorkerLoader,
   WorkerEntrypoint,
+  WorkerStub,
   SandboxEnv,
   WorkerCode,
 } from './types.js'
@@ -32,13 +34,16 @@ import { transformOptions } from './transform.js'
 import {
   COMPATIBILITY_DATE,
   SANDBOX_URL,
-  generateSandboxId,
+  workerCodeId,
   normalizeImport,
   extractPackageName,
 } from './shared.js'
 
 /** Default per-evaluation timeout in milliseconds */
 export const DEFAULT_TIMEOUT = 5000
+
+/** Default isolate reuse policy: one cached isolate per unique worker spec */
+export const DEFAULT_ISOLATION: Isolation = 'cached'
 
 /**
  * Run the sandbox worker's `/execute` route with a wall-clock timeout.
@@ -216,16 +221,7 @@ export async function evaluate(
     // source that actually runs, and local and production see the same bytes.
     const options = transformOptions(rawOptions)
 
-    // Use simple worker for basic script execution (no tests, no SDK)
-    const useSimpleWorker = !options.tests && !options.sdk
-
-    if (useSimpleWorker) {
-      return await evaluateSimple(options, loader, start)
-    }
-
-    // Use full worker template for tests and SDK features. The TEST (ai-tests)
-    // binding is optional: without it the worker embeds its own test runner.
-    return await evaluateWithWorkerLoader(options, loader, env?.test || env?.TEST, start)
+    return await runWorker(options, loader, env?.test || env?.TEST, start)
   } catch (error) {
     return {
       success: false,
@@ -296,75 +292,43 @@ async function prefetchModules(imports: string[]): Promise<Record<string, string
 }
 
 /**
- * Simple evaluation without capnweb/TEST dependencies
+ * Build the `WorkerCode` spec for an evaluation - the single object that is
+ * both content-addressed (`workerCodeId`) and handed to the loader.
+ *
+ * Two templates share this path:
+ * - without `tests`/`sdk`, the minimal worker (`generateSimpleWorkerCode`),
+ *   plus any pre-fetched `imports` as sibling modules;
+ * - otherwise the full template (capnweb export RPC, SDK, tests). The TEST
+ *   (ai-tests) binding is optional: without it the worker embeds its own test
+ *   runner, and the binding is passed through as `env.TEST` only when present.
+ *
+ * `fetch: false | null` blocks outbound network at the runtime level
+ * (`globalOutbound: null`) in addition to the in-worker fetch control.
  */
-async function evaluateSimple(
+export async function buildWorkerCode(
   options: EvaluateOptions,
-  loader: WorkerLoader,
-  start: number
-): Promise<EvaluateResult> {
-  // Pre-fetch any external modules
-  let externalModules: Record<string, string> = {}
-  if (options.imports && options.imports.length > 0) {
-    try {
-      externalModules = await prefetchModules(options.imports)
-    } catch (error) {
-      return {
-        success: false,
-        logs: [],
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - start,
-      }
+  testService?: unknown
+): Promise<WorkerCode> {
+  const useSimpleWorker = !options.tests && !options.sdk
+  const globalOutbound = options.fetch === false || options.fetch === null ? null : undefined
+
+  if (useSimpleWorker) {
+    const externalModules =
+      options.imports && options.imports.length > 0 ? await prefetchModules(options.imports) : {}
+    const workerCode = generateSimpleWorkerCode({
+      ...(options.module !== undefined && { module: options.module }),
+      ...(options.script !== undefined && { script: options.script }),
+      ...(options.imports !== undefined && { imports: options.imports }),
+      ...(options.fetch !== undefined && { fetch: options.fetch }),
+    })
+    return {
+      mainModule: 'worker.js',
+      modules: { 'worker.js': workerCode, ...externalModules },
+      compatibilityDate: COMPATIBILITY_DATE,
+      globalOutbound,
     }
   }
 
-  const workerCode = generateSimpleWorkerCode({
-    ...(options.module !== undefined && { module: options.module }),
-    ...(options.script !== undefined && { script: options.script }),
-    ...(options.imports !== undefined && { imports: options.imports }),
-    ...(options.fetch !== undefined && { fetch: options.fetch }),
-  })
-
-  const id = generateSandboxId(workerCode)
-
-  const worker = loader.get(
-    id,
-    async (): Promise<WorkerCode> => ({
-      mainModule: 'worker.js',
-      modules: {
-        'worker.js': workerCode,
-        ...externalModules,
-      },
-      compatibilityDate: COMPATIBILITY_DATE,
-      // Block network if fetch is false or null
-      globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
-    })
-  )
-
-  // Get the entrypoint and call fetch
-  const result = await executeWithTimeout(
-    worker.getEntrypoint(),
-    options.timeout ?? DEFAULT_TIMEOUT
-  )
-
-  return {
-    ...result,
-    duration: Date.now() - start,
-  }
-}
-
-/**
- * Evaluate using the full worker template (capnweb export RPC, SDK, tests).
- *
- * With a TEST binding the worker proxies assertions to ai-tests over RPC;
- * without one it runs the embedded test framework.
- */
-async function evaluateWithWorkerLoader(
-  options: EvaluateOptions,
-  loader: WorkerLoader,
-  testService: unknown,
-  start: number
-): Promise<EvaluateResult> {
   const workerCode = generateWorkerCode({
     testRunner: testService ? 'rpc' : 'embedded',
     ...(options.module !== undefined && { module: options.module }),
@@ -374,26 +338,50 @@ async function evaluateWithWorkerLoader(
     ...(options.imports !== undefined && { imports: options.imports }),
     ...(options.fetch !== undefined && { fetch: options.fetch }),
   })
-  const id = generateSandboxId(workerCode)
+  return {
+    mainModule: 'worker.js',
+    modules: {
+      'worker.js': workerCode,
+      // capnweb is a module so the worker can import it
+      'capnweb.js': CAPNWEB_SOURCE,
+    },
+    compatibilityDate: COMPATIBILITY_DATE,
+    globalOutbound,
+    // Cloudflare Dynamic Workers' loader field is `env`, not `bindings`. The
+    // loaded worker reads `env.TEST` (see worker-template/core.ts) only in
+    // 'rpc' mode, so the binding is passed through only when present.
+    env: testService ? { TEST: testService } : {},
+  }
+}
 
-  const worker = loader.get(
-    id,
-    async (): Promise<WorkerCode> => ({
-      mainModule: 'worker.js',
-      modules: {
-        'worker.js': workerCode,
-        // Include capnweb as a module so the worker can import it
-        'capnweb.js': CAPNWEB_SOURCE,
-      },
-      compatibilityDate: COMPATIBILITY_DATE,
-      // Block network if fetch is false or null
-      globalOutbound: options.fetch === false || options.fetch === null ? null : undefined,
-      // Cloudflare Dynamic Workers' loader-factory field is `env`, not `bindings`.
-      // The loaded worker reads `env.TEST` (see worker-template/core.ts) only in
-      // 'rpc' mode, so the binding is passed through only when present.
-      env: testService ? { TEST: testService } : {},
-    })
-  )
+/**
+ * Obtain a worker stub for a spec under the requested isolation policy.
+ *
+ * - `'cached'`: `loader.get(workerCodeId(code), () => code)` - the loader
+ *   calls the factory only when no isolate with that id is live, so identical
+ *   specs share one isolate (one unique worker per distinct spec).
+ * - `'fresh'`: `loader.load(code)` - a new, uncached isolate.
+ */
+export function loadWorker(
+  loader: WorkerLoader,
+  code: WorkerCode,
+  isolation: Isolation = DEFAULT_ISOLATION
+): WorkerStub {
+  if (isolation === 'fresh') return loader.load(code)
+  return loader.get(workerCodeId(code), () => code)
+}
+
+/**
+ * Build, load and run the sandbox worker for one evaluation.
+ */
+async function runWorker(
+  options: EvaluateOptions,
+  loader: WorkerLoader,
+  testService: unknown,
+  start: number
+): Promise<EvaluateResult> {
+  const code = await buildWorkerCode(options, testService)
+  const worker = loadWorker(loader, code, options.isolation)
 
   // Get the entrypoint and call fetch (required by Cloudflare worker_loaders API)
   const result = await executeWithTimeout(
