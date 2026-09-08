@@ -20,6 +20,7 @@ import { ChildProcess } from 'node:child_process'
 import { Server, Socket } from 'node:net'
 import { basename } from 'node:path'
 import type { Miniflare as MiniflareInstance } from 'miniflare'
+import type * as MiniflareModule from 'miniflare'
 import type { EvaluateOptions, EvaluateResult, SandboxEnv } from './types.js'
 import { evaluate as evaluateInWorker, DEFAULT_TIMEOUT } from './evaluate.js'
 import { COMPATIBILITY_DATE, EVALUATE_PATH, normalizeImports } from './shared.js'
@@ -49,6 +50,44 @@ export const WEDGED_HOST_ERROR =
 
 /** Error reported by evaluations caught in flight when the runtime is disposed */
 export const DISPOSED_HOST_ERROR = 'Host worker disposed while this evaluation was in flight'
+
+/** Lowest Node major that Miniflare 5 (`engines.node`) runs on */
+const MINIFLARE_MIN_NODE_MAJOR = 22
+
+/**
+ * Error reported when the local runtime cannot load `miniflare`.
+ *
+ * `miniflare` is an optional dependency of ai-evaluate: Miniflare 5 (the only
+ * line with a `worker-loader` binding) is published as `5.x-alpha` and declares
+ * `engines.node >= 22`, so package managers skip it silently on older Node and
+ * the first `evaluate()` without an `env` would otherwise fail with a bare
+ * "Cannot find package 'miniflare'".
+ */
+export const MINIFLARE_UNAVAILABLE_ERROR =
+  "ai-evaluate/node needs 'miniflare' (Miniflare 5, an optional dependency that requires " +
+  `Node >= ${MINIFLARE_MIN_NODE_MAJOR}); install it with your package manager on Node ` +
+  `${MINIFLARE_MIN_NODE_MAJOR}+ - older Node skips the optional dependency at install time`
+
+function isModuleNotFound(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  return code === 'ERR_MODULE_NOT_FOUND' || code === 'MODULE_NOT_FOUND'
+}
+
+/** `import('miniflare')`, with a missing package explained rather than passed through */
+async function loadMiniflare(): Promise<typeof MiniflareModule> {
+  try {
+    return await import('miniflare')
+  } catch (error) {
+    if (!isModuleNotFound(error)) throw error
+    const major = Number(process.versions.node.split('.')[0])
+    const running =
+      major < MINIFLARE_MIN_NODE_MAJOR ? ` (running Node ${process.versions.node})` : ''
+    throw new Error(
+      `${MINIFLARE_UNAVAILABLE_ERROR}${running}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
+  }
+}
 
 /**
  * Node-side preprocessing: import normalization only. JSX/TypeScript are
@@ -187,9 +226,14 @@ export function createLocalRuntime(): LocalRuntime {
   let inFlight = 0
 
   const createHost = async (): Promise<Host> => {
-    const { Miniflare } = await import('miniflare')
+    const { Miniflare } = await loadMiniflare()
     const { mainModule, modules } = getHostWorker()
     const before = new Set(activeHandles())
+    // Native Miniflare 5 options: one `workers[].config` per worker with a
+    // `manifest` of modules and the loader as `env.LOADER: { type:
+    // 'worker-loader' }`. The Miniflare 4 shape (`modules: true`, `script`,
+    // `workerLoaders: { LOADER: {} }`) is not used; Miniflare 5 only accepts it
+    // through its `convertV4MiniflareOptions()` shim, which went with the pool.
     const miniflare = new Miniflare({
       workers: [
         {

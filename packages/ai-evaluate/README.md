@@ -137,6 +137,17 @@ Workers behaviour rather than a separate dev template.
 pnpm add ai-evaluate miniflare   # Miniflare 5 requires Node >= 22
 ```
 
+`miniflare` is an optional dependency of ai-evaluate, pinned to
+`^5.20260907.0-alpha`: every Miniflare 5 release so far is an `-alpha`
+prerelease (it is the `latest` dist-tag), and under npm semver a bare `^5`
+matches no prerelease, so the range names the alpha tuple explicitly. It also
+admits the first stable 5.x once one ships; re-pin to plain `^5` then. Miniflare
+5 declares `engines.node >= 22`, so on older Node your package manager skips
+the optional dependency at install time and the first `evaluate()` fails with
+`MINIFLARE_UNAVAILABLE_ERROR` (exported from `ai-evaluate/node`) saying so.
+`ai-evaluate` declares `engines.node >= 22` for the same reason; the `.`
+export runs inside Workers and is unaffected.
+
 ```typescript
 import { evaluate, dispose } from 'ai-evaluate/node'
 
@@ -152,6 +163,13 @@ evaluation is in flight the host's handles (workerd child, loopback server) are
 unref'd, so a script or CLI that never calls `dispose()` still exits on its own
 as soon as its work is done; workerd is reaped on exit. `dispose()` only
 matters when you want the host gone before the process ends.
+
+The host is constructed with native Miniflare 5 options - one
+`workers[].config` carrying a `manifest` of modules and the loader as
+`env.LOADER: { type: 'worker-loader' }` - not the Miniflare 4 shape
+(`modules: true`, `script`, `workerLoaders`), which Miniflare 5 accepts only
+through its `convertV4MiniflareOptions()` shim. ai-evaluate no longer uses that
+shim anywhere.
 
 The host worker's modules are embedded in the published package at build time
 (`dist/host-worker-modules.js`), so `ai-evaluate/node` can be bundled into your
@@ -516,7 +534,7 @@ console.log(result.value) // 7
 | Environment | Requirement |
 |-------------|-------------|
 | Cloudflare Workers | wrangler v4+, `worker_loaders` binding |
-| Node.js | miniflare (peer dependency) |
+| Node.js (`ai-evaluate/node`) | Node >= 22, `miniflare@^5.20260907.0-alpha` (optional dependency) |
 
 ## Security Model
 

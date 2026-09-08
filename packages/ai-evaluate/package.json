@@ -58,6 +58,9 @@
   "optionalDependencies": {
     "miniflare": "^5.20260907.0-alpha"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "keywords": [
     "ai",
     "sandbox",
