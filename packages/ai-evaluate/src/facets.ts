@@ -296,10 +296,26 @@ export { __Facet__ as ${className} };
 }
 
 /**
- * The `env` the sandboxed code sees, as a statement for the generated
- * worker's request handler: a frozen copy of the loader env with the
- * reserved `SandboxHost` key removed and, when a facet is configured, the
- * facet proxy under its binding. `__env__` is the handler's env parameter.
+ * Name of the module-scope function the generated worker builds the sandbox
+ * `env` with (`facetEnvSource`): `__sandboxEnv__(loaderEnv)`.
+ */
+export const SANDBOX_ENV_FUNCTION = '__sandboxEnv__'
+
+/**
+ * The `env` the sandboxed code sees, as a module-scope `const` function of
+ * the generated worker: `__sandboxEnv__(__env__)` answers a frozen copy of
+ * the loader env with the reserved `SandboxHost` key removed and, when a
+ * facet is configured, the facet proxy under its binding.
+ *
+ * The function is the only place in the generated worker that names the
+ * loader env and the `SandboxHost` stub: the request handler calls it with
+ * its env parameter and hands the result to a module-scope request function
+ * that the user script is inlined into, so `__env__` and `__sandboxHost__`
+ * are ReferenceErrors from the script and the stub - whose `attach` would
+ * load an arbitrary worker through the host's loader, without the sandbox's
+ * outbound policy - is out of its reach. `const` at module scope means a
+ * script that breaks out of its function cannot redeclare or reassign it
+ * (SyntaxError / TypeError, before or instead of running).
  *
  * The proxy is the only thing the sandbox gets: a method call is
  * `invoke(name, method, args)` on the `SandboxHost` stub, `fetch(input,
@@ -309,22 +325,26 @@ export { __Facet__ as ${className} };
 export function facetEnvSource(facet?: { binding: string; name: string } | undefined): string {
   const key = JSON.stringify(SANDBOX_HOST_BINDING_KEY)
   if (!facet) {
-    return `const { [${key}]: __sandboxHost__, ...__bindings__ } = __env__;
-    const env = Object.freeze({ ...__bindings__ });`
+    return `const ${SANDBOX_ENV_FUNCTION} = (__env__) => {
+  const { [${key}]: __sandboxHost__, ...__bindings__ } = __env__;
+  return Object.freeze({ ...__bindings__ });
+};`
   }
   const binding = JSON.stringify(facet.binding)
   const name = JSON.stringify(facet.name)
-  return `const { [${key}]: __sandboxHost__, ...__bindings__ } = __env__;
-    const __facet__ = new Proxy(Object.freeze({}), {
-      get(_, method) {
-        if (typeof method !== 'string' || method === 'then') return undefined;
-        if (method === 'fetch') {
-          return (input, init) => __sandboxHost__.fetchFacet(${name}, new Request(input, init));
-        }
-        return (...args) => __sandboxHost__.invoke(${name}, method, args);
-      },
-    });
-    const env = Object.freeze({ ...__bindings__, [${binding}]: __facet__ });`
+  return `const ${SANDBOX_ENV_FUNCTION} = (__env__) => {
+  const { [${key}]: __sandboxHost__, ...__bindings__ } = __env__;
+  const __facet__ = new Proxy(Object.freeze({}), {
+    get(_, method) {
+      if (typeof method !== 'string' || method === 'then') return undefined;
+      if (method === 'fetch') {
+        return (input, init) => __sandboxHost__.fetchFacet(${name}, new Request(input, init));
+      }
+      return (...args) => __sandboxHost__.invoke(${name}, method, args);
+    },
+  });
+  return Object.freeze({ ...__bindings__, [${binding}]: __facet__ });
+};`
 }
 
 /**

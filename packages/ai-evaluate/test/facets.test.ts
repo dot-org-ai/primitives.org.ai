@@ -268,9 +268,13 @@ describe('facet worker template', () => {
 
   it('facetEnvSource strips the reserved key and adds the proxy only with a facet', () => {
     const without = facetEnvSource()
+    // A module-scope const function: the stub and the loader env are named
+    // only inside it, never in the scope the script is inlined into
+    expect(without.startsWith('const __sandboxEnv__ = (__env__) => {')).toBe(true)
     expect(without).toContain(`[${JSON.stringify(SANDBOX_HOST_BINDING_KEY)}]: __sandboxHost__`)
     expect(without).not.toContain('new Proxy')
     const withFacet = facetEnvSource({ binding: 'STATE', name: 'State' })
+    expect(withFacet.startsWith('const __sandboxEnv__ = (__env__) => {')).toBe(true)
     expect(withFacet).toContain('new Proxy')
     expect(withFacet).toContain('__sandboxHost__.invoke("State", method, args)')
     expect(withFacet).toContain('__sandboxHost__.fetchFacet("State", new Request(input, init))')

@@ -151,6 +151,96 @@ describe('facets (workerd, SandboxHost Durable Object)', () => {
     })
   })
 
+  it('__sandboxHost__ and __env__ are ReferenceErrors from the script: the host stub is out of scope', async () => {
+    for (const name of ['__sandboxHost__', '__env__', '__bindings__']) {
+      const result = await evaluate(
+        counter(sandbox(), {
+          script: `return typeof ${name} === 'undefined' ? 'unbound' : ${name}`,
+        }),
+        env
+      )
+      expect(result.success, `${name}: ${result.error}`).toBe(true)
+      expect(result.value, name).toBe('unbound')
+    }
+  })
+
+  it('__env__ is unbound in the script without a facet, and in the test-runner worker', async () => {
+    const simple = await evaluate({ script: 'return __env__' }, env)
+    expect(simple.success).toBe(false)
+    expect(simple.error).toMatch(/__env__ is not defined/)
+    const full = await evaluate(
+      {
+        script: 'return typeof __env__',
+        tests: 'it("cannot see the loader env", () => expect(typeof __env__).toBe("undefined"))',
+      },
+      env
+    )
+    expect(full.success, full.error).toBe(true)
+    expect(full.value).toBe('undefined')
+  })
+
+  it('attach-escape witness: the script cannot load its own worker through the host (fetch: false holds)', async () => {
+    // A DurableObject class whose method fetches: loaded through SandboxHost.attach
+    // without a globalOutbound it would inherit the host's network.
+    const evil = `
+      import { DurableObject } from 'cloudflare:workers'
+      export class Evil extends DurableObject {
+        async go() {
+          try { const r = await fetch('https://example.com/'); return 'leaked:' + r.status } catch (e) { return 'blocked:' + e.message }
+        }
+      }`
+    const spec = JSON.stringify({
+      code: {
+        mainModule: 'w.js',
+        modules: { 'w.js': evil },
+        compatibilityDate: '2026-01-01',
+        compatibilityFlags: [],
+      },
+      codeId: 'evil-witness-1',
+      className: 'Evil',
+    })
+    const viaLocal = await evaluate(
+      counter(sandbox(), {
+        fetch: false,
+        script: `
+          await __sandboxHost__.attach('Evil', ${spec})
+          return await __sandboxHost__.invoke('Evil', 'go', [])
+        `,
+      }),
+      env
+    )
+    expect(viaLocal.success).toBe(false)
+    expect(viaLocal.error).toMatch(/__sandboxHost__ is not defined/)
+
+    const viaEnv = await evaluate(
+      counter(sandbox(), {
+        fetch: false,
+        script: `
+          const host = __env__[${JSON.stringify(SANDBOX_HOST_BINDING_KEY)}]
+          await host.attach('Evil', ${spec})
+          return await host.invoke('Evil', 'go', [])
+        `,
+      }),
+      env
+    )
+    expect(viaEnv.success).toBe(false)
+    expect(viaEnv.error).toMatch(/__env__ is not defined/)
+
+    // The facet proxy itself gives no route to attach: it is an invoke() of that name
+    const viaProxy = await evaluate(
+      counter(sandbox(), {
+        fetch: false,
+        script: `
+          try { await env.STATE.attach('Evil', ${spec}) } catch (e) { return 'refused: ' + e.message }
+          return 'attached'
+        `,
+      }),
+      env
+    )
+    expect(viaProxy.success, viaProxy.error).toBe(true)
+    expect(viaProxy.value).toMatch(/^refused: /)
+  })
+
   it('facet.binding names the env key', async () => {
     const result = await evaluate(
       counter(sandbox(), {

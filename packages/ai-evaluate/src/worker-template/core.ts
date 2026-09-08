@@ -11,7 +11,7 @@ import { getExportNames, wrapScriptForReturn } from './helpers.js'
 import { transformModuleCode } from './code-transforms.js'
 import { generateSDKCode, generateShouldCode } from './sdk-generator.js'
 import { generateTestFrameworkCode, generateTestRunnerCode } from './test-generator.js'
-import { facetEnvSource } from '../facets.js'
+import { SANDBOX_ENV_FUNCTION, facetEnvSource } from '../facets.js'
 
 /**
  * Which test runner the generated worker uses for `/execute`.
@@ -82,7 +82,7 @@ ${generateTestFrameworkCode()}
 `
     : `
     // Check for TEST service binding
-    if (!__env__.TEST) {
+    if (!__testBinding__) {
       return Response.json({
         success: false,
         error: 'TEST service binding not available. Ensure ai-tests worker is bound.',
@@ -92,7 +92,7 @@ ${generateTestFrameworkCode()}
     }
 
     // Connect to get the TestServiceCore via RPC
-    const testService = await __env__.TEST.connect();
+    const testService = await __testBinding__.connect();
 
     // Create global test functions that proxy to the RPC service
     const describe = (name, fn) => testService.describe(name, fn);
@@ -213,14 +213,18 @@ class ExportsRpcTarget extends RpcTarget {
 // ============================================================
 // WORKER ENTRY POINT
 // ============================================================
-export default {
-  async fetch(request, __env__) {
+// The sandbox env, as tests and the script see it: a frozen copy of the
+// allowlisted bindings the loader was given (see buildSandboxEnv), minus
+// the reserved SandboxHost stub, plus the facet proxy when there is one.
+${facetEnvSource(facet)}
+
+// The request, in a scope of its own: tests and the script are inlined here
+// and see \`env\` (the sandbox env) and the TEST service, but neither the
+// loader env nor the SandboxHost stub, which only the fetch handler and
+// ${SANDBOX_ENV_FUNCTION} name.
+const __handleRequest__ = async (request, env, __testBinding__) => {
     const url = new URL(request.url);
     logs.splice(__moduleLogCount__);
-    // The sandbox env, as tests and the script see it: a frozen copy of the
-    // allowlisted bindings the loader was given (see buildSandboxEnv), minus
-    // the reserved SandboxHost stub, plus the facet proxy when there is one.
-    ${facetEnvSource(facet)}
 
     // Route: GET / - Return info about exports
     if (request.method === 'GET' && url.pathname === '/') {
@@ -341,6 +345,13 @@ ${script}
       error: scriptError || undefined,
       duration: 0
     });
+};
+
+export default {
+  fetch(request, __env__) {
+    return __handleRequest__(request, ${SANDBOX_ENV_FUNCTION}(__env__)${
+    embedded ? '' : ', __env__.TEST'
+  });
   }
 };
 `

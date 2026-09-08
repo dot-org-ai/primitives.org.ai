@@ -6,7 +6,7 @@ describe('generateWorkerCode (production)', () => {
     it('generates valid worker code', () => {
       const code = generateWorkerCode({})
       expect(code).toContain('export default')
-      expect(code).toContain('async fetch(request, __env__)')
+      expect(code).toContain('fetch(request, __env__)')
     })
 
     it('includes console capture', () => {
@@ -83,8 +83,8 @@ describe('generateWorkerCode (production)', () => {
   describe('RPC setup', () => {
     it('connects to test service via RPC', () => {
       const code = generateWorkerCode({})
-      expect(code).toContain('__env__.TEST.connect()')
-      expect(code).toContain('const testService = await __env__.TEST.connect()')
+      expect(code).toContain('__handleRequest__(request, __sandboxEnv__(__env__), __env__.TEST)')
+      expect(code).toContain('const testService = await __testBinding__.connect()')
     })
 
     it('sets up test functions from RPC service', () => {
@@ -293,7 +293,7 @@ describe('generateDevWorkerCode (development)', () => {
     it('generates valid worker code', () => {
       const code = generateDevWorkerCode({})
       expect(code).toContain('export default')
-      expect(code).toContain('async fetch(request, __env__)')
+      expect(code).toContain('fetch(request, __env__)')
     })
 
     it('includes embedded test framework', () => {
