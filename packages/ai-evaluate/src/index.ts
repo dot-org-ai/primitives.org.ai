@@ -1,12 +1,18 @@
 /**
- * ai-sandbox - Secure code execution in sandboxed environments
+ * ai-evaluate - Secure code execution in sandboxed environments
  *
- * Provides evaluate() for running untrusted code safely using:
- * - Cloudflare worker_loaders in production
- * - Miniflare in development/Node.js
+ * Provides evaluate() for running untrusted code safely in Cloudflare
+ * Dynamic Workers (`worker_loaders`). This entry runs inside a Worker; for
+ * Node.js, `ai-evaluate/node` runs the same evaluate() inside a Miniflare 5
+ * host worker with a real loader binding.
+ *
+ * The runtime exports of this module are the documented 3.0 surface and are
+ * pinned by test/index.test.ts; see README "Exports" and MIGRATION.md.
  *
  * @packageDocumentation
  */
+
+export { VERSION } from './version.js'
 
 export {
   evaluate,

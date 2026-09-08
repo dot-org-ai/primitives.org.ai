@@ -556,20 +556,16 @@ describe('ai-evaluate/node', () => {
   })
 
   describe('single code path with src/evaluate.ts', () => {
-    it('the host worker builds sandbox code with generateWorkerCode, not the dev alias', async () => {
+    it('the host worker builds sandbox code with generateWorkerCode; the dev alias is gone', async () => {
       // A Node-side spy cannot see code running inside workerd, so this is
-      // asserted on the module text the Miniflare host actually loads: the
-      // only modules that mention `generateDevWorkerCode` are the one that
-      // defines the deprecated alias and the barrel that re-exports it.
+      // asserted on the module text the Miniflare host actually loads: no
+      // module mentions `generateDevWorkerCode` (3.0 removed the alias).
       // `evaluate.js` - which builds every WorkerCode - calls the production
       // generator and picks the test runner from the TEST binding.
       const { loadHostWorker } = await import('../src/host-modules.js')
       const { modules } = loadHostWorker()
 
-      expect(devTemplateReferences(modules)).toEqual([
-        'worker-template/core.js',
-        'worker-template/index.js',
-      ])
+      expect(devTemplateReferences(modules)).toEqual([])
       expect(modules['evaluate.js']).toMatch(/\bgenerateWorkerCode\(/)
       expect(modules['evaluate.js']).toMatch(
         /testRunner:\s*testService\s*\?\s*['"]rpc['"]\s*:\s*['"]embedded['"]/

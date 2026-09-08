@@ -29,9 +29,10 @@ import { generateSDKCode, generateShouldCode } from '../worker-template/sdk-gene
 import type { SDKConfig, FetchConfig } from '../types.js'
 
 /**
- * Version of the static assets
+ * Version of the static assets: the package version (see `src/version.ts`)
  */
-export const VERSION = '2.1.8'
+export { VERSION } from '../version.js'
+import { VERSION } from '../version.js'
 
 /**
  * The bundled capnweb RPC library source code
@@ -283,7 +284,11 @@ export interface BuildWorkerOptions {
   sdk?: SDKConfig | boolean
   /** Top-level imports to hoist */
   imports?: string[]
-  /** Use the embedded test runner (no TEST binding required) instead of the ai-tests RPC runner */
+  /**
+   * Use the embedded test runner (no `test` / ai-tests binding required)
+   * instead of the ai-tests RPC runner: `generateWorkerCode({ testRunner:
+   * 'embedded' })`. There is no separate dev template in 3.0.
+   */
   dev?: boolean
 }
 

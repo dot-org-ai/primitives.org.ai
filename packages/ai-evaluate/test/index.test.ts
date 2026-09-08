@@ -1,6 +1,102 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, expectTypeOf, beforeAll, afterAll } from 'vitest'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import type { SandboxEnv } from '../src/types.js'
 import { createLoaderBridge, type LoaderBridge } from './helpers/loader-bridge.js'
 import { SCRIPT_RESULT_KEYS, TESTS_RESULT_KEYS, resultKeys } from './fixtures/result-shape.js'
+
+/**
+ * The documented 3.0 runtime surface of `ai-evaluate` (the `.` export), as
+ * listed under "Exports" in README.md and in MIGRATION.md. Types are not
+ * visible at runtime and are covered by the typecheck. A name added here is a
+ * public commitment: add it to the README too.
+ */
+const AI_EVALUATE_EXPORTS = [
+  // evaluate
+  'VERSION',
+  'evaluate',
+  'createEvaluator',
+  'buildWorkerCode',
+  'buildWorkerCodeWithWarnings',
+  'planImports',
+  'loadWorker',
+  'entrypointLimits',
+  'DEFAULT_ISOLATION',
+  'DEFAULT_TIMEOUT',
+  // shared
+  'normalizeImport',
+  'normalizeImports',
+  'parseImportSpecifier',
+  'partitionImports',
+  'packageJsonModule',
+  'workerCodeId',
+  'COMPATIBILITY_DATE',
+  'PACKAGE_JSON_MODULE',
+  // bundler
+  'resolveImports',
+  'dependenciesHash',
+  'clearBundlerCache',
+  'BundlerUnavailableError',
+  // validation
+  'ValidationError',
+  'validateOptions',
+  'buildSandboxEnv',
+  'isRpcStubLike',
+  'isStructuredCloneable',
+  'TEST_BINDING_KEY',
+  'MAX_TIMEOUT',
+  // type guards
+  'isEvaluateResult',
+  'assertEvaluateResult',
+  // outbound gateway
+  'createOutboundGateway',
+  'outboundPolicy',
+  'blockedHostError',
+  'OUTBOUND_GATEWAY_EXPORT',
+  'OUTBOUND_JSON_MODULE',
+  'OUTBOUND_GATEWAY_UNAVAILABLE_ERROR',
+  'INTERCEPTOR_UNAVAILABLE_ERROR',
+  'OUTBOUND_RPC_CACHED_ERROR',
+  // facets
+  'createFacetHost',
+  'facetBindingName',
+  'facetEnvSource',
+  'generateFacetWorkerCode',
+  'loopbackSandboxHost',
+  'facetNotAttachedError',
+  'isIdentifier',
+  'SANDBOX_ENV_FUNCTION',
+  'SANDBOX_HOST_EXPORT',
+  'SANDBOX_HOST_BINDING_KEY',
+  'SANDBOX_JSON_MODULE',
+  'SANDBOX_HOST_UNAVAILABLE_ERROR',
+  'loopbackExport',
+  // transform
+  'transformSource',
+  'transformOptions',
+  'containsJSX',
+] as const
+
+/** Names 2.x callers could reach that 3.0 does not export anywhere */
+const REMOVED_IN_3_0 = [
+  'configurePool',
+  'getPoolConfig',
+  'getPoolStats',
+  'warmPool',
+  'acquireInstance',
+  'disposePool',
+  'resetPool',
+  'generateDevWorkerCode',
+  'generateDomainCheckCode',
+  'generateFetchControlCode',
+  'getDomainCheckCode',
+  'generateSandboxId',
+  'bundleHostWorker',
+  'loadHostWorker',
+  'HOST_MODULE',
+  'HOST_WORKER_NAME',
+  'buildContextModule',
+] as const
 
 afterAll(async () => {
   const { dispose } = await import('../src/node.js')
@@ -43,6 +139,55 @@ describe('index exports', () => {
         'MINIFLARE_UNAVAILABLE_ERROR',
       ].sort()
     )
+  })
+})
+
+describe('ai-evaluate (Workers entry) exports', () => {
+  it('src/index.ts exports exactly the documented 3.0 runtime surface', async () => {
+    // `cloudflare:workers` is only imported lazily (facets, the gateway), so
+    // the entry loads on Node. Order-insensitive; sorted for a readable diff.
+    const entry = await import('../src/index.js')
+    expect(Object.keys(entry).sort()).toEqual([...AI_EVALUATE_EXPORTS].sort())
+  })
+
+  it('exports none of the 2.x symbols 3.0 removed, on any public subpath', async () => {
+    const surfaces = await Promise.all([
+      import('../src/index.js'),
+      import('../src/node.js'),
+      import('../src/static/index.js'),
+      import('../src/repl.js'),
+    ])
+    for (const surface of surfaces) {
+      for (const name of REMOVED_IN_3_0) expect(surface).not.toHaveProperty(name)
+    }
+  })
+
+  it('the README documents every runtime export by name', async () => {
+    const readme = await readFile(resolve(import.meta.dirname, '..', 'README.md'), 'utf8')
+    const section = readme.slice(readme.indexOf('\n## Exports'))
+    expect(section.length).toBeGreaterThan(0)
+    for (const name of AI_EVALUATE_EXPORTS) expect(section).toContain(`\`${name}\``)
+  })
+})
+
+describe('SandboxEnv (3.0: `loader` and `test` only)', () => {
+  it('has no LOADER / TEST aliases at the type level', () => {
+    expectTypeOf<SandboxEnv>().toHaveProperty('loader')
+    expectTypeOf<SandboxEnv>().toHaveProperty('test')
+    expectTypeOf<SandboxEnv>().not.toHaveProperty('LOADER')
+    expectTypeOf<SandboxEnv>().not.toHaveProperty('TEST')
+    expectTypeOf<keyof SandboxEnv>().toEqualTypeOf<'loader' | 'test'>()
+  })
+
+  it('declares exactly `loader` and `test` in src/types.ts (source witness)', async () => {
+    // `expectTypeOf` only bites under a typecheck that includes test files;
+    // this reads the interface as written so the Node pool fails on its own
+    // if an alias comes back.
+    const source = await readFile(resolve(import.meta.dirname, '..', 'src', 'types.ts'), 'utf8')
+    const match = source.match(/export interface SandboxEnv \{([^}]*)\}/)
+    expect(match).not.toBeNull()
+    const keys = [...match![1]!.matchAll(/^\s+(\w+)\??:/gm)].map((m) => m[1])
+    expect(keys).toEqual(['loader', 'test'])
   })
 })
 

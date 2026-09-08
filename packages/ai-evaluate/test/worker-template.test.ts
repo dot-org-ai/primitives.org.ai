@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { generateWorkerCode, generateDevWorkerCode } from '../src/worker-template/index.js'
+import { generateWorkerCode } from '../src/worker-template/index.js'
+import type { GenerateWorkerCodeOptions } from '../src/worker-template/index.js'
+
+/**
+ * The former dev template: the same generator with the embedded test runner.
+ * 3.0 removed the `generateDevWorkerCode` alias (it was internal), so this is
+ * the spelling the tests below use for that variant.
+ */
+const embeddedWorkerCode = (options: Omit<GenerateWorkerCodeOptions, 'testRunner'> = {}) =>
+  generateWorkerCode({ ...options, testRunner: 'embedded' })
 
 describe('generateWorkerCode (production)', () => {
   describe('basic structure', () => {
@@ -280,191 +289,189 @@ describe('generateWorkerCode testRunner option', () => {
     }
   })
 
-  it('generateDevWorkerCode is an alias for testRunner: "embedded"', () => {
-    const options = { module: 'exports.a = 1', tests: 'it("t", () => {})', script: 'return a' }
-    expect(generateDevWorkerCode(options)).toBe(
-      generateWorkerCode({ ...options, testRunner: 'embedded' })
-    )
+  it('the 3.0 generator has no dev-template alias', async () => {
+    const template = await import('../src/worker-template/index.js')
+    expect(Object.keys(template)).not.toContain('generateDevWorkerCode')
   })
 })
 
-describe('generateDevWorkerCode (development)', () => {
+describe('generateWorkerCode({ testRunner: "embedded" }) (the former dev template)', () => {
   describe('basic structure', () => {
     it('generates valid worker code', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('export default')
       expect(code).toContain('fetch(request, __env__)')
     })
 
     it('includes embedded test framework', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('const describe = (name, fn)')
       expect(code).toContain('const it = (name, fn)')
       expect(code).toContain('const expect = (actual)')
     })
 
     it('does not require TEST service', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).not.toContain('__env__.TEST')
     })
   })
 
   describe('embedded test framework', () => {
     it('includes describe function', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('const describe = (name, fn)')
       expect(code).toContain('currentDescribe')
     })
 
     it('includes it/test functions', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('const it = (name, fn)')
       expect(code).toContain('const test = it')
     })
 
     it('includes skip and only', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('it.skip')
       expect(code).toContain('it.only')
     })
 
     it('includes beforeEach/afterEach hooks', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('const beforeEach = (fn)')
       expect(code).toContain('const afterEach = (fn)')
     })
 
     it('includes deep equality check', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('const deepEqual = (a, b)')
     })
   })
 
   describe('embedded expect matchers', () => {
     it('includes toBe', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBe:')
     })
 
     it('includes toEqual', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toEqual:')
     })
 
     it('includes toStrictEqual', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toStrictEqual:')
     })
 
     it('includes toBeTruthy', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeTruthy:')
     })
 
     it('includes toBeFalsy', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeFalsy:')
     })
 
     it('includes toBeNull', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeNull:')
     })
 
     it('includes toBeUndefined', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeUndefined:')
     })
 
     it('includes toBeDefined', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeDefined:')
     })
 
     it('includes toBeNaN', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeNaN:')
     })
 
     it('includes toContain', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toContain:')
     })
 
     it('includes toContainEqual', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toContainEqual:')
     })
 
     it('includes toHaveLength', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toHaveLength:')
     })
 
     it('includes toHaveProperty', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toHaveProperty:')
     })
 
     it('includes toMatchObject', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toMatchObject:')
     })
 
     it('includes toThrow', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toThrow:')
     })
 
     it('includes toBeGreaterThan', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeGreaterThan:')
     })
 
     it('includes toBeLessThan', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeLessThan:')
     })
 
     it('includes toBeCloseTo', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeCloseTo:')
     })
 
     it('includes toMatch', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toMatch:')
     })
 
     it('includes toBeInstanceOf', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeInstanceOf:')
     })
 
     it('includes toBeTypeOf', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('toBeTypeOf:')
     })
 
     it('includes not matchers', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('matchers.not = {')
     })
 
     it('includes resolves proxy', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('matchers.resolves')
     })
 
     it('includes rejects proxy', () => {
-      const code = generateDevWorkerCode({})
+      const code = embeddedWorkerCode({})
       expect(code).toContain('matchers.rejects')
     })
   })
 
   describe('module embedding', () => {
     it('embeds module code when provided', () => {
-      const code = generateDevWorkerCode({
+      const code = embeddedWorkerCode({
         module: 'exports.foo = 42;',
       })
       expect(code).toContain('exports.foo = 42;')
@@ -473,7 +480,7 @@ describe('generateDevWorkerCode (development)', () => {
 
   describe('test embedding', () => {
     it('embeds test code when provided', () => {
-      const code = generateDevWorkerCode({
+      const code = embeddedWorkerCode({
         tests: 'describe("test", () => {});',
       })
       expect(code).toContain('describe("test", () => {});')
@@ -482,7 +489,7 @@ describe('generateDevWorkerCode (development)', () => {
 
   describe('script embedding', () => {
     it('embeds script code when provided', () => {
-      const code = generateDevWorkerCode({
+      const code = embeddedWorkerCode({
         script: 'return 42;',
       })
       expect(code).toContain('return 42;')

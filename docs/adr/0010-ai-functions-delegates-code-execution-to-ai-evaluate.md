@@ -55,6 +55,13 @@ Two clearly separated paths preserve the determinism boundary:
 
 ### The env boundary
 
+> **Addendum (ai-evaluate 3.0, aip-263g):** the bindings are `env.loader` and
+> `env.test`; the uppercase `LOADER` / `TEST` aliases this ADR names were
+> removed in 3.0, and `runInSandbox` switches on `env.loader` only. The Node
+> fallback holds one `createLocalRuntime()` handle from `ai-evaluate/node`,
+> which requires Node >= 22 (Miniflare 5). See
+> `packages/ai-evaluate/MIGRATION.md`.
+
 "Zero env plumbing" is **not** achievable. The Workers entry (`ai-evaluate`)
 requires a `LOADER` binding (and `TEST` for the test path) passed via `env`, and
 it imports `cloudflare:workers`, which is Node-incompatible and cannot be

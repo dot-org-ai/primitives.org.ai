@@ -356,16 +356,3 @@ export default {
 };
 `
 }
-
-/**
- * @deprecated Use `generateWorkerCode({ ...options, testRunner: 'embedded' })`.
- *
- * Kept as a compatibility alias: the former "dev" template is now the same
- * worker template with the embedded test runner, so local and production
- * sandboxes run identical code.
- */
-export function generateDevWorkerCode(
-  options: Omit<GenerateWorkerCodeOptions, 'testRunner'>
-): string {
-  return generateWorkerCode({ ...options, testRunner: 'embedded' })
-}

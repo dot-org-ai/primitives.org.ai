@@ -1,7 +1,7 @@
 /**
  * Workers-pool vitest config: runs `test/workers/**` inside workerd via
  * `@cloudflare/vitest-pool-workers`, with a real `worker_loaders` binding
- * (`env.LOADER`) declared in `test/workers/wrangler.test.jsonc`.
+ * (`env.loader`) declared in `test/workers/wrangler.test.jsonc`.
  *
  * `@cloudflare/vitest-pool-workers` >= 0.15 targets Vitest 4 and replaces
  * `defineWorkersConfig` / `test.poolOptions.workers` with the `cloudflareTest`
