@@ -409,7 +409,12 @@ Durable Object - workerd does not serialize facet stubs, nor a dynamic
 worker's `DurableObjectClass` - so the script worker receives a stub of the
 `SandboxHost` under a reserved env key, and `env.STATE` is a proxy whose
 method calls are `invoke` RPCs and whose `fetch()` reaches the class's
-`fetch` handler. The facet keeps running across evaluations of the same
+`fetch` handler. The stub itself is out of the script's reach: the generated
+worker turns the loader env into the sandbox `env` in a module-scope
+function of its own and runs the script in a scope that names neither
+(`__env__` and `__sandboxHost__` are ReferenceErrors there), so the script
+cannot call the host's `attach` to load a worker of its own through the
+host's loader, outside the outbound policy. The facet keeps running across evaluations of the same
 module (in-memory state included); a changed module restarts it on the new
 class with its SQLite storage kept. Outbound policy applies to facet code
 too (`fetch: false`, an allowlist), except `outboundRpc`, which is
@@ -877,17 +882,17 @@ console.log(result.value) // 7
 
 ## Security Model
 
-| Protection        | Description                                                                                                                                                                                                                               |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| V8 Isolate        | Code runs in isolated V8 context                                                                                                                                                                                                          |
-| Persistent state  | Only through a declared `facet`: a SQLite-backed Durable Object per `sandboxId`, reached by RPC through the host's `SandboxHost`; the sandbox holds no host binding, and the `SandboxHost` stub it uses is removed from the `env` it sees |
-| Network Control   | Configurable: allow, block, or allowlist - enforced as the loaded worker's `globalOutbound` (see [Network Access Control](#network-access-control)), never by code in the isolate                                                         |
-| No File System    | Zero filesystem access                                                                                                                                                                                                                    |
-| Memory Limits     | Standard Worker limits apply                                                                                                                                                                                                              |
-| CPU Limits        | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts))                                        |
-| Subrequest Limits | `limits.subrequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility))                                                               |
-| Input Validation  | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `dependencies` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape               |
-| Dependencies      | `dependencies` come from the npm registry via `@cloudflare/worker-bundler` (esm.sh only as fallback); `imports` accept bare package names and http(s) URLs only (`file:` and other schemes are rejected)                                  |
+| Protection        | Description                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V8 Isolate        | Code runs in isolated V8 context                                                                                                                                                                                                                                                                                                                                          |
+| Persistent state  | Only through a declared `facet`: a SQLite-backed Durable Object per `sandboxId`, reached by RPC through the host's `SandboxHost`; the sandbox holds no host binding, and the `SandboxHost` stub it uses is out of the script's scope (removed from `env`, and `__env__` / `__sandboxHost__` are unbound there), so `attach` cannot be reached to load an unpoliced worker |
+| Network Control   | Configurable: allow, block, or allowlist - enforced as the loaded worker's `globalOutbound` (see [Network Access Control](#network-access-control)), never by code in the isolate                                                                                                                                                                                         |
+| No File System    | Zero filesystem access                                                                                                                                                                                                                                                                                                                                                    |
+| Memory Limits     | Standard Worker limits apply                                                                                                                                                                                                                                                                                                                                              |
+| CPU Limits        | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts))                                                                                                                                                                        |
+| Subrequest Limits | `limits.subrequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility))                                                                                                                                                                                               |
+| Input Validation  | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `dependencies` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape                                                                                                                                               |
+| Dependencies      | `dependencies` come from the npm registry via `@cloudflare/worker-bundler` (esm.sh only as fallback); `imports` accept bare package names and http(s) URLs only (`file:` and other schemes are rejected)                                                                                                                                                                  |
 
 ### Network Access Control
 

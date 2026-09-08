@@ -71,6 +71,7 @@ export {
   loopbackSandboxHost,
   facetNotAttachedError,
   isIdentifier,
+  SANDBOX_ENV_FUNCTION,
   SANDBOX_HOST_EXPORT,
   SANDBOX_HOST_BINDING_KEY,
   SANDBOX_HOST_UNAVAILABLE_ERROR,

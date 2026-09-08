@@ -77,6 +77,7 @@ import {
   packageJsonModule,
 } from './shared.js'
 import {
+  SANDBOX_ENV_FUNCTION,
   SANDBOX_HOST_BINDING_KEY,
   SANDBOX_HOST_UNAVAILABLE_ERROR,
   facetBindingName,
@@ -211,31 +212,39 @@ const { ${exportNames} } = exports;
 // request on a reused (content-addressed) isolate do not.
 const __moduleLogCount__ = logs.length;
 
-export default {
-  async fetch(request, __env__) {
-    logs.splice(__moduleLogCount__);
-    // The sandbox env, as the script sees it: a frozen copy of the allowlisted
-    // bindings the loader was given (see buildSandboxEnv), minus the reserved
-    // SandboxHost stub, plus the facet proxy when there is one.
-    ${facetEnvSource(facet)}
-    try {
-      // Execute the script (embedded at generation time - no new Function())
-      ${wrappedScript}
+// The sandbox env, as the script sees it: a frozen copy of the allowlisted
+// bindings the loader was given (see buildSandboxEnv), minus the reserved
+// SandboxHost stub, plus the facet proxy when there is one.
+${facetEnvSource(facet)}
 
-      return Response.json({
-        success: true,
-        value: __result__,
-        logs,
-        duration: 0
-      });
-    } catch (error) {
-      return Response.json({
-        success: false,
-        error: error.message || String(error),
-        logs,
-        duration: 0
-      });
-    }
+// The request, in a scope of its own: the script is inlined here and sees
+// \`env\` (the sandbox env) but neither the loader env nor the SandboxHost
+// stub, which only the fetch handler and ${SANDBOX_ENV_FUNCTION} name.
+const __handleRequest__ = async (request, env) => {
+  logs.splice(__moduleLogCount__);
+  try {
+    // Execute the script (embedded at generation time - no new Function())
+    ${wrappedScript}
+
+    return Response.json({
+      success: true,
+      value: __result__,
+      logs,
+      duration: 0
+    });
+  } catch (error) {
+    return Response.json({
+      success: false,
+      error: error.message || String(error),
+      logs,
+      duration: 0
+    });
+  }
+};
+
+export default {
+  fetch(request, __env__) {
+    return __handleRequest__(request, ${SANDBOX_ENV_FUNCTION}(__env__));
   }
 };
 `
