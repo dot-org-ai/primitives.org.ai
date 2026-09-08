@@ -105,19 +105,36 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
 
     it('does not leak logs across requests on a reused isolate', async () => {
       // Same code -> same content-addressed id -> same isolate
-      const options = { script: 'console.log("once"); return 1' }
+      const options = { script: 'console.log("once"); return 1', isolation: 'cached' as const }
       const first = await evaluate(options, env)
       const second = await evaluate(options, env)
       expect(first.logs).toHaveLength(1)
       expect(second.logs).toHaveLength(1)
     })
 
-    it("isolation: 'cached' reuses one isolate per spec; 'fresh' loads a new one", async () => {
+    it("isolation: 'cached' reuses one isolate per spec; 'fresh' (default) loads a new one", async () => {
       const script = 'globalThis.__n = (globalThis.__n ?? 0) + 1; return globalThis.__n'
       expect((await evaluate({ script }, env)).value).toBe(1)
+      expect((await evaluate({ script }, env)).value).toBe(1)
+      expect((await evaluate({ script, isolation: 'cached' }, env)).value).toBe(1)
       expect((await evaluate({ script, isolation: 'cached' }, env)).value).toBe(2)
       expect((await evaluate({ script, isolation: 'fresh' }, env)).value).toBe(1)
-      expect((await evaluate({ script, isolation: 'fresh' }, env)).value).toBe(1)
+      expect((await evaluate({ script }, env)).value).toBe(1)
+    })
+
+    // aip-263g.30: module-scope state (not just globalThis) is what a reused
+    // isolate carries; the default must not carry it.
+    it('default: module-scope let/const state is per-evaluation; cached carries it', async () => {
+      const options = {
+        module: 'let n = 0; export const inc = () => ++n; export const seen = []',
+        script: 'seen.push("x"); return { n: inc(), seen: seen.length }',
+      }
+      expect((await evaluate(options, env)).value).toEqual({ n: 1, seen: 1 })
+      expect((await evaluate(options, env)).value).toEqual({ n: 1, seen: 1 })
+      const cached = { ...options, isolation: 'cached' as const }
+      expect((await evaluate(cached, env)).value).toEqual({ n: 1, seen: 1 })
+      expect((await evaluate(cached, env)).value).toEqual({ n: 2, seen: 2 })
+      expect((await evaluate(options, env)).value).toEqual({ n: 1, seen: 1 })
     })
 
     it('enforces the timeout', async () => {

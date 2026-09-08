@@ -91,23 +91,28 @@ export interface EvaluateOptions {
   /** Top-level imports to hoist (for MDX test files with external imports) */
   imports?: string[] | undefined
   /**
-   * Isolate reuse policy (default: `'cached'`)
+   * Isolate reuse policy (default: `'fresh'`)
+   * - `'fresh'`: `LOADER.load(spec)` - a new, uncached isolate every call, so
+   *   identical evaluations are independent (nothing at module scope of the
+   *   user module survives between calls).
    * - `'cached'`: `LOADER.get(workerCodeId(spec), factory)` - identical specs
    *   share one isolate; the id content-addresses the full `WorkerCode`
-   *   (modules, compatibility date/flags, limits), never `env`.
-   * - `'fresh'`: `LOADER.load(spec)` - a new, uncached isolate every call.
+   *   (modules, compatibility date/flags, limits), never `env`. The user
+   *   module body runs once per isolate, so all of its module-scope state
+   *   (let/const bindings, exported arrays and objects, the `exports`
+   *   record, `globalThis`) persists across calls; only script locals and
+   *   logs are per-request.
    *
    * Dynamic Workers are billed per unique worker per day, so `'cached'` is
-   * the cost control and `'fresh'` the escape hatch for per-call isolate
-   * state.
+   * the opt-in cost control for code that is safe to re-enter.
    */
   isolation?: Isolation | undefined
 }
 
 /**
- * Isolate reuse policy for `evaluate()`: `'cached'` reuses one isolate per
- * unique `WorkerCode` spec (`LOADER.get`), `'fresh'` loads a new one every
- * call (`LOADER.load`).
+ * Isolate reuse policy for `evaluate()`: `'fresh'` (default) loads a new
+ * isolate every call (`LOADER.load`); `'cached'` reuses one isolate, and its
+ * module-scope state, per unique `WorkerCode` spec (`LOADER.get`).
  */
 export type Isolation = 'cached' | 'fresh'
 

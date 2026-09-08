@@ -231,7 +231,7 @@ describe('ai-evaluate/node', () => {
       expect(result1.success).toBe(true)
       expect(result1.value).toBe(42)
 
-      // Second evaluation (different script -> different loaded worker) must not see it
+      // Second evaluation loads a fresh isolate by default (and is a different spec anyway)
       const result2 = await evaluate({
         script: 'return globalThis.testValue;',
       })
@@ -579,15 +579,12 @@ describe('ai-evaluate/node', () => {
       const { evaluate } = await import('../src/node.js')
 
       const canned = { success: true, value: 'from-loader', logs: [], duration: 0 }
-      const env = {
-        loader: {
-          get: () => ({
-            getEntrypoint: () => ({
-              fetch: async () => Response.json(canned),
-            }),
-          }),
-        },
-      }
+      const stub = () => ({
+        getEntrypoint: () => ({
+          fetch: async () => Response.json(canned),
+        }),
+      })
+      const env = { loader: { get: stub, load: stub } }
 
       const direct = await evaluateModule.evaluate({ script: 'return 1' }, env)
       const viaNode = await evaluate({ script: 'return 1' }, env)
@@ -686,7 +683,11 @@ describe('ai-evaluate/node', () => {
     // with ERR_MODULE_NOT_FOUND. vitest cannot make a dynamic import reject
     // with a specific error (a throwing vi.mock factory is re-wrapped), so the
     // fixture runs in a child `node` with resolver hooks that hide the package.
-    const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'missing-miniflare.ts')
+    const fixture = join(
+      dirname(fileURLToPath(import.meta.url)),
+      'fixtures',
+      'missing-miniflare.ts'
+    )
 
     async function runFixture(failure: 'missing' | 'broken') {
       const { stdout } = await execFileAsync(process.execPath, ['--import', 'tsx', fixture], {

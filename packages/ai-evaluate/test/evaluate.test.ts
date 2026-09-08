@@ -315,8 +315,8 @@ describe('evaluate', () => {
       expectTypeOf<WorkerLoader['get']>().parameter(0).toEqualTypeOf<string>()
     })
 
-    it("defaults to 'cached'", () => {
-      expect(DEFAULT_ISOLATION).toBe('cached')
+    it("defaults to 'fresh'", () => {
+      expect(DEFAULT_ISOLATION).toBe('fresh')
     })
 
     it('cached: two identical calls share one isolate (factory invoked once)', async () => {
@@ -332,25 +332,25 @@ describe('evaluate', () => {
       expect(fake.ids[0]).toBe(fake.ids[1])
     })
 
-    it('default (no isolation given) behaves as cached', async () => {
+    it('default (no isolation given) behaves as fresh: load() every call, never get()', async () => {
       const fake = createFakeLoader()
       await evaluateWithEnv({ script: 'return 1' }, { loader: fake.loader })
       await evaluateWithEnv({ script: 'return 1' }, { loader: fake.loader })
-      expect(fake.calls.get).toBe(2)
-      expect(fake.calls.factory).toBe(1)
-      expect(fake.calls.load).toBe(0)
+      expect(fake.calls.load).toBe(2)
+      expect(fake.calls.get).toBe(0)
+      expect(fake.calls.factory).toBe(0)
     })
 
     it('cached: the id is workerCodeId of the spec handed to the factory', async () => {
       const fake = createFakeLoader()
-      await evaluateWithEnv({ script: 'return 1' }, { loader: fake.loader })
+      await evaluateWithEnv({ script: 'return 1', isolation: 'cached' }, { loader: fake.loader })
       expect(fake.ids[0]).toBe(workerCodeId(fake.loaded[0]!))
     })
 
     it('cached: different scripts get different isolates', async () => {
       const fake = createFakeLoader()
-      await evaluateWithEnv({ script: 'return 1' }, { loader: fake.loader })
-      await evaluateWithEnv({ script: 'return 2' }, { loader: fake.loader })
+      await evaluateWithEnv({ script: 'return 1', isolation: 'cached' }, { loader: fake.loader })
+      await evaluateWithEnv({ script: 'return 2', isolation: 'cached' }, { loader: fake.loader })
       expect(fake.calls.factory).toBe(2)
       expect(fake.ids[0]).not.toBe(fake.ids[1])
     })
@@ -392,10 +392,10 @@ describe('evaluate', () => {
           throw new Error('load exploded')
         },
       }
-      const cached = await evaluateWithEnv({ script: 'return 1' }, { loader })
+      const cached = await evaluateWithEnv({ script: 'return 1', isolation: 'cached' }, { loader })
       expect(cached.success).toBe(false)
       expect(cached.error).toContain('get exploded')
-      const fresh = await evaluateWithEnv({ script: 'return 1', isolation: 'fresh' }, { loader })
+      const fresh = await evaluateWithEnv({ script: 'return 1' }, { loader })
       expect(fresh.success).toBe(false)
       expect(fresh.error).toContain('load exploded')
     })
@@ -440,19 +440,19 @@ describe('evaluate', () => {
   describe('loadWorker', () => {
     const code: WorkerCode = { mainModule: 'w.js', modules: { 'w.js': '' } }
 
-    it('defaults to cached (get)', () => {
+    it('defaults to fresh (load)', () => {
       const fake = createFakeLoader()
       loadWorker(fake.loader, code)
+      expect(fake.calls.load).toBe(1)
+      expect(fake.calls.get).toBe(0)
+    })
+
+    it('cached uses get with the content-addressed id', () => {
+      const fake = createFakeLoader()
+      loadWorker(fake.loader, code, 'cached')
       expect(fake.calls.get).toBe(1)
       expect(fake.calls.load).toBe(0)
       expect(fake.ids[0]).toBe(workerCodeId(code))
-    })
-
-    it('fresh uses load', () => {
-      const fake = createFakeLoader()
-      loadWorker(fake.loader, code, 'fresh')
-      expect(fake.calls.get).toBe(0)
-      expect(fake.calls.load).toBe(1)
     })
   })
 
@@ -463,7 +463,7 @@ describe('evaluate', () => {
       expect(result.value).toBe('fresh')
     })
 
-    it("'cached' reuses the isolate; 'fresh' never does (module-level state witness)", async () => {
+    it("'cached' reuses the isolate; 'fresh' never does (globalThis witness)", async () => {
       const script = 'globalThis.__n = (globalThis.__n ?? 0) + 1; return globalThis.__n'
       const cached1 = await evaluate({ script, isolation: 'cached' })
       const cached2 = await evaluate({ script, isolation: 'cached' })
@@ -474,6 +474,33 @@ describe('evaluate', () => {
       const fresh2 = await evaluate({ script, isolation: 'fresh' })
       expect(fresh1.value).toBe(1)
       expect(fresh2.value).toBe(1)
+    })
+
+    // aip-263g.30: the user module runs at module scope of the generated
+    // worker, so a reused isolate carries let/const bindings and exported
+    // objects (not just globalThis) into the next evaluation. The default
+    // must keep identical calls independent.
+    it('default: module-scope state (let counter, exported array) does not survive between identical calls', async () => {
+      const options = {
+        module: 'let n = 0; export const inc = () => ++n; export const seen = []',
+        script: 'seen.push("x"); return { n: inc(), seen: seen.length }',
+      }
+      expect((await evaluate(options)).value).toEqual({ n: 1, seen: 1 })
+      expect((await evaluate(options)).value).toEqual({ n: 1, seen: 1 })
+      expect((await evaluate({ ...options, isolation: 'fresh' })).value).toEqual({ n: 1, seen: 1 })
+    })
+
+    it("'cached' (opt-in) carries module-scope state across identical calls", async () => {
+      const options = {
+        module: 'let n = 0; export const inc = () => ++n; export const seen = []',
+        script: 'seen.push("y"); return { n: inc(), seen: seen.length }',
+        isolation: 'cached' as const,
+      }
+      expect((await evaluate(options)).value).toEqual({ n: 1, seen: 1 })
+      expect((await evaluate(options)).value).toEqual({ n: 2, seen: 2 })
+      // The default is not affected by an earlier cached isolate for the same spec
+      const { isolation: _isolation, ...defaults } = options
+      expect((await evaluate(defaults)).value).toEqual({ n: 1, seen: 1 })
     })
   })
 })

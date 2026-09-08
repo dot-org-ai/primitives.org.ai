@@ -13,3 +13,9 @@ public API change; the three internal call sites (`evaluate.ts` simple + worker
 paths, `node.ts` worker path) were updated to pass the worker code. Also
 refreshes "Worker Loaders → Dynamic Workers" naming in the entry-file headers;
 the `worker_loaders` wrangler key is unchanged.
+
+Superseded before release: 3.0 replaces this with `workerCodeId(spec)` and an
+`isolation` option whose default is `'fresh'` (`LOADER.load`, a new isolate per
+call). The content-addressed `LOADER.get` reuse described here is now the
+opt-in `isolation: 'cached'`, because a reused isolate carries the user module's
+module-scope state into the next evaluation.
