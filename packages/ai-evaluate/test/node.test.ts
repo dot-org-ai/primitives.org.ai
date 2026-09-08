@@ -6,6 +6,20 @@ afterAll(async () => {
 })
 
 describe('ai-evaluate/node', () => {
+  describe('import side effects', () => {
+    it('importing src/node.js registers no process signal or exit listeners', async () => {
+      // Callers own shutdown: the module must not install process.on('exit' |
+      // 'SIGINT' | 'SIGTERM') handlers the way the removed miniflare-pool did.
+      // Re-evaluate the module so its top level actually runs here.
+      const events = ['SIGINT', 'SIGTERM', 'exit'] as const
+      const before = Object.fromEntries(events.map((e) => [e, process.listenerCount(e)]))
+      vi.resetModules()
+      await import('../src/node.js')
+      const after = Object.fromEntries(events.map((e) => [e, process.listenerCount(e)]))
+      expect(after).toEqual(before)
+    })
+  })
+
   describe('JSX / TypeScript transformation (in the host worker, via bundled sucrase)', () => {
     it('transforms simple JSX', async () => {
       const { evaluate } = await import('../src/node.js')
@@ -303,6 +317,22 @@ describe('ai-evaluate/node', () => {
       }
     })
 
+    it('runs 20 sequential evaluations in under 2s once the host is warm', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      // Warm-up: pays for host startup (and a fresh host after any dispose())
+      const warm = await evaluate({ script: 'return 1' })
+      expect(warm.value).toBe(1)
+
+      const start = Date.now()
+      for (let i = 0; i < 20; i++) {
+        const result = await evaluate({ script: 'return 1' })
+        expect(result.value).toBe(1)
+      }
+      // Per-call Miniflare instantiation cost ~100ms+ each; one reused host is ~2ms.
+      expect(Date.now() - start).toBeLessThan(2000)
+    })
+
     it('returns duration in result', async () => {
       const { evaluate } = await import('../src/node.js')
 
@@ -358,7 +388,7 @@ describe('ai-evaluate/node', () => {
     })
 
     it('loads host-worker -> evaluate as the host worker modules (same bytes as prod)', async () => {
-      const { loadHostWorker, HOST_MODULE } = await import('../src/node.js')
+      const { loadHostWorker, HOST_MODULE } = await import('../src/host-modules.js')
       const { mainModule, modules } = loadHostWorker()
       expect(mainModule).toBe(HOST_MODULE)
       // The host is the evaluate() implementation, not a separate local template

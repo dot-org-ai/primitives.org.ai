@@ -20,6 +20,15 @@ describe('index exports', () => {
     // Types are compile-time only, so we just check the module loads
     await import('../src/node.js')
   })
+
+  it('ai-evaluate/node exports exactly evaluate, createEvaluator, createLocalRuntime, dispose', async () => {
+    // dispose() is the only lifecycle API: no pool (configurePool/warmPool/
+    // disposePool) and no host-worker internals (loadHostWorker, HOST_*).
+    const node = await import('../src/node.js')
+    expect(Object.keys(node).sort()).toEqual(
+      ['evaluate', 'createEvaluator', 'createLocalRuntime', 'dispose'].sort()
+    )
+  })
 })
 
 describe('types', () => {
