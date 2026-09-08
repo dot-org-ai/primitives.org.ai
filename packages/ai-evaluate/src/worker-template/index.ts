@@ -8,7 +8,7 @@
  */
 
 // Main public API - worker code generators
-export { generateWorkerCode, generateDevWorkerCode, generateFetchControlCode } from './core.js'
+export { generateWorkerCode, generateDevWorkerCode } from './core.js'
 export type { GenerateWorkerCodeOptions, TestRunner } from './core.js'
 
 // SDK code generation (local and remote modes)

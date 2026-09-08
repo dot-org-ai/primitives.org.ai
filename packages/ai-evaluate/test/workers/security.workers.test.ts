@@ -6,7 +6,9 @@
  * pure-JS escape vectors (prototype pollution, constructor/eval escapes, code
  * injection, resource exhaustion) on the Node pool. Here every assertion is
  * about what workerd does with the loaded worker: what `globalOutbound: null`
- * blocks, which bindings the isolate can see, and which host APIs exist.
+ * blocks, what the `OutboundGateway` allowlist blocks (nothing in the isolate
+ * checks hosts - see test/workers/outbound.workers.test.ts for the gateway
+ * itself), which bindings the isolate can see, and which host APIs exist.
  */
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 import { env } from 'cloudflare:test'
@@ -37,7 +39,8 @@ describe('security (workerd)', () => {
           { fetch: false }
         )
         expect(value.blocked).toBe(true)
-        expect(value.error).toMatch(/Network|blocked|outbound/i)
+        // workerd's own message for a worker without an outbound
+        expect(value.error).toMatch(/Network|blocked|outbound|not permitted/i)
       })
 
       it('blocks public hosts with fetch: null (backwards compat)', async () => {
@@ -105,23 +108,24 @@ describe('security (workerd)', () => {
         expect(value.error).toContain('not in allowlist')
       })
 
-      // Allowed-domain probes pass a pre-aborted signal: the allowlist check
-      // runs first, then the real fetch rejects with AbortError before any
-      // network I/O. That witnesses "passed the allowlist" without DNS.
+      // An allowed host is forwarded by the gateway to the host's real fetch.
+      // The probe targets a port nothing listens on, so the forwarded request
+      // fails at the transport - not with the allowlist's message - and no
+      // DNS or network is involved.
       it('allows matching exact domains past the allowlist', async () => {
         const value = await probe(
           `
             try {
-              await fetch('https://api.example.com/data', { signal: AbortSignal.abort() });
-              return { allowlistBlocked: false, fetched: true };
+              const response = await fetch('http://127.0.0.1:1/data');
+              return { allowlistBlocked: false, status: response.status };
             } catch (e) {
-              return { allowlistBlocked: e.message.includes('not in allowlist'), name: e.name, error: e.message };
+              return { allowlistBlocked: e.message.includes('not in allowlist'), error: e.message };
             }
           `,
-          { fetch: ['api.example.com'] }
+          { fetch: ['127.0.0.1'] }
         )
         expect(value.allowlistBlocked).toBe(false)
-        expect(value.name).toBe('AbortError')
+        expect(value.status).toBeUndefined()
       })
 
       it('wildcard patterns block other domains', async () => {
@@ -139,20 +143,23 @@ describe('security (workerd)', () => {
         expect(value.blocked).toBe(true)
       })
 
-      it('wildcard patterns match subdomains', async () => {
+      it('wildcard patterns do not match a host that merely contains the suffix', async () => {
+        // Which hosts a wildcard admits is witnessed on the pure gateway
+        // (test/shared.test.ts); here, that the gateway's refusal reaches the
+        // isolate with the attempted host named
         const value = await probe(
           `
             try {
-              await fetch('https://api.example.com/data', { signal: AbortSignal.abort() });
-              return { allowlistBlocked: false };
+              await fetch('https://example.com.evil.test/data');
+              return { blocked: false };
             } catch (e) {
-              return { allowlistBlocked: e.message.includes('not in allowlist'), name: e.name, error: e.message };
+              return { blocked: e.message.includes('not in allowlist'), error: e.message };
             }
           `,
           { fetch: ['*.example.com'] }
         )
-        expect(value.allowlistBlocked).toBe(false)
-        expect(value.name).toBe('AbortError')
+        expect(value.blocked).toBe(true)
+        expect(value.error).toContain('Attempted: example.com.evil.test')
       })
 
       it('blocks localhost when not in the allowlist', async () => {

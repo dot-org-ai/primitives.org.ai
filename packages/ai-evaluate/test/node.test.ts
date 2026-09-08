@@ -429,6 +429,50 @@ describe('ai-evaluate/node', () => {
       expect(result.value).toContain('fetch blocked')
     })
 
+    it('enforces a fetch allowlist through the host worker\'s OutboundGateway', async () => {
+      // The Miniflare host is src/host-worker.ts, which exports the gateway,
+      // so the allowlist is enforced locally exactly as on Cloudflare: by the
+      // loader's globalOutbound, not by anything in the isolate.
+      const { evaluate } = await import('../src/node.js')
+
+      const blocked = await evaluate({
+        script: 'return fetch("https://blocked.test")',
+        fetch: ['api.example.com'],
+      })
+      expect(blocked.success).toBe(false)
+      expect(blocked.error).toMatch(/not in allowlist/)
+      expect(blocked.error).toContain('blocked.test')
+
+      const noPatch = await evaluate({
+        script: 'return typeof __originalFetch__',
+        fetch: ['api.example.com'],
+      })
+      expect(noPatch.success, noPatch.error).toBe(true)
+      expect(noPatch.value).toBe('undefined')
+
+      // An allowed host is forwarded to the host's real fetch: a port nothing
+      // listens on fails at the transport, not with the allowlist's message
+      const allowed = await evaluate({
+        script: `
+          try {
+            return { status: (await fetch('http://127.0.0.1:1/')).status }
+          } catch (e) {
+            return { error: e.message }
+          }
+        `,
+        fetch: ['127.0.0.1'],
+      })
+      expect(allowed.success, allowed.error).toBe(true)
+      expect((allowed.value as { error?: string }).error).not.toMatch(/not in allowlist/)
+    })
+
+    it('rejects outboundRpc without a host env (a function cannot cross the JSON boundary)', async () => {
+      const { evaluate } = await import('../src/node.js')
+      const result = await evaluate({ script: 'return 1', outboundRpc: () => null })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('outboundRpc needs a live worker_loaders binding')
+    })
+
     it('allows network when fetch is not null', async () => {
       const { evaluate } = await import('../src/node.js')
 

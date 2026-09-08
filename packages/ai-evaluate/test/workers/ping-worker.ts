@@ -10,8 +10,14 @@
  * `tail()` handler. It keeps a structured-cloneable summary of each event
  * (a `TraceItem` itself cannot cross RPC) that tests read back with
  * `count()` / `drain()`.
+ *
+ * `OutboundGateway` is what any host worker that calls `evaluate()` with a
+ * fetch allowlist or `outboundRpc` must export: `evaluate()` binds a loopback
+ * stub of it (`ctx.exports.OutboundGateway`) as the sandbox's `globalOutbound`.
  */
 import { WorkerEntrypoint } from 'cloudflare:workers'
+
+export { OutboundGateway } from '../../src/worker.js'
 
 export class Ping extends WorkerEntrypoint {
   ping(): string {

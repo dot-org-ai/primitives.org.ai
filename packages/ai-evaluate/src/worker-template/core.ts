@@ -6,12 +6,11 @@
  * (embedded test runner) modes from a single template.
  */
 
-import type { SDKConfig, FetchConfig } from '../types.js'
+import type { SDKConfig } from '../types.js'
 import { getExportNames, wrapScriptForReturn } from './helpers.js'
 import { transformModuleCode } from './code-transforms.js'
 import { generateSDKCode, generateShouldCode } from './sdk-generator.js'
 import { generateTestFrameworkCode, generateTestRunnerCode } from './test-generator.js'
-import { generateDomainCheckCode } from '../shared.js'
 
 /**
  * Which test runner the generated worker uses for `/execute`.
@@ -25,8 +24,9 @@ import { generateDomainCheckCode } from '../shared.js'
  *   deployment without ai-tests).
  *
  * Everything else about the worker (console capture, module embedding,
- * capnweb export RPC, GET /:name, fetch control) is identical in both modes,
- * so local and production run the same template.
+ * capnweb export RPC, GET /:name) is identical in both modes, so local and
+ * production run the same template. Network policy is not in the template at
+ * all: it is the loader's `globalOutbound` (see `../outbound.ts`).
  */
 export type TestRunner = 'rpc' | 'embedded'
 
@@ -39,32 +39,7 @@ export interface GenerateWorkerCodeOptions {
   imports?: string[] | undefined
   /** Code run once at module scope, after console capture and before the user module */
   preamble?: string | undefined
-  fetch?: null | FetchConfig | undefined
   testRunner?: TestRunner | undefined
-}
-
-/**
- * Generate in-worker fetch control for a `fetch` option.
- *
- * - false/null -> block. The loader also sets `globalOutbound: null`, which is
- *   the real enforcement; the JS override gives a clear, stable error message.
- * - string[]   -> domain allowlist enforced in-worker.
- * - true/undefined -> allow all (empty string).
- */
-export function generateFetchControlCode(fetchOption: null | FetchConfig | undefined): string {
-  if (fetchOption === false || fetchOption === null) {
-    return `
-// Block fetch when fetch: false or null is specified
-const __originalFetch__ = globalThis.fetch;
-globalThis.fetch = async (...args) => {
-  throw new Error('Network access blocked: fetch is disabled in this sandbox');
-};
-`
-  }
-  if (Array.isArray(fetchOption)) {
-    return generateDomainCheckCode(fetchOption)
-  }
-  return ''
 }
 
 /**
@@ -81,7 +56,6 @@ export function generateWorkerCode(options: GenerateWorkerCodeOptions): string {
     sdk,
     imports = [],
     preamble = '',
-    fetch: fetchOption,
     testRunner = 'rpc',
   } = options
   const sdkConfig = sdk === true ? {} : sdk || null
@@ -93,8 +67,6 @@ export function generateWorkerCode(options: GenerateWorkerCodeOptions): string {
   // Hoisted imports (the user module's own, and the `imports` option's
   // bindings) - placed at true module top level
   const hoistedImports = imports.length > 0 ? imports.join('\n') + '\n' : ''
-
-  const fetchControlCode = generateFetchControlCode(fetchOption)
 
   // Test registration + run for /execute, per runner.
   const testSetupCode = embedded
@@ -153,8 +125,6 @@ ${generateTestFrameworkCode()}
 import { RpcTarget, newWorkersRpcResponse } from 'capnweb.js';
 ${hoistedImports}
 const logs = [];
-
-${fetchControlCode}
 
 ${sdkConfig ? generateShouldCode() : ''}
 

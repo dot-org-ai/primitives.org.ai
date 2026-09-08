@@ -29,5 +29,7 @@ export default defineConfig({
     globals: false,
     include: WORKERS_TEST_INCLUDE,
     testTimeout: 30000, // Loader isolates start on first use
+    // Expected host-side rejections of the outbound gateway (see the file)
+    setupFiles: ['./test/workers/setup.ts'],
   },
 })

@@ -17,6 +17,11 @@
  * binding as `TEST` on the RPC runner. Nothing else from the host env reaches
  * the isolate.
  *
+ * Network policy is the loader's `globalOutbound`, never code in the isolate:
+ * `null` for `fetch: false`, and for an allowlist or `outboundRpc` a loopback
+ * stub of the host worker's `OutboundGateway` entrypoint (see `./outbound.ts`),
+ * which the host's main module must export.
+ *
  * npm `dependencies` are resolved by `@cloudflare/worker-bundler` inside this
  * worker (see `./bundler.ts`); where it cannot load, or with `bundler: false`,
  * they are fetched from esm.sh as bundled modules instead.
@@ -25,7 +30,6 @@
 import type {
   EvaluateOptions,
   EvaluateResult,
-  FetchConfig,
   Isolation,
   WorkerLoader,
   WorkerEntrypoint,
@@ -38,7 +42,6 @@ import type {
 } from './types.js'
 import {
   generateWorkerCode,
-  generateFetchControlCode,
   transformModuleCode,
   getExportNames,
   hoistImports,
@@ -48,6 +51,15 @@ import { transformOptions } from './transform.js'
 import { buildSandboxEnv, validateOptions, TEST_BINDING_KEY } from './validation.js'
 import { assertEvaluateResult } from './type-guards.js'
 import { resolveImports, BundlerUnavailableError } from './bundler.js'
+import {
+  outboundPolicy,
+  loopbackOutboundGateway,
+  registerInterceptor,
+  releaseInterceptor,
+  OUTBOUND_JSON_MODULE,
+  OUTBOUND_GATEWAY_UNAVAILABLE_ERROR,
+  type OutboundGatewayProps,
+} from './outbound.js'
 import {
   COMPATIBILITY_DATE,
   SANDBOX_URL,
@@ -124,15 +136,8 @@ function generateSimpleWorkerCode(options: {
   imports?: string[]
   /** Code run once at module scope, after console capture and before the user module */
   preamble?: string
-  fetch?: FetchConfig | undefined
 }): string {
-  const {
-    module: rawModule = '',
-    script = '',
-    imports = [],
-    preamble = '',
-    fetch: fetchOption,
-  } = options
+  const { module: rawModule = '', script = '', imports = [], preamble = '' } = options
 
   // Module code may use `exports.x =` or `export const x =`; both become
   // properties of `exports`, then top-level bindings the script can call.
@@ -151,8 +156,6 @@ function generateSimpleWorkerCode(options: {
 ${importStatements}
 
 const logs = [];
-
-${generateFetchControlCode(fetchOption)}
 
 // Capture console output
 const originalConsole = { ...console };
@@ -464,6 +467,12 @@ export interface BuiltWorkerCode {
   code: WorkerCode
   /** Warnings from import resolution, reported to the caller as `warn` logs */
   warnings: string[]
+  /**
+   * Release what the build registered on the host for this evaluation - the
+   * `outboundRpc` interceptor its gateway looks up. Call once the loaded
+   * worker is done; a no-op when nothing was registered.
+   */
+  release(): void
 }
 
 /**
@@ -491,8 +500,14 @@ export interface BuiltWorkerCode {
  * values from `options.bindings`). A value that fails that validator throws a
  * `ValidationError` here, before any loader call.
  *
- * `fetch: false | null` blocks outbound network at the runtime level
- * (`globalOutbound: null`) in addition to the in-worker fetch control.
+ * Network policy is `globalOutbound`, set here and enforced by the runtime:
+ * `null` for `fetch: false | null`; for `fetch: string[]` or `outboundRpc`
+ * (see `outboundPolicy`) a loopback stub of the host worker's
+ * `OutboundGateway` entrypoint with the policy in its `props`, which throws
+ * `OUTBOUND_GATEWAY_UNAVAILABLE_ERROR` when the host does not export it. The
+ * policy also goes into the spec as the `outbound.json` module, so it is part
+ * of the content-addressed id. An `outboundRpc` function is registered on the
+ * host under an id the gateway resolves; `release()` on the result forgets it.
  *
  * `compatibilityDate` (default `COMPATIBILITY_DATE`), `compatibilityFlags`
  * (default none) and `limits` are passed through as given - they are part of
@@ -514,14 +529,17 @@ export async function buildWorkerCodeWithWarnings(
   testService?: unknown
 ): Promise<BuiltWorkerCode> {
   const useSimpleWorker = !options.tests && !options.sdk
-  const globalOutbound = options.fetch === false || options.fetch === null ? null : undefined
   const env = buildSandboxEnv(options)
+  const policy = outboundPolicy(options)
+  // Resolve the gateway before any fetching: a host that cannot enforce the
+  // policy fails here, closed, without having done any work.
+  const gateway = policy ? await loopbackOutboundGateway() : null
+  if (policy && !gateway) throw new Error(OUTBOUND_GATEWAY_UNAVAILABLE_ERROR)
   const spec = {
     compatibilityDate: options.compatibilityDate ?? COMPATIBILITY_DATE,
     compatibilityFlags: options.compatibilityFlags ?? [],
     ...(options.limits !== undefined && { limits: options.limits }),
     ...(options.tails !== undefined && { tails: options.tails }),
-    globalOutbound,
   }
 
   const plan = planImports(options)
@@ -535,7 +553,6 @@ export async function buildWorkerCodeWithWarnings(
         script: plan.script,
         imports: plan.statements,
         preamble: plan.preamble,
-        ...(options.fetch !== undefined && { fetch: options.fetch }),
       })
     : generateWorkerCode({
         testRunner: testService ? 'rpc' : 'embedded',
@@ -545,7 +562,6 @@ export async function buildWorkerCodeWithWarnings(
         preamble: plan.preamble,
         ...(options.tests !== undefined && { tests: options.tests }),
         ...(options.sdk !== undefined && { sdk: options.sdk }),
-        ...(options.fetch !== undefined && { fetch: options.fetch }),
       })
   // capnweb is a module so the worker can import it (full template only)
   const siblings: Record<string, string> = useSimpleWorker ? {} : { 'capnweb.js': CAPNWEB_SOURCE }
@@ -587,14 +603,34 @@ export async function buildWorkerCodeWithWarnings(
     }
   }
 
+  // The outbound policy, last: registering the interceptor is the one side
+  // effect of this build, and nothing after it can throw.
+  let globalOutbound: null | unknown = null
+  let outboundModule: Record<string, WorkerModule> = {}
+  let release = (): void => {}
+  if (policy && gateway) {
+    const props: OutboundGatewayProps = { allowlist: policy.allowlist }
+    if (options.outboundRpc) {
+      const id = registerInterceptor(options.outboundRpc)
+      props.interceptor = id
+      release = () => releaseInterceptor(id)
+    }
+    globalOutbound = gateway({ props })
+    outboundModule = { [OUTBOUND_JSON_MODULE]: { json: props } }
+  } else if (options.fetch !== false && options.fetch !== null) {
+    globalOutbound = undefined
+  }
+
   return {
     code: {
       mainModule: resolved.mainModule,
-      modules: { ...resolved.modules, ...packageJson },
+      modules: { ...resolved.modules, ...packageJson, ...outboundModule },
       ...spec,
+      globalOutbound,
       env: loaderEnv,
     },
     warnings,
+    release,
   }
 }
 
@@ -640,18 +676,25 @@ async function runWorker(
   testService: unknown,
   start: number
 ): Promise<EvaluateResult> {
-  const { code, warnings } = await buildWorkerCodeWithWarnings(options, testService)
-  const worker = loadWorker(loader, code, options.isolation)
+  const { code, warnings, release } = await buildWorkerCodeWithWarnings(options, testService)
   const timeout = options.timeout ?? DEFAULT_TIMEOUT
-
-  // Bind the loaded worker's CPU budget to the wall-clock timeout (or the
-  // explicit `limits.cpuMs`, see `entrypointLimits`). Limits set on the
-  // entrypoint narrow the spec's own `limits` (the lower wins) without
-  // changing its content-addressed id, so the same code with different
-  // timeouts is still one cached isolate. Cloudflare enforces the limit;
-  // open-source workerd (local) accepts and ignores it.
-  const entrypoint = worker.getEntrypoint(undefined, { limits: entrypointLimits(options, timeout) })
-  const result = await executeWithTimeout(entrypoint, timeout)
+  let result: EvaluateResult
+  try {
+    const worker = loadWorker(loader, code, options.isolation)
+    // Bind the loaded worker's CPU budget to the wall-clock timeout (or the
+    // explicit `limits.cpuMs`, see `entrypointLimits`). Limits set on the
+    // entrypoint narrow the spec's own `limits` (the lower wins) without
+    // changing its content-addressed id, so the same code with different
+    // timeouts is still one cached isolate. Cloudflare enforces the limit;
+    // open-source workerd (local) accepts and ignores it.
+    const entrypoint = worker.getEntrypoint(undefined, {
+      limits: entrypointLimits(options, timeout),
+    })
+    result = await executeWithTimeout(entrypoint, timeout)
+  } finally {
+    // The gateway's interceptor lives only as long as the evaluation
+    release()
+  }
 
   // Import-resolution warnings (bundler warnings, the esm.sh fallback being
   // taken, undeclared dependencies) precede the worker's own console output.

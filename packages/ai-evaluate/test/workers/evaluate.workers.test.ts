@@ -13,10 +13,10 @@ import type { SandboxEnv } from '../../src/types.js'
 import { SCRIPT_RESULT_KEYS, TESTS_RESULT_KEYS, resultKeys } from '../fixtures/result-shape.js'
 
 /**
- * Error text a blocked fetch produces: the in-isolate override says
- * "Network access blocked"; workerd's own `globalOutbound: null` says
- * "This worker is not permitted to access the internet via global functions
- * like fetch()".
+ * Error text a blocked fetch produces. `fetch: false` is `globalOutbound:
+ * null`, and workerd's own message is "This worker is not permitted to access
+ * the internet via global functions like fetch()"; nothing in the isolate
+ * rewrites it.
  */
 const BLOCKED_FETCH = /Network|blocked|outbound|not permitted/i
 
@@ -502,31 +502,39 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       expect(result.error).toMatch(BLOCKED_FETCH)
     })
 
-    it('is enforced by workerd, not only by the in-isolate fetch override', async () => {
-      // The sandbox template rebinds globalThis.fetch to throw when fetch is
-      // disabled, keeping the original in module scope as __originalFetch__.
-      // The script is embedded in that same module, so it can reach past the
-      // override. Doing so must still fail: the loader was given
-      // globalOutbound: null, so workerd itself has no outbound path.
+    it('is enforced by workerd alone: the isolate holds no patched or original fetch', async () => {
+      // 2.x rebound globalThis.fetch inside the sandbox and kept the original
+      // as __originalFetch__ in module scope, where the script could reach
+      // it. 3.0 leaves fetch untouched: the loader was given
+      // globalOutbound: null, so workerd itself has no outbound path, and
+      // every way of naming fetch fails the same way.
       const result = await evaluate(
         {
           script: `
-            // Fail loudly (success: true) if the witness ever loses its handle
-            // on the real fetch, instead of degrading to the patched one.
-            if (typeof __originalFetch__ !== 'function') return { witness: 'no __originalFetch__' };
-            const response = await __originalFetch__('https://example.com');
-            return { status: response.status };
+            const witness = {
+              originalFetch: typeof __originalFetch__,
+              ownFetch: Object.getOwnPropertyDescriptor(globalThis, 'fetch') !== undefined,
+            };
+            try {
+              // The prototype's fetch is the classic way past an own-property patch
+              const response = await Object.getPrototypeOf(globalThis).fetch.call(globalThis, 'https://example.com');
+              return { ...witness, status: response.status };
+            } catch (e) {
+              return { ...witness, error: e.message };
+            }
           `,
           fetch: false,
           timeout: 10000,
         },
         env
       )
-      expect(result.success, JSON.stringify(result.value)).toBe(false)
-      expect(result.value).toBeUndefined()
-      expect(result.error).toMatch(BLOCKED_FETCH)
-      // workerd's message, not the template's "fetch is disabled in this sandbox"
-      expect(result.error).not.toContain('fetch is disabled')
+      expect(result.success, result.error).toBe(true)
+      const value = result.value as { originalFetch: string; ownFetch: boolean; error?: string }
+      expect(value.originalFetch).toBe('undefined')
+      expect(value.ownFetch).toBe(false)
+      expect(value.error).toMatch(BLOCKED_FETCH)
+      // workerd's message, not the 2.x template's "fetch is disabled in this sandbox"
+      expect(value.error).not.toContain('fetch is disabled')
     })
 
     it('a script that catches the blocked fetch still completes', async () => {

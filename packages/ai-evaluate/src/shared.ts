@@ -270,9 +270,8 @@ export function matchesDomainPattern(domain: string, pattern: string): boolean {
   // Wildcard pattern: *.example.com
   if (normalizedPattern.startsWith('*.')) {
     const suffix = normalizedPattern.slice(2) // Remove '*.'
-    // Domain must end with the suffix and have at least one character before it
-    // e.g., 'api.example.com' matches '*.example.com'
-    // but 'example.com' does not match '*.example.com'
+    // Any subdomain, and the apex itself: 'api.example.com' and
+    // 'example.com' both match '*.example.com'; 'example.com.evil.com' does not
     return normalizedDomain.endsWith('.' + suffix) || normalizedDomain === suffix
   }
 
@@ -301,48 +300,4 @@ export function isDomainAllowed(url: string, allowedDomains: string[]): boolean 
     // Invalid URL - not allowed
     return false
   }
-}
-
-/**
- * Generate JavaScript code for domain checking in workers
- * This is embedded into the worker source code
- */
-export function generateDomainCheckCode(allowedDomains: string[]): string {
-  const domainsJson = JSON.stringify(allowedDomains)
-
-  return `
-// Domain allowlist checking
-const __allowedDomains__ = ${domainsJson};
-
-const __matchesDomainPattern__ = (domain, pattern) => {
-  const normalizedDomain = domain.toLowerCase();
-  const normalizedPattern = pattern.toLowerCase();
-  if (normalizedDomain === normalizedPattern) return true;
-  if (normalizedPattern.startsWith('*.')) {
-    const suffix = normalizedPattern.slice(2);
-    return normalizedDomain.endsWith('.' + suffix) || normalizedDomain === suffix;
-  }
-  return false;
-};
-
-const __isDomainAllowed__ = (url) => {
-  try {
-    const parsedUrl = new URL(url);
-    const hostname = parsedUrl.hostname;
-    for (const pattern of __allowedDomains__) {
-      if (__matchesDomainPattern__(hostname, pattern)) return true;
-    }
-    return false;
-  } catch { return false; }
-};
-
-const __originalFetch__ = globalThis.fetch;
-globalThis.fetch = async (input, init) => {
-  const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
-  if (!__isDomainAllowed__(url)) {
-    throw new Error(\`Network access blocked: domain not in allowlist. Attempted: \${new URL(url).hostname}\`);
-  }
-  return __originalFetch__(input, init);
-};
-`
 }

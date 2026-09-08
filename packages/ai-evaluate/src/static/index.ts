@@ -26,7 +26,6 @@ import {
   generateTestRunnerCode,
 } from '../worker-template/test-generator.js'
 import { generateSDKCode, generateShouldCode } from '../worker-template/sdk-generator.js'
-import { generateDomainCheckCode } from '../shared.js'
 import type { SDKConfig, FetchConfig } from '../types.js'
 
 /**
@@ -284,8 +283,6 @@ export interface BuildWorkerOptions {
   sdk?: SDKConfig | boolean
   /** Top-level imports to hoist */
   imports?: string[]
-  /** Network access configuration */
-  fetch?: FetchConfig
   /** Use the embedded test runner (no TEST binding required) instead of the ai-tests RPC runner */
   dev?: boolean
 }
@@ -313,7 +310,6 @@ export function buildWorkerTemplate(options: BuildWorkerOptions = {}): string {
     ...(options.script !== undefined && { script: options.script }),
     ...(options.sdk !== undefined && { sdk: options.sdk }),
     ...(options.imports !== undefined && { imports: options.imports }),
-    ...(options.fetch !== undefined && { fetch: options.fetch }),
   })
 }
 
@@ -366,13 +362,6 @@ export function getSDKCode(config?: SDKConfig): string {
  */
 export function getShouldCode(): string {
   return generateShouldCode()
-}
-
-/**
- * Get domain check code for fetch allowlisting
- */
-export function getDomainCheckCode(allowedDomains: string[]): string {
-  return generateDomainCheckCode(allowedDomains)
 }
 
 // Re-export types
