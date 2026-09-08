@@ -34,18 +34,23 @@
     "build": "tsc -p tsconfig.json && npm run build:static",
     "build:static": "npx tsx scripts/build-static.ts",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "vitest run",
+    "test": "vitest run && vitest run --config vitest.workers.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "clean": "rm -rf dist public"
+    "clean": "rm -rf dist public",
+    "test:node": "vitest run",
+    "test:workers": "vitest run --config vitest.workers.config.ts"
   },
   "dependencies": {
     "capnweb": "^0.2.0"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.0",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@vitest/coverage-v8": "^4.1.0",
     "tsx": "^4.7.0",
-    "vitest": "^2.1.0"
+    "vite": "^7.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.39.0"
   },
   "optionalDependencies": {
     "esbuild": "^0.24.0",
