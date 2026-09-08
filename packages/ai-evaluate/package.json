@@ -26,6 +26,10 @@
       "import": "./dist/static/index.js",
       "types": "./dist/static/index.d.ts"
     },
+    "./codemode": {
+      "import": "./dist/codemode.js",
+      "types": "./dist/codemode.d.ts"
+    },
     "./static/index.mjs": "./public/index.mjs",
     "./static/capnweb.mjs": "./public/capnweb.mjs",
     "./static/scaffold.mjs": "./public/scaffold.mjs"
@@ -51,7 +55,16 @@
     "@cloudflare/worker-bundler": "0.2.3",
     "capnweb": "^0.2.0"
   },
+  "peerDependencies": {
+    "@cloudflare/codemode": "^0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "@cloudflare/codemode": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@cloudflare/codemode": "^0.5.1",
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@vitest/coverage-v8": "^4.1.0",
     "sucrase": "^3.35.1",
