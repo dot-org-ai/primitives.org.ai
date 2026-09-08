@@ -169,10 +169,41 @@ const result = await runtime.evaluate({ script: 'return 1 + 1' })
 await runtime.dispose()
 ```
 
-Timeouts are enforced by `AbortSignal.timeout` inside `evaluate()` (the host
-worker). A CPU-bound loop cannot be interrupted from JS and local workerd
-enforces no CPU limit, so the Node side adds a backstop: on timeout the wedged
-host is disposed and recreated on the next call.
+#### Timeouts and CPU-bound scripts
+
+`timeout` is enforced in two layers, and which one fires depends on what the
+script is doing:
+
+| Script | Cloudflare | Local (`ai-evaluate/node`) |
+|--------|------------|----------------------------|
+| Slow but yielding (`await setTimeout(...)`) | `AbortSignal.timeout` in `evaluate()` → `Timeout: Script execution exceeded {timeout}ms` | same |
+| Promise that never settles | workerd hang detection, or the timeout | same |
+| CPU-bound loop (`while (true) {}`) | the loaded worker's `limits.cpuMs`, bound to `timeout`, throws out of the loop (the runtime's CPU-limit error) | Node backstop: `Timeout: ...` at `timeout + 250ms`, then the host is replaced |
+
+A loop that never yields is never interrupted by `AbortSignal.timeout` - the
+signal is only observed when the script returns to the event loop. On
+Cloudflare `evaluate()` therefore also passes `limits: { cpuMs: timeout }` to
+the loaded worker's entrypoint (per-entrypoint limits do not change the
+content-addressed isolate id, so cached isolates are unaffected). **Open-source
+workerd accepts `limits.cpuMs` but does not enforce it**, and runs every loaded
+worker on the host worker's single thread, so locally a CPU-bound loop also
+stalls the host's own timers. The Node side is the local contract for that case:
+
+- The evaluation that looped returns `Timeout: Script execution exceeded
+  {timeout}ms` about 250ms after its timeout; the wedged host is then
+  SIGKILLed and the next `evaluate()` starts a fresh one (~1s cold start).
+- Any other evaluation in flight on that host fails with `WEDGED_HOST_ERROR`
+  (exported from `ai-evaluate/node`) rather than a transport error, and can be
+  retried.
+- `dispose()` while evaluations are in flight fails them with
+  `DISPOSED_HOST_ERROR`; the runtime is reusable afterwards.
+- Host startup never counts against `timeout`: both clocks start once the host
+  is ready.
+
+The backstop only exists on the Node side. When `evaluate()` from `ai-evaluate`
+is called directly inside a local workerd with a loader binding (e.g. under
+`@cloudflare/vitest-pool-workers`), a CPU-bound loop wedges that workerd until
+the process is restarted - there is nothing outside it to abort the request.
 
 When the environment has no `TEST` (ai-tests) binding, tests run on the worker's
 embedded vitest-compatible runner (`generateWorkerCode({ testRunner: 'embedded' })`);
@@ -495,7 +526,7 @@ console.log(result.value) // 7
 | Network Control | Configurable: allow, block, or allowlist |
 | No File System | Zero filesystem access |
 | Memory Limits | Standard Worker limits apply |
-| CPU Limits | Execution time bounded |
+| CPU Limits | `limits.cpuMs` bound to `timeout` on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts)) |
 
 ### Network Access Control
 

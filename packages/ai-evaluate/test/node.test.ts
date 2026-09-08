@@ -248,6 +248,128 @@ describe('ai-evaluate/node', () => {
       expect(after.value).toBe('alive')
     }, 20000)
 
+    describe('host recovery from a CPU-bound loop (Node backstop)', () => {
+      // Local workerd is single-threaded and enforces no CPU limit, so a
+      // `while(true){}` stalls the host worker's own AbortSignal.timeout. The
+      // Node side aborts the request at timeout + grace, SIGKILLs the host and
+      // starts a fresh one on the next call. These tests witness that contract
+      // for everything else that was on the host at the time (aip-263g.14).
+      const LOOP = 'while(true){}'
+      const SLOW = 'await new Promise((r) => setTimeout(r, 5000)); return "late"'
+
+      it('returns the timeout promptly: teardown of the wedged host is bounded', async () => {
+        const { createLocalRuntime } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          const result = await runtime.evaluate({ script: LOOP, timeout: 100 })
+          expect(result.success).toBe(false)
+          expect(result.error).toBe('Timeout: Script execution exceeded 100ms')
+          // timeout + 250ms grace + SIGKILL/close of the host - not a 5s hang
+          expect(result.duration).toBeLessThan(5000)
+        } finally {
+          await runtime.dispose()
+        }
+      }, 20000)
+
+      it('reports WEDGED_HOST_ERROR to an evaluation caught in flight, then recovers', async () => {
+        const { createLocalRuntime, WEDGED_HOST_ERROR } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          // A well-behaved async script is on the host when the loop lands.
+          // Its timer lives in the same wedged workerd, so it can only end
+          // when the host is killed out from under it.
+          const bystander = runtime.evaluate({ script: SLOW, timeout: 10000 })
+          await new Promise((r) => setTimeout(r, 100))
+          const loop = await runtime.evaluate({ script: LOOP, timeout: 100 })
+          expect(loop.success).toBe(false)
+          expect(loop.error).toMatch(/^Timeout/)
+
+          const caught = await bystander
+          expect(caught.success).toBe(false)
+          expect(caught.error).toBe(WEDGED_HOST_ERROR)
+          // Not the transport error the kill produces
+          expect(caught.error).not.toMatch(/fetch failed|ECONNRESET|socket/i)
+
+          const after = await runtime.evaluate({ script: 'return "alive"' })
+          expect(after.success).toBe(true)
+          expect(after.value).toBe('alive')
+        } finally {
+          await runtime.dispose()
+        }
+      }, 30000)
+
+      it('retires the wedged host once when several CPU-bound loops hit the backstop together', async () => {
+        const { createLocalRuntime, WEDGED_HOST_ERROR } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          const results = await Promise.all([
+            runtime.evaluate({ script: LOOP, timeout: 100 }),
+            runtime.evaluate({ script: 'for(;;){}', timeout: 100 }),
+            runtime.evaluate({ script: 'let i = 0; while(true) { i++ }', timeout: 100 }),
+          ])
+          for (const result of results) {
+            expect(result.success).toBe(false)
+            // Whichever backstop fires first retires the host; the others
+            // either hit their own backstop (Timeout) or are caught by the
+            // kill (WEDGED_HOST_ERROR). Never a bare transport error.
+            expect([`Timeout: Script execution exceeded 100ms`, WEDGED_HOST_ERROR]).toContain(
+              result.error
+            )
+          }
+          // Only the host that wedged was torn down: the replacement serves
+          // the next call, and it is not torn down by the late retire()s.
+          const after = await runtime.evaluate({ script: 'return "alive"' })
+          expect(after.success).toBe(true)
+          expect(after.value).toBe('alive')
+          const again = await runtime.evaluate({ script: 'return "still alive"' })
+          expect(again.value).toBe('still alive')
+          expect(again.duration).toBeLessThan(after.duration)
+        } finally {
+          await runtime.dispose()
+        }
+      }, 30000)
+
+      it('reports DISPOSED_HOST_ERROR to an evaluation in flight when the runtime is disposed', async () => {
+        const { createLocalRuntime, DISPOSED_HOST_ERROR } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          const slow = runtime.evaluate({ script: SLOW, timeout: 10000 })
+          await new Promise((r) => setTimeout(r, 100))
+          await runtime.dispose()
+          const result = await slow
+          expect(result.success).toBe(false)
+          expect(result.error).toBe(DISPOSED_HOST_ERROR)
+          // dispose() does not wait for the in-flight script's own 5s
+          expect(result.duration).toBeLessThan(4000)
+          // The runtime is reusable: the next call starts a fresh host
+          const after = await runtime.evaluate({ script: 'return "fresh"' })
+          expect(after.value).toBe('fresh')
+        } finally {
+          await runtime.dispose()
+        }
+      }, 20000)
+
+      it('does not count host startup against the timeout (cold start is not a timeout)', async () => {
+        const { createLocalRuntime } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          // Host startup (workerd spawn + loader) is well over 100ms; the
+          // backstop and the in-worker AbortSignal.timeout both start after
+          // the host is ready, so a trivial script with a small timeout passes.
+          const result = await runtime.evaluate({ script: 'return "cold"', timeout: 1000 })
+          expect(result.error).toBeUndefined()
+          expect(result.success).toBe(true)
+          expect(result.value).toBe('cold')
+        } finally {
+          await runtime.dispose()
+        }
+      }, 20000)
+    })
+
     it('times out a slow async script via the host worker AbortSignal.timeout', async () => {
       const { evaluate } = await import('../src/node.js')
 

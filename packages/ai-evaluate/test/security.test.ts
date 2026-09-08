@@ -158,39 +158,49 @@ describe('security', () => {
 
   describe('resource exhaustion', () => {
     describe('infinite loops with timeout', () => {
-      // Note: Synchronous infinite loops are hard to interrupt in JavaScript.
-      // The sandbox relies on workerd/Miniflare CPU time limits.
-      // These tests are skipped by default to avoid hanging CI.
+      // A synchronous loop cannot be interrupted from JS, and local workerd
+      // enforces no CPU limit (aip-263g.14). Locally the contract is the Node
+      // backstop in src/node.ts: the request is aborted at timeout + grace and
+      // the wedged host is replaced, so each case below also pays a fresh host
+      // start (~1s) for the next evaluation. On Cloudflare the loaded worker's
+      // `limits.cpuMs` (bound to `timeout`) ends the loop instead.
 
-      it.skip('terminates infinite while loop (manual test)', async () => {
+      it('terminates infinite while loop', async () => {
         const result = await evaluate({
           script: 'while(true){}',
-          timeout: 2000,
+          timeout: 500,
         })
         expect(result.success).toBe(false)
-        expect(result.error).toBeDefined()
-      }, 30000)
+        expect(result.error).toMatch(/^Timeout: Script execution exceeded 500ms/)
+      }, 20000)
 
-      it.skip('terminates infinite for loop (manual test)', async () => {
+      it('terminates infinite for loop', async () => {
         const result = await evaluate({
           script: 'for(;;){}',
-          timeout: 2000,
+          timeout: 500,
         })
         expect(result.success).toBe(false)
-        expect(result.error).toBeDefined()
-      }, 30000)
+        expect(result.error).toMatch(/^Timeout: Script execution exceeded 500ms/)
+      }, 20000)
 
-      it.skip('terminates busy loop (manual test)', async () => {
+      it('terminates busy loop', async () => {
         const result = await evaluate({
           script: `
             let i = 0;
             while(true) { i++; }
             return i;
           `,
-          timeout: 2000,
+          timeout: 500,
         })
         expect(result.success).toBe(false)
-      }, 30000)
+        expect(result.error).toMatch(/^Timeout: Script execution exceeded 500ms/)
+      }, 20000)
+
+      it('recovers: the next evaluation runs on a fresh host', async () => {
+        const result = await evaluate({ script: 'return "recovered"' })
+        expect(result.success).toBe(true)
+        expect(result.value).toBe('recovered')
+      }, 20000)
     })
 
     describe('memory bombs', () => {

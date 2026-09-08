@@ -1,7 +1,7 @@
 /**
- * ai-evaluate v2.3.0
+ * ai-evaluate v2.4.0
  * Static worker template for evaluate.workers.do
- * Generated: 2026-05-26T13:42:33.566Z
+ * Generated: 2026-09-08T14:20:32.133Z
  *
  * @license MIT
  */
