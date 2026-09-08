@@ -2,3 +2,4 @@ node_modules
 dist
 coverage
 .beads
+packages/ai-evaluate/src/transform-bundle.ts

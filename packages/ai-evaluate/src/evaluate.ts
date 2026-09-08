@@ -28,6 +28,7 @@ import {
   getExportNames,
 } from './worker-template/index.js'
 import { CAPNWEB_SOURCE } from './capnweb-bundle.js'
+import { transformOptions } from './transform.js'
 import {
   COMPATIBILITY_DATE,
   SANDBOX_URL,
@@ -192,7 +193,7 @@ export default {
  * ```
  */
 export async function evaluate(
-  options: EvaluateOptions,
+  rawOptions: EvaluateOptions,
   env?: SandboxEnv
 ): Promise<EvaluateResult> {
   const start = Date.now()
@@ -209,6 +210,11 @@ export async function evaluate(
         duration: Date.now() - start,
       }
     }
+
+    // JSX / TypeScript -> JavaScript here, in the worker that runs evaluate(),
+    // before any worker code is generated: the content id then hashes the
+    // source that actually runs, and local and production see the same bytes.
+    const options = transformOptions(rawOptions)
 
     // Use simple worker for basic script execution (no tests, no SDK)
     const useSimpleWorker = !options.tests && !options.sdk
