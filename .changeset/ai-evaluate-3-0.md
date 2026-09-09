@@ -80,12 +80,14 @@ below, is `packages/ai-evaluate/MIGRATION.md`.
 - `VERSION` exported from `ai-evaluate` and `ai-evaluate/static`, equal to
   the package version (2.x shipped `2.1.8` from a 2.4.0 package); kept in sync
   by `pnpm sync:version`, which the root `version-packages` script runs after
-  `changeset version`, and witnessed by `test/static.test.ts`.
+  `changeset version` and `pnpm build` runs first, and witnessed by
+  `test/static.test.ts`.
 - The runtime export list of `ai-evaluate` is documented under "Exports" in
   the README and pinned by `test/index.test.ts`.
 
-**Versioning:** `ai-evaluate` stays in the fixed changeset group, so the whole
-group goes to 3.0.0. The major is real for the group: `ai-functions` routes
-all dynamic code execution through `ai-evaluate`, and its Node fallback now
-needs Miniflare 5 - Node >= 22 - which every dependent inherits (see the
-`ai-functions` changeset and MIGRATION.md "Versioning").
+**Versioning:** `ai-evaluate` is removed from the fixed changeset group for
+this release, so only `ai-evaluate` goes to 3.0.0; packages that depend on it
+(`ai-functions`, `ai-primitives`) get the dependency-range bump and the fixed
+group moves by `ai-functions`' own minor. `ai-functions`' consumer-facing
+changes (`env.loader` only, Node >= 22 for the Node fallback) are recorded in
+its changeset and in MIGRATION.md "Versioning".

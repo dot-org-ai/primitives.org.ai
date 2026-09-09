@@ -1,8 +1,15 @@
 ---
-'ai-functions': major
+'ai-functions': minor
 ---
 
 ai-functions: `runInSandbox` follows ai-evaluate 3.0 - `env.loader` only, Node >= 22 for the Node fallback (aip-263g.12)
+
+Release decision (aip-263g.12, integrator): only `ai-evaluate` takes the 3.0.0
+major; it leaves the fixed changeset group so the other 17 packages are not
+cascaded to a new major. `ai-functions` therefore ships this under a minor,
+but the first two items below change behaviour for callers that used the
+`LOADER` / `TEST` aliases or ran the Node fallback on Node < 22 - read them
+as breaking for those callers.
 
 - **Breaking:** `runInSandbox(options, env)` - and so `DefinedFunction.call`
   and `generateAndRunCode` with an `env` - switches on `env.loader` only; the

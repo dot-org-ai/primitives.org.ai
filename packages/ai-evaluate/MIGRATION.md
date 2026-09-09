@@ -311,28 +311,34 @@ is under "Exports" in the README and pinned by `test/index.test.ts`.
 Deprecated (still present, warns once): `EvaluateOptions.imports`,
 `ReplSession.getContext()`.
 
-## Versioning: why every package in the group goes to 3.0.0
+## Versioning: only `ai-evaluate` goes to 3.0.0
 
-`.changeset/config.json` keeps `ai-evaluate` in the fixed version group with
-`ai-functions`, `ai-database`, `ai-workflows` and the other core packages, so
-`changeset version` bumps all of them to 3.0.0 together (as 2.4.0 cascaded
-from a minor). That is deliberate rather than an accident of the config: the
-major is real for the group, not only for `ai-evaluate`.
+`ai-evaluate` was in the fixed changeset group with `ai-functions`,
+`ai-database`, `ai-workflows` and the other core packages, so a major here
+would have cascaded all 18 of them to 3.0.0. The release decision (aip-263g.12)
+is the opposite: `.changeset/config.json` removes `ai-evaluate` from the fixed
+group, so `changeset version` bumps
+
+- `ai-evaluate` to **3.0.0**;
+- the packages that depend on it - `ai-functions` (`workspace:^`, published as
+  `^3.0.0`) and the `ai-primitives` umbrella (`workspace:*`) - by the dependency
+  range change plus their own changesets; the fixed group moves together with
+  `ai-functions` (a minor: `disposeSandbox()` and the `env.loader`-only
+  routing);
+- nothing else.
+
+What that means for `ai-functions` users, even though its version is not a
+new major:
 
 - `ai-functions` routes all dynamic code execution through `ai-evaluate`
   (ADR-0010). Its Node fallback (`runInSandbox` without an env) now needs
   Miniflare 5, so **`ai-functions` on Node requires Node >= 22**; the monorepo
-  root `engines.node` moved with it. Every package that depends on
-  `ai-functions` inherits that floor.
+  root `engines.node` moved with it.
 - `ai-functions`' `runInSandbox(options, env)` no longer honours `env.LOADER`
   / `env.TEST`; an env without `env.loader` takes the Node fallback.
-- A single version across the group is what the umbrella packages
-  (`ai-primitives`) and `workspace:^` ranges assume; splitting `ai-evaluate`
-  out would leave `ai-functions@2.x` depending on `ai-evaluate@^3` with the
-  Node 22 requirement hidden inside a patch.
 
-Packages in the group without a change of their own get an empty 3.0.0 entry
-("Updated dependencies"), as they did at 2.4.0.
+Both are stated in the `ai-functions` changeset so they appear in its
+CHANGELOG entry.
 
 ## Checklist
 

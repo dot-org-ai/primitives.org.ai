@@ -14,7 +14,7 @@
     "prepare-publish": "tsx scripts/prepare-publish.ts",
     "version-packages": "changeset version && pnpm --filter ai-evaluate sync:version",
     "publish-packages": "tsx scripts/publish.ts",
-    "release": "pnpm build && pnpm version-packages && pnpm publish-packages"
+    "release": "pnpm version-packages && pnpm build && pnpm publish-packages"
   },
   "devDependencies": {
     "@org.ai/config": "workspace:*",
