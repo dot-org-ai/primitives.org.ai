@@ -1,5 +1,14 @@
 # @org.ai/examples
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [d574ed8]
+- Updated dependencies [b2c1c83]
+  - ai-functions@2.5.0
+  - ai-providers@2.5.0
+
 ## 0.0.3
 
 ### Patch Changes

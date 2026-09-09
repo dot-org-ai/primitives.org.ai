@@ -1,5 +1,15 @@
 # ai-props
 
+## 2.5.0
+
+### Patch Changes
+
+- Updated dependencies [d574ed8]
+- Updated dependencies [b2c1c83]
+  - ai-functions@2.5.0
+  - ai-providers@2.5.0
+  - language-models@2.5.0
+
 ## 2.4.0
 
 ### Patch Changes
