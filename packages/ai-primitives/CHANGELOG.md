@@ -1,5 +1,45 @@
 # ai-primitives
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [d574ed8]
+- Updated dependencies [3111c86]
+- Updated dependencies [b97d038]
+- Updated dependencies [9ba30c2]
+- Updated dependencies [eb9ec75]
+- Updated dependencies [2d48c58]
+- Updated dependencies [b907460]
+- Updated dependencies [0f7dd9e]
+- Updated dependencies [21a77e7]
+- Updated dependencies [bd4697a]
+- Updated dependencies [5c4c588]
+- Updated dependencies [815a9ce]
+- Updated dependencies [aef9570]
+- Updated dependencies [fbad990]
+- Updated dependencies [db0ede1]
+- Updated dependencies [f9a8899]
+- Updated dependencies [93803c4]
+- Updated dependencies [d574ed8]
+- Updated dependencies [b2c1c83]
+  - ai-evaluate@3.0.0
+  - ai-functions@2.5.0
+  - ai-database@2.5.0
+  - ai-experiments@2.5.0
+  - ai-props@2.5.0
+  - autonomous-agents@2.5.0
+  - business-as-code@2.5.0
+  - digital-products@2.5.0
+  - digital-tasks@2.5.0
+  - digital-tools@2.5.0
+  - digital-workers@2.5.0
+  - human-in-the-loop@2.5.0
+  - services-as-software@2.5.0
+  - ai-workflows@2.5.0
+  - ai-providers@2.5.0
+  - language-models@2.5.0
+
 ## 2.0.1
 
 ### Patch Changes

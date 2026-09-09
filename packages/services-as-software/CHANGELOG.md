@@ -1,5 +1,18 @@
 # services-as-software
 
+## 2.5.0
+
+### Patch Changes
+
+- Updated dependencies [d574ed8]
+- Updated dependencies [b2c1c83]
+  - ai-functions@2.5.0
+  - ai-database@2.5.0
+  - business-as-code@2.5.0
+  - digital-tools@2.5.0
+  - digital-workers@2.5.0
+  - language-models@2.5.0
+
 ## 2.4.0
 
 ### Patch Changes
