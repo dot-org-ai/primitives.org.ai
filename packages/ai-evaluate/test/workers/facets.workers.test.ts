@@ -276,7 +276,7 @@ describe('facets (workerd, SandboxHost Durable Object)', () => {
     expect((await evaluate(counter(b, { isolation: 'cached' }), env)).value).toBe(2)
   })
 
-  it('the script worker id differs per sandboxId (sandbox.json) and is stable within one; the facet worker id does not', async () => {
+  it('both worker ids differ per sandboxId (sandbox.json) and are stable within one', async () => {
     const a = sandbox()
     const [first, again, other] = await Promise.all([
       buildWorkerCodeWithWarnings(counter(a)),
@@ -288,9 +288,38 @@ describe('facets (workerd, SandboxHost Durable Object)', () => {
     })
     expect(workerCodeId(first.code)).toBe(workerCodeId(again.code))
     expect(workerCodeId(first.code)).not.toBe(workerCodeId(other.code))
-    // The facet worker is content-addressed on the module alone
-    expect(first.facet!.spec.code.modules).not.toHaveProperty(SANDBOX_JSON_MODULE)
-    expect(first.facet!.spec.codeId).toBe(other.facet!.spec.codeId)
+    // The facet worker carries the sandbox identity too (aip-lrjh.5)
+    expect(first.facet!.spec.code.modules[SANDBOX_JSON_MODULE]).toEqual({
+      json: { sandboxId: a, facet: 'State' },
+    })
+    expect(first.facet!.spec.codeId).toBe(again.facet!.spec.codeId)
+    expect(first.facet!.spec.codeId).not.toBe(other.facet!.spec.codeId)
+  })
+
+  // aip-lrjh.5: the facet worker is loader.get(codeId) and its env is not
+  // hashed, so before the fix tenants b and c read tenant a's env from their
+  // own facets (witnessed 'tenant-a' three times).
+  it('a facet sees its own sandbox env, not the env of the sandbox that first attached the module', async () => {
+    const module = `
+      import { DurableObject } from 'cloudflare:workers'
+      export class State extends DurableObject { who() { return this.env.WHO ?? null } }
+    `
+    const who = async (tenant: string) =>
+      evaluate(
+        {
+          module,
+          script: 'return await env.STATE.who()',
+          facet: { class: 'State' },
+          sandboxId: `${tenant}-${crypto.randomUUID()}`,
+          env: { WHO: tenant },
+        },
+        env
+      )
+    const a = await who('tenant-a')
+    expect(a.success, a.error).toBe(true)
+    expect(a.value).toBe('tenant-a')
+    expect((await who('tenant-b')).value).toBe('tenant-b')
+    expect((await who('tenant-c')).value).toBe('tenant-c')
   })
 
   it('fetch: false applies to facet code too', async () => {

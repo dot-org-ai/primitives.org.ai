@@ -268,7 +268,7 @@ interface EvaluateOptions {
   tests?: string // Vitest-style test code
   script?: string // Script to execute
   timeout?: number // Default: 5000ms, max: 60000ms (wall clock)
-  limits?: { cpuMs?: number; subrequests?: number } // Runtime-enforced limits (see below)
+  limits?: { cpuMs?: number; subRequests?: number } // Runtime-enforced limits (see below)
   tails?: unknown[] // Tail workers receiving trace events (see below)
   compatibilityFlags?: string[] // e.g. ['nodejs_compat'] (default: none)
   compatibilityDate?: string // YYYY-MM-DD (default: the package's COMPATIBILITY_DATE)
@@ -285,7 +285,7 @@ interface EvaluateOptions {
 
 Every option is validated at the top of `evaluate()` (`validateOptions`):
 sizes, `timeout`, `limits`, `compatibilityFlags`, `compatibilityDate`, `tails`,
-`dependencies` and `imports` are checked before anything is transformed or loaded, and a
+`dependencies`, `imports`, `fetch`, `isolation`, `outboundRpc` and `jsx` are checked before anything is transformed or loaded, and a
 `ValidationError` comes back as an error result (`success: false`, `error`
 naming the option). What the loaded worker answers is checked too
 (`assertEvaluateResult`): a response that is not a well-formed `EvaluateResult`
@@ -298,7 +298,7 @@ These map directly onto the Dynamic Workers spec the loader receives:
 | Option               | Where it lands                                                 | Content-addressed?                                      |
 | -------------------- | -------------------------------------------------------------- | ------------------------------------------------------- |
 | `limits.cpuMs`       | `WorkerCode.limits` (as given) and the entrypoint's CPU budget | yes (the spec's `limits`; the entrypoint budget is not) |
-| `limits.subrequests` | `WorkerCode.limits`                                            | yes                                                     |
+| `limits.subRequests` | `WorkerCode.limits`                                            | yes                                                     |
 | `compatibilityFlags` | `WorkerCode.compatibilityFlags` (default `[]`)                 | yes                                                     |
 | `compatibilityDate`  | `WorkerCode.compatibilityDate` (default `COMPATIBILITY_DATE`)  | yes                                                     |
 | `tails`              | `WorkerCode.tails` (the same array)                            | no - a runtime binding                                  |
@@ -307,7 +307,7 @@ These map directly onto the Dynamic Workers spec the loader receives:
 await evaluate(
   {
     script: 'console.log("hi"); return Buffer.from("hi").toString("base64")',
-    limits: { cpuMs: 50, subrequests: 2 }, // CPU and outbound-request caps, enforced by the runtime
+    limits: { cpuMs: 50, subRequests: 2 }, // CPU and outbound-request caps, enforced by the runtime
     compatibilityFlags: ['nodejs_compat'], // Buffer, process, node: builtins
     tails: [env.TAIL], // a tail worker: gets console output, exceptions, outcome
   },
@@ -333,8 +333,10 @@ usual tail worker.
 ### Sandbox env: `env` and `bindings`
 
 The loaded worker's `env` is an explicit allowlist, so a host binding can never
-leak into the isolate by accident. `module`, `tests` and `script` all see it as
-a frozen `env` object:
+leak into the isolate by accident. `tests` and `script` see it as a frozen
+`env` object; `module` code runs at module scope, before any request, and
+does not see `env` (a `ReferenceError`) - pass values in from `script` /
+`tests` as arguments:
 
 ```typescript
 await evaluate(
@@ -408,7 +410,7 @@ await evaluate({ ...options, sandboxId: 'user-43' }, env) // value: 1 - isolated
 
 How it is wired (see `src/facets.ts`): `evaluate()` builds a second,
 content-addressed **facet worker** from `module` and its imports (no script,
-no capnweb) and attaches it to `ctx.exports.SandboxHost.getByName(sandboxId)`;
+no capnweb; the module plus the sandbox identity) and attaches it to `ctx.exports.SandboxHost.getByName(sandboxId)`;
 the Durable Object loads it through its own `loader` binding and starts the
 facet on the first call (`ctx.facets.get`). The facet stub never leaves the
 Durable Object - workerd does not serialize facet stubs, nor a dynamic
@@ -424,12 +426,15 @@ host's loader, outside the outbound policy. The facet keeps running across evalu
 module (in-memory state included); a changed module restarts it on the new
 class with its SQLite storage kept. Outbound policy applies to facet code
 too (`fetch: false`, an allowlist), except `outboundRpc`, which is
-per-evaluation and does not serve a facet that outlives it. Under
-`isolation: 'cached'` the script worker is cached per sandbox: `sandboxId` and
-the facet class are part of its content-addressed spec (the `sandbox.json`
-module), so a reused isolate - whose env holds one sandbox's `SandboxHost`
-stub - is never handed another sandbox's script, and `user-43` above gets
-`value: 1` under `'cached'` as well.
+per-evaluation and does not serve a facet that outlives it. Both workers
+carry the sandbox identity in their content-addressed spec (the
+`sandbox.json` module: `sandboxId` and the facet class). For the script
+worker that keeps a `'cached'` isolate - whose env holds one sandbox's
+`SandboxHost` stub - from being handed another sandbox's script, so `user-43`
+above gets `value: 1` under `'cached'` as well. For the facet worker, which is
+always `loader.get` so the class stays hot, it means one facet isolate per
+sandbox: the `env` and `bindings` a facet class sees are its own sandbox's,
+never those of whichever sandbox first attached the module.
 
 `ai-evaluate/node` has the `SandboxHost` on its Miniflare host, with
 in-memory storage that lives as long as that host. In your own Worker,
@@ -446,7 +451,7 @@ spec into an isolate:
 | `isolation`         | Loader call                               | When                                                                                                                                                                                       |
 | ------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `'fresh'` (default) | `loader.load(spec)`                       | A new, uncached isolate every call: nothing at module scope survives between evaluations, so identical calls return identical results.                                                     |
-| `'cached'`          | `loader.get(workerCodeId(spec), factory)` | Identical specs share one isolate, and its module-scope state. Dynamic Workers are billed per unique worker per day, so this is the opt-in cost control for code that is safe to re-enter. |
+| `'cached'`          | `loader.get(workerCodeId(spec), factory)` | Identical specs share one isolate, and its module-scope state. Dynamic Workers are billed per unique worker per day, so this is the opt-in cost control for code that is safe to re-enter. The isolate keeps the `env`, `bindings` and `tails` of the call that loaded it (none is part of the id): a later call with the same spec but other values is served by that isolate, and its own values are ignored. Do not pass per-caller secrets or stubs with `'cached'`. |
 
 `workerCodeId(spec)` content-addresses the spec - `mainModule`, `modules`,
 `compatibilityDate`, `compatibilityFlags`, `allowExperimental`, `limits`, and
@@ -919,7 +924,7 @@ console.log(result.value) // 7
 | No File System    | Zero filesystem access                                                                                                                                                                                                                                                                                                                                                    |
 | Memory Limits     | Standard Worker limits apply                                                                                                                                                                                                                                                                                                                                              |
 | CPU Limits        | `limits.cpuMs` (default: `timeout`) - the runtime throws out of a CPU-bound loop on Cloudflare; Node-side backstop locally (see [Timeouts and CPU-bound scripts](#timeouts-and-cpu-bound-scripts))                                                                                                                                                                        |
-| Subrequest Limits | `limits.subrequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility))                                                                                                                                                                                               |
+| Subrequest Limits | `limits.subRequests` caps outbound requests (fetch and binding calls) per evaluation on Cloudflare (see [Limits, tails and compatibility](#limits-tails-and-compatibility))                                                                                                                                                                                               |
 | Input Validation  | `validateOptions` rejects oversized sources, malformed `timeout` / `limits` / compatibility settings / `tails` / `dependencies` / `imports` before anything runs; `assertEvaluateResult` checks the worker's response shape                                                                                                                                               |
 | Dependencies      | `dependencies` come from the npm registry via `@cloudflare/worker-bundler` (esm.sh only as fallback); `imports` accept bare package names and http(s) URLs only (`file:` and other schemes are rejected)                                                                                                                                                                  |
 
@@ -957,6 +962,12 @@ and no `__originalFetch__` in module scope for the sandboxed code to reach
 | `true` / absent  | inherited (the host's)                  | -                                                                    |
 | `false` / `null` | `null`                                  | workerd's own "not permitted to access the internet"                 |
 | `string[]`       | the host's `OutboundGateway` entrypoint | `Network access blocked: domain not in allowlist. Attempted: <host>` |
+
+Patterns match the hostname only (any scheme or port); `*.example.com` admits
+every subdomain and `example.com` itself. The gateway forwards with
+`redirect: 'manual'`, so a redirect from an allowlisted host is followed by
+the sandbox's own `fetch()` - through the gateway again - never by the
+gateway: the allowlist applies to every hop.
 
 An allowlist (and `outboundRpc`) is served by the **`OutboundGateway`
 entrypoint of the host worker** - the Worker that calls `evaluate()`. Its main

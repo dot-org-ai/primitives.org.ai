@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   matchesDomainPattern,
   isDomainAllowed,
@@ -131,6 +131,24 @@ describe('outbound gateway (src/outbound.ts)', () => {
       expect(response.status).toBe(200)
       expect(await response.text()).toBe('upstream a.com')
       expect(forwarded).toEqual(['GET https://a.com/x'])
+    })
+
+    it('forwards with redirect: manual by default, so the gateway never follows a redirect itself', async () => {
+      const seen: Request[] = []
+      const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        seen.push(input as Request)
+        return new Response(null, { status: 302, headers: { location: 'https://evil.com/' } })
+      })
+      try {
+        const gateway = createOutboundGateway(['a.com'])
+        const response = await gateway.fetch(new Request('https://a.com/r', { redirect: 'follow' }))
+        expect(response.status).toBe(302)
+        expect(seen).toHaveLength(1)
+        expect(seen[0]!.redirect).toBe('manual')
+        expect(seen[0]!.url).toBe('https://a.com/r')
+      } finally {
+        spy.mockRestore()
+      }
     })
 
     it('accepts a URL string with init, like fetch', async () => {

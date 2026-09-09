@@ -553,9 +553,10 @@ export interface BuiltWorkerCode {
  *
  * With `facet`, a second spec is built from the same plan: the facet worker
  * (`generateFacetWorkerCode` - the module and its imports exporting the
- * class, no script, no capnweb), content-addressed on its own so it changes
- * only when the module does. It gets the sandbox env (no `TEST`, no host
- * stub) and the same outbound policy minus any `outboundRpc` interceptor,
+ * class, no script, no capnweb), content-addressed on the module plus the
+ * sandbox identity (`sandbox.json`), so it changes only when the module does
+ * and is never shared between sandboxes. It gets the sandbox env (no `TEST`,
+ * no host stub) and the same outbound policy minus any `outboundRpc` interceptor,
  * which is registered per evaluation and cannot serve a facet that outlives
  * it. The script worker's env additionally carries the `SandboxHost` stub
  * for `sandboxId` under `SANDBOX_HOST_BINDING_KEY`, which the generated
@@ -665,8 +666,9 @@ export async function buildWorkerCodeWithWarnings(
     : null
   const facetResolved = facetEntry ? await assemble(facetEntry, {}) : null
 
-  // The outbound policy, last: registering the interceptor is the one side
-  // effect of this build, and nothing after it can throw.
+  // The outbound policy: registering the interceptor is the one side effect
+  // of this build; the facet block below runs after it and releases the
+  // registration if it throws.
   let globalOutbound: null | unknown = null
   let facetOutbound: null | unknown = null
   let outboundModule: Record<string, WorkerModule> = {}
@@ -693,34 +695,50 @@ export async function buildWorkerCodeWithWarnings(
   let built: BuiltWorkerCode['facet']
   let scriptEnv: Record<string, unknown> = loaderEnv
   let sandboxModule: Record<string, WorkerModule> = {}
-  if (facetOptions && sandboxHosts && facetResolved) {
-    // `sandboxId` is required with `facet` by validateOptions
-    const sandboxId = options.sandboxId ?? ''
-    const host = sandboxHosts.getByName(sandboxId)
-    // The sandbox identity goes into the script worker's spec: the host stub
-    // is a binding, outside the content-addressed id, and this is what keeps
-    // a 'cached' isolate from serving another sandbox (SANDBOX_JSON_MODULE).
-    sandboxModule = {
-      [SANDBOX_JSON_MODULE]: { json: { sandboxId, facet: facetOptions.class } },
+  try {
+    if (facetOptions && sandboxHosts && facetResolved) {
+      // `sandboxId` is required with `facet` by validateOptions
+      const sandboxId = options.sandboxId ?? ''
+      const host = sandboxHosts.getByName(sandboxId)
+      // The sandbox identity goes into the script worker's spec: the host stub
+      // is a binding, outside the content-addressed id, and this is what keeps
+      // a 'cached' isolate from serving another sandbox (SANDBOX_JSON_MODULE).
+      sandboxModule = {
+        [SANDBOX_JSON_MODULE]: { json: { sandboxId, facet: facetOptions.class } },
+      }
+      const facetCode: WorkerCode = {
+        mainModule: facetResolved.mainModule,
+        // sandbox.json here too: the facet worker is always loader.get(codeId)
+        // and its env is not hashed, so without it the isolate loaded for the
+        // first sandbox - with that sandbox's env and bindings - would serve every
+        // later sandbox attaching the same module (aip-lrjh.5). One facet
+        // isolate per sandbox, hot across its evaluations while only the script
+        // changes.
+        modules: {
+          ...facetResolved.modules,
+          ...packageJson,
+          ...facetOutboundModule,
+          ...sandboxModule,
+        },
+        ...spec,
+        globalOutbound: facetOutbound,
+        env,
+      }
+      built = {
+        host,
+        name: facetOptions.class,
+        spec: {
+          code: facetCode,
+          codeId: workerCodeId(facetCode),
+          className: facetOptions.class,
+          ...(facetOptions.id !== undefined && { id: facetOptions.id }),
+        },
+      }
+      scriptEnv = { ...loaderEnv, [SANDBOX_HOST_BINDING_KEY]: host }
     }
-    const facetCode: WorkerCode = {
-      mainModule: facetResolved.mainModule,
-      modules: { ...facetResolved.modules, ...packageJson, ...facetOutboundModule },
-      ...spec,
-      globalOutbound: facetOutbound,
-      env,
-    }
-    built = {
-      host,
-      name: facetOptions.class,
-      spec: {
-        code: facetCode,
-        codeId: workerCodeId(facetCode),
-        className: facetOptions.class,
-        ...(facetOptions.id !== undefined && { id: facetOptions.id }),
-      },
-    }
-    scriptEnv = { ...loaderEnv, [SANDBOX_HOST_BINDING_KEY]: host }
+  } catch (error) {
+    release()
+    throw error
   }
 
   return {

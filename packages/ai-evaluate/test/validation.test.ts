@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   validateOptions,
   ValidationError,
+  isReservedModuleName,
+  isFetchConfig,
   MAX_SCRIPT_SIZE,
   MAX_IMPORTS,
   MAX_TIMEOUT,
@@ -96,6 +98,58 @@ describe('validation', () => {
         expect(() =>
           validateOptions({ script: 'return 1', fetch: ['a.test'], isolation: 'cached' })
         ).not.toThrow()
+      })
+    })
+
+    // Integration review (aip-263g): a malformed fetch must not fail open, and
+    // isolation / outboundRpc / jsx are checked like every other option.
+    describe('fetch, isolation, outboundRpc and jsx validation', () => {
+      it('accepts every FetchConfig form', () => {
+        for (const fetch of [true, false, null, [], ['a.com', '*.b.com']]) {
+          expect(() => validateOptions({ script: 'return 1', fetch })).not.toThrow()
+          expect(isFetchConfig(fetch)).toBe(true)
+        }
+      })
+
+      it('rejects a string, an object, or a list with a non-host entry (fail closed, not open)', () => {
+        for (const fetch of ['a.com', {}, [''], ['a.com', 1], ['a b.com']]) {
+          expect(() =>
+            validateOptions({ script: 'return 1', fetch: fetch as unknown as string[] })
+          ).toThrow('fetch must be true, false, null or an array of host patterns')
+          expect(isFetchConfig(fetch)).toBe(false)
+        }
+      })
+
+      it('rejects an isolation other than fresh or cached (aip-263g.38)', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', isolation: 'shared' as unknown as 'fresh' })
+        ).toThrow("isolation must be 'fresh' or 'cached'")
+      })
+
+      it('rejects a non-function outboundRpc and a non-object jsx', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc: 'x' as unknown as () => null })
+        ).toThrow('outboundRpc must be a function')
+        expect(() =>
+          validateOptions({ script: 'return 1', jsx: 'h' as unknown as object })
+        ).toThrow('jsx must be an object')
+        expect(() => validateOptions({ script: 'return 1', jsx: { factory: 'h' } })).not.toThrow()
+      })
+    })
+
+    describe('reserved module names', () => {
+      it('include every json module the generated worker owns', () => {
+        for (const name of [
+          'worker.js',
+          'capnweb.js',
+          'package.json',
+          'outbound.json',
+          'sandbox.json',
+          '__external_0__.js',
+        ]) {
+          expect(isReservedModuleName(name), name).toBe(true)
+        }
+        expect(isReservedModuleName('helper.js')).toBe(false)
       })
     })
 
@@ -326,7 +380,7 @@ describe('validation', () => {
     // aip-263g.5: Dynamic Workers limits, compatibility settings and tails
     describe('limits validation', () => {
       it('accepts positive limits', () => {
-        expect(() => validateOptions({ limits: { cpuMs: 50, subrequests: 2 } })).not.toThrow()
+        expect(() => validateOptions({ limits: { cpuMs: 50, subRequests: 2 } })).not.toThrow()
         expect(() => validateOptions({ limits: {} })).not.toThrow()
         expect(() => validateOptions({ limits: undefined })).not.toThrow()
       })
@@ -348,11 +402,19 @@ describe('validation', () => {
         )
       })
 
-      it('rejects a non-positive or fractional subrequests', () => {
-        expect(() => validateOptions({ limits: { subrequests: 0 } })).toThrow(ValidationError)
-        expect(() => validateOptions({ limits: { subrequests: 1.5 } })).toThrow(
-          'limits.subrequests must be an integer'
+      it('rejects a non-positive or fractional subRequests', () => {
+        expect(() => validateOptions({ limits: { subRequests: 0 } })).toThrow(ValidationError)
+        expect(() => validateOptions({ limits: { subRequests: 1.5 } })).toThrow(
+          'limits.subRequests must be an integer'
         )
+      })
+
+      // aip-263g.35: workerd's field is subRequests; the lowercase key would be
+      // accepted by the loader and silently ignored
+      it('rejects the misspelled limits.subrequests instead of dropping it', () => {
+        expect(() =>
+          validateOptions({ limits: { subrequests: 2 } as unknown as { subRequests: number } })
+        ).toThrow('limits.subrequests is not a Dynamic Workers limit; use limits.subRequests')
       })
 
       it('rejects non-object limits', () => {

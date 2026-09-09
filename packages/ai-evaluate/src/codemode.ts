@@ -84,6 +84,7 @@ const PAUSE_SENTINEL = '__CODEMODE_PAUSE__'
  * namespace becomes a `const` in the same scope.
  */
 const RESERVED_NAMES = new Set([
+  '__proto__',
   '__codemodeCall',
   '__codemodeFetch',
   '__codemodeTools',
@@ -261,7 +262,7 @@ export function sanitizeToolName(name: string): string {
   let sanitized = name.replace(/[-.\s]/g, '_').replace(/[^a-zA-Z0-9_$]/g, '')
   if (!sanitized) return '_'
   if (/^[0-9]/.test(sanitized)) sanitized = `_${sanitized}`
-  if (JS_RESERVED.has(sanitized)) sanitized = `${sanitized}_`
+  if (JS_RESERVED.has(sanitized) || sanitized === '__proto__') sanitized = `${sanitized}_`
   return sanitized
 }
 
@@ -458,7 +459,9 @@ export function createDispatcher(
         if (marker?.control === 'error') return Response.json({ error: String(marker.message) })
         return Response.json({ result: outcome })
       }
-      const fn = entry.fns[tool]
+      // Own names only: `constructor`, `toString` and the rest of
+      // Object.prototype are not tools
+      const fn = Object.hasOwn(entry.fns, tool) ? entry.fns[tool] : undefined
       if (!fn) return notFound()
       return Response.json({ result: await fn(...args) })
     } catch (error) {

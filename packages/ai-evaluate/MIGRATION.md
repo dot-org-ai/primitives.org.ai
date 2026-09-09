@@ -171,13 +171,18 @@ await evaluate({ script, isolation: 'cached' }, env)
 `generateSandboxId(code)` is replaced by `workerCodeId(spec: WorkerCode)`,
 which hashes the whole spec (modules, compatibility date and flags, limits,
 whether outbound is blocked); `env`, `tails` and a `globalOutbound` service
-never change the id.
+never change the id. The consequence under `'cached'`: the isolate keeps the
+`env`, `bindings` and `tails` of the call that loaded it, and a later call with
+the same spec but other values is served by that isolate with its own values
+ignored. Do not pass per-caller secrets or stubs with `'cached'`.
 
 ### 5. The sandbox `env` is an explicit allowlist
 
 `EvaluateOptions.env` was documented as environment variables but never
 reached the sandbox. It now does - as a frozen `env` object visible to
-`module`, `tests` and `script` - and it is **strings only**. Everything else
+`tests` and `script` (`module` code runs at module scope, before any request,
+and does not see `env`; pass values in as arguments) - and it is **strings
+only**. Everything else
 goes in the new `bindings`:
 
 | Option     | Accepts                                                                                            | Rejected (`ValidationError`, as an error result)              |
@@ -277,7 +282,7 @@ All of these reach the Dynamic Workers spec the loader receives.
 
 | Option               | What                                                                                                                                               | Content-addressed? |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| `limits`             | `{ cpuMs?, subrequests? }` enforced by Cloudflare (accepted, not enforced, by local workerd); `cpuMs` defaults to `timeout`                         | yes                |
+| `limits`             | `{ cpuMs?, subRequests? }` (`subRequests` in camel case, as workerd spells it; `subrequests` is rejected) enforced by Cloudflare (accepted, not enforced, by local workerd); `cpuMs` defaults to `timeout`                         | yes                |
 | `tails`              | tail workers (service bindings with a `tail()` handler) receiving the loaded worker's trace events; needs a live loader                            | no                 |
 | `compatibilityFlags` | e.g. `['nodejs_compat']` (default none)                                                                                                            | yes                |
 | `compatibilityDate`  | `YYYY-MM-DD` (default `COMPATIBILITY_DATE`, `2026-01-01`)                                                                                           | yes                |

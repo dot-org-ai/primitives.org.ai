@@ -134,6 +134,27 @@ describe('resolveImports', () => {
     expect((calls[1]!.options.files as FileSystem).read(BUNDLER_ENTRY)).toContain('[3]')
   })
 
+  it("the shared install carries node_modules only: one build cannot read another build's files", async () => {
+    const { createWorker, calls } = fakeRegistryBundler()
+    await resolveImports({
+      entry: ENTRY,
+      dependencies: LODASH,
+      files: { 'helper.js': 'export const secret = "tenant-a"' },
+      createWorker,
+    })
+    await resolveImports({
+      entry: ENTRY.replace('[1, 2]', '[3]'),
+      dependencies: LODASH,
+      createWorker,
+    })
+    const second = calls[1]!.options.files as FileSystem
+    expect(calls[1]!.hadNodeModules).toBe(true)
+    expect(second.read('helper.js')).toBeNull()
+    expect(second.list()).not.toContain('helper.js')
+    // ... and the first build's package.json / entry did not leak either
+    expect(second.read(BUNDLER_ENTRY)).toContain('[3]')
+  })
+
   it('different dependency versions install separately', async () => {
     const { createWorker, calls } = fakeRegistryBundler()
     await resolveImports({ entry: ENTRY, dependencies: { lodash: '4.17.21' }, createWorker })

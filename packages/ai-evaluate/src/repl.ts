@@ -25,6 +25,8 @@
  */
 
 import type { EvaluateOptions, EvaluateResult, SandboxEnv, SDKConfig } from './types.js'
+import { isIdentifier } from './facets.js'
+import { ValidationError } from './validation.js'
 
 /** The facet class that holds a session's variables */
 export const REPL_FACET_CLASS = 'ReplState'
@@ -512,6 +514,10 @@ export async function createReplSession(
     },
 
     setContext(key: string, value: unknown): void {
+      // The key is interpolated into every later chunk as `let <key> = ...`
+      if (!isIdentifier(key)) {
+        throw new ValidationError(`setContext key must be a JavaScript identifier: ${key}`)
+      }
       pending.set(key, value)
     },
 

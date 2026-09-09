@@ -123,7 +123,9 @@ export function blockedHostError(url: string): Error {
  * `isDomainAllowed` - `null` means no restriction - and forwards allowed
  * requests to `upstream` (the host worker's own `fetch` by default). A
  * blocked request rejects with `blockedHostError`, so the sandbox's `fetch()`
- * throws rather than receiving a response.
+ * throws rather than receiving a response. The default `upstream` forwards
+ * with `redirect: 'manual'`, so a redirect is followed by the sandbox (through
+ * the gateway again), never by the gateway.
  *
  * The interceptor sees a clone of a request that has a body, so a request it
  * declines can still be forwarded.
@@ -131,7 +133,11 @@ export function blockedHostError(url: string): Error {
 export function createOutboundGateway(
   allowlist: readonly string[] | null,
   outboundRpc?: OutboundInterceptor,
-  upstream: (request: Request) => Promise<Response> = (request) => fetch(request)
+  upstream: (request: Request) => Promise<Response> = (request) =>
+    // Never follow a redirect here: an allowlisted host could 3xx to a blocked
+    // one. The 3xx goes back to the sandbox, whose own `fetch()` follows it
+    // through this gateway again, so the allowlist applies to every hop.
+    fetch(new Request(request, { redirect: 'manual' }))
 ): OutboundGateway {
   const hosts = allowlist === null ? null : [...allowlist]
   return {

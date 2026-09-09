@@ -139,6 +139,16 @@ export class MemoryFiles implements FileSystem {
     for (const path of this.files.keys()) if (path.startsWith(prefix)) return true
     return false
   }
+
+  /**
+   * A new, base-less layer holding only this layer's files under `prefix`:
+   * what one build installed, without that build's own sources.
+   */
+  layer(prefix: string): MemoryFiles {
+    const seed: Record<string, string> = {}
+    for (const [path, content] of this.files) if (path.startsWith(prefix)) seed[path] = content
+    return new MemoryFiles(null, seed)
+  }
 }
 
 function decodeUtf8(bytes: Uint8Array): string {
@@ -258,9 +268,12 @@ export async function resolveImports(options: ResolveImportsOptions): Promise<Re
     externals: ['cloudflare:workers', ...externals],
   })
 
-  // First build for these dependencies: keep what it installed as the base
-  // for the next one. Later builds write only their sources on top.
-  if (!installed && fs.hasOwn('node_modules/')) installedCache.set(depsKey, fs)
+  // First build for these dependencies: keep what it installed - only
+  // node_modules, never this build's entry, package.json or `files` - as the
+  // base for the next one, which writes its own sources on top.
+  if (!installed && fs.hasOwn('node_modules/')) {
+    installedCache.set(depsKey, fs.layer('node_modules/'))
+  }
 
   const resolved: ResolvedImports = {
     mainModule: result.mainModule,

@@ -4,10 +4,15 @@
  * Validates options to prevent resource exhaustion and provide clear error messages.
  */
 
-import type { EvaluateOptions } from './types.js'
+import type { EvaluateOptions, FetchConfig } from './types.js'
 import { isPackageName, parseImportSpecifier, PACKAGE_JSON_MODULE } from './shared.js'
 import { OUTBOUND_JSON_MODULE, OUTBOUND_RPC_CACHED_ERROR } from './outbound.js'
-import { SANDBOX_HOST_BINDING_KEY, facetBindingName, isIdentifier } from './facets.js'
+import {
+  SANDBOX_HOST_BINDING_KEY,
+  SANDBOX_JSON_MODULE,
+  facetBindingName,
+  isIdentifier,
+} from './facets.js'
 
 /**
  * The key under which the ai-tests service binding is handed to the loaded
@@ -55,8 +60,8 @@ const COMPATIBILITY_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 /**
  * Whether a module name is one the generated worker uses itself, and so is
  * not available to `options.modules`: the entry, the capnweb sibling, the
- * two json modules of the content-addressed spec, and the prefetched URL
- * imports.
+ * json modules of the content-addressed spec (package, outbound, sandbox
+ * identity), and the prefetched URL imports.
  */
 export function isReservedModuleName(name: string): boolean {
   return (
@@ -64,7 +69,17 @@ export function isReservedModuleName(name: string): boolean {
     name === 'capnweb.js' ||
     name === PACKAGE_JSON_MODULE ||
     name === OUTBOUND_JSON_MODULE ||
+    name === SANDBOX_JSON_MODULE ||
     /^__external_\d+__\.js$/.test(name)
+  )
+}
+
+/** Whether `value` is a well-formed `FetchConfig`: a boolean, null, or host patterns */
+export function isFetchConfig(value: unknown): value is FetchConfig {
+  if (value === null || typeof value === 'boolean') return true
+  return (
+    Array.isArray(value) &&
+    value.every((host) => typeof host === 'string' && host.length > 0 && !/\s/.test(host))
   )
 }
 
@@ -112,19 +127,52 @@ export function validateOptions(options: EvaluateOptions): void {
     throw new ValidationError(OUTBOUND_RPC_CACHED_ERROR)
   }
 
+  // Any other value would silently take the cached path (aip-263g.38)
+  if (
+    options.isolation !== undefined &&
+    options.isolation !== 'fresh' &&
+    options.isolation !== 'cached'
+  ) {
+    throw new ValidationError("isolation must be 'fresh' or 'cached'")
+  }
+
+  // A malformed `fetch` (a string instead of an array, say) must not fail
+  // open to "allow all": the option reaches the host worker as JSON, so the
+  // type is no protection for the caller
+  if (options.fetch !== undefined && !isFetchConfig(options.fetch)) {
+    throw new ValidationError('fetch must be true, false, null or an array of host patterns')
+  }
+
+  if (options.outboundRpc !== undefined && typeof options.outboundRpc !== 'function') {
+    throw new ValidationError('outboundRpc must be a function')
+  }
+
+  if (
+    options.jsx !== undefined &&
+    (typeof options.jsx !== 'object' || options.jsx === null || Array.isArray(options.jsx))
+  ) {
+    throw new ValidationError('jsx must be an object')
+  }
+
   // Validate limits (Dynamic Workers resource limits)
   if (options.limits !== undefined && options.limits !== null) {
     if (typeof options.limits !== 'object' || Array.isArray(options.limits)) {
       throw new ValidationError('limits must be an object')
     }
-    const { cpuMs, subrequests } = options.limits
+    if ('subrequests' in options.limits) {
+      // Not a workerd field: it would be accepted and silently ignored (aip-263g.35)
+      throw new ValidationError(
+        'limits.subrequests is not a Dynamic Workers limit; use limits.subRequests'
+      )
+    }
+    const { cpuMs, subRequests } = options.limits
     if (cpuMs !== undefined) {
       validatePositiveNumber('limits.cpuMs', cpuMs)
     }
-    if (subrequests !== undefined) {
-      validatePositiveNumber('limits.subrequests', subrequests)
-      if (!Number.isInteger(subrequests)) {
-        throw new ValidationError('limits.subrequests must be an integer')
+    if (subRequests !== undefined) {
+      validatePositiveNumber('limits.subRequests', subRequests)
+      if (!Number.isInteger(subRequests)) {
+        throw new ValidationError('limits.subRequests must be an integer')
       }
     }
   }

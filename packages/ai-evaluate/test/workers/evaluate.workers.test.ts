@@ -144,6 +144,18 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       expect((await evaluate(options, env)).value).toEqual({ n: 1, seen: 1 })
     })
 
+    // aip-263g.36: env, bindings and tails are not part of the id, so a
+    // 'cached' isolate keeps the values of the call that loaded it. This is
+    // the documented contract (README "Isolate reuse"), witnessed here.
+    it('cached: the isolate keeps the env of the call that loaded it; fresh does not', async () => {
+      const script = `return env.WHO`
+      const module = `export const marker = ${JSON.stringify(crypto.randomUUID())}`
+      const cached = { module, script, isolation: 'cached' as const }
+      expect((await evaluate({ ...cached, env: { WHO: 'first' } }, env)).value).toBe('first')
+      expect((await evaluate({ ...cached, env: { WHO: 'second' } }, env)).value).toBe('first')
+      expect((await evaluate({ module, script, env: { WHO: 'third' } }, env)).value).toBe('third')
+    })
+
     it('enforces the timeout', async () => {
       const result = await evaluate(
         { script: 'await new Promise((r) => setTimeout(r, 5000)); return "late"', timeout: 200 },
@@ -179,6 +191,21 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       )
       expect(result.error).toBeUndefined()
       expect(result.value).toEqual({ foo: 'bar', frozen: true, keys: ['FOO'] })
+    })
+
+    // aip-263g.37: module code runs at module scope, before any request; env
+    // is bound only where script and tests run. Documented contract.
+    it('env is visible to script and tests, not to module code', async () => {
+      const result = await evaluate(
+        {
+          module: 'export const fromModule = () => typeof env',
+          script: 'return { module: fromModule(), script: typeof env, foo: env.FOO }',
+          env: { FOO: 'bar' },
+        },
+        env
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({ module: 'undefined', script: 'object', foo: 'bar' })
     })
 
     it('a WorkerEntrypoint service stub passed via bindings answers RPC from inside the sandbox', async () => {
@@ -268,7 +295,7 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
 
     it('limits reach the real loader and the worker still evaluates', async () => {
       const result = await evaluate(
-        { script: 'return 1 + 1', limits: { cpuMs: 100, subrequests: 1 } },
+        { script: 'return 1 + 1', limits: { cpuMs: 100, subRequests: 1 } },
         env
       )
       expect(result.error).toBeUndefined()
@@ -294,17 +321,17 @@ describe('evaluate (workerd, real worker_loaders binding)', () => {
       expect(result.error).toMatch(/CPU|limit|exceeded/i)
     })
 
-    it('a script over limits.subrequests fails on the extra subrequest', async (ctx) => {
+    it('a script over limits.subRequests fails on the extra subrequest', async (ctx) => {
       if (!(await localRuntimeEnforcesLimits())) {
         ctx.skip(
-          'local workerd accepts limits.subrequests but does not enforce it (aip-263g.34); witnessed on Cloudflare only'
+          'local workerd accepts limits.subRequests but does not enforce it (aip-263g.34); witnessed on Cloudflare only'
         )
       }
       const result = await evaluate(
         {
           script: 'await env.svc.ping(); await env.svc.ping(); return "two"',
           bindings: { svc: env.PING },
-          limits: { subrequests: 1 },
+          limits: { subRequests: 1 },
         },
         env
       )

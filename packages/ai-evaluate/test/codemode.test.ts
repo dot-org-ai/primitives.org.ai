@@ -212,12 +212,12 @@ describe('createExecutor', () => {
       await createExecutor({
         loader: fake.loader,
         evaluate: {
-          limits: { subrequests: 5 },
+          limits: { subRequests: 5 },
           compatibilityFlags: ['nodejs_compat'],
         },
       }).execute('return 1', {})
       expect(fake.calls).toEqual({ get: 0, load: 1 })
-      expect(fake.loaded[0]?.limits).toEqual({ subrequests: 5 })
+      expect(fake.loaded[0]?.limits).toEqual({ subRequests: 5 })
       expect(fake.loaded[0]?.compatibilityFlags).toEqual(['nodejs_compat'])
     })
 
@@ -315,6 +315,13 @@ describe('createExecutor', () => {
         },
       })
       expect(result).toEqual({ result: undefined, error: 'tool failed', logs: [] })
+    })
+
+    it('Object.prototype names are not tools: constructor answers not found', async () => {
+      const fake = calling('codemode', 'constructor', [1])
+      expect(
+        (await createExecutor({ loader: fake.loader }).execute('return 1', { add })).error
+      ).toBe('Tool "constructor" not found')
     })
 
     it('an unknown tool or namespace answers Tool "x" not found', async () => {
@@ -434,6 +441,8 @@ describe('createExecutor', () => {
       expect(sanitizeToolName('list-issues')).toBe('list_issues')
       expect(sanitizeToolName('a.b c')).toBe('a_b_c')
       expect(sanitizeToolName('1st')).toBe('_1st')
+      // never a prototype key on the host's fns record
+      expect(sanitizeToolName('__proto__')).toBe('__proto___')
       expect(sanitizeToolName('delete')).toBe('delete_')
       expect(sanitizeToolName('')).toBe('_')
       expect(sanitizeToolName('***')).toBe('_')

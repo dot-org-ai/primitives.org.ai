@@ -4,7 +4,7 @@
 
 ai-evaluate: pass through `limits`, `tails`, `compatibilityFlags` and `compatibilityDate`; wire `validateOptions` and `assertEvaluateResult` into `evaluate()` (aip-263g.5)
 
-- `EvaluateOptions` gains `limits` (`cpuMs`, `subrequests`), `tails`,
+- `EvaluateOptions` gains `limits` (`cpuMs`, `subRequests`), `tails`,
   `compatibilityFlags` (default none) and `compatibilityDate` (default
   `COMPATIBILITY_DATE`). All four reach the Dynamic Workers spec the loader
   receives; `limits`, flags and date are content-addressed with the code,
@@ -23,6 +23,6 @@ ai-evaluate: pass through `limits`, `tails`, `compatibilityFlags` and `compatibi
   its JSON boundary), as it already did for `bindings`.
 - Workers suite: a `TailStub` tail worker (`env.TAIL`) witnesses trace
   delivery; `nodejs_compat` is witnessed via `Buffer`. Local workerd accepts
-  but does not enforce `limits.cpuMs` / `limits.subrequests` (aip-263g.34), so
+  but does not enforce `limits.cpuMs` / `limits.subRequests` (aip-263g.34), so
   those two enforcement tests probe the runtime and skip themselves until it
   does.

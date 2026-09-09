@@ -249,6 +249,19 @@ describe('createReplSession (local host, ReplState facet)', () => {
     }
   })
 
+  it('setContext rejects a key that is not an identifier (it is interpolated into the chunk)', async () => {
+    const session = await createReplSession({ local: true })
+    try {
+      expect(() => session.setContext('a b', 1)).toThrow(
+        'setContext key must be a JavaScript identifier'
+      )
+      expect(() => session.setContext('x; fetch("https://evil.test")', 1)).toThrow(/identifier/)
+      expect(() => session.setContext('ok_1', 1)).not.toThrow()
+    } finally {
+      await session.close()
+    }
+  })
+
   it('prelude exports are in scope of every evaluation', async () => {
     const session = await createReplSession({
       local: true,

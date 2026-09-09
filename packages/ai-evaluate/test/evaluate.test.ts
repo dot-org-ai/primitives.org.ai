@@ -491,10 +491,10 @@ describe('evaluate', () => {
     it('explicit limits are handed to the loader on the spec', async () => {
       const fake = createFakeLoader()
       await evaluateWithEnv(
-        { script: 'return 1', limits: { cpuMs: 50, subrequests: 2 }, isolation: 'cached' },
+        { script: 'return 1', limits: { cpuMs: 50, subRequests: 2 }, isolation: 'cached' },
         { loader: fake.loader }
       )
-      expect(fake.loaded[0]?.limits).toEqual({ cpuMs: 50, subrequests: 2 })
+      expect(fake.loaded[0]?.limits).toEqual({ cpuMs: 50, subRequests: 2 })
     })
 
     it('no limits: the spec carries none, and the entrypoint CPU budget is the timeout', async () => {
@@ -522,7 +522,7 @@ describe('evaluate', () => {
 
     it('entrypointLimits maps timeout -> cpuMs only when limits.cpuMs is unset', () => {
       expect(entrypointLimits({ script: '1' }, 200)).toEqual({ cpuMs: 200 })
-      expect(entrypointLimits({ script: '1', limits: { subrequests: 2 } }, 200)).toEqual({
+      expect(entrypointLimits({ script: '1', limits: { subRequests: 2 } }, 200)).toEqual({
         cpuMs: 200,
       })
       expect(entrypointLimits({ script: '1', limits: { cpuMs: 50 } }, 200)).toEqual({ cpuMs: 50 })
@@ -562,12 +562,12 @@ describe('evaluate', () => {
         tests: 'it("x", () => {})',
         compatibilityFlags: ['nodejs_compat'],
         compatibilityDate: '2026-06-01',
-        limits: { subrequests: 3 },
+        limits: { subRequests: 3 },
       })
       expect(Object.keys(code.modules).sort()).toEqual(['capnweb.js', 'worker.js'])
       expect(code.compatibilityFlags).toEqual(['nodejs_compat'])
       expect(code.compatibilityDate).toBe('2026-06-01')
-      expect(code.limits).toEqual({ subrequests: 3 })
+      expect(code.limits).toEqual({ subRequests: 3 })
     })
 
     it('compatibility flags and date change the content-addressed id', async () => {
@@ -796,7 +796,7 @@ describe('evaluate', () => {
     })
 
     it('limits are accepted by the local loader (not enforced by open-source workerd)', async () => {
-      const result = await evaluate({ script: 'return 1', limits: { cpuMs: 100, subrequests: 1 } })
+      const result = await evaluate({ script: 'return 1', limits: { cpuMs: 100, subRequests: 1 } })
       expect(result.error).toBeUndefined()
       expect(result.value).toBe(1)
     })

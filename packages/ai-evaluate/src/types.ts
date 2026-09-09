@@ -119,7 +119,7 @@ export interface EvaluateOptions {
   timeout?: number | undefined
   /**
    * Resource limits the runtime enforces on the loaded worker (Cloudflare
-   * Dynamic Workers `limits`): `cpuMs` caps CPU time per request, `subrequests`
+   * Dynamic Workers `limits`): `cpuMs` caps CPU time per request, `subRequests`
    * caps outbound requests (fetch and binding calls) per request. Part of the
    * `WorkerCode` spec, so they are content-addressed with the code.
    *
@@ -149,9 +149,12 @@ export interface EvaluateOptions {
    */
   compatibilityDate?: string | undefined
   /**
-   * String environment variables, visible to `module`, `tests` and `script`
-   * as `env.NAME` (a frozen object). Strings only: anything else is rejected
-   * with a `ValidationError` - stubs and structured values go in `bindings`.
+   * String environment variables, visible to `tests` and `script` as
+   * `env.NAME` (a frozen object). `module` code runs at module scope, before
+   * any request, and does not see `env` (a `ReferenceError`): pass values in
+   * from `script` / `tests` as arguments. Strings only: anything else is
+   * rejected with a `ValidationError` - stubs and structured values go in
+   * `bindings`.
    */
   env?: Record<string, string> | undefined
   /**
@@ -182,7 +185,7 @@ export interface EvaluateOptions {
    *   "Network access blocked: domain not in allowlist". Part of the
    *   content-addressed spec.
    */
-  fetch?: FetchConfig
+  fetch?: FetchConfig | undefined
   /** RPC services to expose via capnweb (URL -> handler) */
   rpc?: Record<string, unknown> | undefined
   /**
@@ -239,7 +242,7 @@ export interface EvaluateOptions {
    * go through the bundler, and always present as sibling modules of the
    * worker. Part of the content-addressed spec. The names the generated
    * worker uses (`worker.js`, `capnweb.js`, `package.json`, `outbound.json`,
-   * `__external_<i>__.js`) are reserved.
+   * `sandbox.json`, `__external_<i>__.js`) are reserved.
    */
   modules?: Record<string, string> | undefined
   /**
@@ -253,7 +256,11 @@ export interface EvaluateOptions {
    *   module body runs once per isolate, so all of its module-scope state
    *   (let/const bindings, exported arrays and objects, the `exports`
    *   record, `globalThis`) persists across calls; only script locals and
-   *   logs are per-request.
+   *   logs are per-request. The isolate also keeps the `env`, `bindings` and
+   *   `tails` of the call that loaded it: a later call with the same spec
+   *   but different values is served by that isolate and its own values are
+   *   ignored (they are not part of the id). Do not pass per-caller secrets
+   *   or stubs with `'cached'`.
    *
    * Dynamic Workers are billed per unique worker per day, so `'cached'` is
    * the opt-in cost control for code that is safe to re-enter.
@@ -367,8 +374,11 @@ export interface TestResult {
 export interface WorkerLimits {
   /** CPU time per request, in milliseconds */
   cpuMs?: number | undefined
-  /** Subrequests (fetch, bindings) per request */
-  subrequests?: number | undefined
+  /**
+   * Subrequests (fetch, bindings) per request. workerd's field is `subRequests`
+   * (camel case); the lowercase spelling is rejected by `validateOptions`.
+   */
+  subRequests?: number | undefined
 }
 
 /**

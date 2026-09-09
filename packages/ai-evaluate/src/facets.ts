@@ -56,9 +56,11 @@ export const SANDBOX_HOST_BINDING_KEY = '__ai_evaluate_sandbox_host__'
  * its env bound to A's stub - would serve sandbox B's script, so B's calls
  * would reach A's facet and A's storage (aip-263g.39). With it, a `'cached'`
  * isolate is one per sandbox: reused across evaluations of the same
- * `sandboxId`, never across sandboxes. The facet worker does not carry it:
- * it is content-addressed on the module alone and runs inside the sandbox's
- * own `SandboxHost`.
+ * `sandboxId`, never across sandboxes. The facet worker carries it as well:
+ * it is always `loader.get(codeId)` and its env is not hashed, so without it
+ * the first sandbox's env and bindings would serve every later sandbox with
+ * the same module (aip-lrjh.5). One facet isolate per sandbox, running inside
+ * the sandbox's own `SandboxHost`.
  */
 export const SANDBOX_JSON_MODULE = 'sandbox.json'
 

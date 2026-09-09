@@ -416,7 +416,7 @@ describe('evaluate() with a facet (fake loader, mocked loopback)', () => {
     }
   })
 
-  it('the script worker is content-addressed per sandboxId (sandbox.json); the facet worker is not (aip-263g.39)', async () => {
+  it('both workers are content-addressed per sandboxId (sandbox.json): the script worker (aip-263g.39) and the facet worker (aip-lrjh.5)', async () => {
     const { loader, loaded } = createFakeLoader()
     const byName = new Map<string, ReturnType<typeof createFacetHost>>()
     hosts.current = {
@@ -438,8 +438,13 @@ describe('evaluate() with a facet (fake loader, mocked loopback)', () => {
       })
       expect(workerCodeId(a.code)).toBe(workerCodeId(again.code))
       expect(workerCodeId(a.code)).not.toBe(workerCodeId(b.code))
-      expect(a.facet!.spec.code.modules).not.toHaveProperty(SANDBOX_JSON_MODULE)
-      expect(a.facet!.spec.codeId).toBe(b.facet!.spec.codeId)
+      // The facet worker is always loader.get(codeId) with an unhashed env, so
+      // the sandbox identity is what keeps sandbox b off a's facet isolate
+      expect(a.facet!.spec.code.modules[SANDBOX_JSON_MODULE]).toEqual({
+        json: { sandboxId: 'sandbox-a', facet: 'State' },
+      })
+      expect(a.facet!.spec.codeId).toBe(again.facet!.spec.codeId)
+      expect(a.facet!.spec.codeId).not.toBe(b.facet!.spec.codeId)
       // Without a facet there is no sandbox.json: sandboxId alone does not change the id
       const plain = await buildWorkerCodeWithWarnings({
         script: 'return 1',
