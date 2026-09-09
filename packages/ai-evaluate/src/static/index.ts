@@ -20,19 +20,19 @@
  */
 
 import { CAPNWEB_SOURCE } from '../capnweb-bundle.js'
-import { generateWorkerCode, generateDevWorkerCode } from '../worker-template/index.js'
+import { generateWorkerCode } from '../worker-template/index.js'
 import {
   generateTestFrameworkCode,
   generateTestRunnerCode,
 } from '../worker-template/test-generator.js'
 import { generateSDKCode, generateShouldCode } from '../worker-template/sdk-generator.js'
-import { generateDomainCheckCode } from '../shared.js'
 import type { SDKConfig, FetchConfig } from '../types.js'
 
 /**
- * Version of the static assets
+ * Version of the static assets: the package version (see `src/version.ts`)
  */
-export const VERSION = '2.1.8'
+export { VERSION } from '../version.js'
+import { VERSION } from '../version.js'
 
 /**
  * The bundled capnweb RPC library source code
@@ -284,9 +284,11 @@ export interface BuildWorkerOptions {
   sdk?: SDKConfig | boolean
   /** Top-level imports to hoist */
   imports?: string[]
-  /** Network access configuration */
-  fetch?: FetchConfig
-  /** Use dev mode (embedded test framework, no capnweb) */
+  /**
+   * Use the embedded test runner (no `test` / ai-tests binding required)
+   * instead of the ai-tests RPC runner: `generateWorkerCode({ testRunner:
+   * 'embedded' })`. There is no separate dev template in 3.0.
+   */
   dev?: boolean
 }
 
@@ -306,23 +308,13 @@ export interface BuildWorkerOptions {
  * ```
  */
 export function buildWorkerTemplate(options: BuildWorkerOptions = {}): string {
-  if (options.dev) {
-    return generateDevWorkerCode({
-      ...(options.module !== undefined && { module: options.module }),
-      ...(options.tests !== undefined && { tests: options.tests }),
-      ...(options.script !== undefined && { script: options.script }),
-      ...(options.sdk !== undefined && { sdk: options.sdk }),
-      ...(options.imports !== undefined && { imports: options.imports }),
-      ...(options.fetch !== undefined && { fetch: options.fetch }),
-    })
-  }
   return generateWorkerCode({
+    testRunner: options.dev ? 'embedded' : 'rpc',
     ...(options.module !== undefined && { module: options.module }),
     ...(options.tests !== undefined && { tests: options.tests }),
     ...(options.script !== undefined && { script: options.script }),
     ...(options.sdk !== undefined && { sdk: options.sdk }),
     ...(options.imports !== undefined && { imports: options.imports }),
-    ...(options.fetch !== undefined && { fetch: options.fetch }),
   })
 }
 
@@ -375,13 +367,6 @@ export function getSDKCode(config?: SDKConfig): string {
  */
 export function getShouldCode(): string {
   return generateShouldCode()
-}
-
-/**
- * Get domain check code for fetch allowlisting
- */
-export function getDomainCheckCode(allowedDomains: string[]): string {
-  return generateDomainCheckCode(allowedDomains)
 }
 
 // Re-export types

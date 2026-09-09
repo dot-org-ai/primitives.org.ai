@@ -7,8 +7,11 @@
  * @module worker-template
  */
 
-// Main public API - worker code generators
-export { generateWorkerCode, generateDevWorkerCode } from './core.js'
+// Main public API - the one worker code generator. The former dev template
+// is `generateWorkerCode({ testRunner: 'embedded' })`; its 2.x alias is gone
+// in 3.0.
+export { generateWorkerCode } from './core.js'
+export type { GenerateWorkerCodeOptions, TestRunner } from './core.js'
 
 // SDK code generation (local and remote modes)
 export { generateSDKCode, generateShouldCode } from './sdk-generator.js'
@@ -17,7 +20,8 @@ export { generateSDKCode, generateShouldCode } from './sdk-generator.js'
 export { generateTestFrameworkCode, generateTestRunnerCode } from './test-generator.js'
 
 // Module transformation and export detection
-export { transformModuleCode } from './code-transforms.js'
+export { transformModuleCode, hoistImports } from './code-transforms.js'
+export type { HoistedImports } from './code-transforms.js'
 
 // Shared utility functions
 export { getExportNames, wrapScriptForReturn } from './helpers.js'

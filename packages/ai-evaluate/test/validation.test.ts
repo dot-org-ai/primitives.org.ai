@@ -1,12 +1,25 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   validateOptions,
   ValidationError,
+  isReservedModuleName,
+  isFetchConfig,
   MAX_SCRIPT_SIZE,
   MAX_IMPORTS,
   MAX_TIMEOUT,
   DEFAULT_TIMEOUT,
 } from '../src/validation.js'
+import { evaluate } from '../src/evaluate.js'
+import { OUTBOUND_RPC_CACHED_ERROR } from '../src/outbound.js'
+import type * as ValidationModule from '../src/validation.js'
+import type { WorkerLoader, WorkerStub } from '../src/types.js'
+
+// Wrap `validateOptions` so the test below can witness `evaluate()` calling
+// it; every other export (and the wrapped implementation) is the original.
+vi.mock('../src/validation.js', async (importOriginal) => {
+  const original = await importOriginal<typeof ValidationModule>()
+  return { ...original, validateOptions: vi.fn(original.validateOptions) }
+})
 
 describe('validation', () => {
   describe('constants', () => {
@@ -59,6 +72,84 @@ describe('validation', () => {
             imports: undefined,
           })
         ).not.toThrow()
+      })
+    })
+
+    describe('outboundRpc and isolation', () => {
+      const outboundRpc = () => null
+
+      it('rejects outboundRpc with isolation: cached (the interceptor is per evaluation)', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc, isolation: 'cached' })
+        ).toThrow(ValidationError)
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc, isolation: 'cached' })
+        ).toThrow(OUTBOUND_RPC_CACHED_ERROR)
+      })
+
+      it('accepts outboundRpc under fresh isolation, explicit or default', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc, isolation: 'fresh' })
+        ).not.toThrow()
+        expect(() => validateOptions({ script: 'return 1', outboundRpc })).not.toThrow()
+      })
+
+      it('accepts isolation: cached without outboundRpc (an allowlist is hashed, not registered)', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', fetch: ['a.test'], isolation: 'cached' })
+        ).not.toThrow()
+      })
+    })
+
+    // Integration review (aip-263g): a malformed fetch must not fail open, and
+    // isolation / outboundRpc / jsx are checked like every other option.
+    describe('fetch, isolation, outboundRpc and jsx validation', () => {
+      it('accepts every FetchConfig form', () => {
+        for (const fetch of [true, false, null, [], ['a.com', '*.b.com']]) {
+          expect(() => validateOptions({ script: 'return 1', fetch })).not.toThrow()
+          expect(isFetchConfig(fetch)).toBe(true)
+        }
+      })
+
+      it('rejects a string, an object, or a list with a non-host entry (fail closed, not open)', () => {
+        for (const fetch of ['a.com', {}, [''], ['a.com', 1], ['a b.com']]) {
+          expect(() =>
+            validateOptions({ script: 'return 1', fetch: fetch as unknown as string[] })
+          ).toThrow('fetch must be true, false, null or an array of host patterns')
+          expect(isFetchConfig(fetch)).toBe(false)
+        }
+      })
+
+      it('rejects an isolation other than fresh or cached (aip-263g.38)', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', isolation: 'shared' as unknown as 'fresh' })
+        ).toThrow("isolation must be 'fresh' or 'cached'")
+      })
+
+      it('rejects a non-function outboundRpc and a non-object jsx', () => {
+        expect(() =>
+          validateOptions({ script: 'return 1', outboundRpc: 'x' as unknown as () => null })
+        ).toThrow('outboundRpc must be a function')
+        expect(() =>
+          validateOptions({ script: 'return 1', jsx: 'h' as unknown as object })
+        ).toThrow('jsx must be an object')
+        expect(() => validateOptions({ script: 'return 1', jsx: { factory: 'h' } })).not.toThrow()
+      })
+    })
+
+    describe('reserved module names', () => {
+      it('include every json module the generated worker owns', () => {
+        for (const name of [
+          'worker.js',
+          'capnweb.js',
+          'package.json',
+          'outbound.json',
+          'sandbox.json',
+          '__external_0__.js',
+        ]) {
+          expect(isReservedModuleName(name), name).toBe(true)
+        }
+        expect(isReservedModuleName('helper.js')).toBe(false)
       })
     })
 
@@ -188,11 +279,29 @@ describe('validation', () => {
         )
       })
 
+      it('accepts bare package specifiers (dependencies for the bundler)', () => {
+        expect(() =>
+          validateOptions({
+            imports: ['lodash', 'dayjs@1.11.10', '@faker-js/faker', '@scope/pkg@1.0.0', 'pkg@^4'],
+          })
+        ).not.toThrow()
+      })
+
+      it('rejects bare specifiers that are not package names', () => {
+        for (const bad of ['Lodash', 'lodash/fp', '.hidden', 'a b', 'lodash@']) {
+          expect(() => validateOptions({ imports: [bad] })).toThrow(ValidationError)
+          expect(() => validateOptions({ imports: [bad] })).toThrow(
+            `imports[0] is not a valid URL: ${bad}`
+          )
+        }
+      })
+
       it('rejects invalid URLs', () => {
-        expect(() => validateOptions({ imports: ['not-a-url'] })).toThrow(ValidationError)
-        expect(() => validateOptions({ imports: ['not-a-url'] })).toThrow(
-          'imports[0] is not a valid URL: not-a-url'
+        expect(() => validateOptions({ imports: ['://not-a-url'] })).toThrow(ValidationError)
+        expect(() => validateOptions({ imports: ['://not-a-url'] })).toThrow(
+          'imports[0] is not a valid URL: ://not-a-url'
         )
+        expect(() => validateOptions({ imports: [''] })).toThrow('imports[0] is not a valid URL')
       })
 
       it('rejects non-http/https URLs', () => {
@@ -213,10 +322,211 @@ describe('validation', () => {
       it('reports correct index for invalid import', () => {
         expect(() =>
           validateOptions({
-            imports: ['https://esm.sh/lodash', 'invalid-url', 'https://esm.sh/react'],
+            imports: ['https://esm.sh/lodash', 'ftp://invalid-url', 'https://esm.sh/react'],
           })
-        ).toThrow('imports[1] is not a valid URL: invalid-url')
+        ).toThrow('imports[1] is not a valid URL: ftp://invalid-url')
       })
+    })
+
+    // aip-263g.9: npm dependencies for the bundler
+    describe('dependencies validation', () => {
+      it('accepts package.json-style dependencies', () => {
+        expect(() =>
+          validateOptions({
+            dependencies: { lodash: '4.17.21', '@scope/pkg': '^1.0.0', hono: 'latest', zod: '*' },
+          })
+        ).not.toThrow()
+      })
+
+      it('rejects a non-object', () => {
+        expect(() =>
+          validateOptions({ dependencies: ['lodash'] as unknown as Record<string, string> })
+        ).toThrow('dependencies must be an object of package name -> version')
+      })
+
+      it('rejects an invalid package name', () => {
+        expect(() => validateOptions({ dependencies: { 'Not A Package': '1' } })).toThrow(
+          'dependencies has an invalid package name: Not A Package'
+        )
+        expect(() => validateOptions({ dependencies: { 'file:///etc/passwd': '1' } })).toThrow(
+          ValidationError
+        )
+      })
+
+      it('rejects a non-string or empty version', () => {
+        expect(() => validateOptions({ dependencies: { lodash: 4 as unknown as string } })).toThrow(
+          'dependencies.lodash must be a version or range string'
+        )
+        expect(() => validateOptions({ dependencies: { lodash: '' } })).toThrow(ValidationError)
+      })
+
+      it('rejects more dependencies than MAX_IMPORTS', () => {
+        const dependencies = Object.fromEntries(
+          Array.from({ length: MAX_IMPORTS + 1 }, (_, i) => [`pkg${i}`, '1.0.0'])
+        )
+        expect(() => validateOptions({ dependencies })).toThrow(
+          `dependencies count (${MAX_IMPORTS + 1}) exceeds maximum allowed count of ${MAX_IMPORTS}`
+        )
+      })
+
+      it('bundler must be a boolean', () => {
+        expect(() => validateOptions({ bundler: false })).not.toThrow()
+        expect(() => validateOptions({ bundler: 'no' as unknown as boolean })).toThrow(
+          'bundler must be a boolean'
+        )
+      })
+    })
+
+    // aip-263g.5: Dynamic Workers limits, compatibility settings and tails
+    describe('limits validation', () => {
+      it('accepts positive limits', () => {
+        expect(() => validateOptions({ limits: { cpuMs: 50, subRequests: 2 } })).not.toThrow()
+        expect(() => validateOptions({ limits: {} })).not.toThrow()
+        expect(() => validateOptions({ limits: undefined })).not.toThrow()
+      })
+
+      it('rejects a negative cpuMs', () => {
+        expect(() => validateOptions({ limits: { cpuMs: -1 } })).toThrow(ValidationError)
+        expect(() => validateOptions({ limits: { cpuMs: -1 } })).toThrow(
+          'limits.cpuMs must be a positive number'
+        )
+      })
+
+      it('rejects zero, non-finite and non-numeric cpuMs', () => {
+        expect(() => validateOptions({ limits: { cpuMs: 0 } })).toThrow(ValidationError)
+        expect(() => validateOptions({ limits: { cpuMs: Infinity } })).toThrow(
+          'limits.cpuMs must be a finite number'
+        )
+        expect(() => validateOptions({ limits: { cpuMs: '50' as unknown as number } })).toThrow(
+          'limits.cpuMs must be a number'
+        )
+      })
+
+      it('rejects a non-positive or fractional subRequests', () => {
+        expect(() => validateOptions({ limits: { subRequests: 0 } })).toThrow(ValidationError)
+        expect(() => validateOptions({ limits: { subRequests: 1.5 } })).toThrow(
+          'limits.subRequests must be an integer'
+        )
+      })
+
+      // aip-263g.35: workerd's field is subRequests; the lowercase key would be
+      // accepted by the loader and silently ignored
+      it('rejects the misspelled limits.subrequests instead of dropping it', () => {
+        expect(() =>
+          validateOptions({ limits: { subrequests: 2 } as unknown as { subRequests: number } })
+        ).toThrow('limits.subrequests is not a Dynamic Workers limit; use limits.subRequests')
+      })
+
+      it('rejects non-object limits', () => {
+        expect(() => validateOptions({ limits: 50 as unknown as { cpuMs: number } })).toThrow(
+          'limits must be an object'
+        )
+        expect(() => validateOptions({ limits: [] as unknown as { cpuMs: number } })).toThrow(
+          'limits must be an object'
+        )
+      })
+    })
+
+    describe('compatibility validation', () => {
+      it('accepts flags and a YYYY-MM-DD date', () => {
+        expect(() =>
+          validateOptions({
+            compatibilityFlags: ['nodejs_compat'],
+            compatibilityDate: '2026-06-01',
+          })
+        ).not.toThrow()
+        expect(() => validateOptions({ compatibilityFlags: [] })).not.toThrow()
+      })
+
+      it('rejects non-array or non-string flags', () => {
+        expect(() =>
+          validateOptions({ compatibilityFlags: 'nodejs_compat' as unknown as string[] })
+        ).toThrow('compatibilityFlags must be an array of strings')
+        expect(() => validateOptions({ compatibilityFlags: [1 as unknown as string] })).toThrow(
+          'compatibilityFlags[0] must be a non-empty string'
+        )
+        expect(() => validateOptions({ compatibilityFlags: [''] })).toThrow(ValidationError)
+      })
+
+      it('rejects a malformed compatibility date', () => {
+        expect(() => validateOptions({ compatibilityDate: '2026-6-1' })).toThrow(
+          'compatibilityDate must be a YYYY-MM-DD string'
+        )
+        expect(() => validateOptions({ compatibilityDate: 20260601 as unknown as string })).toThrow(
+          ValidationError
+        )
+      })
+    })
+
+    describe('tails validation', () => {
+      it('accepts stubs (anything with a fetch method)', () => {
+        expect(() =>
+          validateOptions({ tails: [{ fetch: async () => new Response('') }] })
+        ).not.toThrow()
+        expect(() => validateOptions({ tails: [] })).not.toThrow()
+      })
+
+      it('rejects a non-array', () => {
+        expect(() => validateOptions({ tails: {} as unknown as unknown[] })).toThrow(
+          'tails must be an array of tail worker stubs'
+        )
+      })
+
+      it('rejects an entry that is not a stub', () => {
+        expect(() => validateOptions({ tails: ['https://tail.example'] })).toThrow(ValidationError)
+        expect(() => validateOptions({ tails: [{}] })).toThrow(
+          /tails\[0\] is not a tail worker stub/
+        )
+      })
+    })
+
+    describe('options object', () => {
+      it('rejects a non-object', () => {
+        expect(() => validateOptions(null as unknown as Record<string, never>)).toThrow(
+          'options must be an object'
+        )
+        expect(() => validateOptions([] as unknown as Record<string, never>)).toThrow(
+          ValidationError
+        )
+      })
+    })
+  })
+
+  // aip-263g.5: validateOptions is wired into evaluate()
+  describe('evaluate() calls validateOptions', () => {
+    const stub: WorkerStub = {
+      getEntrypoint: () => ({
+        fetch: async () => Response.json({ success: true, value: 1, logs: [], duration: 0 }),
+      }),
+      getDurableObjectClass: () => undefined,
+    }
+    const loader: WorkerLoader = { get: () => stub, load: () => stub }
+
+    beforeEach(() => {
+      vi.mocked(validateOptions).mockClear()
+    })
+
+    it('is called once, with the raw options, before the loader is used', async () => {
+      const options = { script: 'return 1', limits: { cpuMs: 50 } }
+      const result = await evaluate(options, { loader })
+      expect(result.success).toBe(true)
+      expect(validateOptions).toHaveBeenCalledTimes(1)
+      expect(validateOptions).toHaveBeenCalledWith(options)
+    })
+
+    it('is called even when there is no loader (validation comes first)', async () => {
+      await evaluate({ script: 'return 1' })
+      expect(validateOptions).toHaveBeenCalledTimes(1)
+    })
+
+    it('reports the ValidationError as an error result', async () => {
+      const result = await evaluate({ script: 'return 1', limits: { cpuMs: -1 } }, { loader })
+      expect(validateOptions).toHaveBeenCalledTimes(1)
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('limits.cpuMs must be a positive number')
+      const tooLong = await evaluate({ script: 'return 1', timeout: MAX_TIMEOUT + 1 }, { loader })
+      expect(tooLong.success).toBe(false)
+      expect(tooLong.error).toMatch(/timeout exceeds maximum/)
     })
   })
 

@@ -19,10 +19,15 @@
  * nothing — it only spies to prove the model is never touched.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest'
 
 // Spy targets for Path A: prove no model is consulted on the deterministic path.
 import * as generateModule from '../src/generate.js'
+import { disposeSandbox } from '../src/sandbox.js'
+
+// Release the Miniflare host early. Optional (an idle host does not keep the
+// process alive), but it exercises the passthrough.
+afterAll(disposeSandbox)
 
 describe('Path A — type:code is deterministic (no model, no network)', () => {
   let generateObjectSpy: ReturnType<typeof vi.spyOn>

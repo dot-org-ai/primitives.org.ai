@@ -38,7 +38,7 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
       # No registry-url: nothing here authenticates to npm.
       - run: pnpm install --frozen-lockfile

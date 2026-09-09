@@ -145,7 +145,7 @@ export function fillTemplate(template: string, args: Record<string, unknown>): s
  * via `new Function`/`eval`. Execution stays deterministic: no model is ever
  * consulted on this path.
  *
- * @param env - Optional host Workers env (carrying `LOADER`) for the sandbox;
+ * @param env - Optional host Workers env (carrying `loader`) for the sandbox;
  *   when omitted the inline-code path falls back to the Miniflare-backed Node
  *   runtime. Ignored when a `handler` is supplied (direct call, no sandbox).
  *
@@ -193,7 +193,7 @@ async function executeCodeFunction<TOutput, TInput>(
  * supported on the inline-`code` path. Pass a `handler` for non-serializable
  * inputs (functions, class instances, etc.).
  *
- * @param env - Optional host Workers env (carrying `LOADER`) for the sandbox;
+ * @param env - Optional host Workers env (carrying `loader`) for the sandbox;
  *   when omitted, runs against the Miniflare-backed Node runtime.
  */
 async function runInlineCode<TOutput, TInput>(
@@ -339,10 +339,10 @@ export interface GeneratedCodeRunResult<TOutput = unknown> {
  * @param definition - The code-authoring spec ({@link CodeGenerationDefinition}).
  *   Set `includeTests: false` to skip test authoring (default: tests included).
  * @param args - Concrete inputs the authored code is invoked with.
- * @param env - Optional host Workers env. When it carries `LOADER` **and**
- *   `TEST`, tests run on the real Dynamic Workers loader; otherwise execution
+ * @param env - Optional host Workers env. When it carries `loader` **and**
+ *   `test`, tests run on the real Dynamic Workers loader; otherwise execution
  *   falls back to the Miniflare-backed Node runtime (whose dev worker has its
- *   own embedded test runner and needs no live `TEST` binding).
+ *   own embedded test runner and needs no live `test` binding).
  * @returns The executed result plus authored artifacts.
  *
  * @example

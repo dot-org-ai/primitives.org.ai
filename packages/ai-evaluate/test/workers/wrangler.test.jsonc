@@ -1,0 +1,27 @@
+// Wrangler config for the workers-pool test suite (vitest.workers.config.ts).
+// Declares the real `worker_loaders` binding that `evaluate()` needs, so the
+// suite exercises src/evaluate.ts against Dynamic Workers inside workerd.
+//
+// `PING` is a service binding to this worker's own `Ping` WorkerEntrypoint
+// (ping-worker.ts): a real RPC stub for the `bindings` tests. `TAIL` binds its
+// `TailStub` WorkerEntrypoint: a tail worker for the `tails` tests. `KV` is a
+// real KV namespace: a raw host binding the sandbox must refuse to forward.
+// `SANDBOX_HOST` is the `SandboxHost` Durable Object (SQLite) that owns the
+// sandbox facets of the `facet` / `sandboxId` tests; `evaluate()` reaches it
+// as `ctx.exports.SandboxHost`.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ai-evaluate-workers-test",
+  "main": "./ping-worker.ts",
+  "compatibility_date": "2026-01-01",
+  "worker_loaders": [{ "binding": "loader" }],
+  "services": [
+    { "binding": "PING", "service": "ai-evaluate-workers-test", "entrypoint": "Ping" },
+    { "binding": "TAIL", "service": "ai-evaluate-workers-test", "entrypoint": "TailStub" }
+  ],
+  "kv_namespaces": [{ "binding": "KV", "id": "ai-evaluate-test-kv" }],
+  "durable_objects": {
+    "bindings": [{ "name": "SANDBOX_HOST", "class_name": "SandboxHost" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SandboxHost"] }]
+}

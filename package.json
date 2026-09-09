@@ -12,9 +12,9 @@
     "typecheck": "turbo typecheck",
     "clean": "turbo clean",
     "prepare-publish": "tsx scripts/prepare-publish.ts",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && pnpm --filter ai-evaluate sync:version",
     "publish-packages": "tsx scripts/publish.ts",
-    "release": "pnpm build && changeset version && pnpm publish-packages"
+    "release": "pnpm version-packages && pnpm build && pnpm publish-packages"
   },
   "devDependencies": {
     "@org.ai/config": "workspace:*",
@@ -28,8 +28,13 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
+  "pnpm": {
+    "overrides": {
+      "@cloudflare/worker-bundler>typescript": "$typescript"
+    }
+  },
   "packageManager": "pnpm@9.0.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

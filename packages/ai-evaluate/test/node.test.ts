@@ -1,14 +1,44 @@
-import { describe, it, expect } from 'vitest'
+import { execFile } from 'node:child_process'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
+import { describe, it, expect, vi, afterAll } from 'vitest'
+import type { EvaluateResult } from '../src/types.js'
+
+const execFileAsync = promisify(execFile)
+
+/** Names of the modules in a host worker map that mention the dev-template alias, sorted */
+function devTemplateReferences(modules: Record<string, string>): string[] {
+  return Object.entries(modules)
+    .filter(([, source]) => /\bgenerateDevWorkerCode\b/.test(source))
+    .map(([name]) => name)
+    .sort()
+}
+
+afterAll(async () => {
+  const { dispose } = await import('../src/node.js')
+  await dispose()
+})
 
 describe('ai-evaluate/node', () => {
-  describe('JSX transformation', () => {
-    // Note: JSX transformation uses esbuild which may produce ESM-wrapped code
-    // These tests verify the JSX detection and transformation attempt
+  describe('import side effects', () => {
+    it('importing src/node.js registers no process signal or exit listeners', async () => {
+      // Callers own shutdown: the module must not install process.on('exit' |
+      // 'SIGINT' | 'SIGTERM') handlers the way the removed miniflare-pool did.
+      // Re-evaluate the module so its top level actually runs here.
+      const events = ['SIGINT', 'SIGTERM', 'exit'] as const
+      const before = Object.fromEntries(events.map((e) => [e, process.listenerCount(e)]))
+      vi.resetModules()
+      await import('../src/node.js')
+      const after = Object.fromEntries(events.map((e) => [e, process.listenerCount(e)]))
+      expect(after).toEqual(before)
+    })
+  })
 
-    it('detects and attempts to transform simple JSX', async () => {
+  describe('JSX / TypeScript transformation (in the host worker, via bundled sucrase)', () => {
+    it('transforms simple JSX', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // JSX code that would need transformation
       const result = await evaluate({
         module: `
           function h(tag, props, ...children) {
@@ -19,13 +49,12 @@ describe('ai-evaluate/node', () => {
         script: 'return render()',
       })
 
-      // The transformation is attempted - result depends on esbuild output format
-      // Either it succeeds or returns an error (not a crash)
-      expect(typeof result.success).toBe('boolean')
-      expect(Array.isArray(result.logs)).toBe(true)
+      expect(result.error).toBeUndefined()
+      expect(result.success).toBe(true)
+      expect(result.value).toEqual({ tag: 'div', props: null, children: ['Hello'] })
     })
 
-    it('detects JSX with props', async () => {
+    it('transforms JSX with props', async () => {
       const { evaluate } = await import('../src/node.js')
 
       const result = await evaluate({
@@ -35,22 +64,22 @@ describe('ai-evaluate/node', () => {
           }
           const handler = () => 'clicked'
           exports.render = () => <Button onClick={handler}>Click</Button>
+          function Button() {}
         `,
-        script: 'return render()',
+        script: 'const el = render(); return [typeof el.tag, el.props.onClick(), el.children]',
       })
 
-      // Verify the function doesn't crash and returns a valid result shape
-      expect(typeof result.success).toBe('boolean')
-      expect(typeof result.duration).toBe('number')
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual(['function', 'clicked', ['Click']])
     })
 
-    it('detects JSX fragments', async () => {
+    it('transforms JSX fragments', async () => {
       const { evaluate } = await import('../src/node.js')
 
       const result = await evaluate({
         module: `
           function h(tag, props, ...children) {
-            return { tag, props, children }
+            return { tag: tag === Fragment ? 'fragment' : tag, props, children }
           }
           function Fragment(props) {
             return props.children
@@ -60,28 +89,67 @@ describe('ai-evaluate/node', () => {
         script: 'return render()',
       })
 
-      // Verify graceful handling
-      expect(typeof result.success).toBe('boolean')
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({
+        tag: 'fragment',
+        props: null,
+        children: [
+          { tag: 'span', props: null, children: [] },
+          { tag: 'span', props: null, children: [] },
+        ],
+      })
     })
 
-    it('handles JSX transform failure gracefully', async () => {
+    it('honours options.jsx (factory / fragment)', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // Even with JSX that fails to transform correctly, evaluate should not throw
       const result = await evaluate({
         module: `
-          function h(tag, props, ...children) {
-            return { tag, props, children }
+          const React = {
+            createElement: (tag, props, ...children) => ({ tag, props, children }),
+            Fragment: 'Fragment',
           }
-          exports.element = <div>Test</div>
+          exports.el = <><b>x</b></>
         `,
+        script: 'return el',
+        jsx: { factory: 'React.createElement', fragment: 'React.Fragment' },
+      })
+
+      expect(result.error).toBeUndefined()
+      expect(result.value).toEqual({
+        tag: 'Fragment',
+        props: null,
+        children: [{ tag: 'b', props: null, children: ['x'] }],
+      })
+    })
+
+    it('strips TypeScript from module and script', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      const result = await evaluate({
+        module: `
+          interface Point { x: number; y: number }
+          export function len(p: Point): number { return p.x + p.y }
+        `,
+        script: 'const p: Point = { x: 40, y: 2 }; return len(p) as number',
+      })
+
+      expect(result.error).toBeUndefined()
+      expect(result.value).toBe(42)
+    })
+
+    it('reports a JSX syntax error from the runtime instead of throwing', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      const result = await evaluate({
+        module: 'exports.element = <div>',
         script: 'return element',
       })
 
-      // Should return a result (success or error), not throw
       expect(result).toHaveProperty('success')
       expect(result).toHaveProperty('logs')
       expect(result).toHaveProperty('duration')
+      expect(result.success).toBe(false)
     })
 
     it('passes through non-JSX code unchanged', async () => {
@@ -100,16 +168,14 @@ describe('ai-evaluate/node', () => {
     it('handles code that looks like JSX but is a string', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // String literals with angle brackets may still be detected by the regex
-      // but the transformation should still produce valid code
       const result = await evaluate({
         module: `
-          exports.html = "Not JSX"
+          exports.html = "<b>Not JSX</b>"
         `,
         script: 'return html',
       })
       expect(result.success).toBe(true)
-      expect(result.value).toBe('Not JSX')
+      expect(result.value).toBe('<b>Not JSX</b>')
     })
 
     it('handles empty module gracefully', async () => {
@@ -123,11 +189,221 @@ describe('ai-evaluate/node', () => {
     })
   })
 
-  describe('Miniflare-specific behavior', () => {
-    it('evaluates without env binding (uses Miniflare)', async () => {
+  describe('local runtime (Miniflare 5 host worker with LOADER binding)', () => {
+    it('createLocalRuntime returns { evaluate, dispose } and evaluates a script', async () => {
+      const { createLocalRuntime } = await import('../src/node.js')
+
+      const runtime = createLocalRuntime()
+      expect(typeof runtime.evaluate).toBe('function')
+      expect(typeof runtime.dispose).toBe('function')
+
+      const result = await runtime.evaluate({ script: 'return 1+1' })
+      expect(result.success).toBe(true)
+      expect(result.value).toBe(2)
+
+      await expect(runtime.dispose()).resolves.toBeUndefined()
+      // dispose is idempotent
+      await expect(runtime.dispose()).resolves.toBeUndefined()
+    })
+
+    it('reuses one host across calls (second call is not a cold start)', async () => {
+      const { createLocalRuntime } = await import('../src/node.js')
+      const runtime = createLocalRuntime()
+      try {
+        const first = await runtime.evaluate({ script: 'return 1' })
+        const second = await runtime.evaluate({ script: 'return 2' })
+        expect(first.value).toBe(1)
+        expect(second.value).toBe(2)
+        // The first call pays for bundling + workerd startup; the second must not.
+        expect(second.duration).toBeLessThan(first.duration)
+      } finally {
+        await runtime.dispose()
+      }
+    })
+
+    it('maintains isolation between evaluations', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // No env passed - should use Miniflare fallback
+      // First evaluation sets a global
+      const result1 = await evaluate({
+        script: 'globalThis.testValue = 42; return globalThis.testValue;',
+      })
+      expect(result1.success).toBe(true)
+      expect(result1.value).toBe(42)
+
+      // Second evaluation loads a fresh isolate by default (and is a different spec anyway)
+      const result2 = await evaluate({
+        script: 'return globalThis.testValue;',
+      })
+      expect(result2.success).toBe(true)
+      expect(result2.value).toBeUndefined()
+    })
+
+    it('times out a CPU-bound script and recovers for the next call', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      const result = await evaluate({
+        script: 'while(true){}',
+        timeout: 100,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/Timeout/)
+
+      // The wedged host is replaced; subsequent evaluations work again
+      const after = await evaluate({ script: 'return "alive"' })
+      expect(after.success).toBe(true)
+      expect(after.value).toBe('alive')
+    }, 20000)
+
+    describe('host recovery from a CPU-bound loop (Node backstop)', () => {
+      // Local workerd is single-threaded and enforces no CPU limit, so a
+      // `while(true){}` stalls the host worker's own AbortSignal.timeout. The
+      // Node side aborts the request at timeout + grace, SIGKILLs the host and
+      // starts a fresh one on the next call. These tests witness that contract
+      // for everything else that was on the host at the time (aip-263g.14).
+      const LOOP = 'while(true){}'
+      const SLOW = 'await new Promise((r) => setTimeout(r, 5000)); return "late"'
+
+      it('returns the timeout promptly: teardown of the wedged host is bounded', async () => {
+        const { createLocalRuntime } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          const result = await runtime.evaluate({ script: LOOP, timeout: 100 })
+          expect(result.success).toBe(false)
+          expect(result.error).toBe('Timeout: Script execution exceeded 100ms')
+          // timeout + 250ms grace + SIGKILL/close of the host - not a 5s hang
+          expect(result.duration).toBeLessThan(5000)
+        } finally {
+          await runtime.dispose()
+        }
+      }, 20000)
+
+      it('reports WEDGED_HOST_ERROR to an evaluation caught in flight, then recovers', async () => {
+        const { createLocalRuntime, WEDGED_HOST_ERROR } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          // A well-behaved async script is on the host when the loop lands.
+          // Its timer lives in the same wedged workerd, so it can only end
+          // when the host is killed out from under it.
+          const bystander = runtime.evaluate({ script: SLOW, timeout: 10000 })
+          await new Promise((r) => setTimeout(r, 100))
+          const loop = await runtime.evaluate({ script: LOOP, timeout: 100 })
+          expect(loop.success).toBe(false)
+          expect(loop.error).toMatch(/^Timeout/)
+
+          const caught = await bystander
+          expect(caught.success).toBe(false)
+          expect(caught.error).toBe(WEDGED_HOST_ERROR)
+          // Not the transport error the kill produces
+          expect(caught.error).not.toMatch(/fetch failed|ECONNRESET|socket/i)
+
+          const after = await runtime.evaluate({ script: 'return "alive"' })
+          expect(after.success).toBe(true)
+          expect(after.value).toBe('alive')
+        } finally {
+          await runtime.dispose()
+        }
+      }, 30000)
+
+      it('retires the wedged host once when several CPU-bound loops hit the backstop together', async () => {
+        const { createLocalRuntime, WEDGED_HOST_ERROR } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          const results = await Promise.all([
+            runtime.evaluate({ script: LOOP, timeout: 100 }),
+            runtime.evaluate({ script: 'for(;;){}', timeout: 100 }),
+            runtime.evaluate({ script: 'let i = 0; while(true) { i++ }', timeout: 100 }),
+          ])
+          for (const result of results) {
+            expect(result.success).toBe(false)
+            // Whichever backstop fires first retires the host; the others
+            // either hit their own backstop (Timeout) or are caught by the
+            // kill (WEDGED_HOST_ERROR). Never a bare transport error.
+            expect([`Timeout: Script execution exceeded 100ms`, WEDGED_HOST_ERROR]).toContain(
+              result.error
+            )
+          }
+          // Only the host that wedged was torn down: the replacement serves
+          // the next call, and it is not torn down by the late retire()s.
+          const after = await runtime.evaluate({ script: 'return "alive"' })
+          expect(after.success).toBe(true)
+          expect(after.value).toBe('alive')
+          const again = await runtime.evaluate({ script: 'return "still alive"' })
+          expect(again.value).toBe('still alive')
+          expect(again.duration).toBeLessThan(after.duration)
+        } finally {
+          await runtime.dispose()
+        }
+      }, 30000)
+
+      it('reports DISPOSED_HOST_ERROR to an evaluation in flight when the runtime is disposed', async () => {
+        const { createLocalRuntime, DISPOSED_HOST_ERROR } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          await runtime.evaluate({ script: 'return 0' })
+          const slow = runtime.evaluate({ script: SLOW, timeout: 10000 })
+          await new Promise((r) => setTimeout(r, 100))
+          await runtime.dispose()
+          const result = await slow
+          expect(result.success).toBe(false)
+          expect(result.error).toBe(DISPOSED_HOST_ERROR)
+          // dispose() does not wait for the in-flight script's own 5s
+          expect(result.duration).toBeLessThan(4000)
+          // The runtime is reusable: the next call starts a fresh host
+          const after = await runtime.evaluate({ script: 'return "fresh"' })
+          expect(after.value).toBe('fresh')
+        } finally {
+          await runtime.dispose()
+        }
+      }, 20000)
+
+      it('does not count host startup against the timeout (cold start is not a timeout)', async () => {
+        const { createLocalRuntime } = await import('../src/node.js')
+        const runtime = createLocalRuntime()
+        try {
+          // Host startup (workerd spawn + loader) is well over 100ms; the
+          // backstop and the in-worker AbortSignal.timeout both start after
+          // the host is ready, so a trivial script with a small timeout passes.
+          const result = await runtime.evaluate({ script: 'return "cold"', timeout: 1000 })
+          expect(result.error).toBeUndefined()
+          expect(result.success).toBe(true)
+          expect(result.value).toBe('cold')
+        } finally {
+          await runtime.dispose()
+        }
+      }, 20000)
+    })
+
+    it('times out a slow async script via the host worker AbortSignal.timeout', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      const result = await evaluate({
+        script: 'await new Promise((r) => setTimeout(r, 10000)); return "never"',
+        timeout: 100,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/Timeout: Script execution exceeded 100ms/)
+      // Well under the script's own 10s: the host aborted it, not the Node backstop
+      expect(result.duration).toBeLessThan(5000)
+    }, 10000)
+
+    it('fails fast on a promise that can never settle (workerd hang detection)', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      const result = await evaluate({
+        script: 'await new Promise(() => {}); return "never"',
+        timeout: 1000,
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toMatch(/hung|Timeout/)
+    }, 10000)
+
+    it('evaluates without env binding (uses the shared local runtime)', async () => {
+      const { evaluate } = await import('../src/node.js')
+
       const result = await evaluate({
         script: 'return 42',
       })
@@ -135,22 +411,7 @@ describe('ai-evaluate/node', () => {
       expect(result.value).toBe(42)
     })
 
-    it('handles timeout with AbortController', async () => {
-      const { evaluate } = await import('../src/node.js')
-
-      const result = await evaluate({
-        script: `
-          // Infinite loop that should be aborted
-          while(true) {}
-          return 'never'
-        `,
-        timeout: 100,
-      })
-      expect(result.success).toBe(false)
-      expect(result.error).toContain('Timeout')
-    }, 10000)
-
-    it('blocks network via outboundService when fetch: null', async () => {
+    it('blocks network via globalOutbound when fetch: null', async () => {
       const { evaluate } = await import('../src/node.js')
 
       const result = await evaluate({
@@ -164,21 +425,57 @@ describe('ai-evaluate/node', () => {
         `,
         fetch: null,
       })
-      // Network blocking via outboundService may cause different errors
-      // The key is that fetch doesn't succeed
-      if (result.success) {
-        expect(result.value).toContain('fetch blocked')
-      } else {
-        // Network blocking might cause an error at the worker level
-        expect(result.error).toBeDefined()
-      }
+      expect(result.success).toBe(true)
+      expect(result.value).toContain('fetch blocked')
+    })
+
+    it("enforces a fetch allowlist through the host worker's OutboundGateway", async () => {
+      // The Miniflare host is src/host-worker.ts, which exports the gateway,
+      // so the allowlist is enforced locally exactly as on Cloudflare: by the
+      // loader's globalOutbound, not by anything in the isolate.
+      const { evaluate } = await import('../src/node.js')
+
+      const blocked = await evaluate({
+        script: 'return fetch("https://blocked.test")',
+        fetch: ['api.example.com'],
+      })
+      expect(blocked.success).toBe(false)
+      expect(blocked.error).toMatch(/not in allowlist/)
+      expect(blocked.error).toContain('blocked.test')
+
+      const noPatch = await evaluate({
+        script: 'return typeof __originalFetch__',
+        fetch: ['api.example.com'],
+      })
+      expect(noPatch.success, noPatch.error).toBe(true)
+      expect(noPatch.value).toBe('undefined')
+
+      // An allowed host is forwarded to the host's real fetch: a port nothing
+      // listens on fails at the transport, not with the allowlist's message
+      const allowed = await evaluate({
+        script: `
+          try {
+            return { status: (await fetch('http://127.0.0.1:1/')).status }
+          } catch (e) {
+            return { error: e.message }
+          }
+        `,
+        fetch: ['127.0.0.1'],
+      })
+      expect(allowed.success, allowed.error).toBe(true)
+      expect((allowed.value as { error?: string }).error).not.toMatch(/not in allowlist/)
+    })
+
+    it('rejects outboundRpc without a host env (a function cannot cross the JSON boundary)', async () => {
+      const { evaluate } = await import('../src/node.js')
+      const result = await evaluate({ script: 'return 1', outboundRpc: () => null })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('outboundRpc needs a live worker_loaders binding')
     })
 
     it('allows network when fetch is not null', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // This test verifies network is allowed by default
-      // We don't actually make a network call, just verify the option is respected
       const result = await evaluate({
         script: `
           // Verify fetch exists and is callable
@@ -189,10 +486,9 @@ describe('ai-evaluate/node', () => {
       expect(result.value).toBe(true)
     })
 
-    it('disposes Miniflare instance after execution', async () => {
+    it('runs repeated evaluations on one host', async () => {
       const { evaluate } = await import('../src/node.js')
 
-      // Execute multiple evaluations to ensure proper cleanup
       for (let i = 0; i < 3; i++) {
         const result = await evaluate({
           script: `return ${i}`,
@@ -200,6 +496,22 @@ describe('ai-evaluate/node', () => {
         expect(result.success).toBe(true)
         expect(result.value).toBe(i)
       }
+    })
+
+    it('runs 20 sequential evaluations in under 2s once the host is warm', async () => {
+      const { evaluate } = await import('../src/node.js')
+
+      // Warm-up: pays for host startup (and a fresh host after any dispose())
+      const warm = await evaluate({ script: 'return 1' })
+      expect(warm.value).toBe(1)
+
+      const start = Date.now()
+      for (let i = 0; i < 20; i++) {
+        const result = await evaluate({ script: 'return 1' })
+        expect(result.value).toBe(1)
+      }
+      // Per-call Miniflare instantiation cost ~100ms+ each; one reused host is ~2ms.
+      expect(Date.now() - start).toBeLessThan(2000)
     })
 
     it('returns duration in result', async () => {
@@ -213,7 +525,7 @@ describe('ai-evaluate/node', () => {
       expect(result.duration).toBeGreaterThanOrEqual(0)
     })
 
-    it('captures console output in Miniflare', async () => {
+    it('captures console output', async () => {
       const { evaluate } = await import('../src/node.js')
 
       const result = await evaluate({
@@ -232,20 +544,123 @@ describe('ai-evaluate/node', () => {
         true
       )
     })
+
+    it('exports dispose() for the shared runtime', async () => {
+      const { evaluate, dispose } = await import('../src/node.js')
+      expect(typeof dispose).toBe('function')
+      await expect(dispose()).resolves.toBeUndefined()
+      // A fresh runtime is created on the next call
+      const result = await evaluate({ script: 'return "fresh"' })
+      expect(result.value).toBe('fresh')
+    })
   })
 
-  describe('esbuild optional dependency', () => {
-    it('esbuild is available in dev environment', async () => {
-      // esbuild should be available in dev
-      const esbuild = await import('esbuild').catch(() => null)
-      expect(esbuild).not.toBeNull()
-      expect(typeof esbuild?.transform).toBe('function')
+  describe('single code path with src/evaluate.ts', () => {
+    it('the host worker builds sandbox code with generateWorkerCode; the dev alias is gone', async () => {
+      // A Node-side spy cannot see code running inside workerd, so this is
+      // asserted on the module text the Miniflare host actually loads: no
+      // module mentions `generateDevWorkerCode` (3.0 removed the alias).
+      // `evaluate.js` - which builds every WorkerCode - calls the production
+      // generator and picks the test runner from the TEST binding.
+      const { loadHostWorker } = await import('../src/host-modules.js')
+      const { modules } = loadHostWorker()
+
+      expect(devTemplateReferences(modules)).toEqual([])
+      expect(modules['evaluate.js']).toMatch(/\bgenerateWorkerCode\(/)
+      expect(modules['evaluate.js']).toMatch(
+        /testRunner:\s*testService\s*\?\s*['"]rpc['"]\s*:\s*['"]embedded['"]/
+      )
     })
 
-    it('graceful fallback when code has no JSX', async () => {
+    it('that witness fails when evaluate.js is rewired to the dev alias', async () => {
+      // Guard against the check itself being vacuous: a tampered module map
+      // in which evaluate.js calls the alias must be reported.
+      const { loadHostWorker } = await import('../src/host-modules.js')
+      const { modules } = loadHostWorker()
+      const tampered = {
+        ...modules,
+        'evaluate.js': modules['evaluate.js']!.replace(
+          /\bgenerateWorkerCode\(/,
+          'generateDevWorkerCode('
+        ),
+      }
+      expect(devTemplateReferences(tampered)).toContain('evaluate.js')
+    })
+
+    it('walks host-worker -> evaluate as the host worker modules (same bytes as prod)', async () => {
+      const { walkHostWorker, HOST_MODULE } = await import('../src/host-modules.js')
+      const { mainModule, modules } = walkHostWorker()
+      expect(mainModule).toBe(HOST_MODULE)
+      // The host is the evaluate() implementation, not a separate local template
+      expect(Object.keys(modules)).toEqual(
+        expect.arrayContaining([
+          'host-worker.js',
+          'evaluate.js',
+          'shared.js',
+          'transform.js',
+          'transform-bundle.js',
+          'capnweb-bundle.js',
+          'worker-template/index.js',
+          'worker-template/core.js',
+        ])
+      )
+      expect(Object.keys(modules)).not.toContain('node.js')
+      expect(modules['evaluate.js']).toContain('Sandbox requires worker_loaders binding')
+      expect(modules['evaluate.js']).toContain('Simple Sandbox Worker')
+      expect(modules['host-worker.js']).toContain('/evaluate')
+      const all = Object.values(modules).join('\n')
+      // Plain ES modules: no TypeScript left; no static import of esbuild or
+      // the worker bundler (the bundler is loaded on demand, see src/bundler.ts,
+      // and this host cannot resolve it - the esm.sh fallback runs here)
+      expect(all).not.toMatch(/^import type\b/m)
+      expect(all).not.toMatch(/^import[^\n]*from\s*['"](?:esbuild|@cloudflare\/worker-bundler)/m)
+    })
+
+    it('delegates to evaluate() from src/evaluate.ts when env has a loader', async () => {
+      const evaluateModule = await import('../src/evaluate.js')
       const { evaluate } = await import('../src/node.js')
 
-      // Code without JSX should work regardless of esbuild
+      const canned = { success: true, value: 'from-loader', logs: [], duration: 0 }
+      const stub = () => ({
+        getEntrypoint: () => ({
+          fetch: async () => Response.json(canned),
+        }),
+      })
+      const env = { loader: { get: stub, load: stub } }
+
+      const direct = await evaluateModule.evaluate({ script: 'return 1' }, env)
+      const viaNode = await evaluate({ script: 'return 1' }, env)
+      expect(viaNode.value).toBe('from-loader')
+      expect(Object.keys(viaNode).sort()).toEqual(Object.keys(direct).sort())
+    })
+  })
+
+  describe('no esbuild dependency', () => {
+    it('package.json declares no esbuild in any dependency field', async () => {
+      const { readFileSync } = await import('node:fs')
+      const pkg = JSON.parse(
+        readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+      ) as Record<string, Record<string, string> | undefined>
+      for (const field of [
+        'dependencies',
+        'devDependencies',
+        'optionalDependencies',
+        'peerDependencies',
+      ]) {
+        expect(pkg[field] ?? {}, field).not.toHaveProperty('esbuild')
+      }
+    })
+
+    it('src/node.ts does not import esbuild', async () => {
+      const { readFileSync } = await import('node:fs')
+      const source = readFileSync(new URL('../src/node.ts', import.meta.url), 'utf8')
+      expect(source).not.toMatch(/import\(['"]esbuild['"]\)/)
+      expect(source).not.toMatch(/from ['"]esbuild['"]/)
+    })
+
+    it('code without JSX evaluates unchanged', async () => {
+      const { evaluate } = await import('../src/node.js')
+
       const result = await evaluate({
         module: `
           exports.multiply = (a, b) => a * b
@@ -254,42 +669,6 @@ describe('ai-evaluate/node', () => {
       })
       expect(result.success).toBe(true)
       expect(result.value).toBe(42)
-    })
-
-    it('uses esbuild for JSX detection patterns', async () => {
-      // Test that JSX patterns are detected
-      // The containsJSX function should identify these patterns
-      const patterns = [
-        '<div>content</div>', // lowercase tag
-        '<Button />', // uppercase tag
-        '<>fragment</>', // fragment
-        'return <Component />', // return JSX
-        'return (\n<div>\n</div>\n)', // multiline return JSX
-      ]
-
-      // All these should be detected as JSX
-      for (const pattern of patterns) {
-        const jsxPattern = /<[A-Z][a-zA-Z0-9]*[\s/>]|<[a-z][a-z0-9-]*[\s/>]|<>|<\/>/
-        const jsxReturnPattern = /return\s*\(\s*<|return\s+<[A-Za-z]/
-        const isJSX = jsxPattern.test(pattern) || jsxReturnPattern.test(pattern)
-        expect(isJSX).toBe(true)
-      }
-    })
-
-    it('does not detect non-JSX patterns', async () => {
-      // These should NOT be detected as JSX
-      const patterns = [
-        'const x = a < b ? c : d', // comparison (no space after <)
-        '5 > 3', // comparison
-        'arr.map(x => x * 2)', // arrow function
-      ]
-
-      for (const pattern of patterns) {
-        const jsxPattern = /<[A-Z][a-zA-Z0-9]*[\s/>]|<[a-z][a-z0-9-]*[\s/>]|<>|<\/>/
-        const jsxReturnPattern = /return\s*\(\s*<|return\s+<[A-Za-z]/
-        const isJSX = jsxPattern.test(pattern) || jsxReturnPattern.test(pattern)
-        expect(isJSX).toBe(false)
-      }
     })
   })
 
@@ -337,6 +716,55 @@ describe('ai-evaluate/node', () => {
       // Verify the module exports the expected functions
       expect(Object.keys(nodeModule)).toContain('evaluate')
       expect(Object.keys(nodeModule)).toContain('createEvaluator')
+    })
+  })
+
+  describe('miniflare availability (aip-263g.13)', () => {
+    // Miniflare 5 declares engines.node >= 22, so on older Node the package
+    // manager skips the optional dependency and `import('miniflare')` fails
+    // with ERR_MODULE_NOT_FOUND. vitest cannot make a dynamic import reject
+    // with a specific error (a throwing vi.mock factory is re-wrapped), so the
+    // fixture runs in a child `node` with resolver hooks that hide the package.
+    const fixture = join(
+      dirname(fileURLToPath(import.meta.url)),
+      'fixtures',
+      'missing-miniflare.ts'
+    )
+
+    async function runFixture(failure: 'missing' | 'broken') {
+      const { stdout } = await execFileAsync(process.execPath, ['--import', 'tsx', fixture], {
+        cwd: join(dirname(fixture), '..', '..'),
+        env: { ...process.env, MINIFLARE_FAILURE: failure },
+        timeout: 20_000,
+      })
+      return JSON.parse(stdout.trim().split('\n').at(-1) ?? '') as {
+        shared: EvaluateResult
+        explicit: EvaluateResult
+        message: string
+      }
+    }
+
+    it('reports MINIFLARE_UNAVAILABLE_ERROR when the optional miniflare dependency is not installed', async () => {
+      const { MINIFLARE_UNAVAILABLE_ERROR } = await import('../src/node.js')
+      const { shared, explicit, message } = await runFixture('missing')
+      expect(message).toBe(MINIFLARE_UNAVAILABLE_ERROR)
+      expect(MINIFLARE_UNAVAILABLE_ERROR).toMatch(/Node >= 22/)
+      for (const result of [shared, explicit]) {
+        expect(result.success).toBe(false)
+        // What is missing and why, then the resolver's own message
+        expect(result.error).toContain(MINIFLARE_UNAVAILABLE_ERROR)
+        expect(result.error).toContain("Cannot find package 'miniflare'")
+      }
+    })
+
+    it('passes through import failures that are not a missing package', async () => {
+      const { MINIFLARE_UNAVAILABLE_ERROR } = await import('../src/node.js')
+      const { shared, explicit } = await runFixture('broken')
+      for (const result of [shared, explicit]) {
+        expect(result.success).toBe(false)
+        expect(result.error).toBe('workerd binary failed to initialise')
+        expect(result.error).not.toContain(MINIFLARE_UNAVAILABLE_ERROR)
+      }
     })
   })
 
