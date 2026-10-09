@@ -1,9 +1,9 @@
-import Image from 'next/image';
+import { OrgAiMark } from './org-ai-mark';
 export function baseOptions() {
     return {
         nav: {
             title: (<>
-          <Image src="/org-ai.svg" alt="" width={24} height={24}/>
+          <OrgAiMark />
           Primitives.org.ai
         </>),
         },

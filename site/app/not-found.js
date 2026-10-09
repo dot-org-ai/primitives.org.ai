@@ -11,9 +11,6 @@ export default function NotFound() {
           <Link href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-fd-primary text-fd-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity">
             Go Home
           </Link>
-          <Link href="/docs" className="inline-flex items-center gap-2 px-6 py-3 border border-fd-border rounded-lg font-medium hover:bg-fd-accent transition-colors">
-            Documentation
-          </Link>
         </div>
       </div>
     </div>);
