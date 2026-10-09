@@ -17,5 +17,7 @@ export function baseOptions(): BaseLayoutProps {
       { text: 'The Org.AI Foundation', url: 'https://foundation.org.ai', external: true },
     ],
     githubUrl: 'https://github.com/dot-org-ai/primitives.org.ai',
+    // dark only, as every Org.AI Foundation site is: no light theme to switch to
+    themeSwitch: { enabled: false },
   };
 }

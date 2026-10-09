@@ -8,5 +8,7 @@ export function baseOptions() {
         </>),
         },
         githubUrl: 'https://github.com/dot-org-ai/primitives.org.ai',
+        // dark only, as every Org.AI Foundation site is: no light theme to switch to
+        themeSwitch: { enabled: false },
     };
 }
