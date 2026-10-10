@@ -17,20 +17,36 @@
   --color-fd-card: oklch(0.222 0.007 78); /* raise */
   --color-fd-card-foreground: oklch(0.96 0.005 86); /* ink */
   --color-fd-border: oklch(0.26 0.007 78); /* rule-faint */
-  --color-fd-primary: oklch(0.80 0.118 68); /* now, the amber */
+  --color-fd-primary: oklch(0.8 0.118 68); /* now, the amber */
   --color-fd-primary-foreground: oklch(0.21 0.03 62); /* now-ink */
   --color-fd-secondary: oklch(0.222 0.007 78); /* raise */
   --color-fd-secondary-foreground: oklch(0.96 0.005 86); /* ink */
   --color-fd-accent: oklch(0.27 0.008 78); /* raise-hi */
   --color-fd-accent-foreground: oklch(0.96 0.005 86); /* ink */
-  --color-fd-ring: oklch(0.80 0.118 68); /* now */
-  --color-fd-overlay: oklch(0.12 0.005 78 / 0.62); /* the dim behind a sheet, as on foundation.org.ai */
+  --color-fd-ring: oklch(0.8 0.118 68); /* now */
+  --color-fd-overlay: oklch(
+    0.12 0.005 78 / 0.62
+  ); /* the dim behind a sheet, as on foundation.org.ai */
   color-scheme: dark;
 }
 
 /* the Foundation's type: headings set light, with tight tracking, as on foundation.org.ai */
-.fd-title { font-weight: 360; letter-spacing: -0.025em; }
-.prose h1 { font-weight: 340; letter-spacing: -0.03em; }
-.prose h2 { font-weight: 400; letter-spacing: -0.02em; }
-.prose h3 { font-weight: 500; letter-spacing: -0.012em; }
-.prose h4 { font-weight: 600; }
+.fd-title {
+  font-weight: 360;
+  letter-spacing: -0.025em;
+}
+.prose h1 {
+  font-weight: 340;
+  letter-spacing: -0.03em;
+}
+.prose h2 {
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+.prose h3 {
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+.prose h4 {
+  font-weight: 600;
+}

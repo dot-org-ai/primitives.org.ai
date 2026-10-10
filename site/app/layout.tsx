@@ -5,7 +5,11 @@ import type { Metadata } from 'next'
 import localFont from 'next/font/local'
 
 // Public Sans, the Org.AI Foundation's typeface, served from this site
-const publicSans = localFont({ src: './fonts/publicsans-latin.woff2', weight: '100 900', display: 'swap' })
+const publicSans = localFont({
+  src: './fonts/publicsans-latin.woff2',
+  weight: '100 900',
+  display: 'swap',
+})
 
 const baseUrl = process.env['NEXT_PUBLIC_BASE_URL']
   ? new URL(process.env['NEXT_PUBLIC_BASE_URL'])
@@ -75,7 +79,9 @@ export default function Layout({ children }: LayoutProps<'/'>) {
     <html lang="en" className={publicSans.className} suppressHydrationWarning>
       <body className="flex flex-col min-h-screen">
         {/* dark, as every Org.AI Foundation site is */}
-        <RootProvider theme={{ forcedTheme: 'dark', defaultTheme: 'dark', enableSystem: false }}>{children}</RootProvider>
+        <RootProvider theme={{ forcedTheme: 'dark', defaultTheme: 'dark', enableSystem: false }}>
+          {children}
+        </RootProvider>
         <footer className="border-t border-fd-border px-6 py-6 text-sm text-fd-muted-foreground">
           <p>
             The primitives are documented by{' '}
