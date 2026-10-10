@@ -41,11 +41,12 @@ export async function generateMetadata(props: PageProps<'/[[...slug]]'>): Promis
   /* Every docs page gets its own generated card from app/og/[...slug]. The
      home page is the exception: it is the one the estate links to, and it has
      a hand-built card of its own in the root layout. Overriding it here would
-     replace that card with the generic template. */
+     replace that card with the generic template. Its title is the site's name,
+     so it skips the "%s | Primitives.org.ai" template rather than repeat it. */
   const isHome = (params.slug ?? []).length === 0
 
   return {
-    title: page.data.title,
+    title: isHome ? { absolute: page.data.title } : page.data.title,
     description: page.data.description,
     ...(isHome ? {} : { openGraph: { images: getPageImage(page).url } }),
   }
