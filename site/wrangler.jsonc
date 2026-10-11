@@ -4,6 +4,8 @@
   "name": "primitives-org-ai",
   "compatibility_date": "2024-12-30",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  // the theme script is inlined from its source text; kept names would add __name() calls the browser lacks
+  "keep_names": false,
   "routes": [
     {
       "pattern": "primitives.org.ai/*",
