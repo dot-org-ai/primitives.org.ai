@@ -83,6 +83,8 @@ export interface VideoOptions {
   loop?: boolean
   /** Additional model-specific parameters */
   modelParams?: Record<string, unknown>
+  /** Video gateway base URL (falls back to VIDEO_GATEWAY_URL / AI_GATEWAY_URL env) */
+  gatewayUrl?: string
 }
 
 /**
@@ -159,6 +161,8 @@ export interface VideoExtendOptions {
   direction?: 'forward' | 'backward'
   /** Overlap frames for smoother transition */
   overlap?: number
+  /** Video gateway base URL (falls back to VIDEO_GATEWAY_URL / AI_GATEWAY_URL env) */
+  gatewayUrl?: string
 }
 
 /**
@@ -182,6 +186,8 @@ export interface VideoEditOptions {
   strength?: number
   /** Preserve audio from original */
   preserveAudio?: boolean
+  /** Video gateway base URL (falls back to VIDEO_GATEWAY_URL / AI_GATEWAY_URL env) */
+  gatewayUrl?: string
 }
 
 // ============================================================================
@@ -225,34 +231,45 @@ function buildMetadata(
 }
 
 /**
+ * Get environment variable safely (works in both Node.js and Workers)
+ */
+function getEnvVar(key: string): string | undefined {
+  return typeof globalThis !== 'undefined' && 'process' in globalThis
+    ? (globalThis as { process?: { env?: Record<string, string> } }).process?.env?.[key]
+    : undefined
+}
+
+/**
  * Resolve the worker URL for video generation based on model
  */
-function resolveVideoWorkerUrl(model: string): string {
-  // Map models to their respective worker endpoints
-  const workerMap: Record<string, string> = {
-    'runway-gen3': 'https://video.workers.do/runway/gen3',
-    'runway-gen2': 'https://video.workers.do/runway/gen2',
-    'pika-1.0': 'https://video.workers.do/pika/1.0',
-    'pika-1.5': 'https://video.workers.do/pika/1.5',
-    'stable-video': 'https://video.workers.do/stability/svd',
-    minimax: 'https://video.workers.do/minimax',
-    kling: 'https://video.workers.do/kling',
-    luma: 'https://video.workers.do/luma',
+function resolveVideoWorkerUrl(model: string, gatewayUrl?: string): string {
+  // Map models to their respective endpoint paths on the gateway
+  const modelPaths: Record<string, string> = {
+    'runway-gen3': 'runway/gen3',
+    'runway-gen2': 'runway/gen2',
+    'pika-1.0': 'pika/1.0',
+    'pika-1.5': 'pika/1.5',
+    'stable-video': 'stability/svd',
+    minimax: 'minimax',
+    kling: 'kling',
+    luma: 'luma',
   }
 
   // Check for custom endpoint in environment
-  const customEndpoint =
-    typeof globalThis !== 'undefined' && 'process' in globalThis
-      ? (globalThis as { process?: { env?: Record<string, string> } }).process?.env?.[
-          'VIDEO_WORKER_URL'
-        ]
-      : undefined
+  const customEndpoint = getEnvVar('VIDEO_WORKER_URL')
 
   if (customEndpoint) {
     return customEndpoint
   }
 
-  return workerMap[model] || `https://video.workers.do/${model}`
+  const baseUrl = gatewayUrl || getEnvVar('VIDEO_GATEWAY_URL') || getEnvVar('AI_GATEWAY_URL')
+  if (!baseUrl) {
+    throw new Error(
+      'No video gateway URL configured. Pass options.gatewayUrl or set VIDEO_GATEWAY_URL / AI_GATEWAY_URL.'
+    )
+  }
+
+  return `${baseUrl}/${modelPaths[model] || model}`
 }
 
 // ============================================================================
@@ -317,14 +334,15 @@ export async function video(
     motionIntensity,
     loop,
     modelParams,
+    gatewayUrl,
   } = options
 
   const startTime = Date.now()
 
-  // Build the worker URL for video generation
-  const workerUrl = resolveVideoWorkerUrl(model)
-
   try {
+    // Build the worker URL for video generation
+    const workerUrl = resolveVideoWorkerUrl(model, gatewayUrl)
+
     const response = await fetch(workerUrl, {
       method: 'POST',
       headers: {
@@ -457,12 +475,14 @@ video.fromImage = async function fromImage(
     imageFidelity = 0.7,
     motion,
     motionIntensity,
+    gatewayUrl,
   } = options
 
   const startTime = Date.now()
-  const workerUrl = resolveVideoWorkerUrl(model)
 
   try {
+    const workerUrl = resolveVideoWorkerUrl(model, gatewayUrl)
+
     const response = await fetch(workerUrl, {
       method: 'POST',
       headers: {
@@ -586,12 +606,13 @@ video.extend = async function extend(
   duration: number,
   options: Partial<Omit<VideoExtendOptions, 'videoUrl' | 'duration'>> = {}
 ): Promise<VideoResult> {
-  const { prompt, direction = 'forward', overlap = 4 } = options
+  const { prompt, direction = 'forward', overlap = 4, gatewayUrl } = options
 
   const startTime = Date.now()
-  const workerUrl = resolveVideoWorkerUrl('runway-gen3')
 
   try {
+    const workerUrl = resolveVideoWorkerUrl('runway-gen3', gatewayUrl)
+
     const response = await fetch(workerUrl, {
       method: 'POST',
       headers: {
@@ -701,12 +722,13 @@ video.edit = async function edit(
   prompt: string,
   options: Partial<Omit<VideoEditOptions, 'videoUrl' | 'prompt'>> = {}
 ): Promise<VideoResult> {
-  const { region, maskUrl, strength = 0.7, preserveAudio = true } = options
+  const { region, maskUrl, strength = 0.7, preserveAudio = true, gatewayUrl } = options
 
   const startTime = Date.now()
-  const workerUrl = resolveVideoWorkerUrl('runway-gen3')
 
   try {
+    const workerUrl = resolveVideoWorkerUrl('runway-gen3', gatewayUrl)
+
     const response = await fetch(workerUrl, {
       method: 'POST',
       headers: {
